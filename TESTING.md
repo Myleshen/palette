@@ -143,6 +143,11 @@ Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
   Catppuccin Mocha; `/neof package.swift` resolved the right file; `/zj` listed
   sessions and offered a create row; selecting **Copy Bundle ID** on Safari put
   `com.apple.Safari` on the clipboard.
+- Hotkey regression (1.4.1): the previous build's `⌥Space` was dead whenever
+  `⌥V` was registered, because a second `InstallEventHandler` replaced the first
+  on the same Carbon target. After the shared-router fix, the brew-installed
+  1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
+  the same session, with Raycast running.
 - v1.3 parity checks: empty query is a list by default; `/neo ~/dev/` showed
   direct folders before deeper files; a lone `/` returned apps without Zellij
   create rows; `rust async runtime` offered Google/DuckDuckGo/GitHub/YouTube;
