@@ -41,19 +41,22 @@ after a rebuild; that is expected without a Developer ID certificate.
 
 ### Homebrew
 
-A ready Cask lives in `packaging/homebrew/Casks/palette.rb`. `make release`
-builds `dist/Palette-<version>.zip`, updates its checksum, and prints the upload
-steps for `Myleshen/palette` and a `Myleshen/homebrew-tap` repository. Once that
-release and tap exist:
+Palette ships through a public tap:
 
 ```sh
 brew install --cask Myleshen/tap/palette
 ```
 
-No Apple Developer subscription or App Store listing is involved. The app is
-ad-hoc signed; Homebrew installs it without the quarantine flag. Manual zip
-downloads may need System Settings > Privacy & Security > Open Anyway. See
-`packaging/homebrew/README.md` for the release process.
+The cask downloads the latest GitHub release, installs `Palette.app` into
+`/Applications`, and clears the quarantine flag because the app is ad-hoc signed
+rather than notarized. No Apple Developer subscription or App Store listing is
+involved. Manual zip downloads may need System Settings > Privacy & Security >
+Open Anyway.
+
+To publish a new version: bump `CFBundleShortVersionString` and
+`CFBundleVersion`, run `make release`, upload `dist/Palette-<version>.zip` to a
+GitHub release, then copy `packaging/homebrew/Casks/palette.rb` into
+`Myleshen/homebrew-tap/Casks/`. See `packaging/homebrew/README.md`.
 
 ## First run
 

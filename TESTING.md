@@ -167,6 +167,12 @@ Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
   `emoji-test.txt` entry rendered header, icon, 672 KB size, and a `bat` text
   preview; `/clip text` filtered to the text entry. Copy Files restored file
   URLs to the pasteboard (`«class furl»`).
+- Homebrew: uninstalled and reinstalled with `brew install --cask
+  Myleshen/tap/palette`; the cask downloaded `v1.4.0`, installed build 5 into
+  `/Applications`, and its postflight removed `com.apple.quarantine`. The
+  installed app launched, logged `Hotkey registered: opt+space` and
+  `Clipboard hotkey registered: opt+v`, and physical `⌥V` opened the clipboard
+  browser with grouped Text rows and the preview pane.
 - Web-app shortcuts: added an app with `ctrl+alt+f`; Palette exported
   `~/.hammerspoon/palette-webapps.lua`, Hammerspoon reloaded and the shortcut
   opened the URL. The generated file, `init.lua`, and `keybinds.lua` pass
