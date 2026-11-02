@@ -132,7 +132,7 @@ Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
   shortcut recorder).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.5.0). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.5.1). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -149,6 +149,19 @@ Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.5.1 physical round on the installed app (screen unlocked):
+  `⌥Space` opened the launcher and `⌥V` opened the clipboard browser with the
+  wide preview and filter chips; `Esc` dismissed them. In Settings, clicking the
+  launcher recorder and pressing `⌃⌥K` changed the field to `opt+ctrl+k`; Save
+  rewrote `config.toml`, the app logged `Hotkey registered: opt+ctrl+k`, and the
+  recorded shortcut opened the panel. Recording `⌥Space` again restored it.
+  Choosing Google Chrome in the web-app browser picker and pressing Save showed
+  “Google Chrome is not installed…” and left `web_app_browser = "Helium"`
+  unchanged. Setting the position picker to Center placed the panel at
+  `515,336` (680×480) on a 1710×1112 screen; restoring Top returned it to the
+  top. Opening `/sys config` launched Neovide with the config file and no nvim
+  launch error after the PATH fix. Enter-to-hidden latency measured 84–105 ms
+  (was 423 ms with the window animation).
 - v1.5 checks: the empty query showed the Apps tab first; `Tab` switched to
   `/calc` and `⇧Tab` returns; typing `finder` ranked the CoreServices Finder
   first with web-search rows below; `search_position = "bottom"` put the tab

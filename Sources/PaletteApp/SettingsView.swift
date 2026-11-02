@@ -68,11 +68,11 @@ struct SettingsView: View {
         Form {
             Section("Launcher") {
                 LabeledContent("Hotkey") {
-                    ShortcutRecorder(value: $config.hotkey)
+                    ShortcutRecorder(value: $config.hotkey, label: "Launcher hotkey")
                         .frame(width: 200, height: 26)
                 }
                 LabeledContent("Clipboard hotkey") {
-                    ShortcutRecorder(value: $config.clipboardHotkey)
+                    ShortcutRecorder(value: $config.clipboardHotkey, label: "Clipboard hotkey")
                         .frame(width: 200, height: 26)
                 }
                 TextField("Provider prefix", text: $config.providerPrefix)
@@ -227,9 +227,11 @@ struct SettingsView: View {
 /// user to type something like "opt+space".
 struct ShortcutRecorder: NSViewRepresentable {
     @Binding var value: String
+    var label: String
 
     func makeNSView(context: Context) -> RecorderView {
         let view = RecorderView()
+        view.label = label
         view.value = value
         view.onChange = { recorded in
             value = recorded
@@ -238,17 +240,42 @@ struct ShortcutRecorder: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: RecorderView, context: Context) {
+        nsView.label = label
         nsView.value = value
     }
 }
 
 final class RecorderView: NSView {
     var value: String = "" {
-        didSet { needsDisplay = true }
+        didSet {
+            needsDisplay = true
+            setAccessibilityValue(value)
+        }
+    }
+    var label: String = "Shortcut" {
+        didSet { setAccessibilityLabel(label) }
     }
     var onChange: ((String) -> Void)?
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityHelp("Press the shortcut keys you want to use")
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+    }
+
     override var acceptsFirstResponder: Bool { true }
+
+    override func accessibilityPerformPress() -> Bool {
+        window?.makeFirstResponder(self)
+        return true
+    }
 
     override func becomeFirstResponder() -> Bool {
         needsDisplay = true

@@ -159,6 +159,13 @@ public final class SearchController: ObservableObject, HostBridge {
         // Bound searches can take a moment (Bitwarden, external processes).
         // Show the target provider immediately instead of stale global rows.
         let parsed = registry.parser.parse(query)
+        // Preview width belongs to the clipboard browser only. Leaving /clip
+        // (Tab, typing another prefix, clearing the query) must drop it.
+        if previewEnabled, parsed.providerID != "clip" {
+            previewEnabled = false
+            clipboardFilter = nil
+            panel?.widthOverride = nil
+        }
         if parsed.isBound {
             items = []
             selectionIndex = 0

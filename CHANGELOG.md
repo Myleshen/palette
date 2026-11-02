@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.5.1 — 2026-11-03
+
+Fixes found during the physical 1.5.0 test round.
+
+### Fixed
+
+- The shortcut recorder is now an accessibility button with a label and value,
+  and recording a shortcut was verified end-to-end from the installed app.
+- Config.toml now opens in Neovide with Homebrew's `nvim` on `PATH`; GUI apps
+  previously inherited launchd's minimal PATH and Neovide failed to start.
+- Leaving `/clip` (Tab, another prefix, or clearing the query) drops the preview
+  pane and wide layout instead of leaving it over the next provider.
+- Panel show/hide no longer animates, cutting Enter-to-panel-hidden latency from
+  ~423 ms to ~84–105 ms in the same measurement.
+- Web-app browser validation was exercised in the real Settings window: saving
+  with an uninstalled browser shows the install message and leaves the config
+  untouched.
+
 ## 1.5.0 — 2026-11-02
 
 Daily-use release. Existing configs keep working; new fields (`search_position`,

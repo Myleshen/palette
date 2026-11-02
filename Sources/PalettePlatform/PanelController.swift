@@ -58,7 +58,7 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isMovable = false
-        panel.animationBehavior = .utilityWindow
+        panel.animationBehavior = .none
         panel.delegate = self
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true

@@ -17,6 +17,9 @@ public final class LauncherService {
         if let appPath = ToolLocator.shared.appPath(named: app) {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true
+            // GUI apps inherit launchd's minimal PATH, so Neovide cannot find
+            // Homebrew's nvim. Hand the usual tool directories to the child.
+            configuration.environment = Self.toolPathEnvironment
             NSWorkspace.shared.open([url], withApplicationAt: URL(fileURLWithPath: appPath), configuration: configuration) { _, error in
                 if let error {
                     Log.shared.error("open with \(app) failed: \(error.localizedDescription)", source: "launcher")
@@ -36,6 +39,17 @@ public final class LauncherService {
         }
 
         throw ProviderError.failed("Could not find app '\(app)'")
+    }
+
+    private static var toolPathEnvironment: [String: String] {
+        let current = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        var seen = Set<String>()
+        var parts: [String] = []
+        for part in ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"] + current.split(separator: ":").map(String.init)
+        where seen.insert(part).inserted {
+            parts.append(part)
+        }
+        return ["PATH": parts.joined(separator: ":")]
     }
 
     public func reveal(_ path: String) {
@@ -66,6 +80,7 @@ public final class LauncherService {
         }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
+        configuration.environment = Self.toolPathEnvironment
         NSWorkspace.shared.open([url], withApplicationAt: URL(fileURLWithPath: appPath), configuration: configuration) { _, error in
             if let error {
                 Log.shared.error("open in \(browser) failed: \(error.localizedDescription)", source: "launcher")

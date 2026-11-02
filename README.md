@@ -10,7 +10,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.5.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.5.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
