@@ -403,7 +403,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let manager = hotkey!
         do {
             currentHotKey = try manager.register(configuration.hotkey)
-            Log.shared.info("Hotkey registered: \(configuration.hotkey)", source: "hotkey")
+            Log.shared.info("Hotkey registered: \(currentHotKey?.display ?? configuration.hotkey)", source: "hotkey")
         } catch {
             currentHotKey = nil
             if let previous, (try? manager.register(previous.display)) != nil {
@@ -430,7 +430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         do {
             currentClipboardHotKey = try clipboardHotkey.register(configuration.clipboardHotkey)
-            Log.shared.info("Clipboard hotkey registered: \(configuration.clipboardHotkey)", source: "hotkey")
+            Log.shared.info("Clipboard hotkey registered: \(currentClipboardHotKey?.display ?? configuration.clipboardHotkey)", source: "hotkey")
         } catch {
             currentClipboardHotKey = nil
             Log.shared.warn(

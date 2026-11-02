@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.1 — 2026-11-02
+
+### Fixed
+
+- `⌥Space` did nothing when the clipboard hotkey was also enabled: each
+  `HotKeyManager` installed its own Carbon event handler on the same target, and
+  the second installation replaced the first. A single shared router now
+  dispatches by hotkey id, so both `opt+space` and `opt+v` work together.
+- Hotkey display strings are normalized (`opt+ space` → `opt+space`).
+
 ## 1.4.0 — 2026-11-02
 
 Clipboard and emoji release.

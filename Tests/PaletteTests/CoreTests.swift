@@ -3,6 +3,7 @@ import PaletteCore
 import PalettePlatform
 import PaletteProviders
 import TOMLKit
+import Carbon.HIToolbox
 
 final class CoreTests: XCTestCase {
     func testAppLookupIsCaseInsensitive() throws {
@@ -147,6 +148,13 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(rows[0].title.contains("Google"))
         let prefix = try await provider.search(SearchRequest(text: "/", limit: 10, isBound: false))
         XCTAssertTrue(prefix.isEmpty)
+    }
+
+    func testHotKeySpecNormalizesWhitespace() {
+        let spec = HotKeySpec.parse("opt+ space")
+        XCTAssertEqual(spec?.display, "opt+space")
+        XCTAssertEqual(spec?.keyCode, UInt32(kVK_Space))
+        XCTAssertEqual(spec?.modifiers, UInt32(optionKey))
     }
 
     func testEmojiCatalogIsLargeAndSearchable() async throws {

@@ -34,7 +34,7 @@ public struct HotKeySpec: Equatable, Sendable {
         }
 
         guard let keyName, let keyCode = keyCode(for: keyName), modifiers != 0 else { return nil }
-        return HotKeySpec(keyCode: keyCode, modifiers: modifiers, display: raw)
+        return HotKeySpec(keyCode: keyCode, modifiers: modifiers, display: parts.joined(separator: "+"))
     }
 
     private static func keyCode(for name: String) -> UInt32? {
@@ -66,10 +66,61 @@ public struct HotKeySpec: Equatable, Sendable {
     }
 }
 
+/// One Carbon handler for the whole process. `InstallEventHandler` replaces the
+/// previous handler for the same target and event kind, so installing one per
+/// manager silently disables every hotkey registered before it.
+private final class HotKeyRouter {
+    static let shared = HotKeyRouter()
+
+    private var handlers: [UInt32: () -> Void] = [:]
+    private var handlerRef: EventHandlerRef?
+
+    func set(_ id: UInt32, handler: @escaping () -> Void) {
+        handlers[id] = handler
+        installIfNeeded()
+    }
+
+    func remove(_ id: UInt32) {
+        handlers[id] = nil
+    }
+
+    private func installIfNeeded() {
+        guard handlerRef == nil else { return }
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        let userData = Unmanaged.passUnretained(self).toOpaque()
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, event, userData in
+                guard let userData, let event else { return noErr }
+                var pressed = EventHotKeyID()
+                GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &pressed
+                )
+                let router = Unmanaged<HotKeyRouter>.fromOpaque(userData).takeUnretainedValue()
+                guard let handler = router.handlers[pressed.id] else { return noErr }
+                DispatchQueue.main.async { handler() }
+                return noErr
+            },
+            1,
+            &eventType,
+            userData,
+            &handlerRef
+        )
+    }
+}
+
 public final class HotKeyManager {
     public var onPressed: (() -> Void)?
     private var hotKeyRef: EventHotKeyRef?
-    private var handlerRef: EventHandlerRef?
     private var registered: HotKeySpec?
     private let hotKeyID: UInt32
 
@@ -88,45 +139,7 @@ public final class HotKeyManager {
             throw ProviderError.failed("Invalid hotkey '\(raw)'")
         }
         unregister()
-
-        if handlerRef == nil {
-            var eventType = EventTypeSpec(
-                eventClass: OSType(kEventClassKeyboard),
-                eventKind: UInt32(kEventHotKeyPressed)
-            )
-            let userData = Unmanaged.passUnretained(self).toOpaque()
-            let status = InstallEventHandler(
-                GetApplicationEventTarget(),
-                { _, event, userData in
-                    guard let userData, let event else { return noErr }
-                    var pressed = EventHotKeyID()
-                    GetEventParameter(
-                        event,
-                        EventParamName(kEventParamDirectObject),
-                        EventParamType(typeEventHotKeyID),
-                        nil,
-                        MemoryLayout<EventHotKeyID>.size,
-                        nil,
-                        &pressed
-                    )
-                    let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
-                    // Both managers install a handler on the app target; only
-                    // the one whose id matches should fire.
-                    guard pressed.id == manager.hotKeyID else { return noErr }
-                    DispatchQueue.main.async {
-                        manager.onPressed?()
-                    }
-                    return noErr
-                },
-                1,
-                &eventType,
-                userData,
-                &handlerRef
-            )
-            guard status == noErr else {
-                throw ProviderError.failed("Could not install the hotkey handler (\(status))")
-            }
-        }
+        HotKeyRouter.shared.set(hotKeyID) { [weak self] in self?.onPressed?() }
 
         let hotKeyID = EventHotKeyID(signature: OSType(0x50414C54), id: hotKeyID) // 'PALT'
         let status = RegisterEventHotKey(
@@ -149,10 +162,7 @@ public final class HotKeyManager {
             UnregisterEventHotKey(hotKeyRef)
             self.hotKeyRef = nil
         }
-        if let handlerRef {
-            RemoveEventHandler(handlerRef)
-            self.handlerRef = nil
-        }
+        HotKeyRouter.shared.remove(hotKeyID)
         registered = nil
     }
 

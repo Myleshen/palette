@@ -124,14 +124,14 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 29 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 30 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   emoji catalog and Apple names, breadth-first paths, and default-off app
   grid).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `~/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.4.0). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.4.1). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
