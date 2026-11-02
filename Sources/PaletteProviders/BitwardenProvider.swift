@@ -46,7 +46,7 @@ public actor BitwardenVault {
         }
         guard let email, !email.isEmpty else { return }
 
-        var password = environment["BW_PASSWORD"] ?? environment["BITWARDEN_TEST_USER_PASS"]
+        var password = environment["BW_PASSWORD"]
         if password == nil || password?.isEmpty == true {
             password = await bridge.prompt(
                 kind: .secureText,
