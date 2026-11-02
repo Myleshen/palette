@@ -516,8 +516,10 @@ public final class SearchController: ObservableObject, HostBridge {
             switch action.kind {
             case .openPath:
                 if let path = action.value.text {
-                    launcher.openPath(path)
+                    // Hide first so Enter feels instant; launching the app can
+                    // take longer than the animation.
                     panel?.hide(activatePrevious: false)
+                    launcher.openPath(path)
                 }
 
             case .openPathWith:
@@ -526,22 +528,20 @@ public final class SearchController: ObservableObject, HostBridge {
                     return
                 }
                 let app = value["app"] ?? configuration.editorOpenWith
-                try launcher.openPath(path, with: app)
                 panel?.hide(activatePrevious: false)
+                try launcher.openPath(path, with: app)
 
             case .openURL:
-                if let object = action.value.object, let url = object["url"] {
-                    launcher.openURL(url, with: object["browser"])
-                    panel?.hide(activatePrevious: false)
-                } else if let url = action.value.text {
-                    launcher.openURL(url)
-                    panel?.hide(activatePrevious: false)
-                }
+                let object = action.value.object
+                let url = object?["url"] ?? action.value.text
+                guard let url else { return }
+                panel?.hide(activatePrevious: false)
+                launcher.openURL(url, with: object?["browser"])
 
             case .reveal:
                 if let path = action.value.text {
-                    launcher.reveal(path)
                     panel?.hide(activatePrevious: false)
+                    launcher.reveal(path)
                 }
 
             case .copyText:
