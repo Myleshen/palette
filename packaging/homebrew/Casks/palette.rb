@@ -1,6 +1,6 @@
 cask "palette" do
-  version "1.1.0"
-  sha256 "45cdf8157bcf7c4780e2d83d09ca4063bf596a8e971830f695b6fd0ec82960c6"
+  version "1.4.0"
+  sha256 "986e76ebaec3de0cbe78ac62b807692589e3123b7caad7d763a9522c41f9a435"
 
   url "https://github.com/Myleshen/palette/releases/download/v#{version}/Palette-#{version}.zip"
   name "Palette"
