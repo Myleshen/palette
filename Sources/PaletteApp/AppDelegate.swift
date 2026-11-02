@@ -79,6 +79,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.shared.configure(url: paths.logFile)
         Log.shared.info("Palette launching from \(Bundle.main.bundlePath)", source: "app")
 
+        // One Palette at a time. A stale build or a second installed copy must
+        // not leave two owners fighting over the global hotkeys.
+        if ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] == nil,
+           let bundleID = Bundle.main.bundleIdentifier,
+           let other = NSRunningApplication
+            .runningApplications(withBundleIdentifier: bundleID)
+            .first(where: { $0.processIdentifier != getpid() }) {
+            Log.shared.warn("Another Palette is already running; activating it instead", source: "app")
+            other.activate(options: [])
+            NSApp.terminate(nil)
+            return
+        }
+
         let configResult = ConfigLoader.load(paths: paths)
         configuration = configResult.config
         startupDiagnostics = configResult.diagnostics
@@ -305,7 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ))
         providers.append(PinProvider(store: store, bridge: hostProxy))
         providers.append(ClipboardProvider(store: store, bridge: hostProxy))
-        providers.append(WebAppProvider(store: store, bridge: hostProxy, onChange: { [weak self] in
+        providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, onChange: { [weak self] in
             await self?.exportWebApps()
         }))
         providers.append(ZellijProvider(terminal: configuration.terminal, launcher: launcher, bridge: hostProxy))
@@ -379,6 +392,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.searchController.panelDidHide()
         }
         panel = controller
+        controller.anchorOverride = configuration.searchPosition.rawValue
         searchController.panel = controller
     }
 
@@ -712,8 +726,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configuration = result.config
         startupDiagnostics = result.diagnostics
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
-        themeManager.selection = configuration.theme
-        themeManager.reload()
+        themeManager.updateSelection(configuration.theme)
+        panel?.anchorOverride = configuration.searchPosition.rawValue
 
         let oldRegistry = registry
         let newRegistry = buildRegistry()
@@ -782,7 +796,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 660, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 640),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -835,6 +849,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openConfig() {
         if !FileManager.default.fileExists(atPath: paths.configFile.path) {
             _ = ConfigLoader.load(paths: paths)
+        }
+        let editor = configuration.editorOpenWith.trimmingCharacters(in: .whitespaces)
+        if !editor.isEmpty {
+            do {
+                try launcher.openPath(paths.configFile.path, with: editor)
+                return
+            } catch {
+                Log.shared.warn("Could not open config with \(editor): \(error.localizedDescription)", source: "app")
+            }
         }
         launcher.openPath(paths.configFile.path)
     }

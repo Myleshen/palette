@@ -32,10 +32,10 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             kind: parsed.kind
         )
         let ordered = entries.sorted { lhs, rhs in
+            if lhs.pinned != rhs.pinned { return lhs.pinned }
             if lhs.kind != rhs.kind {
                 return Self.kindOrder(lhs.kind) < Self.kindOrder(rhs.kind)
             }
-            if lhs.pinned != rhs.pinned { return lhs.pinned }
             return lhs.createdAt > rhs.createdAt
         }
         return ordered.map { entry in

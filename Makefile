@@ -2,7 +2,7 @@ APP_NAME := Palette
 BUNDLE_ID := dev.myleshen.palette
 BUILD_DIR := build
 APP := $(BUILD_DIR)/$(APP_NAME).app
-INSTALL_DIR := $(HOME)/Applications
+INSTALL_DIR ?= /Applications
 BIN_PATH := $(shell swift build -c release --show-bin-path)
 BINARY := $(BIN_PATH)/$(APP_NAME)
 
@@ -18,6 +18,7 @@ app: build
 	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
 	cp "$(BINARY)" "$(APP)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
+	cp Resources/AppIcon.icns "$(APP)/Contents/Resources/AppIcon.icns"
 	cp -R Resources/Themes "$(APP)/Contents/Resources/Themes"
 	cp -R Resources/Providers "$(APP)/Contents/Resources/Providers"
 	cp -R Resources/Examples "$(APP)/Contents/Resources/Examples"

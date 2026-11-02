@@ -97,6 +97,8 @@ public final class ToolLocator: @unchecked Sendable {
             "/Applications/Utilities",
             "/System/Applications",
             "/System/Applications/Utilities",
+            "/System/Library/CoreServices",
+            "/System/Library/CoreServices/Applications",
             home + "/Applications",
             home + "/Applications/Utilities",
         ]

@@ -1,6 +1,6 @@
 cask "palette" do
-  version "1.4.1"
-  sha256 "4006e981fc2c26a2ed3f74cec0aaa72e6b71ce000a388483c9e1b4961b4e06ad"
+  version "1.5.0"
+  sha256 "ca77653b3a137e38ec986a9aa68593067fe688a349b874324ad3ef79a7a9601d"
 
   url "https://github.com/Myleshen/palette/releases/download/v#{version}/Palette-#{version}.zip"
   name "Palette"
@@ -15,9 +15,8 @@ cask "palette" do
 
   # Ad-hoc signed, so Gatekeeper cannot verify it; clear the download flag the
   # same way `--no-quarantine` does for other unsigned casks.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Palette.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Palette.app"]
   end
 
   uninstall quit: "dev.myleshen.palette"

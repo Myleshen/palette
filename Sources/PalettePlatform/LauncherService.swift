@@ -51,6 +51,29 @@ public final class LauncherService {
         NSWorkspace.shared.open(url)
     }
 
+    @discardableResult
+    public func openURL(_ string: String, with browser: String?) -> Bool {
+        guard let browser, !browser.isEmpty,
+              let url = URL(string: string), let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme) else {
+            openURL(string)
+            return false
+        }
+        guard let appPath = ToolLocator.shared.appPath(named: browser) else {
+            Log.shared.warn("Browser \(browser) is not installed; opening the default browser", source: "launcher")
+            openURL(string)
+            return false
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.open([url], withApplicationAt: URL(fileURLWithPath: appPath), configuration: configuration) { _, error in
+            if let error {
+                Log.shared.error("open in \(browser) failed: \(error.localizedDescription)", source: "launcher")
+            }
+        }
+        return true
+    }
+
     public func run(_ argv: [String], cwd: String? = nil) throws {
         guard !argv.isEmpty else { return }
         try ProcessRunner.launch(argv, cwd: cwd)
@@ -146,10 +169,18 @@ public actor AppIndex {
             let path = (url.path as NSString).standardizingPath
             guard records[path] == nil else { return }
             let bundle = Bundle(url: url)
-            let name = bundle?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
-                ?? bundle?.object(forInfoDictionaryKey: "CFBundleName") as? String
+            func bundleName(_ key: String) -> String? {
+                guard let value = bundle?.object(forInfoDictionaryKey: key) as? String else { return nil }
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            let name = bundleName("CFBundleDisplayName")
+                ?? bundleName("CFBundleName")
                 ?? url.deletingPathExtension().lastPathComponent
             let bundleID = bundle?.bundleIdentifier
+            // CoreServices contains helper bundles named by reverse-DNS ID;
+            // they are not launchable user apps and only add noise.
+            guard !(name.contains(".") && name.first?.isLowercase == true) else { return }
             var keywords = [url.deletingPathExtension().lastPathComponent, name]
             if let bundleID { keywords.append(bundleID) }
             records[path] = AppRecord(name: name, path: path, bundleID: bundleID, keywords: keywords)
@@ -171,6 +202,10 @@ public actor AppIndex {
                 }
             }
         }
+
+        // Finder is the one user-facing app that lives in CoreServices; the
+        // rest of that directory is helper daemons, not launchable apps.
+        add(URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"))
 
         return records.values.sorted {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending

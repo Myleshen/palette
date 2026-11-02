@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 import PaletteCore
 import PalettePlatform
 import PaletteProviders
@@ -121,6 +122,8 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(config.clipboard.maxEntries, 5_000)
         XCTAssertEqual(config.webSearchEngines.count, 4)
         XCTAssertEqual(config.clipboardHotkey, "opt+v")
+        XCTAssertEqual(config.searchPosition, .top)
+        XCTAssertEqual(config.webAppBrowser, "Helium")
 
         let table = try TOMLTable(string: ConfigWriter.render(config))
         var diagnostics: [Diagnostic] = []
@@ -129,9 +132,28 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(parsed.clipboard.maxEntries, 5_000)
         XCTAssertEqual(parsed.webSearchEngines.map(\.name), config.webSearchEngines.map(\.name))
         XCTAssertEqual(parsed.clipboardHotkey, config.clipboardHotkey)
+        XCTAssertEqual(parsed.searchPosition, .top)
+        XCTAssertEqual(parsed.webAppBrowser, "Helium")
         XCTAssertTrue(diagnostics.isEmpty)
         XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))
         XCTAssertTrue(ThemeLoader.builtinNames.contains("aetheria-pink"))
+
+        var moved = config
+        moved.searchPosition = .bottom
+        let movedTable = try TOMLTable(string: ConfigWriter.render(moved))
+        var movedDiagnostics: [Diagnostic] = []
+        let movedParsed = try ConfigLoader.parse(movedTable, diagnostics: &movedDiagnostics)
+        XCTAssertEqual(movedParsed.searchPosition, .bottom)
+        XCTAssertTrue(movedDiagnostics.isEmpty)
+    }
+
+    func testWebAppBrowserValidation() {
+        XCTAssertNil(BrowserCatalog.validationError(for: "Helium"),
+                     "The default Helium browser should validate when installed")
+        XCTAssertNotNil(BrowserCatalog.validationError(for: "Definitely Not A Browser"),
+                        "Unknown browsers must fail validation instead of being saved")
+        XCTAssertNotNil(BrowserCatalog.validationError(for: "Safari"),
+                        "Only Chromium-based browsers are allowed for web apps")
     }
 
     func testLonePrefixIsNotAProviderQuery() {
@@ -155,6 +177,24 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(spec?.display, "opt+space")
         XCTAssertEqual(spec?.keyCode, UInt32(kVK_Space))
         XCTAssertEqual(spec?.modifiers, UInt32(optionKey))
+    }
+
+    func testShortcutRecorderTurnsKeyPressIntoCanonicalSpec() {
+        let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.option],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: " ",
+            charactersIgnoringModifiers: " ",
+            isARepeat: false,
+            keyCode: 49
+        )
+        let spec = event.flatMap(HotKeySpec.from(event:))
+        XCTAssertEqual(spec?.display, "opt+space")
+        XCTAssertEqual(spec?.keyCode, UInt32(kVK_Space))
     }
 
     func testEmojiCatalogIsLargeAndSearchable() async throws {

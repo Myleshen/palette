@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.5.0 — 2026-11-02
+
+Daily-use release. Existing configs keep working; new fields (`search_position`,
+`web_app_browser`) default to top and Helium.
+
+### Added
+
+- **Provider tabs** under the search field: Apps plus every triggered provider.
+  `Tab` / `⇧Tab` cycle them, clicking opens one with an empty query.
+- **Search position**: `top`, `center`, or `bottom`. Bottom stacks results and
+  tabs above the field and anchors the panel to the bottom of the screen.
+- **Shortcut recorder** in Settings: press the keys instead of typing
+  `opt+space`.
+- **Web-app browser** setting with a Chromium-only picker (Helium default).
+  Saving is blocked with a clear message when the selected browser is missing.
+- **App icon** (pink command palette) bundled as `AppIcon.icns`.
+- Clipboard: pinned entries sort to the top and filter tabs switch between All,
+  Text, Images, and Files.
+- Bitwarden: in-app login and unlock (prompt or `BW_EMAIL` / `BW_PASSWORD`),
+  shared session across all five prefixes.
+
+### Fixed
+
+- Config.toml from the menu now opens in the configured editor (Neovide), not
+  whatever macOS has registered for `.toml`.
+- Themes no longer stay stuck on a stale `/theme` override after Settings or
+  config changes; a config save clears the override.
+- Finder appears in app search; CoreServices helper daemons do not.
+- Enter reaches the action faster: the frecency write now happens after the
+  action instead of ahead of it.
+- Only one Palette can run; a second launch activates the existing instance.
+- Web apps always offer an Add row, even with no saved apps.
+- Bitwarden values are concealed and excluded from clipboard history.
+- Homebrew cask uses `postflight_steps` instead of deprecated `postflight`.
+
 ## 1.4.1 — 2026-11-02
 
 ### Fixed

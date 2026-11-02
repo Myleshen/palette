@@ -336,13 +336,26 @@ struct LauncherRootView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            searchBar
-            Rectangle()
-                .fill(theme.color(theme.palette.separator))
-                .frame(height: 1)
-            content
-            if theme.footer.show {
-                footer
+            if controller.searchPosition == .bottom {
+                content
+                tabBar
+                Rectangle()
+                    .fill(theme.color(theme.palette.separator))
+                    .frame(height: 1)
+                searchBar
+                if theme.footer.show {
+                    footer
+                }
+            } else {
+                searchBar
+                Rectangle()
+                    .fill(theme.color(theme.palette.separator))
+                    .frame(height: 1)
+                tabBar
+                content
+                if theme.footer.show {
+                    footer
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -364,6 +377,78 @@ struct LauncherRootView: View {
         .onChange(of: controller.prompt?.id) { _, _ in
             DispatchQueue.main.async { promptFocused = controller.prompt != nil }
         }
+    }
+
+    private var tabBar: some View {
+        VStack(spacing: 0) {
+            if controller.activeTabID == "clip" {
+                HStack(spacing: 6) {
+                    filterChip("All", value: nil)
+                    filterChip("Text", value: "text")
+                    filterChip("Images", value: "image")
+                    filterChip("Files", value: "files")
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(controller.providerTabs) { tab in
+                        let selected = controller.activeTabID == tab.id
+                        Button {
+                            controller.selectTab(tab.id)
+                        } label: {
+                            HStack(spacing: 4) {
+                                if let icon = tabIcon(tab.icon) {
+                                    Image(systemName: icon)
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
+                                Text(tab.title)
+                                    .font(.system(size: 10.5, weight: .medium))
+                                    .lineLimit(1)
+                            }
+                            .foregroundColor(theme.color(selected ? theme.palette.accent : theme.palette.fgMuted))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(theme.color(theme.palette.accent).opacity(selected ? 0.16 : 0))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            Rectangle()
+                .fill(theme.color(theme.palette.separator).opacity(0.6))
+                .frame(height: 1)
+        }
+    }
+
+    private func filterChip(_ title: String, value: String?) -> some View {
+        let selected = controller.effectiveClipboardFilter == value
+        return Button {
+            controller.setClipboardFilter(value)
+        } label: {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule().fill(selected
+                        ? theme.color(theme.palette.accent)
+                        : theme.color(theme.palette.elevated))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func tabIcon(_ raw: String?) -> String? {
+        guard let raw, raw.hasPrefix("symbol:") else { return nil }
+        return String(raw.dropFirst(7))
     }
 
     private var searchBar: some View {

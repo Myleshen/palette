@@ -44,15 +44,18 @@ public actor WebAppProvider: PaletteProvider {
 
     private let store: PaletteStore
     private let bridge: HostBridge
+    private let browser: String
     private let onChange: @Sendable () async -> Void
 
     public init(
         store: PaletteStore,
         bridge: HostBridge,
+        browser: String = "Helium",
         onChange: @escaping @Sendable () async -> Void = {}
     ) {
         self.store = store
         self.bridge = bridge
+        self.browser = browser
         self.onChange = onChange
     }
 
@@ -73,7 +76,7 @@ public actor WebAppProvider: PaletteProvider {
             guard searchText.isEmpty || score >= 0 else { continue }
 
             let actions: [PaletteAction] = [
-                PaletteAction(id: "open", title: "Open Web App", kind: .openURL, value: .text(app.url)),
+                PaletteAction(id: "open", title: "Open Web App", kind: .openURL, value: .object(["url": app.url, "browser": browser])),
                 PaletteAction(id: "copy-url", title: "Copy URL", kind: .copyText, value: .text(app.url)),
                 PaletteAction(id: "shortcut", title: app.shortcut == nil ? "Set Shortcut…" : "Change Shortcut…", kind: .custom, value: .text(app.id)),
                 PaletteAction(id: "clear-shortcut", title: "Clear Shortcut", kind: .custom, value: .text(app.id)),
@@ -132,6 +135,18 @@ public actor WebAppProvider: PaletteProvider {
                 providerID: Self.descriptorValue.id,
                 providerName: Self.descriptorValue.name
             ), at: 0)
+        } else if request.isBound, trimmed.isEmpty {
+            items.insert(PaletteItem(
+                id: "add-new",
+                title: "Add Web App…",
+                subtitle: "Enter a domain, or type /web example.com",
+                icon: .symbol("plus.circle"),
+                badge: "new",
+                score: 9_000,
+                actions: [PaletteAction(id: "add", title: "Add Web App", kind: .custom, value: .text(""))],
+                providerID: Self.descriptorValue.id,
+                providerName: Self.descriptorValue.name
+            ), at: 0)
         }
 
         return Array(items.prefix(max(1, request.limit)))
@@ -140,7 +155,16 @@ public actor WebAppProvider: PaletteProvider {
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         switch action.id {
         case "add":
-            guard let raw = action.value.text, let url = WebAppURL.normalize(raw) else {
+            var raw = action.value.text ?? ""
+            if raw.isEmpty {
+                guard let entered = await bridge.prompt(
+                    kind: .text,
+                    title: "Add Web App",
+                    placeholder: "example.com"
+                ) else { return }
+                raw = entered
+            }
+            guard let url = WebAppURL.normalize(raw) else {
                 await bridge.notify("That does not look like a web address")
                 return
             }

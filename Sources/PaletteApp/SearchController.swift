@@ -32,6 +32,8 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public private(set) var focusToken = 0
     /// Wider layout with a live preview pane; used by the clipboard hotkey.
     @Published public private(set) var previewEnabled = false
+    @Published public var clipboardFilter: String?
+    public var searchPosition: SearchPosition { configuration.searchPosition }
 
     public var panel: PanelController?
     public var onReload: (() -> Void)?
@@ -110,6 +112,7 @@ public final class SearchController: ObservableObject, HostBridge {
     /// wide preview layout and no typing required.
     public func openClipboard() {
         previewEnabled = true
+        clipboardFilter = nil
         panel?.widthOverride = 880
         actionsMode = false
         actionItems = []
@@ -327,7 +330,7 @@ public final class SearchController: ObservableObject, HostBridge {
             if actionsMode { executeAction() } else { executePrimary() }
             return true
         case 48:
-            completeTrigger()
+            cycleTab(by: flags.contains(.shift) ? -1 : 1)
             return true
         case 53:
             if actionsMode {
@@ -359,8 +362,69 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     private func completeTrigger() {
-        guard !actionsMode, let completion = registry.parser.completion(for: query) else { return }
-        query = completion
+        cycleTab(by: 1)
+    }
+
+    // MARK: - Provider tabs
+
+    public struct ProviderTab: Identifiable, Equatable {
+        public var id: String
+        public var title: String
+        public var trigger: String?
+        public var icon: String?
+    }
+
+    public var providerTabs: [ProviderTab] {
+        var tabs: [ProviderTab] = [
+            ProviderTab(id: "apps", title: "Apps", trigger: nil, icon: "square.grid.2x2"),
+        ]
+        for provider in registry.providers {
+            guard let trigger = provider.descriptor.trigger else { continue }
+            tabs.append(ProviderTab(
+                id: provider.descriptor.id,
+                title: provider.descriptor.name,
+                trigger: trigger,
+                icon: provider.descriptor.icon
+            ))
+        }
+        return tabs
+    }
+
+    public var activeTabID: String {
+        registry.parser.parse(query).providerID ?? "apps"
+    }
+
+    public func selectTab(_ id: String) {
+        if id == "apps" {
+            query = ""
+            return
+        }
+        guard let provider = registry.providers.first(where: { $0.descriptor.id == id }),
+              let trigger = provider.descriptor.trigger else { return }
+        query = registry.parser.prefix + trigger + " "
+    }
+
+    public func cycleTab(by delta: Int) {
+        guard !actionsMode else { return }
+        let tabs = providerTabs
+        guard tabs.count > 1 else { return }
+        let current = tabs.firstIndex(where: { $0.id == activeTabID }) ?? 0
+        let count = tabs.count
+        let next = ((current + delta) % count + count) % count
+        selectTab(tabs[next].id)
+    }
+
+    public var effectiveClipboardFilter: String? {
+        let text = registry.parser.parse(query).text.lowercased()
+        if text.hasPrefix("image") { return "image" }
+        if text.hasPrefix("file") { return "files" }
+        if text.hasPrefix("text") { return "text" }
+        return nil
+    }
+
+    public func setClipboardFilter(_ kind: String?) {
+        clipboardFilter = kind
+        query = "/clip" + (kind.map { " " + $0 } ?? " ")
     }
 
     private func cycleScope() {
@@ -438,10 +502,12 @@ public final class SearchController: ObservableObject, HostBridge {
         let isTransient = ["install", "login", "unlock", "add", "remove", "shortcut", "clear-shortcut", "pin-item", "unpin-item"].contains(action.id)
         Task { [weak self] in
             guard let self else { return }
+            // Act first: the frecency write must not sit between Enter and the
+            // window opening or the clipboard being written.
+            await self.perform(item: item, action: action)
             if !isTransient {
                 try? await self.store.recordUse(stableID: item.stableID, provider: item.providerID)
             }
-            await self.perform(item: item, action: action)
         }
     }
 
@@ -464,7 +530,10 @@ public final class SearchController: ObservableObject, HostBridge {
                 panel?.hide(activatePrevious: false)
 
             case .openURL:
-                if let url = action.value.text {
+                if let object = action.value.object, let url = object["url"] {
+                    launcher.openURL(url, with: object["browser"])
+                    panel?.hide(activatePrevious: false)
+                } else if let url = action.value.text {
                     launcher.openURL(url)
                     panel?.hide(activatePrevious: false)
                 }
@@ -682,12 +751,14 @@ public final class SearchController: ObservableObject, HostBridge {
             content = rows(items.count)
         }
         let footer = theme.footer.show ? CGFloat(28) : 0
+        // Provider tab strip, plus the clipboard filter chips when previewing.
+        let tabs = CGFloat(33 + (activeTabID == "clip" ? 27 : 0))
         if previewEnabled {
             // The preview pane sets the height; a few rows are always visible.
             content = max(content, 360)
             panel.widthOverride = 880
         }
-        panel.setContentHeight(CGFloat(theme.search.height) + content + footer)
+        panel.setContentHeight(CGFloat(theme.search.height) + content + tabs + footer)
     }
 
     public func refreshTheme() {

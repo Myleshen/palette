@@ -10,7 +10,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.4.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.5.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -93,13 +93,20 @@ Caches live in `~/Library/Caches/Palette`.
 | `⌘⏎` | secondary action (usually paste, or reveal for paths) |
 | `⌘K` | action list for the selection |
 | `⌘1`…`⌘9` | open the nth result |
-| `Tab` | complete the selected provider prefix |
+| `Tab` / `⇧Tab` | cycle provider tabs (`/web`, `/zj`, `/bw`, …) |
 | `Esc` | clear the query, then dismiss |
 | `⌘,` | open Settings |
 | `⌘R` | reload config, themes, and providers after manual file edits |
 
 Application rows expose Open, Show in Finder, Copy Bundle ID, and Copy Path in
 `⌘K`; files and folders expose their own open/reveal/copy actions.
+
+### Provider tabs
+
+A tab strip under the search field shows Apps plus every provider that declares
+a trigger. It starts on **Apps**; clicking a tab opens that provider with an
+empty query. `Tab` and `⇧Tab` cycle through them without reaching for the
+mouse, so `/web`, `/zj`, `/bw`, `/clip`, and the rest are one key away.
 
 ### Prefixes
 
@@ -140,10 +147,19 @@ the result in your default browser. Engines are ordinary config rows in
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window for the hotkey,
-terminal, editor, app grid, themes, clipboard retention, and web-search engines.
-Saving applies immediately. Editing files by hand still works; press `⌘R`
-afterward to reload.
+`⌘,` (or the menu-bar icon) opens a native Settings window for the launcher and
+clipboard hotkeys, search-bar position, terminal, editor, app grid, themes,
+clipboard retention, web-search engines, and the browser used by web apps.
+Hotkeys are recorded by pressing them, not typed. Saving validates both
+shortcuts and refuses a browser that is not installed. Changes apply
+immediately; editing files by hand still works, then press `⌘R`.
+
+### Search position
+
+`search_position = "top" | "center" | "bottom"` controls where the panel opens.
+With `bottom`, the results and provider tabs stack above the search field and the
+panel anchors to the bottom of the screen; `center` keeps the top-first layout
+but opens the panel in the middle.
 
 ### App grid
 
@@ -170,19 +186,29 @@ selections are stored separately and listed under **Text**, **Images**, and
 - Files keep their paths, icon, size, and a `bat` render for text files, with
   Copy/Paste Files and Reveal in Finder.
 
+Pinned entries sort to the very top, across every category, and the filter tabs
+above the list switch between **All**, **Text**, **Images**, and **Files**.
 `⌘K` toggles **Pin** and **Delete** for every kind. Retention defaults to 5,000
 entries and is configurable in Settings; images are stored as PNG and files as
 paths in Palette’s SQLite state. Anything marked concealed by another app is
 never recorded.
 
+Values copied from Bitwarden are always written as concealed and clear after 30
+seconds, so they never enter Palette’s clipboard history.
+
 ### Web apps
 
 `/web` keeps your own web-app shortcuts, independent of any browser-specific
-“install as app” feature. Type a domain or URL and press `⏎` to add it:
+“install as app” feature. An **Add Web App…** row is always present; choose it
+(and paste a URL), or type a domain directly:
 
 1. `/web figma.com`
 2. choose **Add Web App “Figma”**
 3. give it a name, then optionally a shortcut such as `ctrl+alt+f`
+
+Web apps open in Helium by default. Change the browser in Settings → Search;
+only Chromium-based browsers are listed and Palette will not save one that is
+not installed.
 
 A shortcut needs at least two modifiers. Palette writes
 `~/.hammerspoon/palette-webapps.lua`; Hammerspoon watches that file and binds
@@ -212,6 +238,8 @@ editor_open_with = "neovide"
 clipboard_hotkey = "opt+v"
 app_grid = false
 app_grid_columns = 6
+search_position = "top"        # top | center | bottom
+web_app_browser = "Helium"
 
 [web_search]
 enabled = true

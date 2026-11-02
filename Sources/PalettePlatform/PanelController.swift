@@ -29,6 +29,11 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     public var widthOverride: CGFloat? {
         didSet { if isShowing { position() } }
     }
+
+    /// Config `search_position` wins over the theme's window anchor.
+    public var anchorOverride: String? {
+        didSet { if isShowing { position() } }
+    }
     private var keyMonitor: Any?
     private var contentHeight: CGFloat = 200
     private var theme: Theme
@@ -167,7 +172,7 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         var x = visible.midX - width / 2
         var y: CGFloat
 
-        switch theme.window.anchor.lowercased() {
+        switch (anchorOverride ?? theme.window.anchor).lowercased() {
         case "center":
             y = visible.midY - height / 2
         case "bottom":

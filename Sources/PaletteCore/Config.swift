@@ -17,6 +17,10 @@ public struct ThemeSelection: Sendable, Equatable {
     }
 }
 
+public enum SearchPosition: String, Sendable, Equatable, CaseIterable {
+    case top, center, bottom
+}
+
 public struct WebSearchEngine: Sendable, Equatable, Identifiable {
     public var name: String
     public var urlTemplate: String
@@ -67,6 +71,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var appGridColumns: Int
     public var webSearchEnabled: Bool
     public var webSearchEngines: [WebSearchEngine]
+    public var searchPosition: SearchPosition
+    public var webAppBrowser: String
 
     public init(
         hotkey: String = "opt+space",
@@ -82,7 +88,9 @@ public struct PaletteConfig: Sendable, Equatable {
         appGrid: Bool = false,
         appGridColumns: Int = 6,
         webSearchEnabled: Bool = true,
-        webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults
+        webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
+        searchPosition: SearchPosition = .top,
+        webAppBrowser: String = "Helium"
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -98,6 +106,8 @@ public struct PaletteConfig: Sendable, Equatable {
         self.appGridColumns = min(8, max(3, appGridColumns))
         self.webSearchEnabled = webSearchEnabled
         self.webSearchEngines = webSearchEngines
+        self.searchPosition = searchPosition
+        self.webAppBrowser = webAppBrowser
     }
 }
 
@@ -234,6 +244,13 @@ public enum ConfigLoader {
         if let columns = table.int("app_grid_columns") {
             config.appGridColumns = min(8, max(3, columns))
         }
+        if let position = table.str("search_position"),
+           let parsed = SearchPosition(rawValue: position.lowercased()) {
+            config.searchPosition = parsed
+        }
+        if let browser = table.str("web_app_browser"), !browser.isEmpty {
+            config.webAppBrowser = browser
+        }
 
         if let web = table.table("web_search") {
             if let enabled = web.bool("enabled") {
@@ -338,6 +355,13 @@ public enum ConfigLoader {
         app_grid = false
         app_grid_columns = 6
 
+        # Where the launcher opens: top | center | bottom. The search field and
+        # provider tabs follow this position.
+        search_position = "top"
+
+        # Chromium-based browser used for web apps. Defaults to Helium.
+        web_app_browser = "Helium"
+
         # Global web search. Add or remove engines as you like; {query} is
         # replaced with the URL-encoded search text.
         [web_search]
@@ -413,6 +437,8 @@ public enum ConfigWriter {
         out.append("editor_open_with = \(quote(config.editorOpenWith))")
         out.append("app_grid = \(config.appGrid)")
         out.append("app_grid_columns = \(config.appGridColumns)")
+        out.append("search_position = \(quote(config.searchPosition.rawValue))")
+        out.append("web_app_browser = \(quote(config.webAppBrowser))")
         out.append("")
         out.append("[theme]")
         out.append("mode = \(quote(config.theme.mode.rawValue))")

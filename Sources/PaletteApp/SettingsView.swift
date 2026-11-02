@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
 import PaletteCore
+import PalettePlatform
 
 struct SettingsView: View {
     @State private var config: PaletteConfig
     @State private var engines: [WebSearchEngine]
     @State private var selectedTab = 0
+    @State private var saveError: String?
 
     private let themesDirectory: URL
     private let onSave: (PaletteConfig) -> Void
@@ -47,7 +49,15 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .frame(width: 660, height: 560)
+        .frame(width: 720, height: 640)
+        .alert("Cannot Save", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
     }
 
     private var configURL: URL {
@@ -57,17 +67,28 @@ struct SettingsView: View {
     private var general: some View {
         Form {
             Section("Launcher") {
-                TextField("Hotkey", text: $config.hotkey)
-                TextField("Clipboard hotkey", text: $config.clipboardHotkey)
+                LabeledContent("Hotkey") {
+                    ShortcutRecorder(value: $config.hotkey)
+                        .frame(width: 200, height: 26)
+                }
+                LabeledContent("Clipboard hotkey") {
+                    ShortcutRecorder(value: $config.clipboardHotkey)
+                        .frame(width: 200, height: 26)
+                }
                 TextField("Provider prefix", text: $config.providerPrefix)
                 TextField("Terminal", text: $config.terminalApp)
                 TextField("Editor", text: $config.editorOpenWith)
             }
             Section("Layout") {
+                Picker("Search bar position", selection: $config.searchPosition) {
+                    Text("Top").tag(SearchPosition.top)
+                    Text("Center").tag(SearchPosition.center)
+                    Text("Bottom").tag(SearchPosition.bottom)
+                }
                 Toggle("Show applications as a grid", isOn: $config.appGrid)
                 Stepper("Grid columns: \(config.appGridColumns)", value: $config.appGridColumns, in: 3...8)
                     .disabled(!config.appGrid)
-                Text("Grid is only used for an empty, unprefixed query.")
+                Text("Grid is only used for an empty, unprefixed query. With Bottom, the tabs and list stack above the search field.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -138,6 +159,14 @@ struct SettingsView: View {
                     engines.append(WebSearchEngine(name: "New Engine", urlTemplate: "https://example.com/?q={query}"))
                 }
             }
+            Section("Web apps") {
+                Picker("Open web apps in", selection: $config.webAppBrowser) {
+                    ForEach(BrowserCatalog.chromiumChoices, id: \.self) { Text($0).tag($0) }
+                }
+                Text("Chromium-based browsers only; Helium is the default. Palette refuses to save a browser that is not installed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section {
                 Text("Web results appear after apps; {query} is replaced with the URL-encoded text.")
                     .font(.caption)
@@ -173,10 +202,97 @@ struct SettingsView: View {
     }
 
     private func save() {
+        guard HotKeySpec.parse(config.hotkey) != nil else {
+            saveError = "The launcher hotkey is not a valid shortcut. Click the field and press the keys you want."
+            return
+        }
+        guard HotKeySpec.parse(config.clipboardHotkey) != nil else {
+            saveError = "The clipboard hotkey is not a valid shortcut. Click the field and press the keys you want."
+            return
+        }
+        let browser = config.webAppBrowser
+        if let error = BrowserCatalog.validationError(for: browser) {
+            saveError = error
+            return
+        }
         config.webSearchEngines = engines.filter {
             !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && $0.urlTemplate.contains("{query}")
         }
         config.appGridColumns = min(8, max(3, config.appGridColumns))
         onSave(config)
+    }
+}
+
+/// Borderless AppKit field that records a real key press instead of asking the
+/// user to type something like "opt+space".
+struct ShortcutRecorder: NSViewRepresentable {
+    @Binding var value: String
+
+    func makeNSView(context: Context) -> RecorderView {
+        let view = RecorderView()
+        view.value = value
+        view.onChange = { recorded in
+            value = recorded
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: RecorderView, context: Context) {
+        nsView.value = value
+    }
+}
+
+final class RecorderView: NSView {
+    var value: String = "" {
+        didSet { needsDisplay = true }
+    }
+    var onChange: ((String) -> Void)?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func becomeFirstResponder() -> Bool {
+        needsDisplay = true
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        needsDisplay = true
+        return true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            window?.makeFirstResponder(nil)
+            return
+        }
+        guard let spec = HotKeySpec.from(event: event) else { return }
+        value = spec.display
+        onChange?(spec.display)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 1, dy: 1)
+        let focused = window?.firstResponder === self
+        NSColor.controlBackgroundColor.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+        (focused ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        let path = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
+        path.lineWidth = focused ? 2 : 1
+        path.stroke()
+
+        let text = focused && value.isEmpty ? "Press shortcut…" : (value.isEmpty ? "Click to record" : value)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .medium),
+            .foregroundColor: value.isEmpty ? NSColor.secondaryLabelColor : NSColor.labelColor,
+        ]
+        let size = (text as NSString).size(withAttributes: attributes)
+        (text as NSString).draw(
+            at: NSPoint(x: 9, y: (bounds.height - size.height) / 2),
+            withAttributes: attributes
+        )
     }
 }

@@ -124,14 +124,15 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 30 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 32 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
-  emoji catalog and Apple names, breadth-first paths, and default-off app
-  grid).
+  `search_position`, and `web_app_browser`, emoji catalog and Apple names,
+  breadth-first paths, default-off app grid, browser validation, and the
+  shortcut recorder).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
-  installed at `~/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.4.1). Hotkeys `opt+space` and `opt+v` registered without a
+  installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
+  version 1.5.0). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -148,6 +149,14 @@ Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.5 checks: the empty query showed the Apps tab first; `Tab` switched to
+  `/calc` and `⇧Tab` returns; typing `finder` ranked the CoreServices Finder
+  first with web-search rows below; `search_position = "bottom"` put the tab
+  strip and search field under the results; `/clip` showed pinned-first
+  Text/Images/Files groups, the All/Text/Images/Files chips highlighted the
+  matching filter, and `/clip image` showed only the 1024×1024 image with its
+  preview; Settings showed recorded `opt+space` / `opt+v` and the position
+  picker.
 - v1.3 parity checks: empty query is a list by default; `/neo ~/dev/` showed
   direct folders before deeper files; a lone `/` returned apps without Zellij
   create rows; `rust async runtime` offered Google/DuckDuckGo/GitHub/YouTube;
@@ -158,8 +167,12 @@ Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
 - Bitwarden (test profile in `BITWARDENCLI_APPDATA_DIR`, credentials read from
   `BITWARDEN_TEST_USER_PASS`): the GUI app unlocked with `BW_PASSWORD` and
   listed `Test`; `/bwn` listed and copied `Test note` (“test note, success if
-  you can read it”); `/bwu` copied the username `test`. The user’s normal vault
-  profile was not modified, and no password is stored by Palette.
+  you can read it”); `/bwu` copied the username `test`. A second, logged-out
+  profile went through the in-app login row with `BW_EMAIL`/`BW_PASSWORD`,
+  reached the vault, and left `bw status` authenticated as the test user. After
+  copying a note, the pasteboard held it while the clipboard-history table had
+  zero matching rows, proving vault values bypass history. The user’s normal
+  vault profile was not modified, and no password is stored by Palette.
 - Physical `⌥V` on the installed app opened the clipboard browser at `/clip`
   with the wide preview pane, grouped rows, and live text preview; `Esc`
   dismissed it and `⌥Space` still opened the normal launcher.

@@ -35,6 +35,53 @@ public actor BitwardenVault {
         return status
     }
 
+    public func login(bw: String, bridge: HostBridge, environment: [String: String]) async {
+        var email = environment["BW_EMAIL"]
+        if email == nil || email?.isEmpty == true {
+            email = await bridge.prompt(
+                kind: .text,
+                title: "Bitwarden email",
+                placeholder: "you@example.com"
+            )
+        }
+        guard let email, !email.isEmpty else { return }
+
+        var password = environment["BW_PASSWORD"] ?? environment["BITWARDEN_TEST_USER_PASS"]
+        if password == nil || password?.isEmpty == true {
+            password = await bridge.prompt(
+                kind: .secureText,
+                title: "Bitwarden master password",
+                placeholder: "Master password"
+            )
+        }
+        guard let password, !password.isEmpty else { return }
+
+        let result: ProcessResult
+        do {
+            result = try await ProcessRunner.run(
+                [bw, "login", email, "--passwordenv", "BW_PASSWORD", "--raw"],
+                environment: ["BW_PASSWORD": password, "BW_SESSION": ""],
+                timeout: 60
+            )
+        } catch {
+            await bridge.notify("Login failed: \(error.localizedDescription)")
+            return
+        }
+        guard result.status == 0 else {
+            await bridge.notify("Login failed: \(result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines))")
+            return
+        }
+        let key = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            await bridge.notify("Login returned no session key")
+            return
+        }
+        session = key
+        lastStatus = "unlocked"
+        lastStatusDate = Date()
+        await bridge.notify("Bitwarden unlocked")
+    }
+
     public func unlock(bw: String, bridge: HostBridge, environment: [String: String]) async {
         var password = environment["BW_PASSWORD"]
         if password == nil || password?.isEmpty == true {
@@ -266,9 +313,10 @@ public actor BitwardenProvider: PaletteProvider {
             await bridge.notify("That item has no \(kind.rawValue.dropLast())")
             return
         }
-        let concealed = command != "copy-username"
-        await bridge.copyToClipboard(value, concealed: concealed, clearAfterMs: concealed ? 30_000 : nil)
-        await bridge.notify(concealed ? "Copied; clipboard clears in 30 seconds" : "Copied username")
+        // Every vault value is concealed: Palette's monitor ignores concealed
+        // pasteboard writes, so nothing copied from the vault enters history.
+        await bridge.copyToClipboard(value, concealed: true, clearAfterMs: 30_000)
+        await bridge.notify("Copied securely; clipboard clears in 30 seconds")
     }
 
     // MARK: - Vault rows
@@ -281,9 +329,7 @@ public actor BitwardenProvider: PaletteProvider {
                 try launcher.openTerminal(command: "brew install bitwarden-cli", app: terminalApp)
             }
         case "login":
-            try await MainActor.run {
-                try launcher.openTerminal(command: "bw login", app: terminalApp)
-            }
+            await vault.login(bw: bw, bridge: bridge, environment: environment)
         case "unlock":
             await vault.unlock(bw: bw, bridge: bridge, environment: environment)
         default:
@@ -308,10 +354,10 @@ public actor BitwardenProvider: PaletteProvider {
         PaletteItem(
             id: "login",
             title: "Log in to Bitwarden",
-            subtitle: "Vaultwarden · opens bw login in \(terminalApp)",
+            subtitle: "Vaultwarden · sign in without leaving Palette",
             icon: .symbol("person.badge.key"),
             score: 10_000,
-            actions: [PaletteAction(id: "login", title: "Open bw login", kind: .custom, value: .text("login"))],
+            actions: [PaletteAction(id: "login", title: "Log In", kind: .custom, value: .text("login"))],
             providerID: descriptor.id,
             providerName: descriptor.name
         )
