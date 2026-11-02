@@ -1,0 +1,304 @@
+# Palette
+
+A keyboard-first launcher for macOS, built as a native app with a deliberately
+extensible provider system. Press a hotkey, type, act. No window chrome, no
+Dock icon, no script layer holding the core together.
+
+```
+⌥Space → /neo dotfiles → ⏎ opens the folder in Neovide
+```
+
+## Status
+
+v1.4. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+and not distributed through the App Store, by design: a launcher needs to see
+your files and drive other apps.
+
+## Requirements
+
+| Tool | Why | Install |
+|---|---|---|
+| `fd` | filesystem enumeration for `/neo` and `/neof` | `brew install fd` |
+| `fzf` | ranking for path results | `brew install fzf` |
+| `zellij` | `/zj` sessions | `brew install zellij` |
+| `kitty` | terminal used by `/zj` | `brew install --cask kitty` |
+| `bw` | Bitwarden provider | `brew install bitwarden-cli` |
+
+Only `fd` and `fzf` are needed for the core file workflows. Missing tools are
+surfaced as an install row inside the launcher; nothing is installed silently.
+
+## Build and install
+
+```sh
+make            # build a release app bundle at build/Palette.app
+make install    # copy it to ~/Applications
+make run        # build and launch the bundle in build/
+make test       # run the test suite
+```
+
+The app is ad-hoc signed. macOS may ask for Accessibility permission again
+after a rebuild; that is expected without a Developer ID certificate.
+
+### Homebrew
+
+A ready Cask lives in `packaging/homebrew/Casks/palette.rb`. `make release`
+builds `dist/Palette-<version>.zip`, updates its checksum, and prints the upload
+steps for `Myleshen/palette` and a `Myleshen/homebrew-tap` repository. Once that
+release and tap exist:
+
+```sh
+brew install --cask Myleshen/tap/palette
+```
+
+No Apple Developer subscription or App Store listing is involved. The app is
+ad-hoc signed; Homebrew installs it without the quarantine flag. Manual zip
+downloads may need System Settings > Privacy & Security > Open Anyway. See
+`packaging/homebrew/README.md` for the release process.
+
+## First run
+
+1. Launch Palette. It lives in the menu bar.
+2. Press `⌥Space`.
+3. Run a command that pastes (for example a clipboard entry and `⌘⏎`) and grant
+   Accessibility when prompted. Copy-only actions work without it.
+
+Configuration lives in `~/.config/palette`:
+
+```
+~/.config/palette/
+  config.toml
+  providers/
+    neof/provider.toml      # user copy of the file provider, seeded for you
+  themes/                   # optional user themes
+```
+
+The bundled `/neo` provider lives inside the app. On first run Palette writes a
+commented `config.toml` and seeds `providers/neof` so both examples are ready to
+use without copying anything.
+
+State (history, clipboard, frecency) lives in `~/.local/state/palette`.
+Caches live in `~/Library/Caches/Palette`.
+
+## Using it
+
+| Key | Action |
+|---|---|
+| `⌥Space` | show / hide |
+| `⌥V` | clipboard browser with live preview |
+| `↑` `↓` | move selection |
+| `⏎` | primary action |
+| `⌘⏎` | secondary action (usually paste, or reveal for paths) |
+| `⌘K` | action list for the selection |
+| `⌘1`…`⌘9` | open the nth result |
+| `Tab` | complete the selected provider prefix |
+| `Esc` | clear the query, then dismiss |
+| `⌘,` | open Settings |
+| `⌘R` | reload config, themes, and providers after manual file edits |
+
+Application rows expose Open, Show in Finder, Copy Bundle ID, and Copy Path in
+`⌘K`; files and folders expose their own open/reveal/copy actions.
+
+### Prefixes
+
+A prefix routes the query to one provider. The shared prefix character is
+configurable (`provider_prefix`, default `/`), and each provider declares a bare
+trigger word:
+
+| Prefix | Provider |
+|---|---|
+| `/neo <query>` | files and folders, opened in Neovide |
+| `/neof <query>` | folders only, opened in Neovide |
+| `/zj <query>` | zellij sessions; `⏎` attaches or creates in kitty |
+| `/bw <query>` | Bitwarden passwords |
+| `/bwu <query>` | Bitwarden usernames |
+| `/bwt <query>` | Bitwarden TOTP codes |
+| `/bwn <query>` | Bitwarden notes |
+| `/bwo <query>` | Bitwarden URLs |
+| `/clip <query>` | clipboard history, text and images |
+| `/web <query>` | saved web apps; type a domain to add one |
+| `/emoji <query>` | emoji picker |
+| `/sys <query>` | lock, sleep, trash, reload, quit |
+| `/theme <query>` | switch themes live |
+| `/calc <expr>` | calculator (also works unprefixed) |
+
+A trailing slash browses a directory breadth-first: `/neo ~/dev/` shows the
+direct children of `~/dev` first, then the next level.
+
+Unprefixed queries search apps, web apps, zellij sessions, pinned items, web
+search engines, and any provider marked `global = true`. `= 2+2` and bare
+arithmetic also work.
+
+### Web search
+
+Type any query that is not a file or app and Palette offers one row per
+configured engine (Google, DuckDuckGo, GitHub, YouTube by default). `⏎` opens
+the result in your default browser. Engines are ordinary config rows in
+`[web_search]`; add or remove them in Settings or `config.toml`.
+
+### Settings
+
+`⌘,` (or the menu-bar icon) opens a native Settings window for the hotkey,
+terminal, editor, app grid, themes, clipboard retention, and web-search engines.
+Saving applies immediately. Editing files by hand still works; press `⌘R`
+afterward to reload.
+
+### App grid
+
+The app list is a plain compact list by default. With an empty query, set
+`app_grid = true` in Settings or `config.toml` to browse applications as an icon
+grid; arrow keys move by cell, row, or column and `⏎` opens.
+
+### Pinned items
+
+`⌘K` on any result includes **Pin to Palette**. Pinned results rise to the top
+of the empty-query grid and global search; choose **Unpin from Palette** to
+remove them. Pins are stored in Palette’s SQLite state.
+
+### Clipboard
+
+`⌥V` opens a wide clipboard browser with a live preview pane; `/clip` opens the
+same history in the normal window. Copied text, images, and Finder file
+selections are stored separately and listed under **Text**, **Images**, and
+**Files** headings. Add a category word to filter: `/clip text`,
+`/clip images`, `/clip files`, optionally followed by a search.
+
+- Text rows preview in full; long entries can be copied in full or pasted.
+- Images store a thumbnail and dimensions, with Copy/Paste Image.
+- Files keep their paths, icon, size, and a `bat` render for text files, with
+  Copy/Paste Files and Reveal in Finder.
+
+`⌘K` toggles **Pin** and **Delete** for every kind. Retention defaults to 5,000
+entries and is configurable in Settings; images are stored as PNG and files as
+paths in Palette’s SQLite state. Anything marked concealed by another app is
+never recorded.
+
+### Web apps
+
+`/web` keeps your own web-app shortcuts, independent of any browser-specific
+“install as app” feature. Type a domain or URL and press `⏎` to add it:
+
+1. `/web figma.com`
+2. choose **Add Web App “Figma”**
+3. give it a name, then optionally a shortcut such as `ctrl+alt+f`
+
+A shortcut needs at least two modifiers. Palette writes
+`~/.hammerspoon/palette-webapps.lua`; Hammerspoon watches that file and binds
+each app to its URL, so shortcuts are managed here, not by editing Hammerspoon
+config. Use `⌘K` on a saved app to open it, copy its URL, set/change or clear
+its shortcut, or remove it. Opens are counted by the normal frecency store, so
+frequently used apps rise to the top. Definitions live in Palette’s SQLite
+state, not in `config.toml`.
+
+### Themes
+
+`/theme` switches live. Built-ins include Default Dark/Light, Catppuccin
+Mocha/Latte, Gruvbox Dark/Light, and **Aetheria Pink** (the pink/violet Noctalia
+palette). Settings can choose the dark/light pair and auto/dark/light mode; theme
+TOML files live in `~/.config/palette/themes`.
+
+## Configuration
+
+Minimal `config.toml`:
+
+```toml
+hotkey = "opt+space"
+provider_prefix = "/"
+terminal = "kitty"
+terminal_app = "kitty"
+editor_open_with = "neovide"
+clipboard_hotkey = "opt+v"
+app_grid = false
+app_grid_columns = 6
+
+[web_search]
+enabled = true
+
+[[web_search.engines]]
+name = "Google"
+url = "https://www.google.com/search?q={query}"
+
+[theme]
+mode = "auto"                 # dark | light | auto
+dark = "catppuccin-mocha"
+light = "catppuccin-latte"
+
+[scopes.projects]
+roots = ["~/dev", "~/dot-files"]
+exclude = ["**/node_modules/**", "**/.git/**", "**/.build/**", "**/target/**"]
+include_hidden = false
+max_depth = 12
+
+[clipboard]
+enabled = true
+max_entries = 5000
+poll_ms = 500
+clear_after_ms = 30000
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full model, [THEMING.md](THEMING.md)
+for themes, and [PROVIDERS.md](PROVIDERS.md) for writing your own provider.
+
+`terminal` is the binary `/zj` launches; `terminal_app` is the GUI terminal used
+for Bitwarden login/install prompts. Both default to `kitty`; `Terminal` is also
+supported.
+
+## Extending
+
+Two kinds of provider:
+
+- **Paths providers** are declarative manifests backed by the built-in fd + fzf
+  engine. `/neof` is the reference copy: duplicate it, change `kind` and
+  `open_with`.
+- **Command providers** are any executable that speaks newline-delimited JSON
+  over stdin/stdout. Write one in shell, Python, Swift, or anything else. A
+  complete Python example ships in `Resources/Examples/hello`.
+
+```toml
+# ~/.config/palette/providers/hello/provider.toml
+id = "hello"
+name = "Hello"
+trigger = "hello"
+command = ["./hello.sh"]
+timeout_ms = 1000
+```
+
+A user provider with the same `id` as a bundled one overrides it. Provider
+manifests are discovered from `~/.config/palette/providers`; Palette reloads
+them automatically when a manifest changes, and `⌘R` forces a full reload.
+
+## Development
+
+```sh
+swift build
+swift test
+make run
+```
+
+Layout:
+
+```
+Sources/PaletteCore        models, config, theme, query, ranking, storage contracts
+Sources/PalettePlatform    macOS services: hotkey, panel, clipboard, fd/fzf, launch
+Sources/PaletteProviders   bundled providers
+Sources/PaletteRuntime     provider manifests and the external-process runtime
+Sources/PaletteApp         SwiftUI/AppKit shell
+Tests/                     unit and conformance tests
+```
+
+## Troubleshooting
+
+**Nothing happens on the hotkey.** Another app may own it. Change `hotkey` in
+`config.toml`, or quit the conflicting app.
+
+**`fd`/`fzf` not found.** GUI apps do not inherit your shell `PATH`. Palette
+probes `/opt/homebrew/bin`, `/usr/local/bin`, and `~/.local/bin`; if your tools
+live elsewhere, set `tools_path` in `config.toml`.
+
+**Paste does nothing.** Grant Accessibility in System Settings → Privacy &
+Security → Accessibility, then relaunch.
+
+**File results are stale.** Palette re-walks on demand and caches briefly. Use
+`⌘R` to force a refresh.
+
+**A provider misbehaves.** Check `~/.local/state/palette/logs/palette.log` and
+the provider's stderr in the same log.

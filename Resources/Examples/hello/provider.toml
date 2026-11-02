@@ -1,0 +1,9 @@
+id = "hello"
+name = "Hello Provider"
+trigger = "hello"
+engine = "command"
+command = ["python3", "main.py"]
+timeout_ms = 2000
+idle_timeout_s = 120
+priority = 1
+keywords = ["example", "external", "python"]

@@ -1,0 +1,10 @@
+.build/
+build/
+dist/
+.swiftpm/
+.DS_Store
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.log
+xcuserdata/

@@ -1,0 +1,11 @@
+id = "neo"
+name = "Neovide"
+trigger = "neo"
+engine = "paths"
+kind = "any"
+scope = "home"
+open_with = "neovide"
+secondary = "reveal"
+max_results = 2000
+freeform = true
+priority = 60

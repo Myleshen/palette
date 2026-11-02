@@ -1,0 +1,149 @@
+# Changelog
+
+## 1.4.0 — 2026-11-02
+
+Clipboard and emoji release.
+
+### Added
+
+- **Clipboard browser hotkey** (`⌥V`, configurable as `clipboard_hotkey`):
+  opens `/clip` in a wide panel with a live preview pane.
+- **Clipboard previews**: full text, image thumbnails at their real dimensions,
+  and Finder selections with icons, sizes, paths, and a `bat` text render.
+- **File clipboard entries**: Finder copies are stored separately with Copy
+  Files, Paste Files, and Reveal in Finder.
+- **Clipboard categories**: Text, Images, and Files are grouped in the browser
+  and filterable with `/clip text`, `/clip images`, and `/clip files`.
+- **Full macOS emoji catalog**: 3,967 entries merged from Unicode 18 and the
+  system `CoreEmoji` names, so search matches Spotlight and Character Viewer.
+- `clipboard_hotkey` is editable in Settings.
+
+### Changed
+
+- Bound provider results are capped at 5,000 so the complete emoji list is
+  reachable.
+
+## 1.3.0 — 2026-11-02
+
+Parity and daily-use release.
+
+### Added
+
+- **Settings window** (`⌘,`): hotkey, prefix, terminal, editor, app grid, theme
+  mode/pair, clipboard retention, and web-search engines. Saving applies
+  immediately; manual file edits reload with `⌘R`.
+- **Web search provider**: global rows for Google, DuckDuckGo, GitHub, and
+  YouTube (configurable), opened in the default browser.
+- **Favicons for web apps**, fetched and cached under
+  `~/Library/Caches/Palette/Favicons`.
+- **Gruvbox Dark/Light and Aetheria Pink** built-in themes.
+- **Full Unicode emoji catalog** (3,963 names) with literal-name search.
+- **Breadth-first path browsing**: `/neo ~/dev/` shows direct children before
+  deeper levels; directories sort before files at each depth.
+- Clipboard default history is now **5,000** entries; the Settings window can
+  change it.
+- Bitwarden unlock now keeps the in-memory session across all five prefixes,
+  and the test vault was verified against `/bw` and `/bwn`.
+
+### Fixed
+
+- A lone `/` no longer creates a Zellij session or offers web searches for
+  `/`; it returns to the normal app list.
+- Zellij only offers session creation in `/zj`, not from global search.
+- App grid defaults to **off**; enable it in Settings or `app_grid = true`.
+- Emoji search no longer returns unrelated names from loose subsequence matches.
+
+## 1.2.0 — 2026-11-02
+
+Noctalia parity release. No migration is required; existing `config.toml` keeps
+working, and new defaults fill in the missing home scope and app grid.
+
+### Added
+
+- `/neo` now searches files **and** folders across `$HOME` and accepts typed
+  absolute, `~`, or relative paths; `/neof` mirrors Noctalia as folders-only.
+- Clipboard history stores images as well as text, with thumbnails, dimensions,
+  pin/delete, Copy Image, and Paste Image actions.
+- Bitwarden is split into the Noctalia prefixes: `/bw` passwords, `/bwu`
+  usernames, `/bwt` TOTP, `/bwn` notes, `/bwo` URLs, sharing one in-memory
+  session per app run.
+- Zellij is global, with fixed **New Zellij session** and **Work** rows plus
+  every running session.
+- Pinned items: `⌘K` on any result can pin it; pinned results lead the grid and
+  global search.
+- Emoji picker at `/emoji`.
+- App grid for the empty query, with 2D arrow-key navigation and
+  `app_grid` / `app_grid_columns` configuration.
+- Web apps participate in global search.
+- `[scopes.home]` default scope, excluding Library, Movies, Music, Pictures,
+  and Trash.
+
+### Verified
+
+- `swift test`: 23 tests, 0 failures.
+- Live UI: `/neo` file/folder/freeform paths, `/neof` folders, image clipboard
+  capture and copy, `/zj` fixed/running rows, Safari pin/unpin, emoji copy,
+  and grid navigation.
+
+## 1.1.0 — 2026-11-01
+
+Polish and reliability release. No configuration changes are required.
+
+### Fixed
+
+- **Application search no longer matches unrelated apps.** Each app field is
+  scored separately, so typing `Safari` cannot match letters stitched together
+  from an app's name, bundle ID and path keywords.
+- **Symlinked apps are indexed.** Safari and other apps that are symlinks in
+  `/Applications` now appear in results.
+- **Stale results can no longer overwrite a newer query.** A cancelled search
+  now stops before applying its results.
+- **Paste explains itself when Accessibility is missing.** Palette keeps the
+  panel open, copies the text, and shows
+  “Copied — enable Accessibility to paste automatically.”
+- **A failed hotkey change keeps the previous hotkey** instead of leaving
+  Palette unreachable.
+- **Reloading the hotkey no longer leaves a stale Carbon handler.** The handler
+  is removed on rebind, so a press cannot fire a deallocated manager.
+- **Copy actions return focus to the previous app**, so the next `⌘V` lands
+  where you expect.
+- **Provider restarts no longer inherit a bogus backoff.** A provider killed by
+  a timeout or idle shutdown is not treated as a crash, and a late exit from an
+  old process cannot detach the new one.
+- **The action overlay follows its item.** If a background refresh removes the
+  selected entry, actions mode closes instead of acting on a different row.
+- **Clicking another app no longer bounces focus back.** Auto-hide on resign-key
+  leaves the clicked app in front.
+- Clipboard counts use proper singular/plural (`1 char`, `2 chars`).
+- **Bitwarden login and install use the configured terminal.** Both now open
+  `terminal_app` (kitty by default) instead of hard-coded Terminal.app.
+- **Panel activation uses the supported AppKit API** (`NSApp.activate()`),
+  avoiding the deprecated `ignoringOtherApps` path on current macOS.
+- The panel opens on the screen containing the pointer, not always the primary
+  display.
+
+### Added
+
+- Application actions in `⌘K`: Open, Show in Finder, Copy Bundle ID, Copy Path.
+- Meaningful icons for actions (pin, delete, reveal, copy, unlock, and so on).
+- An in-process `PALETTE_SCRIPT` harness for unattended live UI tests. See
+  `TESTING.md`.
+- `PALETTE_SNAPSHOT_DELAY` for providers that need longer to answer.
+- Provider names are hidden while a provider is bound, since the scope pill
+  already says which provider you are in.
+- **Web apps provider (`/web`).** Add a domain, name it, open/copy/remove it,
+  and let usage rise to the top. Web apps can also carry a keyboard shortcut;
+  Palette exports `~/.hammerspoon/palette-webapps.lua`, which Hammerspoon loads
+  and watches automatically.
+- **Homebrew Cask packaging.** `make release` builds the zip, updates the
+  checksum, and prints tap/release steps. No App Store or paid account.
+- **Hammerspoon keybind table.** `keybinds.lua` maps mods + key to app, path,
+  script, URL, shell, or window actions, Hyprland-style.
+
+### Verified
+
+- `swift test`: 21 tests, 0 failures.
+- Homebrew zip builds and its checksum matches the Cask.
+- Live synthetic-key runs: calculator copy, clipboard capture, action overlay,
+  theme switching, `/neof`, `/zj` create row, and Accessibility paste fallback.
+- Final bundle installed at `~/Applications/Palette.app` (ad-hoc signed).
