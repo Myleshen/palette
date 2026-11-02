@@ -23,7 +23,7 @@ public enum BrowserCatalog {
             return "\(trimmed) is not a supported Chromium browser. Choose one from the list."
         }
         guard ToolLocator.shared.appPath(named: trimmed) != nil else {
-            return "\(trimmed) is not installed. Install it from https://helium-browser.org or choose an installed Chromium browser."
+            return "\(trimmed) is not installed. Install it, or choose an installed Chromium browser."
         }
         return nil
     }
