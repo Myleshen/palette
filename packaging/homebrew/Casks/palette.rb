@@ -16,7 +16,7 @@ cask "palette" do
   # Ad-hoc signed, so Gatekeeper cannot verify it; clear the download flag the
   # same way `--no-quarantine` does for other unsigned casks.
   postflight_steps do
-    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Palette.app"]
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "/Applications/Palette.app"]
   end
 
   uninstall quit: "dev.myleshen.palette"
