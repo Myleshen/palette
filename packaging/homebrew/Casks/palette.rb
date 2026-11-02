@@ -7,7 +7,7 @@ cask "palette" do
   desc "Keyboard-first launcher with extensible providers"
   homepage "https://github.com/Myleshen/palette"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
   depends_on formula: "fd"
   depends_on formula: "fzf"
 
@@ -23,9 +23,10 @@ cask "palette" do
   ]
 
   caveats <<~EOS
-    Palette is free and ad-hoc signed, so it is not notarized by Apple. Homebrew
-    installs the downloaded app without the quarantine flag; a manual download
-    may need System Settings > Privacy & Security > Open Anyway.
+    Palette is free and ad-hoc signed, so it is not notarized by Apple. If macOS
+    blocks the first launch, allow it in System Settings > Privacy & Security, or
+    reinstall with:
+      brew install --cask --no-quarantine Myleshen/tap/palette
 
     Grant Accessibility to enable direct paste:
       System Settings > Privacy & Security > Accessibility
