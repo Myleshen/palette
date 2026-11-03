@@ -24,6 +24,8 @@ public final class ProviderRegistry: @unchecked Sendable {
     public init(
         providers: [any PaletteProvider],
         prefix: String,
+        aliases: [String: [String]] = [:],
+        order: [String] = [],
         diagnostics initialDiagnostics: [Diagnostic] = []
     ) {
         var diagnostics = initialDiagnostics
@@ -37,7 +39,11 @@ public final class ProviderRegistry: @unchecked Sendable {
             byID[id] = provider
         }
 
+        let orderIndex = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
         self.providers = byID.values.sorted {
+            let lhs = orderIndex[$0.descriptor.id] ?? Int.max
+            let rhs = orderIndex[$1.descriptor.id] ?? Int.max
+            if lhs != rhs { return lhs < rhs }
             if $0.descriptor.priority != $1.descriptor.priority {
                 return $0.descriptor.priority > $1.descriptor.priority
             }
@@ -45,7 +51,7 @@ public final class ProviderRegistry: @unchecked Sendable {
         }
         self.byID = byID
 
-        let triggers = self.providers.compactMap { provider -> TriggerEntry? in
+        var triggers = self.providers.compactMap { provider -> TriggerEntry? in
             guard let trigger = provider.descriptor.trigger else { return nil }
             return TriggerEntry(trigger: trigger, providerID: provider.descriptor.id, priority: provider.descriptor.priority)
         }
@@ -56,6 +62,28 @@ public final class ProviderRegistry: @unchecked Sendable {
                 diagnostics.append(Diagnostic(.warning, "Providers '\(existing)' and '\(entry.providerID)' both use trigger '\(entry.trigger)'; '\(existing)' wins.", source: "providers"))
             } else {
                 seen[key] = entry.providerID
+            }
+        }
+
+        for providerID in aliases.keys.sorted() {
+            guard let provider = byID[providerID] else {
+                diagnostics.append(Diagnostic(.warning, "Aliases are configured for unknown provider '\(providerID)'.", source: "providers"))
+                continue
+            }
+            for alias in aliases[providerID] ?? [] {
+                let word = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !word.isEmpty,
+                      word.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
+                    diagnostics.append(Diagnostic(.warning, "Alias '\(alias)' for '\(providerID)' is not a valid trigger word.", source: "providers"))
+                    continue
+                }
+                let key = word.lowercased()
+                if let existing = seen[key] {
+                    diagnostics.append(Diagnostic(.warning, "Alias '\(word)' for '\(providerID)' collides with '\(existing)'.", source: "providers"))
+                    continue
+                }
+                seen[key] = providerID
+                triggers.append(TriggerEntry(trigger: word, providerID: providerID, priority: provider.descriptor.priority))
             }
         }
 

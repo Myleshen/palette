@@ -115,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         seedUserProviders()
+        seedCommandsFile()
         launcher = LauncherService()
         pasteboard = PasteboardService()
         Log.shared.info("Accessibility trusted=\(pasteboard.isAccessibilityTrusted)", source: "app")
@@ -332,6 +333,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             await self?.exportWebApps()
         }))
         providers.append(ZellijProvider(terminal: configuration.terminal, launcher: launcher, bridge: hostProxy))
+        providers.append(PortProvider(launcher: launcher, bridge: hostProxy))
+        providers.append(CommandProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
+        providers.append(ProjectProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
+        providers.append(GitProvider(launcher: launcher, bridge: hostProxy))
+        providers.append(FinderProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
         for kind in BitwardenKind.allCases {
             providers.append(BitwardenProvider(
                 kind: kind,
@@ -378,6 +384,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let registry = ProviderRegistry(
             providers: providers,
             prefix: configuration.providerPrefix,
+            aliases: configuration.providerAliases,
+            order: configuration.providerOrder,
             diagnostics: diagnostics
         )
         Log.shared.info("Registered providers: \(registry.providers.map { "\($0.descriptor.id)/\($0.descriptor.trigger ?? "-")" }.joined(separator: ", "))", source: "providers")
@@ -502,6 +510,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         monitor.start(intervalMs: configuration.clipboard.pollMs)
         clipboardMonitor = monitor
+    }
+
+    private func seedCommandsFile() {
+        let file = paths.configDir.appendingPathComponent("commands.toml")
+        guard !FileManager.default.fileExists(atPath: file.path) else { return }
+        do {
+            try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
+            try CommandProvider.example.write(to: file, atomically: true, encoding: .utf8)
+        } catch {
+            Log.shared.warn("Could not seed commands.toml: \(error.localizedDescription)", source: "providers")
+        }
     }
 
     private func seedUserProviders() {
@@ -772,6 +791,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configuration = result.config
         startupDiagnostics = result.diagnostics
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
+        themeManager.typography = configuration.typography
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.floatingCards = configuration.searchStyle == .pill
@@ -919,6 +939,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             accessibilityTrusted: pasteboard.isAccessibilityTrusted,
             providerSummary: registry.providers.map {
                 "\($0.descriptor.name)  ·  \($0.descriptor.trigger.map { "/\($0)" } ?? "global")"
+            },
+            providers: registry.providers.map {
+                ProviderSettingsInfo(
+                    id: $0.descriptor.id,
+                    name: $0.descriptor.name,
+                    trigger: $0.descriptor.trigger
+                )
             },
             diagnostics: startupDiagnostics.map { "\($0.level.rawValue): \($0.message)" },
             onSave: { [weak self] updated in

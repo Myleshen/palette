@@ -22,7 +22,10 @@ let package = Package(
         ),
         .target(
             name: "PaletteProviders",
-            dependencies: ["PaletteCore", "PalettePlatform"]
+            dependencies: [
+                "PaletteCore", "PalettePlatform",
+                .product(name: "TOMLKit", package: "TOMLKit"),
+            ]
         ),
         .target(
             name: "PaletteRuntime",

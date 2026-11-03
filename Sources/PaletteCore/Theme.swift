@@ -125,6 +125,7 @@ public struct ThemeTypography: Equatable, Sendable {
     public var size: Double = 14
     public var subtitleSize: Double = 12
     public var mono = "JetBrains Mono"
+    public var monoSize: Double = 12
     public var matchWeight = "semibold"
     public init() {}
 }
@@ -399,6 +400,7 @@ public enum ThemeLoader {
             theme.typography.size = typography.number("size") ?? theme.typography.size
             theme.typography.subtitleSize = typography.number("subtitle_size") ?? theme.typography.subtitleSize
             theme.typography.mono = typography.str("mono") ?? theme.typography.mono
+            theme.typography.monoSize = typography.number("mono_size") ?? theme.typography.monoSize
             theme.typography.matchWeight = typography.str("match_weight") ?? theme.typography.matchWeight
         }
 

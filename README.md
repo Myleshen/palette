@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.8.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.9.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -127,6 +127,11 @@ trigger word:
 | `/bwn <query>` | Bitwarden notes |
 | `/bwo <query>` | Bitwarden URLs |
 | `/clip <query>` | clipboard history, text/images/files |
+| `/port <query>` | listening TCP ports, with process and PID |
+| `/cmd <query>` | commands from `~/.config/palette/commands.toml` |
+| `/proj <query>` | devx projects and worktrees, or `~/dev` fallback |
+| `/git <query>` | repositories with safe, focused Git actions |
+| `/finder <query>` | actions on the current Finder selection |
 | `/ask <question>` | one-shot answer from a configured AI endpoint |
 | `/askh <query>` | search retained Ask questions and answers |
 | `/web <query>` | saved web apps; type a domain to add one |
@@ -199,8 +204,8 @@ Keychain” and never displays the value again. Keys are never written to
 
 `⌘,` (or the menu-bar icon) opens a native Settings window for the launcher and
 clipboard hotkeys, launcher position (Top / Center), terminal, editor, app order
-(Alphabetical or Most used), themes, clipboard retention, web-search engines,
-and the browser used by web apps. The **Ask** tab selects the endpoint and model,
+(Alphabetical or Most used), themes and typography, clipboard retention,
+web-search engines, and the browser used by web apps. The **Ask** tab selects the endpoint and model,
 saves a Keychain API key, toggles automatic fallback, and controls how many Q&A
 entries and how many days of history are kept.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
@@ -300,6 +305,79 @@ its shortcut, or remove it. Opens are counted by the normal frecency store, so
 frequently used apps rise to the top. Definitions live in Palette’s SQLite
 state, not in `config.toml`.
 
+### Clipboard transforms
+
+`⌘K` on any text entry includes **Transform Text…**. Pick a transform and the
+result opens with a full preview; `⏎` copies it and `⌘⏎` pastes it. Built-ins:
+trim, JSON pretty/minify, Base64 encode/decode, URL encode/decode, shell quote,
+path quote, uppercase/lowercase, sort/dedupe lines, strip ANSI, Markdown link,
+and slug. Transforms are local and deterministic; no user script runs from a
+clipboard copy.
+
+### Developer commands
+
+`/cmd` reads `~/.config/palette/commands.toml`. Each `[[command]]` declares a
+title, keywords, executable, arguments, optional working directory, terminal or
+GUI mode, and whether to ask for confirmation. Nothing is an inline shell string
+in `config.toml`.
+
+```toml
+[[command]]
+title = "Go Test"
+keywords = ["go", "test"]
+executable = "go"
+args = ["test", "./..."]
+cwd = "~/dev/project"
+terminal = true
+confirm = false
+```
+
+### Projects, ports, Git, Finder
+
+- `/proj` lists devx projects and worktrees when devx is installed, with Open in
+  Neovide, Open Terminal, Open Workspace, New/Remove Worktree, and Apply Config.
+  Without devx it falls back to Git repositories directly under `~/dev`.
+- `/port` lists listening TCP ports with process, PID, user, and working
+  directory. Open `localhost:PORT`, copy the port/PID, or terminate with SIGTERM
+  and explicitly force-kill with SIGKILL; both kills require confirmation.
+- `/git` lists repositories and exposes status, branch, stage all, commit with a
+  message, fast-forward-only pull, push, recent log, and LazyGit. Complex Git
+  work still belongs in LazyGit; Palette never force-pushes or rewrites history.
+- `/finder` acts on the current Finder selection: open Terminal/Ghostty there,
+  open Neovide, copy absolute paths, reveal, compress, and create a file or
+  folder. The first read asks macOS for Automation permission once.
+
+### Typography
+
+`[typography]` overrides the active theme. Empty strings and zero sizes inherit
+from the theme, which in turn falls back to the system font. Settings →
+Appearance has family pickers, a free-text family field, size controls, a live
+preview, and **Reset to Theme**. Missing fonts fall back silently with a startup
+diagnostic.
+
+```toml
+[typography]
+ui_family = "Avenir Next"
+mono_family = "Menlo"
+ui_size = 15
+mono_size = 13
+```
+
+### Provider aliases and order
+
+`[providers]` stores tab order and extra trigger words. Order in Settings with
+the up/down buttons; aliases are comma-separated. The canonical trigger never
+changes. Duplicate aliases or triggers are rejected when saving.
+
+```toml
+[providers]
+order = ["apps", "clip", "port", "git", "proj"]
+
+[providers.aliases]
+apps = ["launch", "a"]
+clip = ["cb"]
+```
+
 ### Themes
 
 `/theme` switches live. Built-ins include Default Dark/Light, Catppuccin
@@ -322,6 +400,18 @@ search_position = "top"        # top | center
 search_style = "pill"          # pill (default) | classic
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent
+
+[typography]
+ui_family = ""                 # empty inherits the theme
+mono_family = ""
+ui_size = 0
+mono_size = 0
+
+[providers]
+order = ["apps", "clip", "port", "git", "proj"]
+
+[providers.aliases]
+apps = ["launch"]
 
 [web_search]
 enabled = true

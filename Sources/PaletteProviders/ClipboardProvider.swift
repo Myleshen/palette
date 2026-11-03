@@ -31,6 +31,10 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
     private static let maxSearchEntries = 50_000
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
+        if let entryID = Self.transformEntryID(request.text) {
+            guard let entry = try await store.clipboardEntry(id: entryID), entry.kind == .text else { return [] }
+            return Self.transformItems(entry: entry, provider: descriptor)
+        }
         let parsed = Self.parse(request.text)
         let query = parsed.query
         // Fuzzy search has to see the whole recent history, because a
@@ -153,6 +157,7 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
         if entry.text.count > 120 {
             actions.append(PaletteAction(id: "copy-all", title: "Copy Full Text", kind: .copyText, value: .text(entry.text)))
         }
+        actions.append(PaletteAction(id: "clip-transform", title: "Transform Text…", kind: .custom, value: .text(entry.id)))
         return PaletteItem(
             id: entry.id,
             title: title.isEmpty ? "(whitespace)" : title,
@@ -247,6 +252,37 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
     }
 
     // MARK: - Query parsing
+
+    static func transformEntryID(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.lowercased().hasPrefix("transform:") else { return nil }
+        let id = String(trimmed.dropFirst("transform:".count)).trimmingCharacters(in: .whitespaces)
+        return id.isEmpty ? nil : id
+    }
+
+    private static func transformItems(entry: ClipboardEntry, provider: ProviderDescriptor) -> [PaletteItem] {
+        ClipboardTransform.allCases.compactMap { transform in
+            guard let output = transform.apply(to: entry.text), !output.isEmpty else { return nil }
+            let preview = output
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespaces)
+            return PaletteItem(
+                id: "transform:\(entry.id):\(transform.rawValue)",
+                title: transform.title,
+                subtitle: String(preview.prefix(140)),
+                icon: .symbol("wand.and.stars"),
+                badge: "TRANSFORM",
+                score: 1_000,
+                actions: [
+                    PaletteAction(id: "copy", title: "Copy Result", kind: .copyText, value: .text(output)),
+                    PaletteAction(id: "paste", title: "Paste Result", kind: .pasteText, value: .text(output)),
+                ],
+                preview: .text(output),
+                providerID: provider.id,
+                providerName: provider.name
+            )
+        }
+    }
 
     static func parse(_ text: String) -> (kind: ClipboardKind?, query: String) {
         let fields = text.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)

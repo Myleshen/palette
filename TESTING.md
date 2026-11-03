@@ -125,7 +125,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 60 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 64 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
@@ -136,7 +136,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   skipping, response parsing, and Ask history trimming).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.8.0). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.9.0). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -153,6 +153,11 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.9.0 checks: `/clip transform:<id>` showed the full transform result in
+  the preview pane; `/port` listed real listeners with process/PID/cwd;
+  `/git` listed clean and dirty repositories; `/proj` listed `~/dev`
+  projects; `/cmd` loaded a manifest command; Settings exposes typography and
+  provider order/aliases.
 - v1.8.0 checks: `/ask` listed only the selected endpoint's models with free
   options first, selecting a model persisted it, and a mock OpenAI-compatible
   endpoint answered `/ask hello openai` in 0.35 s. The Q&A row included model,
@@ -160,7 +165,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   The no-key path showed the Keychain setup row, and Settings Ask displayed only
   “Key saved in the macOS Keychain” after saving. Real Zen free quota returned
   429 and the expired Go key returned 401; both were reported without a crash.
-  `swift test`: 60 tests, 0 failures.
+  `swift test`: 64 tests, 0 failures.
 - v1.7.13 checks: after opening the clipboard browser and pressing `Esc`, the
   snapshot showed the empty app list at normal width with no preview pane or
   “No preview available” placeholder.

@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.9.0 — 2026-11-03
+
+### Added
+
+- **Clipboard transforms**: 16 built-ins available from `⌘K` on any text entry,
+  with a full preview before the clipboard is replaced. No scripts run
+  automatically.
+- **Typography overrides**: `[typography]` ui/mono family and sizes, resolved as
+  config → theme → system, with pickers, free text, live preview, and reset in
+  Settings.
+- **`/port`**: listening TCP ports with process, PID, user, and working
+  directory; open localhost, copy port/PID, SIGTERM, and confirmed SIGKILL.
+- **`/cmd`**: manifest-based commands in `~/.config/palette/commands.toml` for
+  Gradle, Go, Java, make, Docker, and project-specific tasks.
+- **`/proj`**: devx projects and worktrees with Open in Neovide/Terminal/
+  Workspace, worktree create/remove, and config apply. Falls back to `~/dev`
+  repositories when devx is absent.
+- **`/git`**: repository list with branch/dirty state plus stage all, commit,
+  fast-forward pull, push, log, and LazyGit. No force-push or history rewriting.
+- **`/finder`**: actions for the current Finder selection, including Terminal/
+  Ghostty, Neovide, copy paths, reveal, compress, and new file/folder.
+- **Provider aliases and order**: extra trigger words and persisted tab order,
+  editable in Settings with duplicate validation.
+
+### Verified
+
+- `swift test`: 64 tests, 0 failures.
+- Live harness: transforms previewed the full result; `/port` listed real
+  listeners with cwd; `/git` listed clean/dirty repositories; `/proj` listed
+  projects; `/cmd` loaded a manifest command.
+
 ## 1.8.0 — 2026-11-03
 
 ### Added

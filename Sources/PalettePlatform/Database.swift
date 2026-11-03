@@ -356,6 +356,35 @@ public actor PaletteStore {
         return entries
     }
 
+    public func clipboardEntry(id: String) throws -> ClipboardEntry? {
+        let statement = try prepare("""
+        SELECT id, text, created, pinned, kind, width, height, thumbnail
+        FROM clipboard WHERE id = ? LIMIT 1;
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, id)
+        guard sqlite3_step(statement) == SQLITE_ROW,
+              let idText = sqlite3_column_text(statement, 0),
+              let bodyText = sqlite3_column_text(statement, 1) else { return nil }
+        let kind = sqlite3_column_text(statement, 4).map { String(cString: $0) } ?? "text"
+        var thumbnail: Data?
+        if sqlite3_column_type(statement, 7) != SQLITE_NULL,
+           let bytes = sqlite3_column_blob(statement, 7) {
+            let count = Int(sqlite3_column_bytes(statement, 7))
+            if count > 0 { thumbnail = Data(bytes: bytes, count: count) }
+        }
+        return ClipboardEntry(
+            id: String(cString: idText),
+            text: String(cString: bodyText),
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 2)),
+            pinned: sqlite3_column_int(statement, 3) != 0,
+            kind: ClipboardKind(rawValue: kind) ?? .text,
+            imageWidth: Int(sqlite3_column_int(statement, 5)),
+            imageHeight: Int(sqlite3_column_int(statement, 6)),
+            thumbnailPNG: thumbnail
+        )
+    }
+
     public func deleteClipboard(id: String) throws {
         let statement = try prepare("DELETE FROM clipboard WHERE id = ?;")
         defer { sqlite3_finalize(statement) }

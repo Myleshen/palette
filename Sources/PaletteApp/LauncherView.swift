@@ -22,16 +22,24 @@ extension Theme {
         (RGBA(hex: hex) ?? RGBA(hex: fallback) ?? RGBA(red: 1, green: 1, blue: 1)).nsColor
     }
 
-    func font(size: Double, weight: Font.Weight = .regular) -> Font {
-        let family = typography.family.trimmingCharacters(in: .whitespaces)
+    func font(size: Double, weight: Font.Weight = .regular) -> Font {        let family = typography.family.trimmingCharacters(in: .whitespaces)
         if family.isEmpty || family == "SF Pro Text" || family == "System" {
             return .system(size: size, weight: weight)
         }
         return .custom(family, size: size).weight(weight)
     }
 
-    func nsFont(size: Double, weight: NSFont.Weight = .regular) -> NSFont {
-        let family = typography.family.trimmingCharacters(in: .whitespaces)
+    func monoFont(size: Double? = nil, weight: Font.Weight = .regular) -> Font {
+        let family = typography.mono.trimmingCharacters(in: .whitespaces)
+        let pointSize = size ?? typography.monoSize
+        if family.isEmpty || family == "System" || family == "SF Mono"
+            || NSFont(name: family, size: pointSize) == nil {
+            return .system(size: pointSize, weight: weight, design: .monospaced)
+        }
+        return .custom(family, size: pointSize).weight(weight)
+    }
+
+    func nsFont(size: Double, weight: NSFont.Weight = .regular) -> NSFont {        let family = typography.family.trimmingCharacters(in: .whitespaces)
         guard !family.isEmpty, family != "SF Pro Text", family != "System",
               let base = NSFont(name: family, size: size) else {
             return NSFont.systemFont(ofSize: size, weight: weight)
@@ -974,7 +982,7 @@ struct ClipboardPreviewPane: View {
         case .text(let value):
             ScrollView {
                 Text(value)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(theme.monoFont(size: 11))
                     .foregroundColor(theme.color(theme.palette.fg))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1017,7 +1025,7 @@ struct ClipboardPreviewPane: View {
                             .fill(theme.color(theme.palette.separator))
                             .frame(height: 1)
                         Text(textPreview)
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(theme.monoFont(size: 10))
                             .foregroundColor(theme.color(theme.palette.fg))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)

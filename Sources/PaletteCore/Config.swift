@@ -65,6 +65,20 @@ public struct ClipboardConfig: Sendable, Equatable {
     }
 }
 
+public struct TypographyConfig: Sendable, Equatable {
+    public var uiFamily: String
+    public var monoFamily: String
+    public var uiSize: Double
+    public var monoSize: Double
+
+    public init(uiFamily: String = "", monoFamily: String = "", uiSize: Double = 0, monoSize: Double = 0) {
+        self.uiFamily = uiFamily
+        self.monoFamily = monoFamily
+        self.uiSize = uiSize
+        self.monoSize = monoSize
+    }
+}
+
 public struct PaletteConfig: Sendable, Equatable {
     public var hotkey: String
     public var clipboardHotkey: String
@@ -83,6 +97,9 @@ public struct PaletteConfig: Sendable, Equatable {
     public var webAppBrowser: String
     public var appSort: AppSort
     public var ask: AskConfig
+    public var typography: TypographyConfig
+    public var providerAliases: [String: [String]]
+    public var providerOrder: [String]
 
     public init(
         hotkey: String = "opt+space",
@@ -101,7 +118,10 @@ public struct PaletteConfig: Sendable, Equatable {
         searchStyle: SearchStyle = .pill,
         webAppBrowser: String = "Helium",
         appSort: AppSort = .alphabetical,
-        ask: AskConfig = AskConfig()
+        ask: AskConfig = AskConfig(),
+        typography: TypographyConfig = TypographyConfig(),
+        providerAliases: [String: [String]] = [:],
+        providerOrder: [String] = []
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -120,6 +140,9 @@ public struct PaletteConfig: Sendable, Equatable {
         self.webAppBrowser = webAppBrowser
         self.appSort = appSort
         self.ask = ask
+        self.typography = typography
+        self.providerAliases = providerAliases
+        self.providerOrder = providerOrder
     }
 }
 
@@ -271,6 +294,36 @@ public enum ConfigLoader {
             config.appSort = parsed
         }
 
+        if let typography = table.table("typography") {
+            if let value = typography.str("ui_family") {
+                config.typography.uiFamily = value.trimmingCharacters(in: .whitespaces)
+            }
+            if let value = typography.str("mono_family") {
+                config.typography.monoFamily = value.trimmingCharacters(in: .whitespaces)
+            }
+            if let value = typography.number("ui_size"), value > 0 {
+                config.typography.uiSize = min(48, max(9, value))
+            }
+            if let value = typography.number("mono_size"), value > 0 {
+                config.typography.monoSize = min(48, max(9, value))
+            }
+        }
+
+        if let providers = table.table("providers") {
+            config.providerOrder = providers.strArray("order") ?? []
+            if let aliases = providers.table("aliases") {
+                var parsed: [String: [String]] = [:]
+                for key in aliases.keys {
+                    let values = aliases.strArray(key) ?? []
+                    let cleaned = values
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                        .filter { !$0.isEmpty }
+                    if !cleaned.isEmpty { parsed[key] = cleaned }
+                }
+                config.providerAliases = parsed
+            }
+        }
+
         if let web = table.table("web_search") {
             if let enabled = web.bool("enabled") {
                 config.webSearchEnabled = enabled
@@ -403,6 +456,19 @@ public enum ConfigLoader {
         web_app_browser = "Helium"
         app_sort = "alphabetical"      # alphabetical | frequent
 
+        # Font overrides. Empty family or 0 size inherits the active theme.
+        [typography]
+        ui_family = ""
+        mono_family = ""
+        ui_size = 0
+        mono_size = 0
+
+        # Provider tab order and optional trigger aliases.
+        [providers]
+        order = []
+
+        [providers.aliases]
+
         # One-shot AI answers (/ask). The API key is never written here; it
         # lives in the macOS Keychain and is entered in Settings > Ask.
         [ask]
@@ -490,6 +556,21 @@ public enum ConfigWriter {
         out.append("search_style = \(quote(config.searchStyle.rawValue))")
         out.append("web_app_browser = \(quote(config.webAppBrowser))")
         out.append("app_sort = \(quote(config.appSort.rawValue))")
+        out.append("")
+        out.append("[typography]")
+        out.append("ui_family = \(quote(config.typography.uiFamily))")
+        out.append("mono_family = \(quote(config.typography.monoFamily))")
+        out.append("ui_size = \(config.typography.uiSize)")
+        out.append("mono_size = \(config.typography.monoSize)")
+        out.append("")
+        out.append("[providers]")
+        out.append("order = [\(config.providerOrder.map(quote).joined(separator: ", "))]")
+        out.append("")
+        out.append("[providers.aliases]")
+        for id in config.providerAliases.keys.sorted() {
+            guard let aliases = config.providerAliases[id], !aliases.isEmpty else { continue }
+            out.append("\(quote(id)) = [\(aliases.map(quote).joined(separator: ", "))]")
+        }
         out.append("")
         out.append("[ask]")
         out.append("provider = \(quote(config.ask.endpoint.rawValue))")

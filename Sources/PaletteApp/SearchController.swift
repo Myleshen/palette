@@ -664,7 +664,11 @@ public final class SearchController: ObservableObject, HostBridge {
                 }
 
             case .custom:
-                if action.id == "ask-settings" {
+                if action.id == "clip-transform" {
+                    if let entryID = action.value.text {
+                        query = registry.parser.prefix + "clip transform:" + entryID
+                    }
+                } else if action.id == "ask-settings" {
                     onOpenConfig?()
                     panel?.hide()
                 } else if action.id == "ask-again" {

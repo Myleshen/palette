@@ -12,6 +12,7 @@ public final class ThemeManager: ObservableObject {
 
     public let paths: PalettePaths
     public var selection: ThemeSelection
+    public var typography = TypographyConfig()
     public var onChange: ((Theme) -> Void)?
 
     private let store: PaletteStore?
@@ -100,12 +101,40 @@ public final class ThemeManager: ObservableObject {
         }
         let fallback = appearanceDark ? Theme.defaultDark : Theme.defaultLight
         let result = ThemeLoader.load(name: name, themesDirectory: paths.themesDir, fallback: fallback)
-        theme = result.theme
-        diagnostics = result.diagnostics
-        for diagnostic in result.diagnostics where diagnostic.level != .info {
+        var resolved = result.theme
+        var diagnostics = result.diagnostics
+        if !typography.uiFamily.isEmpty {
+            resolved.typography.family = typography.uiFamily
+            if !Self.fontExists(typography.uiFamily) {
+                diagnostics.append(Diagnostic(.warning, "Font '\(typography.uiFamily)' is not installed; using the system font.", source: "theme"))
+            }
+        }
+        if !typography.monoFamily.isEmpty {
+            resolved.typography.mono = typography.monoFamily
+            if !Self.fontExists(typography.monoFamily) {
+                diagnostics.append(Diagnostic(.warning, "Mono font '\(typography.monoFamily)' is not installed; using the system font.", source: "theme"))
+            }
+        }
+        if typography.uiSize > 0 {
+            resolved.typography.size = typography.uiSize
+            resolved.typography.subtitleSize = max(9, typography.uiSize - 2)
+        }
+        if typography.monoSize > 0 {
+            resolved.typography.monoSize = typography.monoSize
+        }
+        theme = resolved
+        self.diagnostics = diagnostics
+        for diagnostic in diagnostics where diagnostic.level != .info {
             Log.shared.warn(diagnostic.message, source: "theme")
         }
         onChange?(theme)
+    }
+
+    private static func fontExists(_ family: String) -> Bool {
+        let name = family.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, name != "System", name != "SF Pro Text" else { return true }
+        return NSFont(name: name, size: 14) != nil
+            || NSFontManager.shared.availableFontFamilies.contains(name)
     }
 
     private static var appearanceIsDark: Bool {

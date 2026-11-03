@@ -5,6 +5,12 @@ import SwiftUI
 import PaletteCore
 import PalettePlatform
 
+struct ProviderSettingsInfo: Identifiable, Equatable {
+    var id: String
+    var name: String
+    var trigger: String?
+}
+
 struct SettingsView: View {
     @State private var config: PaletteConfig
     @State private var engines: [WebSearchEngine]
@@ -16,9 +22,12 @@ struct SettingsView: View {
     @State private var askKeyInput = ""
     @State private var askKeyStored: Bool
     @State private var askKeyMessage: String?
+    @State private var providerOrder: [String]
+    @State private var aliases: [String: String]
 
     private let themesDirectory: URL
     private let providerSummary: [String]
+    private let providers: [ProviderSettingsInfo]
     private let diagnostics: [String]
     private let onSave: (PaletteConfig) -> Void
     private let onOpen: (URL) -> Void
@@ -29,6 +38,7 @@ struct SettingsView: View {
         themesDirectory: URL,
         accessibilityTrusted: Bool,
         providerSummary: [String],
+        providers: [ProviderSettingsInfo],
         diagnostics: [String],
         onSave: @escaping (PaletteConfig) -> Void,
         onOpen: @escaping (URL) -> Void,
@@ -38,8 +48,18 @@ struct SettingsView: View {
         _engines = State(initialValue: config.webSearchEngines)
         _accessibilityTrusted = State(initialValue: accessibilityTrusted)
         _askKeyStored = State(initialValue: AskKeychain.hasStoredKey(for: config.ask.endpoint))
+        let order = config.providerOrder.isEmpty ? providers.map(\.id) : config.providerOrder
+        let ordered = order.filter { id in providers.contains { $0.id == id } }
+            + providers.map(\.id).filter { !order.contains($0) }
+        _providerOrder = State(initialValue: ordered)
+        var aliasState: [String: String] = [:]
+        for provider in providers {
+            aliasState[provider.id] = (config.providerAliases[provider.id] ?? []).joined(separator: ", ")
+        }
+        _aliases = State(initialValue: aliasState)
         self.themesDirectory = themesDirectory
         self.providerSummary = providerSummary
+        self.providers = providers
         self.diagnostics = diagnostics
         self.onSave = onSave
         self.onOpen = onOpen
@@ -186,6 +206,47 @@ struct SettingsView: View {
                     ForEach(themeNames, id: \.self) { Text(displayName($0)).tag($0) }
                 }
                 Button("Open Themes Folder") { onOpen(PalettePaths.resolve().themesDir) }
+            }
+            Section("Typography") {
+                Picker("UI family", selection: $config.typography.uiFamily) {
+                    Text("Inherit from theme").tag("")
+                    ForEach(fontFamilies, id: \.self) { Text($0).tag($0) }
+                }
+                TextField("Or type a family name", text: $config.typography.uiFamily)
+                Stepper(
+                    "UI size: \(config.typography.uiSize == 0 ? "theme" : "\(Int(config.typography.uiSize)) pt")",
+                    value: $config.typography.uiSize,
+                    in: 0...48,
+                    step: 1
+                )
+                Picker("Mono family", selection: $config.typography.monoFamily) {
+                    Text("Inherit from theme").tag("")
+                    ForEach(fontFamilies, id: \.self) { Text($0).tag($0) }
+                }
+                TextField("Or type a mono family name", text: $config.typography.monoFamily)
+                Stepper(
+                    "Mono size: \(config.typography.monoSize == 0 ? "theme" : "\(Int(config.typography.monoSize)) pt")",
+                    value: $config.typography.monoSize,
+                    in: 0...48,
+                    step: 1
+                )
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Preview").font(.caption).foregroundStyle(.secondary)
+                    Text("Palette — quick, local, yours")
+                        .font(.custom(
+                            config.typography.uiFamily.isEmpty ? "SF Pro Text" : config.typography.uiFamily,
+                            size: config.typography.uiSize == 0 ? 14 : config.typography.uiSize
+                        ))
+                    Text("mono: glitch in the matrix")
+                        .font(.custom(
+                            config.typography.monoFamily.isEmpty ? "Menlo" : config.typography.monoFamily,
+                            size: config.typography.monoSize == 0 ? 12 : config.typography.monoSize
+                        ))
+                        .foregroundStyle(.secondary)
+                }
+                Button("Reset to Theme") {
+                    config.typography = TypographyConfig()
+                }
             }
             Section {
                 Text("Theme files use TOML. See THEMING.md; saving this window reloads the active theme.")
@@ -336,6 +397,9 @@ struct SettingsView: View {
                 Button("Open config.toml") { onOpen(configURL) }
                 Button("Open Providers Folder") { onOpen(PalettePaths.resolve().providersDir) }
                 Button("Open Themes Folder") { onOpen(PalettePaths.resolve().themesDir) }
+                Button("Open commands.toml") {
+                    onOpen(PalettePaths.resolve().configDir.appendingPathComponent("commands.toml"))
+                }
                 Button("Open Log") { onOpen(PalettePaths.resolve().logFile) }
             }
             Section("Custom providers") {
@@ -347,6 +411,39 @@ struct SettingsView: View {
                 Text("Everything above is written to config.toml. Edit it directly only when you need options the Settings window does not expose.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            Section("Provider order") {
+                Text("Tabs and Tab cycling follow this order. Triggers stay stable; aliases are extra words for the same provider.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(Array(providerOrder.enumerated()), id: \.element) { index, id in
+                    HStack {
+                        Text(providerName(id))
+                        Spacer()
+                        Text(aliases[id] ?? "").font(.caption).foregroundStyle(.secondary)
+                        Button {
+                            guard index > 0 else { return }
+                            providerOrder.swapAt(index, index - 1)
+                        } label: { Image(systemName: "chevron.up") }
+                            .buttonStyle(.borderless)
+                        Button {
+                            guard index + 1 < providerOrder.count else { return }
+                            providerOrder.swapAt(index, index + 1)
+                        } label: { Image(systemName: "chevron.down") }
+                            .buttonStyle(.borderless)
+                    }
+                }
+            }
+            Section("Provider aliases") {
+                ForEach(providers) { provider in
+                    TextField(
+                        "\(provider.name) aliases (comma separated)",
+                        text: Binding(
+                            get: { aliases[provider.id] ?? "" },
+                            set: { aliases[provider.id] = $0 }
+                        )
+                    )
+                }
             }
             Section("Providers") {
                 if providerSummary.isEmpty {
@@ -388,6 +485,14 @@ struct SettingsView: View {
 
     private var themeNames: [String] {
         ThemeLoader.catalog(themesDirectory: themesDirectory).map(\.name)
+    }
+
+    private var fontFamilies: [String] {
+        NSFontManager.shared.availableFontFamilies.sorted()
+    }
+
+    private func providerName(_ id: String) -> String {
+        providers.first(where: { $0.id == id })?.name ?? id
     }
 
     private func displayName(_ name: String) -> String {
@@ -432,6 +537,30 @@ struct SettingsView: View {
             !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && $0.urlTemplate.contains("{query}")
         }
         normalizeAskModel()
+        var aliasMap: [String: [String]] = [:]
+        var used = Set(providers.compactMap { $0.trigger?.lowercased() })
+        for provider in providers {
+            let words = (aliases[provider.id] ?? "")
+                .split(whereSeparator: { $0 == "," || $0.isWhitespace })
+                .map(String.init)
+                .filter { !$0.isEmpty }
+            var accepted: [String] = []
+            for word in words {
+                guard word.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
+                    saveError = "Alias “\(word)” is not a valid trigger word."
+                    return
+                }
+                let key = word.lowercased()
+                guard used.insert(key).inserted else {
+                    saveError = "Alias “\(word)” is already used by another trigger."
+                    return
+                }
+                accepted.append(word)
+            }
+            if !accepted.isEmpty { aliasMap[provider.id] = accepted }
+        }
+        config.providerAliases = aliasMap
+        config.providerOrder = providerOrder
         onSave(config)
     }
 }
