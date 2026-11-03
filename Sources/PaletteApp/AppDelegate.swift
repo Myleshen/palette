@@ -71,6 +71,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        // Finder launches inherit launchd's minimal PATH. Give child CLIs
+        // (devx, bw, zellij) the Homebrew directories without changing tools
+        // that already use absolute paths.
+        let existingPath = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        let toolPath = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/opt/local/bin"]
+            .filter { !existingPath.split(separator: ":").map(String.init).contains($0) }
+        if !toolPath.isEmpty {
+            setenv("PATH", (toolPath + [existingPath]).joined(separator: ":"), 1)
+        }
         paths = PalettePaths.resolve()
         do {
             try paths.createDirectories()

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.9.2 — 2026-11-03
+
+### Fixed
+
+- Finder-launched Palette now prepends Homebrew, `/usr/local`, and MacPorts
+  paths to its child environment, so devx, Bitwarden, Zellij, and workspace
+  tools resolve even though launchd starts apps with a minimal `PATH`.
+
+### Verified
+
+- Devx doctor reports **devx is ready** with the configured terminal, editor,
+  profiles, fzf, and LazyGit.
+- A manifest command with `terminal = false` ran and wrote its expected output.
+
 ## 1.9.1 — 2026-11-03
 
 ### Fixed
