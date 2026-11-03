@@ -458,7 +458,7 @@ struct LauncherRootView: View {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .strokeBorder(theme.color(theme.palette.border).opacity(0.5), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
     }
 
     private var tabBar: some View {
@@ -618,14 +618,9 @@ struct LauncherRootView: View {
                 )
         )
         .shadow(
-            color: .black.opacity(isPill ? 0.34 : 0),
-            radius: isPill ? 14 : 0,
-            y: isPill ? 6 : 0
-        )
-        .shadow(
-            color: theme.color(theme.palette.accent).opacity(isPill ? 0.08 : 0),
-            radius: isPill ? 10 : 0,
-            y: 1
+            color: .black.opacity(isPill ? 0.12 : 0),
+            radius: isPill ? 6 : 0,
+            y: isPill ? 2 : 0
         )
     }
 

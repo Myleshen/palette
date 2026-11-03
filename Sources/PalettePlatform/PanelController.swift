@@ -41,6 +41,7 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     public var floatingCards = false {
         didSet {
             effectView.isHidden = floatingCards
+            panel.hasShadow = !floatingCards && theme.window.shadow
             if isShowing { position() }
         }
     }
@@ -133,7 +134,7 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         effectView.layer?.cornerRadius = theme.window.cornerRadius
         effectView.layer?.borderWidth = 0
         effectView.isHidden = floatingCards
-        panel.hasShadow = theme.window.shadow
+        panel.hasShadow = !floatingCards && theme.window.shadow
         panel.appearance = NSAppearance(named: theme.appearance == "light" ? .aqua : .darkAqua)
         effectView.alphaValue = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? 1 : theme.window.opacity
         if isShowing { position() }

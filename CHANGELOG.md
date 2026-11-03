@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.6 — 2026-11-03
+
+### Fixed
+
+- Removed the dark “background plate” artifacts behind the floating pill
+  surfaces. Pill mode disabled the panel’s own window shadow and the cards were
+  still drawing large black shadows, producing a duplicate dark outline on
+  bright desktops.
+- Pill mode now uses only subtle per-card shadows; the window itself casts no
+  shadow. The two-card layout stays clean on white and other bright wallpapers.
+- Classic mode keeps its normal window shadow and vibrancy.
+
 ## 1.7.5 — 2026-11-03
 
 ### Fixed
