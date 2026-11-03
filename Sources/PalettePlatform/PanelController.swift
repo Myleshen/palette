@@ -34,6 +34,16 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     public var anchorOverride: String? {
         didSet { if isShowing { position() } }
     }
+
+    /// When true the window is transparent and SwiftUI draws separate floating
+    /// cards (search capsule + content card). The vibrancy view must be hidden
+    /// or it would paint a rectangle behind both cards.
+    public var floatingCards = false {
+        didSet {
+            effectView.isHidden = floatingCards
+            if isShowing { position() }
+        }
+    }
     private var keyMonitor: Any?
     private var contentHeight: CGFloat = 200
     private var theme: Theme
@@ -75,13 +85,20 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         contentContainer.translatesAutoresizingMaskIntoConstraints = false
         contentContainer.wantsLayer = true
 
-        panel.contentView = effectView
-        effectView.addSubview(contentContainer)
+        let rootView = NSView()
+        rootView.wantsLayer = true
+        panel.contentView = rootView
+        rootView.addSubview(effectView)
+        rootView.addSubview(contentContainer)
         NSLayoutConstraint.activate([
-            contentContainer.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
-            contentContainer.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
-            contentContainer.topAnchor.constraint(equalTo: effectView.topAnchor),
-            contentContainer.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
+            effectView.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+            effectView.topAnchor.constraint(equalTo: rootView.topAnchor),
+            effectView.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+            contentContainer.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+            contentContainer.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+            contentContainer.topAnchor.constraint(equalTo: rootView.topAnchor),
+            contentContainer.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
         ])
 
         setContent(content)
@@ -115,6 +132,7 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         effectView.material = Self.material(named: theme.window.material)
         effectView.layer?.cornerRadius = theme.window.cornerRadius
         effectView.layer?.borderWidth = 0
+        effectView.isHidden = floatingCards
         panel.hasShadow = theme.window.shadow
         panel.appearance = NSAppearance(named: theme.appearance == "light" ? .aqua : .darkAqua)
         effectView.alphaValue = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? 1 : theme.window.opacity

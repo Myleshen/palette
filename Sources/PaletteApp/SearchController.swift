@@ -802,7 +802,10 @@ public final class SearchController: ObservableObject, HostBridge {
             content = max(content, 360)
             panel.widthOverride = 880
         }
-        panel.setContentHeight(CGFloat(theme.search.height) + content + tabs + footer)
+        // Pill floats the search capsule above the content card: 8 pt top and
+        // bottom margins plus an 8 pt gap replace the old inline spacing.
+        let pillExtra: CGFloat = configuration.searchStyle == .pill ? 12 : 0
+        panel.setContentHeight(CGFloat(theme.search.height) + content + tabs + footer + pillExtra)
     }
 
     public func refreshTheme() {

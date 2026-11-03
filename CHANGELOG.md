@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.4 — 2026-11-03
+
+### Changed
+
+- **Pill mode now uses two separate floating surfaces**: a standalone search
+  capsule and a rounded content card below it, with the desktop visible through
+  the gap. The content card owns the tabs, results, actions, and footer.
+- The window background is transparent in pill mode, so each surface draws its
+  own border and shadow instead of sharing one full-window vibrancy rectangle.
+- The search capsule uses the theme surface colour, matching the content card
+  rather than picking up the desktop behind it.
+- Panel height includes the new top/bottom margins and gap, so the card is not
+  cut off.
+- Switching between Classic and Pill in Settings applies live through the same
+  reload path; Classic keeps the original single-panel layout and vibrancy.
+
 ## 1.7.3 — 2026-11-03
 
 ### Fixed

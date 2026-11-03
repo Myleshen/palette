@@ -383,31 +383,15 @@ struct LauncherRootView: View {
 
     private var theme: Theme { themeManager.theme }
     private var isPill: Bool { controller.searchStyle == .pill }
-    private var panelRadius: CGFloat {
-        isPill ? 30 : CGFloat(theme.window.cornerRadius)
-    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            searchBar
-            if !isPill {
-                Rectangle()
-                    .fill(theme.color(theme.palette.separator))
-                    .frame(height: 1)
-            }
-            tabBar
-            content
-            if theme.footer.show {
-                footer
+        Group {
+            if isPill {
+                pillLayout
+            } else {
+                classicLayout
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(theme.color(theme.palette.bg).opacity(isPill ? 0.96 : 0.72))
-        .clipShape(RoundedRectangle(cornerRadius: panelRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: panelRadius, style: .continuous)
-                .strokeBorder(theme.color(theme.palette.border).opacity(0.55), lineWidth: CGFloat(theme.window.borderWidth))
-        )
         .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
         .onAppear {
             DispatchQueue.main.async { searchFocused = true }
@@ -420,6 +404,61 @@ struct LauncherRootView: View {
         .onChange(of: controller.prompt?.id) { _, _ in
             DispatchQueue.main.async { promptFocused = controller.prompt != nil }
         }
+    }
+
+    /// Classic is one continuous panel.
+    private var classicLayout: some View {
+        VStack(spacing: 0) {
+            searchBar
+            Rectangle()
+                .fill(theme.color(theme.palette.separator))
+                .frame(height: 1)
+            tabBar
+            content
+            if theme.footer.show {
+                footer
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(theme.color(theme.palette.bg).opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: CGFloat(theme.window.cornerRadius), style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: CGFloat(theme.window.cornerRadius), style: .continuous)
+                .strokeBorder(theme.color(theme.palette.border).opacity(0.55), lineWidth: CGFloat(theme.window.borderWidth))
+        )
+    }
+
+    /// Pill separates the search capsule from the content card, like the
+    /// floating Siri search surface. The window itself stays transparent.
+    private var pillLayout: some View {
+        VStack(spacing: 8) {
+            searchBar
+            pillContentCard
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var pillContentCard: some View {
+        VStack(spacing: 0) {
+            tabBar
+            content
+            if theme.footer.show {
+                footer
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(theme.color(theme.palette.bg).opacity(0.96))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(theme.color(theme.palette.border).opacity(0.5), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
     }
 
     private var tabBar: some View {
@@ -569,22 +608,25 @@ struct LauncherRootView: View {
         .frame(height: isPill ? CGFloat(theme.search.height) - 12 : CGFloat(theme.search.height))
         .background(
             Capsule()
-                .fill(theme.color(theme.palette.elevated).opacity(isPill ? 0.72 : 0))
+                .fill(theme.color(theme.palette.surface).opacity(isPill ? 0.96 : 0))
         )
         .overlay(
             Capsule()
                 .strokeBorder(
-                    theme.color(theme.palette.accent).opacity(isPill ? 0.28 : 0),
+                    theme.color(theme.palette.accent).opacity(isPill ? 0.30 : 0),
                     lineWidth: 1
                 )
         )
         .shadow(
-            color: theme.color(theme.palette.accent).opacity(isPill ? 0.10 : 0),
+            color: .black.opacity(isPill ? 0.34 : 0),
+            radius: isPill ? 14 : 0,
+            y: isPill ? 6 : 0
+        )
+        .shadow(
+            color: theme.color(theme.palette.accent).opacity(isPill ? 0.08 : 0),
             radius: isPill ? 10 : 0,
             y: 1
         )
-        .padding(.horizontal, isPill ? 12 : 0)
-        .padding(.vertical, isPill ? 6 : 0)
     }
 
     @ViewBuilder

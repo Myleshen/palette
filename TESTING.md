@@ -133,7 +133,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   and refresh, path filtering, and use counts).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.3). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.4). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,12 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.4 checks: enabling `search_style = "pill"` through the real Settings
+  picker and pressing Save produced a standalone search capsule plus a separate
+  rounded content card with a visible desktop gap and independent shadows. The
+  Classic fallback remained a single vibrancy panel. Search, tab, result,
+  action, and footer content all stayed inside the content card, and the
+  install/version screenshot was taken from the installed app.
 - v1.7.3 checks: with Settings open, the launcher hotkey read `opt+space`.
   Closing Settings, editing `config.toml` to `hotkey = "cmd+space"`, and
   choosing the menu-bar **Reload Configuration** item logged
