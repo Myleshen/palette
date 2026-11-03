@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.7.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.7.2. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -172,10 +172,11 @@ The older `bottom` value is accepted for compatibility and now maps to
 `center`.
 
 `search_style = "classic" | "pill"` changes the launcher chrome. Classic is the
-original flat layout. Pill draws the search field and tab rail as rounded,
-softly glowing capsules, gives the result and action selections capsule shapes,
-and rounds the panel more — the Siri-style look throughout. Classic remains the
-default.
+original flat layout. Pill turns the search field into a floating capsule, gives
+the selected tab and result a soft accent pill outline, uses capsule grid and
+action selections, and rounds the panel further. It is deliberately restrained:
+only the active elements become pills, so the list still reads as a native
+macOS list instead of a stack of buttons. Classic remains the default.
 
 ### App grid
 

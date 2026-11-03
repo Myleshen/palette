@@ -64,6 +64,7 @@ struct HighlightedText: View {
     var theme: Theme
     var size: Double
     var base: String
+    var match: String? = nil
     var weight: Font.Weight = .regular
 
     var body: some View {
@@ -81,7 +82,7 @@ struct HighlightedText: View {
                 .foregroundColor: theme.nsColor(base),
             ]
         )
-        let matchColor = theme.nsColor(theme.palette.matchFg)
+        let matchColor = theme.nsColor(match ?? theme.palette.matchFg)
         let matchFont = theme.nsFont(size: size, weight: theme.matchWeight.nsWeight)
         for term in terms where !term.isEmpty {
             var searchRange = text.startIndex..<text.endIndex
@@ -176,6 +177,21 @@ struct ResultRow: View {
     var theme: Theme
     var pill: Bool = false
 
+    private var selectedBase: String {
+        pill ? theme.palette.fg : (theme.states.selected.fg ?? theme.palette.selectionFg)
+    }
+
+    private var selectedMatch: String {
+        pill ? theme.palette.accent : selectedBase
+    }
+
+    private var subtitleColor: String {
+        if selected {
+            return pill ? theme.palette.fgMuted : selectedBase
+        }
+        return theme.palette.fgMuted
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             if theme.list.showIcons {
@@ -187,13 +203,14 @@ struct ResultRow: View {
                     terms: terms,
                     theme: theme,
                     size: theme.typography.size,
-                    base: selected ? (theme.states.selected.fg ?? theme.palette.selectionFg) : theme.palette.fg,
+                    base: selected ? selectedBase : theme.palette.fg,
+                    match: selected ? selectedMatch : nil,
                     weight: .regular
                 )
                 if theme.list.showSubtitles, let subtitle = item.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.system(size: theme.typography.subtitleSize))
-                        .foregroundColor(theme.color(theme.palette.fgMuted))
+                        .foregroundColor(theme.color(subtitleColor).opacity(selected && !pill ? 0.7 : 1))
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -205,14 +222,15 @@ struct ResultRow: View {
             if showProvider, let name = item.providerName, !name.isEmpty, item.providerID != "apps" {
                 Text(name)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.8))
+                    .foregroundColor(theme.color(selected && !pill ? selectedBase : theme.palette.fgMuted)
+                        .opacity(selected && !pill ? 0.75 : 0.8))
                     .lineLimit(1)
             }
         }
         .padding(.horizontal, 10)
         .frame(height: CGFloat(theme.effectiveRowHeight))
         .background(selectionBackground)
-        .contentShape(pill ? AnyShape(Capsule()) : AnyShape(Rectangle()))
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -241,7 +259,11 @@ struct ResultRow: View {
                 Color.clear
             default:
                 if pill {
-                    Capsule().fill(color.opacity(0.95))
+                    Capsule()
+                        .fill(theme.color(theme.palette.accent).opacity(0.18))
+                        .overlay(
+                            Capsule().strokeBorder(theme.color(theme.palette.accent).opacity(0.55), lineWidth: 1)
+                        )
                 } else {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(color.opacity(0.95))
@@ -289,10 +311,14 @@ struct ActionRow: View {
             Image(systemName: actionIcon)
                 .font(.system(size: 12, weight: .medium))
                 .frame(width: CGFloat(theme.effectiveIconSize))
-                .foregroundColor(theme.color(selected ? theme.palette.selectionFg : theme.palette.fgMuted))
+                .foregroundColor(theme.color(selected
+                    ? (pill ? theme.palette.accent : theme.palette.selectionFg)
+                    : theme.palette.fgMuted))
             Text(action.title)
                 .font(.system(size: theme.typography.size))
-                .foregroundColor(theme.color(selected ? (theme.states.selected.fg ?? theme.palette.selectionFg) : theme.palette.fg))
+                .foregroundColor(theme.color(selected
+                    ? (pill ? theme.palette.fg : (theme.states.selected.fg ?? theme.palette.selectionFg))
+                    : theme.palette.fg))
                 .lineLimit(1)
             Spacer()
             if let shortcut = action.shortcut {
@@ -304,7 +330,7 @@ struct ActionRow: View {
         .padding(.horizontal, 10)
         .frame(height: CGFloat(theme.effectiveRowHeight))
         .background(selectionBackground)
-        .contentShape(pill ? AnyShape(Capsule()) : AnyShape(Rectangle()))
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -333,7 +359,11 @@ struct ActionRow: View {
                 Color.clear
             default:
                 if pill {
-                    Capsule().fill(color.opacity(0.95))
+                    Capsule()
+                        .fill(theme.color(theme.palette.accent).opacity(0.18))
+                        .overlay(
+                            Capsule().strokeBorder(theme.color(theme.palette.accent).opacity(0.55), lineWidth: 1)
+                        )
                 } else {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(color.opacity(0.95))
@@ -366,19 +396,13 @@ struct LauncherRootView: View {
                     .frame(height: 1)
             }
             tabBar
-                .background(
-                    Capsule()
-                        .fill(theme.color(theme.palette.elevated).opacity(isPill ? 0.5 : 0))
-                        .padding(.horizontal, isPill ? 10 : 0)
-                        .padding(.vertical, isPill ? 2 : 0)
-                )
             content
             if theme.footer.show {
                 footer
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(theme.color(theme.palette.bg).opacity(0.72))
+        .background(theme.color(theme.palette.bg).opacity(isPill ? 0.96 : 0.72))
         .clipShape(RoundedRectangle(cornerRadius: panelRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: panelRadius, style: .continuous)
@@ -427,11 +451,25 @@ struct LauncherRootView: View {
                                     .font(.system(size: 10.5, weight: .medium))
                                     .lineLimit(1)
                             }
-                            .foregroundColor(theme.color(selected ? theme.palette.accent : theme.palette.fgMuted))
-                            .padding(.horizontal, 9)
+                            .foregroundColor(theme.color(selected
+                                ? (isPill ? theme.palette.accent : theme.palette.accent)
+                                : theme.palette.fgMuted))
+                            .padding(.horizontal, 10)
                             .padding(.vertical, 4)
                             .background(
-                                Capsule().fill(theme.color(theme.palette.accent).opacity(selected ? 0.16 : 0))
+                                Capsule().fill(
+                                    selected
+                                        ? (isPill
+                                            ? theme.color(theme.palette.accent).opacity(0.2)
+                                            : theme.color(theme.palette.accent).opacity(0.16))
+                                        : Color.clear
+                                )
+                            )
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    theme.color(theme.palette.accent).opacity(selected && isPill ? 0.45 : 0),
+                                    lineWidth: 1
+                                )
                             )
                         }
                         .buttonStyle(.plain)
@@ -439,6 +477,20 @@ struct LauncherRootView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
+            }
+            .overlay(alignment: .trailing) {
+                if isPill {
+                    LinearGradient(
+                        colors: [
+                            theme.color(theme.palette.bg).opacity(0),
+                            theme.color(theme.palette.bg).opacity(0.95),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 34)
+                    .allowsHitTesting(false)
+                }
             }
             if !isPill {
                 Rectangle()
@@ -479,15 +531,25 @@ struct LauncherRootView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(theme.color(theme.palette.accent))
             }
-            TextField(theme.search.placeholder, text: $controller.query)
-                .textFieldStyle(.plain)
-                .font(theme.font(size: theme.typography.size + 3))
-                .foregroundColor(theme.color(theme.palette.fg))
-                .focused($searchFocused)
-                .disabled(controller.prompt != nil)
-                .onSubmit {
-                    if controller.actionsMode { controller.executeAction() } else { controller.executePrimary() }
+            ZStack(alignment: .leading) {
+                if controller.query.isEmpty {
+                    Text(theme.search.placeholder)
+                        .font(theme.font(size: theme.typography.size + 3))
+                        .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.55))
+                        .lineLimit(1)
+                        .allowsHitTesting(false)
                 }
+                TextField("", text: $controller.query)
+                    .textFieldStyle(.plain)
+                    .font(theme.font(size: theme.typography.size + 3))
+                    .foregroundColor(theme.color(theme.palette.fg))
+                    .focused($searchFocused)
+                    .disabled(controller.prompt != nil)
+                    .accessibilityLabel(theme.search.placeholder)
+                    .onSubmit {
+                        if controller.actionsMode { controller.executeAction() } else { controller.executePrimary() }
+                    }
+            }
             if controller.isSearching {
                 ProgressView()
                     .controlSize(.small)
@@ -503,31 +565,32 @@ struct LauncherRootView: View {
                     .clipShape(Capsule())
             }
         }
-        .padding(.horizontal, controller.searchStyle == .pill ? 22 : 16)
-        .frame(height: CGFloat(theme.search.height))
+        .padding(.horizontal, isPill ? 22 : 16)
+        .frame(height: isPill ? CGFloat(theme.search.height) - 12 : CGFloat(theme.search.height))
         .background(
             Capsule()
-                .fill(theme.color(theme.palette.elevated).opacity(controller.searchStyle == .pill ? 0.92 : 0))
+                .fill(theme.color(theme.palette.elevated).opacity(isPill ? 0.72 : 0))
         )
         .overlay(
             Capsule()
                 .strokeBorder(
-                    theme.color(theme.palette.accent).opacity(controller.searchStyle == .pill ? 0.45 : 0),
+                    theme.color(theme.palette.accent).opacity(isPill ? 0.28 : 0),
                     lineWidth: 1
                 )
         )
         .shadow(
-            color: theme.color(theme.palette.accent).opacity(controller.searchStyle == .pill ? 0.16 : 0),
-            radius: controller.searchStyle == .pill ? 12 : 0,
-            y: 2
+            color: theme.color(theme.palette.accent).opacity(isPill ? 0.10 : 0),
+            radius: isPill ? 10 : 0,
+            y: 1
         )
-        .padding(.horizontal, controller.searchStyle == .pill ? 10 : 0)
+        .padding(.horizontal, isPill ? 12 : 0)
+        .padding(.vertical, isPill ? 6 : 0)
     }
 
     @ViewBuilder
     private var content: some View {
         if let prompt = controller.prompt {
-            PromptView(prompt: prompt, controller: controller, theme: theme, focused: $promptFocused)
+            PromptView(prompt: prompt, controller: controller, theme: theme, focused: $promptFocused, pill: isPill)
         } else if controller.actionsMode {
             actionsView
         } else if controller.previewEnabled {
@@ -553,7 +616,7 @@ struct LauncherRootView: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: CGFloat(theme.list.spacing)) {
+                        LazyVStack(spacing: isPill ? 6 : CGFloat(theme.list.spacing)) {
                             ForEach(Array(controller.items.enumerated()), id: \.element.stableID) { index, item in
                                 if controller.previewEnabled,
                                    let group = item.group,
@@ -577,7 +640,7 @@ struct LauncherRootView: View {
                                 .onTapGesture { controller.activate(index) }
                             }
                         }
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, isPill ? 10 : 6)
                         .padding(.vertical, 4)
                     }
                     .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
@@ -689,7 +752,7 @@ struct LauncherRootView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, isPill ? 10 : 6)
                     .padding(.bottom, 4)
                 }
                 .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
@@ -758,7 +821,9 @@ struct LauncherRootView: View {
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
                 .background(theme.color(theme.palette.elevated).opacity(0.7))
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                .clipShape(isPill
+                    ? AnyShape(Capsule())
+                    : AnyShape(RoundedRectangle(cornerRadius: 3, style: .continuous)))
             Text(label)
         }
         .foregroundColor(theme.color(theme.footer.hintColor))
@@ -770,6 +835,7 @@ struct PromptView: View {
     var controller: SearchController
     var theme: Theme
     var focused: FocusState<Bool>.Binding
+    var pill: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -789,7 +855,7 @@ struct PromptView: View {
                 .font(.system(size: 13))
                 .padding(8)
                 .background(theme.color(theme.palette.surface))
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
                 .focused(focused)
                 .onSubmit { controller.submitPrompt() }
             } else {
@@ -801,7 +867,7 @@ struct PromptView: View {
                 .font(.system(size: 13))
                 .padding(8)
                 .background(theme.color(theme.palette.surface))
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
                 .focused(focused)
                 .onSubmit { controller.submitPrompt() }
             }
@@ -812,14 +878,14 @@ struct PromptView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(theme.color(theme.palette.elevated))
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
                 Button(prompt.kind == .confirm ? "Confirm" : "Continue") { controller.submitPrompt() }
                     .buttonStyle(.plain)
                     .foregroundColor(theme.color(theme.palette.accentFg))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(theme.color(theme.palette.accent))
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
             }
             .font(.system(size: 12, weight: .medium))
         }

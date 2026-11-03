@@ -774,7 +774,7 @@ public final class SearchController: ObservableObject, HostBridge {
         guard let panel else { return }
         let theme = themeManager.theme
         let row = CGFloat(theme.effectiveRowHeight)
-        let spacing = CGFloat(theme.list.spacing)
+        let spacing = configuration.searchStyle == .pill ? 6 : CGFloat(theme.list.spacing)
         func rows(_ count: Int) -> CGFloat {
             let visible = CGFloat(min(max(count, 1), 8))
             return visible * row + max(0, visible - 1) * spacing + 8

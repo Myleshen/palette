@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.7.2 — 2026-11-03
+
+### Fixed
+
+- Reworked the **Siri-style pill** so the whole launcher is cohesive instead of
+  only the search field: a floating search capsule, soft accent pill outlines
+  for the active tab, result, and action, capsule grid selection and badges, and
+  a more rounded panel. Unselected rows stay flat, matching native macOS lists.
+- The pill panel background is near-opaque, removing the text ghosting seen
+  through the old translucent panel.
+- Replaced the clipped native placeholder with a custom aligned placeholder;
+  it now renders cleanly in both styles.
+- The tab strip fades at its trailing edge instead of cutting the last chip,
+  and pill row height/spacing is included in the panel-size calculation.
+- Contrast on selected rows is fixed: accent text, readable subtitles, and
+  selected provider labels.
+
 ## 1.7.1 — 2026-11-03
 
 ### Changed

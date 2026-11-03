@@ -133,7 +133,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   and refresh, path filtering, and use counts).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.1). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.2). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,13 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.2 checks: with `search_style = "pill"` on Aetheria Pink, the panel
+  background was opaque (no ghosted terminal text), the placeholder rendered
+  fully, the search field and active tab/result/action used consistent soft
+  accent capsules, unselected rows stayed flat, and the trailing tab faded
+  instead of being cut. The Actions overlay and Classic mode were also
+  snapshotted; Classic kept its original flat layout with the corrected
+  placeholder.
 - v1.7.1 checks: the status menu contained Open Palette, Reload, Launcher
   Position, Refresh Bitwarden Cache, Settings, Advanced, and Quit — no
   Clipboard Paste Permissions item. A fresh Palette process with the same test
