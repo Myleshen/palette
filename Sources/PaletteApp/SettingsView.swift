@@ -15,22 +15,31 @@ struct SettingsView: View {
     @State private var accessibilityTrusted: Bool
 
     private let themesDirectory: URL
+    private let providerSummary: [String]
+    private let diagnostics: [String]
     private let onSave: (PaletteConfig) -> Void
     private let onOpen: (URL) -> Void
+    private let onExportBackup: () -> Void
 
     init(
         config: PaletteConfig,
         themesDirectory: URL,
         accessibilityTrusted: Bool,
+        providerSummary: [String],
+        diagnostics: [String],
         onSave: @escaping (PaletteConfig) -> Void,
-        onOpen: @escaping (URL) -> Void
+        onOpen: @escaping (URL) -> Void,
+        onExportBackup: @escaping () -> Void
     ) {
         _config = State(initialValue: config)
         _engines = State(initialValue: config.webSearchEngines)
         _accessibilityTrusted = State(initialValue: accessibilityTrusted)
         self.themesDirectory = themesDirectory
+        self.providerSummary = providerSummary
+        self.diagnostics = diagnostics
         self.onSave = onSave
         self.onOpen = onOpen
+        self.onExportBackup = onExportBackup
     }
 
     var body: some View {
@@ -256,6 +265,28 @@ struct SettingsView: View {
                 Text("Everything above is written to config.toml. Edit it directly only when you need options the Settings window does not expose.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            Section("Providers") {
+                if providerSummary.isEmpty {
+                    Text("No providers loaded.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(providerSummary, id: \.self) { line in
+                        Text(line).font(.caption).textSelection(.enabled)
+                    }
+                }
+            }
+            Section("Backup & diagnostics") {
+                Button("Export Backup…") { onExportBackup() }
+                Button("Open Crash Log") {
+                    onOpen(PalettePaths.resolve().stateDir.appendingPathComponent("crash.log"))
+                }
+                if diagnostics.isEmpty {
+                    Text("No startup diagnostics.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(diagnostics, id: \.self) { line in
+                        Text(line).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
             Section("About") {
                 LabeledContent("Version") {

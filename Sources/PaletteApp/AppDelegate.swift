@@ -79,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         Log.shared.configure(url: paths.logFile)
         Log.shared.info("Palette launching from \(Bundle.main.bundlePath)", source: "app")
+        CrashReporter.install(url: paths.stateDir.appendingPathComponent("crash.log"))
 
         // One Palette at a time. A stale build or a second installed copy must
         // not leave two owners fighting over the global hotkeys.
@@ -116,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         seedUserProviders()
         launcher = LauncherService()
         pasteboard = PasteboardService()
+        Log.shared.info("Accessibility trusted=\(pasteboard.isAccessibilityTrusted)", source: "app")
         if !pasteboard.isAccessibilityTrusted {
             // Make the permission gap visible instead of silently copying.
             pasteboard.requestAccessibility()
@@ -869,16 +871,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.orderFrontRegardless()
     }
 
+    private func exportBackup() {
+        let panel = NSSavePanel()
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        panel.nameFieldStringValue = "Palette-Backup-\(stamp).zip"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Palette-Backup-\(UUID().uuidString)", isDirectory: true)
+        let manager = FileManager.default
+        do {
+            try manager.createDirectory(at: temp, withIntermediateDirectories: true)
+            try? manager.copyItem(at: paths.configFile, to: temp.appendingPathComponent("config.toml"))
+            try? manager.copyItem(at: paths.themesDir, to: temp.appendingPathComponent("themes"))
+            try? manager.copyItem(at: paths.providersDir, to: temp.appendingPathComponent("providers"))
+            try? manager.copyItem(at: paths.databaseFile, to: temp.appendingPathComponent("palette.sqlite"))
+            for suffix in ["-wal", "-shm"] {
+                let source = URL(fileURLWithPath: paths.databaseFile.path + suffix)
+                if manager.fileExists(atPath: source.path) {
+                    try? manager.copyItem(at: source, to: temp.appendingPathComponent("palette.sqlite" + suffix))
+                }
+            }
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", temp.path, destination.path]
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw NSError(domain: "PaletteBackup", code: Int(process.terminationStatus))
+            }
+            searchController.setStatus("Backup exported to \(destination.lastPathComponent)", duration: 4)
+        } catch {
+            searchController.setStatus("Backup failed: \(error.localizedDescription)", duration: 5)
+        }
+        try? manager.removeItem(at: temp)
+    }
+
     private func makeSettingsView() -> SettingsView {
         SettingsView(
             config: configuration,
             themesDirectory: paths.themesDir,
             accessibilityTrusted: pasteboard.isAccessibilityTrusted,
+            providerSummary: registry.providers.map {
+                "\($0.descriptor.name)  ·  \($0.descriptor.trigger.map { "/\($0)" } ?? "global")"
+            },
+            diagnostics: startupDiagnostics.map { "\($0.level.rawValue): \($0.message)" },
             onSave: { [weak self] updated in
                 self?.saveSettings(updated)
             },
             onOpen: { [weak self] url in
                 self?.launcher.openPath(url.path)
+            },
+            onExportBackup: { [weak self] in
+                self?.exportBackup()
             }
         )
     }

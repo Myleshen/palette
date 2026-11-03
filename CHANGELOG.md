@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.7.9 — 2026-11-03
+
+### Changed
+
+- **Image paste now matches the target app.** Terminal/TUI hosts such as kitty
+  receive Ctrl+V for images, so OpenCode's image paste handler fires; regular
+  apps such as WhatsApp and TextEdit keep Cmd+V. Text pastes are unchanged.
+- Settings → Advanced now lists every registered provider with its trigger and
+  startup diagnostics.
+- Added **Export Backup…**, which packages `config.toml`, themes, providers, and
+  the SQLite state (including WAL/SHM) into a zip.
+- Added a crash breadcrumb for uncaught exceptions at
+  `~/.local/state/palette/crash.log`, with an **Open Crash Log** action.
+
+### Fixed
+
+- The app logs Accessibility trust at launch so a stale TCC grant is visible
+  instead of silently only copying.
+
 ## 1.7.8 — 2026-11-03
 
 ### Changed

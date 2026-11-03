@@ -220,7 +220,9 @@ public final class PasteboardService {
     @discardableResult
     public func paste(image: Data, concealed: Bool = false, into app: NSRunningApplication?) -> Bool {
         write(image: image, concealed: concealed)
-        return deliver(to: app)
+        // TUI editors such as OpenCode read images from the clipboard when
+        // they receive Ctrl+V; Cmd+V only reaches the terminal's text paste.
+        return deliver(to: app, modifiers: Self.imagePasteModifiers(for: app))
     }
 
     @discardableResult
@@ -229,7 +231,7 @@ public final class PasteboardService {
         return deliver(to: app)
     }
 
-    private func deliver(to app: NSRunningApplication?) -> Bool {
+    private func deliver(to app: NSRunningApplication?, modifiers: CGEventFlags = .maskCommand) -> Bool {
         guard isAccessibilityTrusted else {
             Log.shared.warn("Paste skipped: Accessibility is not trusted", source: "clipboard")
             requestAccessibility()
@@ -237,25 +239,41 @@ public final class PasteboardService {
         }
 
         Log.shared.info(
-            "Paste requested target=\(app?.localizedName ?? "nil") trusted=\(isAccessibilityTrusted)",
+            "Paste requested target=\(app?.localizedName ?? "nil") modifiers=\(modifiers.rawValue) trusted=\(isAccessibilityTrusted)",
             source: "clipboard"
         )
         app?.activate(options: [.activateAllWindows])
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            Self.sendCommandV()
+            Self.sendPaste(modifiers: modifiers)
         }
         return true
     }
 
-    private static func sendCommandV() {
+    private static func imagePasteModifiers(for app: NSRunningApplication?) -> CGEventFlags {
+        let terminalBundleIDs: Set<String> = [
+            "net.kovidgoyal.kitty",
+            "com.apple.Terminal",
+            "com.googlecode.iterm2",
+            "dev.wez.wezterm",
+            "org.alacritty",
+            "com.mitchellh.ghostty",
+            "co.zeit.hyper",
+        ]
+        if let id = app?.bundleIdentifier, terminalBundleIDs.contains(id) {
+            return .maskControl
+        }
+        return .maskCommand
+    }
+
+    private static func sendPaste(modifiers: CGEventFlags) {
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
         let keyCode: CGKeyCode = 9 // V
         if let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true) {
-            down.flags = .maskCommand
+            down.flags = modifiers
             down.post(tap: .cghidEventTap)
         }
         if let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) {
-            up.flags = .maskCommand
+            up.flags = modifiers
             up.post(tap: .cghidEventTap)
         }
     }

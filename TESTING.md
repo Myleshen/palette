@@ -133,7 +133,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   and refresh, path filtering, and use counts).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.8). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.9). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,11 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.9 checks: image paste logged `target=kitty modifiers=262144` (Ctrl+V) and
+  `target=TextEdit modifiers=1048576` (Cmd+V); a Finder-launched build logged
+  `Accessibility trusted=true` after the stable-signature grant. Settings
+  Advanced showed the provider list, diagnostics, Export Backup, and Open Crash
+  Log. `swift test`: 42 tests, 0 failures.
 - v1.7.8 checks: a Finder-launched Palette reported Accessibility “Not granted”
   until the stale cdhash entry was removed; the new build exposes that state in
   Settings instead of silently only copying. `/clip` typed manually opened the
