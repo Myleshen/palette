@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.9.1 — 2026-11-03
+
+### Fixed
+
+- `/proj` now parses devx's tab-separated project list correctly, including
+  registered worktrees, and uses the reported path instead of guessing
+  `~/dev/<name>`.
+- `/web` accepts local development URLs such as `http://localhost:5173` and
+  `http://127.0.0.1:8080`.
+
+### Verified
+
+- Installed devx 0.1.2, configured Neovide/kitty/lazygit, and reached
+  `devx doctor` → **devx is ready**.
+- Created and removed a real devx worktree; Palette listed it with **WORKTREE**.
+- Killed test HTTP servers through `/port` with both SIGTERM and SIGKILL.
+- Exercised Git stage, commit, push, pull `--ff-only`, and copy branch against a
+  disposable repository and bare remote.
+- Added, opened, and removed a local test URL as a Web App.
+- `swift test`: 65 tests, 0 failures.
+
 ## 1.9.0 — 2026-11-03
 
 ### Added

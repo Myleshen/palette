@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.9.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.9.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -289,6 +289,9 @@ vault changed elsewhere; the next search reads it fresh. The cache is scoped to
 1. `/web figma.com`
 2. choose **Add Web App “Figma”**
 3. give it a name, then optionally a shortcut such as `ctrl+alt+f`
+
+Local development URLs work too: `/web http://localhost:5173` or
+`/web http://127.0.0.1:8080`.
 
 Web apps open in Helium by default, in their own Chromium **app window**
 (`--app=…`) with a dedicated Palette profile, not as a normal browser tab.

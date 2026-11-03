@@ -12,11 +12,16 @@ public enum WebAppURL {
         guard let url = URL(string: value),
               let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https",
-              let host = url.host,
-              host.contains("."),
-              let suffix = host.split(separator: ".").last,
-              suffix.count >= 2,
-              suffix.allSatisfy(\.isLetter) else { return nil }
+              let host = url.host else { return nil }
+        let isLocal = host == "localhost"
+            || host == "::1"
+            || host.range(of: "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$", options: .regularExpression) != nil
+        guard isLocal || host.contains(".") else { return nil }
+        if !isLocal {
+            guard let suffix = host.split(separator: ".").last,
+                  suffix.count >= 2,
+                  suffix.allSatisfy(\.isLetter) else { return nil }
+        }
         return url
     }
 

@@ -59,6 +59,12 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertEqual(parsed.text, "safari")
     }
 
+    func testLocalWebAppURLsNormalize() {
+        XCTAssertEqual(WebAppURL.normalize("http://localhost:5871")?.absoluteString, "http://localhost:5871")
+        XCTAssertEqual(WebAppURL.normalize("http://127.0.0.1:5871")?.absoluteString, "http://127.0.0.1:5871")
+        XCTAssertNil(WebAppURL.normalize("not a url"))
+    }
+
     func testCommandManifestLoads() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("commands-\(UUID().uuidString).toml")
         defer { try? FileManager.default.removeItem(at: url) }

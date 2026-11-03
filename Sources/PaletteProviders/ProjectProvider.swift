@@ -151,11 +151,19 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
                 .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " -•\t")) }
                 .filter { !$0.isEmpty }
                 .compactMap { line -> Project? in
-                    let name = line.components(separatedBy: "  ").first ?? line
+                    let fields = line.split(separator: "\t").map {
+                        $0.trimmingCharacters(in: .whitespaces)
+                    }
+                    let name = fields.first ?? line
                     let candidate = PathExpansion.expand("~/dev/\(name)")
-                    let path = FileManager.default.fileExists(atPath: candidate) ? candidate : name
+                    let reported = fields.count > 1 && fields[1].hasPrefix("/") ? fields[1] : candidate
+                    let path = FileManager.default.fileExists(atPath: reported) ? reported : candidate
                     guard FileManager.default.fileExists(atPath: path) else { return nil }
-                    return Project(name: (path as NSString).lastPathComponent, path: path, isWorktree: path.contains(".worktrees"))
+                    return Project(
+                        name: name,
+                        path: path,
+                        isWorktree: path.contains(".worktrees")
+                    )
                 }
             if !projects.isEmpty { return projects }
         }
