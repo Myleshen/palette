@@ -79,12 +79,16 @@ struct SettingsView: View {
                 TextField("Terminal", text: $config.terminalApp)
                 TextField("Editor", text: $config.editorOpenWith)
             }
-            Section("Layout") {
-                Picker("Search bar position", selection: $config.searchPosition) {
+            Section("Launcher position") {
+                Picker("Opens at", selection: $config.searchPosition) {
                     Text("Top").tag(SearchPosition.top)
                     Text("Center").tag(SearchPosition.center)
                     Text("Bottom").tag(SearchPosition.bottom)
                 }
+                .pickerStyle(.segmented)
+                Text("Top drops down from the menu bar, Center opens in the middle, and Bottom rises from the bottom with the search field and tabs underneath the results.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle("Show applications as a grid", isOn: $config.appGrid)
                 Stepper("Grid columns: \(config.appGridColumns)", value: $config.appGridColumns, in: 3...8)
                     .disabled(!config.appGrid)

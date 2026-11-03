@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.0 — 2026-11-03
+
+### Added
+
+- Bitwarden rows and prompts now show the account email, and the unlock prompt
+  reads “Master password for you@example.com”, so it is clear which vault is
+  being unlocked.
+- Web apps open in a Chromium app window (`--app=…`) with a dedicated Palette
+  profile. Hammerspoon exports the browser executable and arguments, so
+  shortcuts open the same standalone window instead of Safari.
+- Launcher position is a segmented Top / Center / Bottom control in Settings,
+  plus a **Launcher Position** submenu in the menu-bar menu.
+
+### Fixed
+
+- Bitwarden no longer clears the in-memory session on every list failure.
+  Timeouts (now 60 s), network errors, and server errors keep the session and
+  show a retry row; only genuine session/auth failures ask for the password
+  again. Failures and stderr are logged under `[bitwarden]`.
+
 ## 1.5.1 — 2026-11-03
 
 Fixes found during the physical 1.5.0 test round.

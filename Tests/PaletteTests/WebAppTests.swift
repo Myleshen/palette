@@ -33,10 +33,15 @@ final class WebAppTests: XCTestCase {
             WebApp(id: "1", name: "Figma", url: "https://figma.com", createdAt: Date(), shortcut: "ctrl+alt+f"),
             WebApp(id: "2", name: "No Key", url: "https://example.com", createdAt: Date()),
         ]
-        let text = HammerspoonExport.render(apps)
+        let text = HammerspoonExport.render(apps, browser: "Helium")
         XCTAssertTrue(text.contains("name = \"Figma\", url = \"https://figma.com\", shortcut = \"ctrl+alt+f\""))
         XCTAssertTrue(text.contains("name = \"No Key\", url = \"https://example.com\""))
         XCTAssertFalse(text.contains("No Key\", url = \"https://example.com\", shortcut"))
+        if ToolLocator.shared.appPath(named: "Helium") != nil {
+            XCTAssertTrue(text.contains("browser_path = \"/Applications/Helium.app/Contents/MacOS/Helium\""))
+            XCTAssertTrue(text.contains("--app=https://figma.com"))
+            XCTAssertTrue(text.contains("--user-data-dir="))
+        }
     }
 
     func testStoreAddDedupeAndDelete() async throws {

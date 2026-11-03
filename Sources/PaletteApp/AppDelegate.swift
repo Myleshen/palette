@@ -67,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastProvidersSignature: Date?
     private var reloadInFlight = false
     private var settingsWindow: NSWindow?
+    private var positionMenu: NSMenu?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -596,6 +597,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reload.target = self
         menu.addItem(reload)
 
+        let positionItem = NSMenuItem(title: "Launcher Position", action: nil, keyEquivalent: "")
+        let positionMenu = NSMenu(title: "Launcher Position")
+        for position in SearchPosition.allCases {
+            let item = NSMenuItem(
+                title: position.rawValue.capitalized,
+                action: #selector(setPositionFromMenu(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = position.rawValue
+            positionMenu.addItem(item)
+        }
+        positionItem.submenu = positionMenu
+        menu.addItem(positionItem)
+        self.positionMenu = positionMenu
+        updatePositionMenu()
+
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettingsFromMenu), keyEquivalent: "")
         settings.target = self
         menu.addItem(settings)
@@ -709,7 +727,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func exportWebApps() async {
         do {
             let apps = try await store.webApps()
-            if let url = try HammerspoonExport.write(apps) {
+            if let url = try HammerspoonExport.write(apps, browser: configuration.webAppBrowser) {
                 Log.shared.info("Exported \(apps.count) web app(s) to \(url.path)", source: "hammerspoon")
             }
         } catch {
@@ -728,6 +746,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
+        updatePositionMenu()
 
         let oldRegistry = registry
         let newRegistry = buildRegistry()
@@ -766,6 +785,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func reloadFromMenu() {
         reload(quiet: false)
+    }
+
+    @objc private func setPositionFromMenu(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let position = SearchPosition(rawValue: raw) else { return }
+        configuration.searchPosition = position
+        panel?.anchorOverride = position.rawValue
+        do {
+            try ConfigWriter.render(configuration).write(to: paths.configFile, atomically: true, encoding: .utf8)
+        } catch {
+            Log.shared.warn("Could not save launcher position: \(error.localizedDescription)", source: "app")
+        }
+        updatePositionMenu()
+    }
+
+    private func updatePositionMenu() {
+        for item in positionMenu?.items ?? [] {
+            item.state = (item.representedObject as? String) == configuration.searchPosition.rawValue ? .on : .off
+        }
     }
 
     @objc private func openConfigFromMenu() {

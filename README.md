@@ -10,7 +10,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.5.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.6.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -148,7 +148,8 @@ the result in your default browser. Engines are ordinary config rows in
 ### Settings
 
 `⌘,` (or the menu-bar icon) opens a native Settings window for the launcher and
-clipboard hotkeys, search-bar position, terminal, editor, app grid, themes,
+clipboard hotkeys, launcher position (Top / Center / Bottom), terminal, editor,
+app grid, themes,
 clipboard retention, web-search engines, and the browser used by web apps.
 Hotkeys are recorded by pressing them, not typed. Saving validates both
 shortcuts and refuses a browser that is not installed. Changes apply
@@ -206,9 +207,12 @@ seconds, so they never enter Palette’s clipboard history.
 2. choose **Add Web App “Figma”**
 3. give it a name, then optionally a shortcut such as `ctrl+alt+f`
 
-Web apps open in Helium by default. Change the browser in Settings → Search;
-only Chromium-based browsers are listed and Palette will not save one that is
-not installed.
+Web apps open in Helium by default, in their own Chromium **app window**
+(`--app=…`) with a dedicated Palette profile, not as a normal browser tab.
+Change the browser in Settings → Search; only Chromium-based browsers are
+listed and Palette will not save one that is not installed. Hammerspoon
+shortcuts use the same app-window launcher, so the shortcut opens the same
+standalone window instead of Safari.
 
 A shortcut needs at least two modifiers. Palette writes
 `~/.hammerspoon/palette-webapps.lua`; Hammerspoon watches that file and binds

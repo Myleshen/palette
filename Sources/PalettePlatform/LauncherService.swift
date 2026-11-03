@@ -89,6 +89,24 @@ public final class LauncherService {
         return true
     }
 
+    /// Opens a saved web app in its own Chromium app window, not a browser tab.
+    @discardableResult
+    public func openWebApp(_ string: String, browser: String) -> Bool {
+        guard let spec = WebAppLauncher.launchSpec(urlString: string, browser: browser) else {
+            Log.shared.warn("Could not build an app window for \(string) in \(browser)", source: "launcher")
+            openURL(string, with: browser)
+            return false
+        }
+        do {
+            try ProcessRunner.launch([spec.executable] + spec.arguments)
+            return true
+        } catch {
+            Log.shared.error("Web app launch failed: \(error.localizedDescription)", source: "launcher")
+            openURL(string, with: browser)
+            return false
+        }
+    }
+
     public func run(_ argv: [String], cwd: String? = nil) throws {
         guard !argv.isEmpty else { return }
         try ProcessRunner.launch(argv, cwd: cwd)

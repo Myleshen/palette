@@ -124,15 +124,15 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 32 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 33 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
   breadth-first paths, default-off app grid, browser validation, and the
-  shortcut recorder).
+  shortcut recorder, Bitwarden session classification).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.5.1). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.6.0). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -149,6 +149,16 @@ Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.6.0 checks: `/bw` showed **Unlock Bitwarden — myleshennihonjin@gmail.com**
+  and the prompt read “Master password for …”; after unlocking through the real
+  secure prompt, `/bw`, `/bwn`, and `/bwu` shared one session with no repeated
+  password prompt. A saved web app opened as
+  `Helium --app=https://music.youtube.com --user-data-dir=…/Palette/WebApps/helium`,
+  producing a standalone YouTube Music window with no tabs or address bar.
+  Pressing the Hammerspoon shortcut `ctrl+alt+m` launched the identical app-mode
+  command instead of Safari. Settings showed a segmented Top/Center/Bottom
+  control; selecting Bottom and saving moved the search field and tabs under the
+  results at the bottom of the screen.
 - v1.5.1 physical round on the installed app (screen unlocked):
   `⌥Space` opened the launcher and `⌥V` opened the clipboard browser with the
   wide preview and filter chips; `Esc` dismissed them. In Settings, clicking the

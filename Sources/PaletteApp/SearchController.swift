@@ -543,7 +543,11 @@ public final class SearchController: ObservableObject, HostBridge {
                 let url = object?["url"] ?? action.value.text
                 guard let url else { return }
                 panel?.hide(activatePrevious: false)
-                launcher.openURL(url, with: object?["browser"])
+                if object?["mode"] == "app" {
+                    launcher.openWebApp(url, browser: object?["browser"] ?? configuration.webAppBrowser)
+                } else {
+                    launcher.openURL(url, with: object?["browser"])
+                }
 
             case .reveal:
                 if let path = action.value.text {
@@ -654,7 +658,7 @@ public final class SearchController: ObservableObject, HostBridge {
         case "web":
             return ["add", "remove", "shortcut", "clear-shortcut"].contains(action.id)
         case "bw", "bwu", "bwt", "bwn", "bwo":
-            return ["install", "login", "unlock"].contains(action.id)
+            return ["install", "login", "unlock", "retry"].contains(action.id)
         default:
             return false
         }

@@ -76,7 +76,7 @@ public actor WebAppProvider: PaletteProvider {
             guard searchText.isEmpty || score >= 0 else { continue }
 
             let actions: [PaletteAction] = [
-                PaletteAction(id: "open", title: "Open Web App", kind: .openURL, value: .object(["url": app.url, "browser": browser])),
+                PaletteAction(id: "open", title: "Open Web App", kind: .openURL, value: .object(["url": app.url, "browser": browser, "mode": "app"])),
                 PaletteAction(id: "copy-url", title: "Copy URL", kind: .copyText, value: .text(app.url)),
                 PaletteAction(id: "shortcut", title: app.shortcut == nil ? "Set Shortcut…" : "Change Shortcut…", kind: .custom, value: .text(app.id)),
                 PaletteAction(id: "clear-shortcut", title: "Clear Shortcut", kind: .custom, value: .text(app.id)),

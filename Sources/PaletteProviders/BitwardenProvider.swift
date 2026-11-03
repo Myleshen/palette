@@ -9,10 +9,13 @@ public actor BitwardenVault {
     private var session: String?
     private var lastStatus: String?
     private var lastStatusDate: Date?
+    private var email: String?
 
     public init() {}
 
     public func currentSession() -> String? { session }
+
+    public func accountEmail() -> String? { email }
 
     public func clear() {
         session = nil
@@ -30,6 +33,9 @@ public actor BitwardenVault {
               let status = object["status"] as? String else {
             return "unknown"
         }
+        if let email = object["userEmail"] as? String, !email.isEmpty {
+            self.email = email
+        }
         lastStatus = status
         lastStatusDate = Date()
         return status
@@ -44,13 +50,14 @@ public actor BitwardenVault {
                 placeholder: "you@example.com"
             )
         }
-        guard let email, !email.isEmpty else { return }
+        guard let account = email, !account.isEmpty else { return }
+        self.email = account
 
         var password = environment["BW_PASSWORD"]
         if password == nil || password?.isEmpty == true {
             password = await bridge.prompt(
                 kind: .secureText,
-                title: "Bitwarden master password",
+                title: "Bitwarden password for \(account)",
                 placeholder: "Master password"
             )
         }
@@ -59,7 +66,7 @@ public actor BitwardenVault {
         let result: ProcessResult
         do {
             result = try await ProcessRunner.run(
-                [bw, "login", email, "--passwordenv", "BW_PASSWORD", "--raw"],
+                [bw, "login", account, "--passwordenv", "BW_PASSWORD", "--raw"],
                 environment: ["BW_PASSWORD": password, "BW_SESSION": ""],
                 timeout: 60
             )
@@ -83,12 +90,14 @@ public actor BitwardenVault {
     }
 
     public func unlock(bw: String, bridge: HostBridge, environment: [String: String]) async {
+        _ = await status(bw: bw)
+        let account = email ?? "your account"
         var password = environment["BW_PASSWORD"]
         if password == nil || password?.isEmpty == true {
             password = await bridge.prompt(
                 kind: .secureText,
-                title: "Unlock Bitwarden",
-                placeholder: "Master password"
+                title: "Unlock Bitwarden \(account)",
+                placeholder: "Master password for \(account)"
             )
         }
         guard let password, !password.isEmpty else { return }
@@ -219,15 +228,17 @@ public actor BitwardenProvider: PaletteProvider {
 
         let session = await vault.currentSession()
         if session == nil {
-            switch await vault.status(bw: bw) {
+            let status = await vault.status(bw: bw)
+            let email = await vault.accountEmail()
+            switch status {
             case "unauthenticated":
-                return [loginRow()]
+                return [loginRow(email: email)]
             case "locked":
-                return [unlockRow(message: "The vault is locked")]
+                return [unlockRow(message: "The vault is locked", email: email)]
             default:
                 break
             }
-            return [unlockRow(message: "Unlock to search your vault")]
+            return [unlockRow(message: "Unlock to search your vault", email: email)]
         }
 
         guard let session else { return [] }
@@ -236,15 +247,30 @@ public actor BitwardenProvider: PaletteProvider {
         var arguments = [bw, "list", "items"]
         if !query.isEmpty { arguments.append(contentsOf: ["--search", query]) }
 
-        let result = try await ProcessRunner.run(arguments, environment: ["BW_SESSION": session], timeout: 20)
+        let result = try await ProcessRunner.run(arguments, environment: ["BW_SESSION": session], timeout: 60)
         guard result.status == 0 else {
-            // A stale session is the most common failure; ask for unlock again.
-            await vault.clear()
-            return [unlockRow(message: "Session expired — unlock again")]
+            let stderr = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
+            Log.shared.warn(
+                "Bitwarden list failed (status \(result.status), timedOut=\(result.timedOut)): \(stderr.prefix(300))",
+                source: "bitwarden"
+            )
+            if result.timedOut {
+                // A slow vault is not a locked vault. Keep the session so the
+                // next query can retry without asking for the password again.
+                return [errorRow(message: "Bitwarden did not answer in time. Press \u{23CE} to retry.")]
+            }
+            if Self.looksLikeSessionFailure(stderr) {
+                await vault.clear()
+                return [unlockRow(message: "Session expired — unlock again", email: await vault.accountEmail())]
+            }
+            // Network or server errors must not throw the session away.
+            let detail = stderr.isEmpty ? "bw list items failed" : String(stderr.prefix(200))
+            return [errorRow(message: detail)]
         }
         guard let data = result.stdoutString.data(using: .utf8),
               let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            return []
+            Log.shared.warn("Bitwarden returned an unreadable item list", source: "bitwarden")
+            return [errorRow(message: "Could not read the vault response.")]
         }
 
         let items: [PaletteItem] = raw.compactMap { entry in
@@ -255,7 +281,7 @@ public actor BitwardenProvider: PaletteProvider {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        if let command = action.value.text, ["install", "login", "unlock"].contains(command) {
+        if let command = action.value.text, ["install", "login", "unlock", "retry"].contains(command) {
             try await runRowCommand(command)
             return
         }
@@ -286,8 +312,14 @@ public actor BitwardenProvider: PaletteProvider {
         guard entryResult.status == 0,
               let data = entryResult.stdoutString.data(using: .utf8),
               let entry = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            await vault.clear()
-            await bridge.notify("Could not read the item; session may have expired")
+            let stderr = entryResult.stderrString
+            Log.shared.warn("Bitwarden get item failed: \(stderr.prefix(300))", source: "bitwarden")
+            if Self.looksLikeSessionFailure(stderr) {
+                await vault.clear()
+                await bridge.notify("Session expired — unlock Bitwarden again")
+            } else {
+                await bridge.notify("Could not read the item: \(stderr.prefix(120))")
+            }
             return
         }
 
@@ -350,11 +382,11 @@ public actor BitwardenProvider: PaletteProvider {
         )
     }
 
-    private func loginRow() -> PaletteItem {
+    private func loginRow(email: String?) -> PaletteItem {
         PaletteItem(
             id: "login",
             title: "Log in to Bitwarden",
-            subtitle: "Vaultwarden · sign in without leaving Palette",
+            subtitle: "\(email ?? "No account") · sign in without leaving Palette",
             icon: .symbol("person.badge.key"),
             score: 10_000,
             actions: [PaletteAction(id: "login", title: "Log In", kind: .custom, value: .text("login"))],
@@ -363,10 +395,10 @@ public actor BitwardenProvider: PaletteProvider {
         )
     }
 
-    private func unlockRow(message: String) -> PaletteItem {
+    private func unlockRow(message: String, email: String?) -> PaletteItem {
         PaletteItem(
             id: "unlock",
-            title: "Unlock Bitwarden",
+            title: email.map { "Unlock Bitwarden — \($0)" } ?? "Unlock Bitwarden",
             subtitle: "\(message) · master password is never stored",
             icon: .symbol("lock.open"),
             score: 10_000,
@@ -374,6 +406,29 @@ public actor BitwardenProvider: PaletteProvider {
             providerID: descriptor.id,
             providerName: descriptor.name
         )
+    }
+
+    private func errorRow(message: String) -> PaletteItem {
+        PaletteItem(
+            id: "error",
+            title: "Bitwarden error",
+            subtitle: message,
+            icon: .symbol("exclamationmark.triangle"),
+            score: 10_000,
+            actions: [PaletteAction(id: "retry", title: "Retry", kind: .custom, value: .text("retry"))],
+            providerID: descriptor.id,
+            providerName: descriptor.name
+        )
+    }
+
+    /// Only clear the cached session when the CLI actually says it is stale.
+    static func looksLikeSessionFailure(_ stderr: String) -> Bool {
+        let text = stderr.lowercased()
+        return text.contains("session")
+            || text.contains("not logged in")
+            || text.contains("unauthorized")
+            || text.contains("401")
+            || text.contains("vault is locked")
     }
 
     // MARK: - Item mapping
