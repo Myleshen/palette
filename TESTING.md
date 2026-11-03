@@ -124,16 +124,16 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 43 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 49 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
-  breadth-first paths, browser validation, and the
-  shortcut recorder, Bitwarden session classification, encrypted cache expiry
-  and refresh, path filtering, and use counts).
+  breadth-first paths, browser validation, the shortcut recorder, Bitwarden
+  session classification, encrypted cache expiry and refresh, path filtering,
+  use counts, fuzzy abbreviations, and fuzzy clipboard/file search).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.10). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.11). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,12 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.11 checks: `actmon` ranked Activity Monitor first in the app list;
+  `/clip qbf` matched “The quick brown fox jumps over the lazy dog” from the
+  clipboard, and a file named `Quarterly-Budget-Final.xlsx` matched `qbf` and
+  `qbfinal`; `drgn` found Dragon, while `dragon` did not surface Red Triangle;
+  Bitwarden matching accepted `tst`, `exmpl`, and `rd` against the test login.
+  `swift test`: 49 tests, 0 failures.
 - v1.7.10 checks: app grid mode is gone; the empty query renders the same
   single-list layout as every provider, and legacy `app_grid` keys are ignored.
   `swift test`: 43 tests, 0 failures.

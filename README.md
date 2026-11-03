@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.7.10. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.7.11. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -126,7 +126,7 @@ trigger word:
 | `/bwt <query>` | Bitwarden TOTP codes |
 | `/bwn <query>` | Bitwarden notes |
 | `/bwo <query>` | Bitwarden URLs |
-| `/clip <query>` | clipboard history, text and images |
+| `/clip <query>` | clipboard history, text/images/files |
 | `/web <query>` | saved web apps; type a domain to add one |
 | `/emoji <query>` | emoji picker |
 | `/sys <query>` | lock, sleep, trash, reload, quit |
@@ -139,6 +139,18 @@ direct children of `~/dev` first, then the next level.
 Unprefixed queries search apps, web apps, zellij sessions, pinned items, web
 search engines, and any provider marked `global = true`. `= 2+2` and bare
 arithmetic also work.
+
+### Search matching
+
+Matching is fzf-style, not exact-substring. Type the letters you remember and
+Palette scores runs, word boundaries, and gaps: `actmon` finds **Activity
+Monitor**, `vsc` finds **Visual Studio Code**, `qbf` finds **The quick brown
+fox**, `tst` finds a Bitwarden login named **Test**, and `drgn` finds **Dragon**.
+This applies to apps, clipboard text and file names, web apps, providers,
+themes, and Bitwarden vault fields. Clipboard search scans the recent history
+(up to 5,000 entries) rather than only doing a SQL prefix match, so
+non-contiguous searches work there too. `/neo` still delegates path ranking to
+the real `fzf` binary with `--scheme=path`.
 
 The empty-query screen is deliberately the **app list**: apps in alphabetical
 order (or most-used), with pinned apps and pinned web apps at the top. Unpinned

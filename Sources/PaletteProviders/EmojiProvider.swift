@@ -26,18 +26,41 @@ public final class EmojiProvider: PaletteProvider, @unchecked Sendable {
         }
 
         let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
-        var matches: [(EmojiCatalogEntry, Double)] = []
+        var literalMatches: [(EmojiCatalogEntry, Double)] = []
+        var fuzzyMatches: [(EmojiCatalogEntry, Double)] = []
         for emoji in Self.entries {
-            let haystack = emoji.searchText
-            // Emoji names are literal; subsequence matching turns "dragon" into
-            // "Red Triangle", so every term must appear verbatim somewhere.
-            guard terms.allSatisfy({ haystack.contains($0.lowercased()) }) else { continue }
-            let score = Ranking.score(query: query, candidate: emoji.name)
-                ?? Ranking.score(query: query, candidate: emoji.appleName)
-                ?? Ranking.score(query: query, candidate: emoji.group)
-                ?? 1
-            matches.append((emoji, score))
+            let fields = [emoji.name, emoji.appleName, emoji.group]
+            var total: Double = 0
+            var literal = true
+            var matchedAll = true
+
+            for term in terms {
+                let lower = term.lowercased()
+                var best: Double?
+                for field in fields where !field.isEmpty {
+                    if let score = Ranking.termScore(term, candidate: field) {
+                        best = max(best ?? score, score)
+                    }
+                }
+                guard let best else {
+                    matchedAll = false
+                    break
+                }
+                total += best
+                if !emoji.searchText.contains(lower) { literal = false }
+            }
+            guard matchedAll else { continue }
+            if literal {
+                literalMatches.append((emoji, total))
+            } else {
+                fuzzyMatches.append((emoji, total))
+            }
         }
+
+        // "dragon" also happens to be a subsequence of "Red Triangle Pointed
+        // Up". When literal names exist, they are the answer; fuzzy
+        // abbreviations such as "drgn" are only used as a fallback.
+        var matches = literalMatches.isEmpty ? fuzzyMatches : literalMatches
         matches.sort { $0.1 > $1.1 }
         return matches.prefix(limit).map { item(for: $0.0, score: $0.1) }
     }

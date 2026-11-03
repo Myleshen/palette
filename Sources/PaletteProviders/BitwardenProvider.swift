@@ -401,7 +401,16 @@ public actor BitwardenProvider: PaletteProvider {
                 Log.shared.warn("Bitwarden returned an unreadable item list", source: "bitwarden")
                 return [errorRow(message: "Could not read the vault response.")]
             }
-            let matched = query.isEmpty ? raw : raw.filter { Self.matches($0, query: query) }
+            let matched: [[String: Any]]
+            if query.isEmpty {
+                matched = raw
+            } else {
+                matched = raw.compactMap { entry in
+                    Self.matchScore(entry, query: query).map { (entry, $0) }
+                }
+                .sorted { $0.1 > $1.1 }
+                .map(\.0)
+            }
             let items: [PaletteItem] = matched.compactMap { entry in
                 Self.makeItem(entry, kind: kind, descriptor: descriptor)
             }
@@ -606,15 +615,37 @@ public actor BitwardenProvider: PaletteProvider {
     // MARK: - Item mapping
 
     static func matches(_ entry: [String: Any], query: String) -> Bool {
+        matchScore(entry, query: query) != nil
+    }
+
+    /// Rank a vault item with the same fuzzy matcher as apps and clipboard.
+    /// Fields stay separate so a term cannot be assembled from unrelated
+    /// secrets; a lower-scored combined pass still allows "test example" to
+    /// span the name and URL.
+    static func matchScore(_ entry: [String: Any], query: String) -> Double? {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return 0 }
+
         let name = entry["name"] as? String ?? ""
         let notes = entry["notes"] as? String ?? ""
         let login = entry["login"] as? [String: Any]
         let username = login?["username"] as? String ?? ""
-        let uris = (login?["uris"] as? [[String: Any]])?.compactMap { $0["uri"] as? String }.joined(separator: " ") ?? ""
-        let haystack = "\(name) \(username) \(uris) \(notes)".lowercased()
-        return query.split(whereSeparator: \.isWhitespace).allSatisfy {
-            haystack.contains($0.lowercased())
+        let uris = (login?["uris"] as? [[String: Any]])?
+            .compactMap { $0["uri"] as? String }
+            .joined(separator: " ") ?? ""
+
+        let fields = [name, username, uris, notes]
+        var best: Double?
+        for field in fields where !field.isEmpty {
+            if let score = Ranking.score(query: trimmed, candidate: String(field.prefix(2_000))) {
+                best = max(best ?? score, score)
+            }
         }
+        let combined = fields.joined(separator: " ")
+        if let score = Ranking.score(query: trimmed, candidate: String(combined.prefix(4_000))) {
+            best = max(best ?? score, score * 0.9)
+        }
+        return best
     }
 
     private static func makeItem(

@@ -30,8 +30,8 @@ public enum Ranking {
             return 650 - min(150, Double(index) * 4) - min(50, lengthPenalty)
         }
 
-        if let gaps = subsequenceGaps(needle, in: haystack) {
-            return max(80, 400 - Double(gaps) * 4 - Double(haystack.count - needle.count))
+        if let score = subsequenceScore(needle, in: haystack) {
+            return score
         }
 
         return nil
@@ -99,28 +99,64 @@ public enum Ranking {
         return nil
     }
 
-    private static func subsequenceGaps(_ needle: String, in haystack: String) -> Int? {
+    /// fzf-style subsequence scoring: every character must appear in order, but
+    /// matching at a word boundary and keeping runs together beats a scattered
+    /// match. The ceiling stays below the substring tier so exact and substring
+    /// matches always rank higher.
+    private static func subsequenceScore(_ needle: String, in haystack: String) -> Double? {
         guard !needle.isEmpty else { return 0 }
-        var gaps = 0
-        var lastMatch: String.Index?
-        var haystackIndex = haystack.startIndex
+        let needleChars = Array(needle)
+        let hayChars = Array(haystack)
+        guard needleChars.count <= hayChars.count else { return nil }
 
-        for character in needle {
-            var found = false
-            while haystackIndex < haystack.endIndex {
-                if haystack[haystackIndex] == character {
-                    if let last = lastMatch {
-                        gaps += haystack.distance(from: last, to: haystackIndex) - 1
-                    }
-                    lastMatch = haystackIndex
-                    haystackIndex = haystack.index(after: haystackIndex)
-                    found = true
+        var best: Double?
+        for start in hayChars.indices where hayChars[start] == needleChars[0] {
+            var positions: [Int] = [start]
+            var cursor = start + 1
+            var matched = true
+
+            for character in needleChars.dropFirst() {
+                while cursor < hayChars.count, hayChars[cursor] != character {
+                    cursor += 1
+                }
+                guard cursor < hayChars.count else {
+                    matched = false
                     break
                 }
-                haystackIndex = haystack.index(after: haystackIndex)
+                positions.append(cursor)
+                cursor += 1
             }
-            if !found { return nil }
+            guard matched else { continue }
+
+            var gaps = 0
+            var consecutive = 0
+            var boundaries = 0
+            for (offset, position) in positions.enumerated() {
+                if offset > 0 {
+                    let gap = position - positions[offset - 1] - 1
+                    gaps += gap
+                    if gap == 0 { consecutive += 1 }
+                }
+                if position == 0 {
+                    boundaries += 1
+                } else {
+                    let previous = hayChars[position - 1]
+                    if previous.isWhitespace || "/.-_:".contains(previous) {
+                        boundaries += 1
+                    }
+                }
+            }
+
+            let lengthPenalty = min(80, Double(hayChars.count - needleChars.count) * 2)
+            let score = 250
+                + Double(boundaries) * 45
+                + Double(min(40, consecutive * 10))
+                - Double(gaps) * 7
+                - lengthPenalty
+                - Double(min(30, start))
+            let clamped = min(430, max(80, score))
+            best = max(best ?? clamped, clamped)
         }
-        return gaps
+        return best
     }
 }

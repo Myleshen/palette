@@ -98,6 +98,10 @@ final class BitwardenTests: XCTestCase {
         XCTAssertTrue(BitwardenProvider.matches(entry, query: "test"))
         XCTAssertTrue(BitwardenProvider.matches(entry, query: "example"))
         XCTAssertTrue(BitwardenProvider.matches(entry, query: "read"))
+        XCTAssertTrue(BitwardenProvider.matches(entry, query: "tst"))
+        XCTAssertTrue(BitwardenProvider.matches(entry, query: "exmpl"))
+        XCTAssertTrue(BitwardenProvider.matches(entry, query: "rd"))
+        XCTAssertTrue(BitwardenProvider.matches(entry, query: "test example"))
         XCTAssertFalse(BitwardenProvider.matches(entry, query: "missing"))
     }
 }

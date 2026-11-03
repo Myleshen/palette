@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.7.11 — 2026-11-03
+
+### Changed
+
+- **fzf-style fuzzy search everywhere.** The in-process matcher now scores
+  abbreviations and non-contiguous terms by runs, word boundaries, and gaps, so
+  `actmon` finds Activity Monitor, `vsc` finds Visual Studio Code, and `qbf`
+  finds “The quick brown fox”.
+- Clipboard search no longer relies on a SQL `LIKE` prefix. It ranks recent
+  history in memory, so non-contiguous searches and file-name searches work
+  across text, images, and files.
+- Bitwarden item matching uses the same fuzzy scoring across name, username,
+  URL, and notes, and sorts matching vault rows by match quality.
+- Emoji search accepts abbreviations (`drgn` → Dragon) while still preferring
+  literal names so `dragon` does not surface “Red Triangle”.
+- `/neo` and `/neof` keep the real `fzf` path ranker with `--scheme=path`.
+
+### Verified
+
+- `swift test`: 49 tests, 0 failures.
+- Live harness: `/clip qbf` matched “The quick brown fox…” in clipboard history,
+  and `actmon` ranked Activity Monitor first.
+
 ## 1.7.10 — 2026-11-03
 
 ### Removed

@@ -26,9 +26,14 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let parsed = Self.parse(request.text)
+        let query = parsed.query
+        // Fuzzy search has to see the whole recent history, because a
+        // non-contiguous match ("qbf" -> "quick brown fox") cannot be expressed
+        // as a SQL LIKE pattern.
+        let fetchLimit = query.isEmpty ? min(500, max(1, request.limit)) : 5_000
         let entries = try await store.clipboardEntries(
-            limit: min(500, max(1, request.limit)),
-            query: parsed.query.isEmpty ? nil : parsed.query,
+            limit: fetchLimit,
+            query: nil,
             kind: parsed.kind
         )
         let ordered = entries.sorted { lhs, rhs in
@@ -38,16 +43,54 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             }
             return lhs.createdAt > rhs.createdAt
         }
-        return ordered.map { entry in
-            switch entry.kind {
-            case .image:
-                return Self.imageItem(entry, provider: descriptor)
-            case .files:
-                return Self.filesItem(entry, provider: descriptor)
-            case .text:
-                return Self.textItem(entry, provider: descriptor)
+
+        if query.isEmpty {
+            return ordered.prefix(max(1, request.limit)).map { entry in
+                Self.item(for: entry, provider: descriptor)
             }
         }
+
+        var matches: [(item: PaletteItem, score: Double, date: Date)] = []
+        for entry in ordered {
+            guard let score = Self.searchScore(entry, query: query) else { continue }
+            var item = Self.item(for: entry, provider: descriptor)
+            // Keep typed results flat and ranked; group headers only help the
+            // unfiltered clipboard browser.
+            item.group = nil
+            item.score = score + (entry.pinned ? 25 : 0)
+            matches.append((item, item.score, entry.createdAt))
+        }
+        matches.sort { lhs, rhs in
+            if abs(lhs.score - rhs.score) > 0.0001 { return lhs.score > rhs.score }
+            return lhs.date > rhs.date
+        }
+        return matches.prefix(max(1, request.limit)).map(\.item)
+    }
+
+    private static func item(for entry: ClipboardEntry, provider: ProviderDescriptor) -> PaletteItem {
+        switch entry.kind {
+        case .image:
+            return imageItem(entry, provider: provider)
+        case .files:
+            return filesItem(entry, provider: provider)
+        case .text:
+            return textItem(entry, provider: provider)
+        }
+    }
+
+    /// The searchable form of an entry, capped so a huge text clipboard does
+    /// not make every keystroke crawl.
+    private static func searchScore(_ entry: ClipboardEntry, query: String) -> Double? {
+        let candidate: String
+        switch entry.kind {
+        case .text:
+            candidate = String(entry.text.prefix(4_000))
+        case .files:
+            candidate = String(entry.paths.joined(separator: " ").prefix(4_000))
+        case .image:
+            candidate = "Image \(entry.imageWidth)×\(entry.imageHeight) PNG image"
+        }
+        return Ranking.score(query: query, candidate: candidate)
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
