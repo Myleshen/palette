@@ -369,6 +369,9 @@ public final class SearchController: ObservableObject, HostBridge {
                 resetting = true
                 query = ""
                 resetting = false
+                previewEnabled = false
+                clipboardFilter = nil
+                panel?.widthOverride = nil
                 scheduleSearch(debounce: false)
             } else {
                 panel?.hide()

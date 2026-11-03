@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.13 — 2026-11-03
+
+### Fixed
+
+- Clearing `/clip` with `Esc` now closes the clipboard preview pane and
+  restores the normal launcher width. Previously the empty app list kept the
+  right-hand preview open, showing “No preview available.”
+
+### Verified
+
+- `swift test`: 51 tests, 0 failures.
+- Harness: opened the clipboard browser, pressed `Esc`, and snapshotted the
+  empty app list with the preview pane gone.
+
 ## 1.7.12 — 2026-11-03
 
 ### Fixed

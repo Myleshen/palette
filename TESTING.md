@@ -133,7 +133,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   use counts, fuzzy abbreviations, and fuzzy clipboard/file search).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.12). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.13). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,9 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.13 checks: after opening the clipboard browser and pressing `Esc`, the
+  snapshot showed the empty app list at normal width with no preview pane or
+  “No preview available” placeholder.
 - v1.7.12 checks: a real kitty TUI probe received `0x16` (Ctrl+V) from Palette's
   image-paste path; the previous fixed 220 ms delay failed the same probe, and
   the new activation polling delivered every run. Clipboard search found a
