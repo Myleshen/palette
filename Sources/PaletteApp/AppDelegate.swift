@@ -776,6 +776,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             installHotKey()
         }
         configureClipboard()
+        refreshSettingsWindow()
         if !quiet {
             searchController.setStatus("Configuration reloaded", duration: 2)
         }
@@ -835,13 +836,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func showSettings() {
         panel?.hide(activatePrevious: false)
         if let settingsWindow {
+            // A closed window keeps its old SwiftUI state; rebuild it so the
+            // values reflect config.toml after a reload or manual edit.
+            if !settingsWindow.isVisible {
+                settingsWindow.contentViewController = NSHostingController(rootView: makeSettingsView())
+            }
             NSApp.activate(ignoringOtherApps: true)
             settingsWindow.makeKeyAndOrderFront(nil)
             settingsWindow.orderFrontRegardless()
             return
         }
 
-        let view = SettingsView(
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 640),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Palette Settings"
+        window.isReleasedWhenClosed = false
+        window.contentViewController = NSHostingController(rootView: makeSettingsView())
+        window.center()
+        settingsWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+    }
+
+    private func makeSettingsView() -> SettingsView {
+        SettingsView(
             config: configuration,
             themesDirectory: paths.themesDir,
             onSave: { [weak self] updated in
@@ -851,20 +874,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.launcher.openPath(url.path)
             }
         )
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 640),
-            styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Palette Settings"
-        window.isReleasedWhenClosed = false
-        window.contentViewController = NSHostingController(rootView: view)
-        window.center()
-        settingsWindow = window
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+    }
+
+    /// Keep an open Settings window in sync when config.toml is reloaded.
+    private func refreshSettingsWindow() {
+        guard let settingsWindow, settingsWindow.isVisible else { return }
+        settingsWindow.contentViewController = NSHostingController(rootView: makeSettingsView())
     }
 
     private func saveSettings(_ updated: PaletteConfig) {

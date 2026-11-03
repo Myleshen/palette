@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.3 — 2026-11-03
+
+### Fixed
+
+- **Settings no longer keeps stale values.** Closing the window kept its old
+  SwiftUI state alive, so after editing `config.toml` and pressing `⌘R`, the
+  next Settings visit showed the old hotkey/browser/theme and could write those
+  old values back on Save. The window is now rebuilt from the live configuration
+  when reopened, and refreshed in place if it is open during a reload.
+- Added explicit **Record** buttons next to both shortcut fields. Clicking
+  Record focuses the recorder; pressing the keys updates the field, and Save
+  registers the new shortcut and writes it to `config.toml`.
+- Verified a config-only launch shortcut change: `hotkey = "cmd+space"` followed
+  by menu-bar **Reload Configuration** registered `cmd+space`, and reopening
+  Settings showed `cmd+space` instead of the old `opt+space`.
+
 ## 1.7.2 — 2026-11-03
 
 ### Fixed

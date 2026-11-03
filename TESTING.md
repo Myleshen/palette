@@ -133,7 +133,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   and refresh, path filtering, and use counts).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.2). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.3). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,14 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.3 checks: with Settings open, the launcher hotkey read `opt+space`.
+  Closing Settings, editing `config.toml` to `hotkey = "cmd+space"`, and
+  choosing the menu-bar **Reload Configuration** item logged
+  `Hotkey registered: cmd+space`; reopening Settings showed `cmd+space`. The new
+  **Record** button was pressed, `⌃⌥K` was typed, and the field changed to
+  `opt+ctrl+k`; Save wrote `hotkey = "opt+ctrl+k"`, the log showed it registered,
+  and the physical shortcut opened the panel. The record buttons and recorder
+  values were also confirmed through the accessibility tree.
 - v1.7.2 checks: with `search_style = "pill"` on Aetheria Pink, the panel
   background was opaque (no ghosted terminal text), the placeholder rendered
   fully, the search field and active tab/result/action used consistent soft

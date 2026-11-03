@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var engines: [WebSearchEngine]
     @State private var selectedTab = 0
     @State private var saveError: String?
+    @State private var launcherRecordToken = 0
+    @State private var clipboardRecordToken = 0
 
     private let themesDirectory: URL
     private let onSave: (PaletteConfig) -> Void
@@ -67,16 +69,37 @@ struct SettingsView: View {
         Form {
             Section("Launcher") {
                 LabeledContent("Hotkey") {
-                    ShortcutRecorder(value: $config.hotkey, label: "Launcher hotkey")
-                        .frame(width: 200, height: 26)
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.hotkey,
+                            label: "Launcher hotkey",
+                            recordToken: launcherRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { launcherRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record launcher hotkey")
+                    }
                 }
                 LabeledContent("Clipboard hotkey") {
-                    ShortcutRecorder(value: $config.clipboardHotkey, label: "Clipboard hotkey")
-                        .frame(width: 200, height: 26)
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.clipboardHotkey,
+                            label: "Clipboard hotkey",
+                            recordToken: clipboardRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { clipboardRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record clipboard hotkey")
+                    }
                 }
                 TextField("Provider prefix", text: $config.providerPrefix)
                 TextField("Terminal", text: $config.terminalApp)
                 TextField("Editor", text: $config.editorOpenWith)
+                Text("Click Record, then press the shortcut you want. Save applies it immediately.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Launcher position") {
                 Picker("Opens at", selection: $config.searchPosition) {
@@ -245,6 +268,13 @@ struct SettingsView: View {
 struct ShortcutRecorder: NSViewRepresentable {
     @Binding var value: String
     var label: String
+    var recordToken: Int = 0
+
+    final class Coordinator {
+        var lastToken: Int = 0
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> RecorderView {
         let view = RecorderView()
@@ -253,12 +283,18 @@ struct ShortcutRecorder: NSViewRepresentable {
         view.onChange = { recorded in
             value = recorded
         }
+        context.coordinator.lastToken = recordToken
         return view
     }
 
     func updateNSView(_ nsView: RecorderView, context: Context) {
         nsView.label = label
         nsView.value = value
+        guard recordToken != context.coordinator.lastToken else { return }
+        context.coordinator.lastToken = recordToken
+        DispatchQueue.main.async {
+            nsView.window?.makeFirstResponder(nsView)
+        }
     }
 }
 

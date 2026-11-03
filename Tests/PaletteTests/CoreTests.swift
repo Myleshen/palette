@@ -189,6 +189,11 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(spec?.display, "opt+space")
         XCTAssertEqual(spec?.keyCode, UInt32(kVK_Space))
         XCTAssertEqual(spec?.modifiers, UInt32(optionKey))
+
+        let commandSpace = HotKeySpec.parse("cmd+space")
+        XCTAssertEqual(commandSpace?.display, "cmd+space")
+        XCTAssertEqual(commandSpace?.keyCode, UInt32(kVK_Space))
+        XCTAssertEqual(commandSpace?.modifiers, UInt32(cmdKey))
     }
 
     func testShortcutRecorderTurnsKeyPressIntoCanonicalSpec() {
