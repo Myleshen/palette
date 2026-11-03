@@ -124,7 +124,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 49 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 51 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
@@ -133,7 +133,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   use counts, fuzzy abbreviations, and fuzzy clipboard/file search).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.11). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.12). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,12 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.12 checks: a real kitty TUI probe received `0x16` (Ctrl+V) from Palette's
+  image-paste path; the previous fixed 220 ms delay failed the same probe, and
+  the new activation polling delivered every run. Clipboard search found a
+  needle stored behind 5,001 newer entries, proving the old 5,000-entry scan cap
+  is gone. `SecureVaultCache.ttl` is 30 days and the session round-trip still
+  survives expiry tests. `swift test`: 51 tests, 0 failures.
 - v1.7.11 checks: `actmon` ranked Activity Monitor first in the app list;
   `/clip qbf` matched “The quick brown fox jumps over the lazy dog” from the
   clipboard, and a file named `Quarterly-Budget-Final.xlsx` matched `qbf` and

@@ -233,6 +233,17 @@ public actor PaletteStore {
         return Data(bytes: bytes, count: count)
     }
 
+    public func clipboardThumbnail(id: String) throws -> Data? {
+        let statement = try prepare("SELECT thumbnail FROM clipboard WHERE id = ? LIMIT 1;")
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, id)
+        guard sqlite3_step(statement) == SQLITE_ROW,
+              let bytes = sqlite3_column_blob(statement, 0) else { return nil }
+        let count = Int(sqlite3_column_bytes(statement, 0))
+        guard count > 0 else { return nil }
+        return Data(bytes: bytes, count: count)
+    }
+
     /// Finder copies are stored once per selection, with the paths joined by
     /// newlines in `text` and the lead item's icon as the thumbnail.
     public func insertClipboardFiles(
@@ -268,7 +279,12 @@ public actor PaletteStore {
         return !existing
     }
 
-    public func clipboardEntries(limit: Int = 100, query: String? = nil, kind: ClipboardKind? = nil) throws -> [ClipboardEntry] {
+    public func clipboardEntries(
+        limit: Int = 100,
+        query: String? = nil,
+        kind: ClipboardKind? = nil,
+        includeThumbnails: Bool = true
+    ) throws -> [ClipboardEntry] {
         var conditions: [String] = []
         let search = query?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let search, !search.isEmpty {
@@ -277,7 +293,8 @@ public actor PaletteStore {
         if kind != nil {
             conditions.append("kind = ?")
         }
-        var sql = "SELECT id, text, created, pinned, kind, width, height, thumbnail FROM clipboard"
+        let thumbnailColumn = includeThumbnails ? "thumbnail" : "NULL"
+        var sql = "SELECT id, text, created, pinned, kind, width, height, \(thumbnailColumn) FROM clipboard"
         if !conditions.isEmpty {
             sql += " WHERE " + conditions.joined(separator: " AND ")
         }

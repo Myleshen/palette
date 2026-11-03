@@ -24,17 +24,31 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
         self.bridge = bridge
     }
 
+    // A hard safety cap for pathological histories. Normal configured limits
+    // (including the 5,000 default and 6,000 here) are scanned in full.
+    // shortcut: histories above 50k entries are capped; add a ranked index if
+    // that becomes a real use case.
+    private static let maxSearchEntries = 50_000
+
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let parsed = Self.parse(request.text)
         let query = parsed.query
         // Fuzzy search has to see the whole recent history, because a
         // non-contiguous match ("qbf" -> "quick brown fox") cannot be expressed
         // as a SQL LIKE pattern.
-        let fetchLimit = query.isEmpty ? min(500, max(1, request.limit)) : 5_000
+        let fetchLimit: Int
+        if query.isEmpty {
+            fetchLimit = min(500, max(1, request.limit))
+        } else {
+            let total = (try? await store.clipboardCount()) ?? 0
+            fetchLimit = max(1, min(Self.maxSearchEntries, max(request.limit, total)))
+        }
         let entries = try await store.clipboardEntries(
             limit: fetchLimit,
             query: nil,
-            kind: parsed.kind
+            kind: parsed.kind,
+            // Thumbnails are only fetched for the handful of rows we show.
+            includeThumbnails: query.isEmpty
         )
         let ordered = entries.sorted { lhs, rhs in
             if lhs.pinned != rhs.pinned { return lhs.pinned }
@@ -50,21 +64,31 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             }
         }
 
-        var matches: [(item: PaletteItem, score: Double, date: Date)] = []
+        var matches: [(entry: ClipboardEntry, score: Double)] = []
         for entry in ordered {
             guard let score = Self.searchScore(entry, query: query) else { continue }
-            var item = Self.item(for: entry, provider: descriptor)
             // Keep typed results flat and ranked; group headers only help the
             // unfiltered clipboard browser.
-            item.group = nil
-            item.score = score + (entry.pinned ? 25 : 0)
-            matches.append((item, item.score, entry.createdAt))
+            matches.append((entry, score + (entry.pinned ? 25 : 0)))
         }
         matches.sort { lhs, rhs in
             if abs(lhs.score - rhs.score) > 0.0001 { return lhs.score > rhs.score }
-            return lhs.date > rhs.date
+            return lhs.entry.createdAt > rhs.entry.createdAt
         }
-        return matches.prefix(max(1, request.limit)).map(\.item)
+
+        let limit = max(1, request.limit)
+        var top = Array(matches.prefix(limit))
+        for index in top.indices where top[index].entry.kind != .text && top[index].entry.thumbnailPNG == nil {
+            if let thumbnail = try? await store.clipboardThumbnail(id: top[index].entry.id) {
+                top[index].entry.thumbnailPNG = thumbnail
+            }
+        }
+        return top.map { match in
+            var item = Self.item(for: match.entry, provider: descriptor)
+            item.group = nil
+            item.score = match.score
+            return item
+        }
     }
 
     private static func item(for entry: ClipboardEntry, provider: ProviderDescriptor) -> PaletteItem {

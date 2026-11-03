@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.7.11. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.7.12. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -147,10 +147,10 @@ Palette scores runs, word boundaries, and gaps: `actmon` finds **Activity
 Monitor**, `vsc` finds **Visual Studio Code**, `qbf` finds **The quick brown
 fox**, `tst` finds a Bitwarden login named **Test**, and `drgn` finds **Dragon**.
 This applies to apps, clipboard text and file names, web apps, providers,
-themes, and Bitwarden vault fields. Clipboard search scans the recent history
-(up to 5,000 entries) rather than only doing a SQL prefix match, so
-non-contiguous searches work there too. `/neo` still delegates path ranking to
-the real `fzf` binary with `--scheme=path`.
+themes, and Bitwarden vault fields. Clipboard search scans the whole configured
+history instead of only doing a SQL prefix match, so non-contiguous searches
+work there too. `/neo` still delegates path ranking to the real `fzf` binary
+with `--scheme=path`.
 
 The empty-query screen is deliberately the **app list**: apps in alphabetical
 order (or most-used), with pinned apps and pinned web apps at the top. Unpinned
@@ -227,7 +227,7 @@ Values copied from Bitwarden are always written as concealed and clear after 30
 seconds, so they never enter Palette’s clipboard history.
 
 The vault listing and the CLI session key are sealed with AES-GCM under
-`~/Library/Caches/Palette/Bitwarden` for six hours, scoped to the active CLI
+`~/Library/Caches/Palette/Bitwarden` for thirty days, scoped to the active CLI
 profile. Restarting Palette inside that window does not ask for the master
 password again; **Refresh Bitwarden Cache** forces a fresh read without logging
 you out. The master password itself is never stored.
@@ -235,7 +235,7 @@ you out. The master password itself is never stored.
 ### Bitwarden
 
 `/bw`, `/bwu`, `/bwt`, `/bwn`, and `/bwo` share one in-memory session. The first
-read of a vault is cached for **six hours** in an AES-GCM encrypted file under
+read of a vault is cached for **thirty days** in an AES-GCM encrypted file under
 `~/Library/Caches/Palette/Bitwarden`; the key is a per-user `0600` file. Prefix
 switches, typing, and copy actions reuse the snapshot instead of spawning
 `bw list` again. Choose **Refresh Bitwarden Cache** in the menu-bar menu when the

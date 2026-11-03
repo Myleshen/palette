@@ -72,6 +72,11 @@ final class StorageTests: XCTestCase {
         XCTAssertEqual(entries.first?.thumbnailPNG, thumbnail)
         let loaded = try await store.clipboardImage(id: entries[0].id)
         XCTAssertEqual(loaded, image)
+
+        let withoutThumbnails = try await store.clipboardEntries(limit: 10, includeThumbnails: false)
+        XCTAssertNil(withoutThumbnails.first?.thumbnailPNG)
+        let fetchedThumbnail = try await store.clipboardThumbnail(id: entries[0].id)
+        XCTAssertEqual(fetchedThumbnail, thumbnail)
     }
 
     func testClipboardFilesAndKindFilter() async throws {

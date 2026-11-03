@@ -2,7 +2,11 @@ import XCTest
 @testable import PalettePlatform
 
 final class SecureVaultCacheTests: XCTestCase {
-    func testRoundTripAndSixHourExpiry() throws {
+    func testCacheTTLIsThirtyDays() {
+        XCTAssertEqual(SecureVaultCache.ttl, 30 * 24 * 60 * 60)
+    }
+
+    func testRoundTripAndCacheExpiry() throws {
         let scope = "palette-test-\(UUID().uuidString)"
         defer { SecureVaultCache.remove(scope: scope) }
         let payload = Data(#"[{"id":"1","name":"Test"}]"#.utf8)
@@ -24,7 +28,7 @@ final class SecureVaultCacheTests: XCTestCase {
         )
     }
 
-    func testSessionRoundTripAndSixHourExpiry() throws {
+    func testSessionRoundTripAndCacheExpiry() throws {
         let scope = "palette-session-\(UUID().uuidString)"
         defer {
             SecureVaultCache.removeSession(scope: scope)

@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.7.12 — 2026-11-03
+
+### Fixed
+
+- **Pasting images into a terminal TUI now waits for the terminal to be
+  frontmost.** Palette yields activation, re-activates the target, and only
+  posts Ctrl+V once it is actually frontmost, instead of assuming 220 ms was
+  enough. This fixes image paste into the OpenCode TUI in kitty.
+- Clipboard fuzzy search no longer stops at 5,000 entries. It scans the full
+  configured history, and only skips thumbnails while ranking so large
+  histories stay responsive.
+
+### Changed
+
+- **Bitwarden cache and session lifetime: six hours → thirty days.** The
+  encrypted vault snapshot and CLI session key now survive restart for 30 days;
+  the same AES-GCM cache and per-profile scoping are unchanged. **Refresh
+  Bitwarden Cache** still forces a fresh read without logging out.
+
+### Verified
+
+- `swift test`: 51 tests, 0 failures.
+- Live image-paste probe: a real terminal TUI received `0x16` (Ctrl+V) after
+  Palette pasted an image; the pre-1.7.12 220 ms delay did not deliver it.
+
 ## 1.7.11 — 2026-11-03
 
 ### Changed

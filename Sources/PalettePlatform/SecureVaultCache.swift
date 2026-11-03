@@ -3,14 +3,14 @@ import Foundation
 import PaletteCore
 import Security
 
-/// Encrypted, six-hour cache for Bitwarden vault listings and the CLI session.
+/// Encrypted, thirty-day cache for Bitwarden vault listings and the CLI session.
 ///
 /// The vault payload is personal data, so it never lands on disk in plaintext.
 /// A random 32-byte key is stored beside the cache with `0600` permissions and
 /// both files are sealed with AES-GCM. The cache is scoped to a CLI profile so
 /// test and real vaults cannot read each other's data.
 public enum SecureVaultCache {
-    public static let ttl: TimeInterval = 6 * 60 * 60
+    public static let ttl: TimeInterval = 30 * 24 * 60 * 60
 
     public struct Snapshot: Sendable {
         public var date: Date
@@ -50,7 +50,7 @@ public enum SecureVaultCache {
     }
 
     /// The CLI session key lives in the same encrypted envelope as the vault
-    /// snapshot, under its own file. It expires with the six-hour cache so a
+    /// snapshot, under its own file. It expires with the thirty-day cache so a
     /// restart within that window does not ask for the master password again.
     public static func loadSession(scope: String, now: Date = Date()) -> SessionSnapshot? {
         guard let stored = loadSnapshot(scope: scope, suffix: "-session", now: now),

@@ -238,15 +238,56 @@ public final class PasteboardService {
             return false
         }
 
+        guard let app, !app.isTerminated else {
+            Log.shared.warn("Paste skipped: the previous application is gone", source: "clipboard")
+            return false
+        }
+
         Log.shared.info(
-            "Paste requested target=\(app?.localizedName ?? "nil") modifiers=\(modifiers.rawValue) trusted=\(isAccessibilityTrusted)",
+            "Paste requested target=\(app.localizedName ?? "nil") modifiers=\(modifiers.rawValue) trusted=\(isAccessibilityTrusted)",
             source: "clipboard"
         )
-        app?.activate(options: [.activateAllWindows])
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            Self.sendPaste(modifiers: modifiers)
-        }
+        // Hand focus back explicitly. Without yielding, macOS may keep Palette
+        // active and the synthetic paste goes to the launcher instead of the
+        // terminal/editor behind it.
+        NSApp.yieldActivation(to: app)
+        activate(app)
+        waitForActivation(of: app, modifiers: modifiers, attempt: 0)
         return true
+    }
+
+    private func activate(_ app: NSRunningApplication) {
+        if app.isHidden { app.unhide() }
+        app.activate(options: [.activateAllWindows])
+    }
+
+    /// Activation is asynchronous, and 0.22 s was not enough after hiding the
+    /// panel. Poll until the target is frontmost, then give the window a beat
+    /// before posting the key.
+    private func waitForActivation(
+        of app: NSRunningApplication,
+        modifiers: CGEventFlags,
+        attempt: Int
+    ) {
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.processIdentifier == app.processIdentifier || attempt >= 20 {
+            Log.shared.info(
+                "Paste delivering target=\(app.localizedName ?? "nil") frontmost=\(front?.localizedName ?? "nil")",
+                source: "clipboard"
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                Self.sendPaste(modifiers: modifiers)
+            }
+            return
+        }
+
+        if attempt % 4 == 0 {
+            NSApp.yieldActivation(to: app)
+            activate(app)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.waitForActivation(of: app, modifiers: modifiers, attempt: attempt + 1)
+        }
     }
 
     private static func imagePasteModifiers(for app: NSRunningApplication?) -> CGEventFlags {

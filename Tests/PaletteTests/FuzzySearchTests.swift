@@ -72,6 +72,22 @@ final class FuzzySearchTests: XCTestCase {
         XCTAssertEqual(filesOnly.first?.title, "fox.txt")
     }
 
+    func testClipboardSearchScansPastTheOldFiveThousandCap() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        // The needle is the oldest row. A 5,000-entry cap would only see the
+        // 5,000 newest fillers and never return it.
+        _ = try await store.insertClipboard(text: "buried zebra needle", maxEntries: 10_000)
+        for index in 0..<5_001 {
+            _ = try await store.insertClipboard(text: "filler entry \(index)", maxEntries: 10_000)
+        }
+
+        let provider = ClipboardProvider(store: store, bridge: FuzzyBridge())
+        let results = try await provider.search(SearchRequest(text: "buried zebra", limit: 20, isBound: true))
+        XCTAssertTrue(results.contains { $0.title == "buried zebra needle" })
+    }
+
     func testEmojiAcceptsAbbreviationsWithoutNoise() async throws {
         let provider = EmojiProvider()
         let abbreviations = try await provider.search(SearchRequest(text: "drgn", limit: 20, isBound: true))
