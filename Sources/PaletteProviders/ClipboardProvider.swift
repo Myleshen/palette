@@ -75,9 +75,11 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             .replacingOccurrences(of: "\t", with: " ")
             .trimmingCharacters(in: .whitespaces)
         let title = String(preview.prefix(160))
+        // Enter on a clipboard row pastes immediately; Copy stays available as
+        // the secondary action for people who want to stage it.
         var actions: [PaletteAction] = [
+            PaletteAction(id: "paste", title: "Paste", kind: .pasteText, value: .text(entry.text)),
             PaletteAction(id: "copy", title: "Copy", kind: .copyText, value: .text(entry.text)),
-            PaletteAction(id: "paste", title: "Paste into Previous App", kind: .pasteText, value: .text(entry.text)),
             pinAction(entry),
             PaletteAction(id: "delete", title: "Delete Entry", kind: .custom, value: .text("delete")),
         ]
@@ -101,8 +103,8 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
 
     private static func imageItem(_ entry: ClipboardEntry, provider: ProviderDescriptor) -> PaletteItem {
         let actions: [PaletteAction] = [
+            PaletteAction(id: "paste-image", title: "Paste Image", kind: .pasteImage, value: .text(entry.id)),
             PaletteAction(id: "copy-image", title: "Copy Image", kind: .copyImage, value: .text(entry.id)),
-            PaletteAction(id: "paste-image", title: "Paste Image into Previous App", kind: .pasteImage, value: .text(entry.id)),
             pinAction(entry),
             PaletteAction(id: "delete", title: "Delete Entry", kind: .custom, value: .text("delete")),
         ]
@@ -143,8 +145,8 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             ? names.prefix(3).joined(separator: ", ") + (names.count > 3 ? ", …" : "")
             : shownParent
         var actions: [PaletteAction] = [
+            PaletteAction(id: "paste-files", title: "Paste Files", kind: .pasteFiles, value: .list(paths)),
             PaletteAction(id: "copy-files", title: "Copy Files", kind: .copyFiles, value: .list(paths)),
-            PaletteAction(id: "paste-files", title: "Paste Files into Previous App", kind: .pasteFiles, value: .list(paths)),
         ]
         if paths.count == 1 {
             actions.append(PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .reveal, value: .text(paths[0])))

@@ -273,14 +273,7 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
             expanded = NSHomeDirectory() + "/" + trimmed
         }
 
-        let manager = FileManager.default
-        var isDirectory: ObjCBool = false
-        guard manager.fileExists(atPath: expanded, isDirectory: &isDirectory) else { return [] }
-        switch configuration.kind {
-        case .directories where !isDirectory.boolValue: return []
-        case .files where isDirectory.boolValue: return []
-        default: break
-        }
+        guard PathFilter.isUsable(expanded, expected: configuration.kind) else { return [] }
         return [item(for: expanded, rank: -1_000)]
     }
 

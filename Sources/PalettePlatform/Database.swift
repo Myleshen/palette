@@ -125,6 +125,22 @@ public actor PaletteStore {
         try step(statement)
     }
 
+    /// Raw launch counts, used by the "most used" app ordering.
+    public func useCounts(for stableIDs: [String]) throws -> [String: Int] {
+        guard !stableIDs.isEmpty else { return [:] }
+        let wanted = Set(stableIDs)
+        let statement = try prepare("SELECT id, uses FROM items WHERE uses > 0;")
+        defer { sqlite3_finalize(statement) }
+        var result: [String: Int] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let text = sqlite3_column_text(statement, 0) else { continue }
+            let id = String(cString: text)
+            guard wanted.contains(id) else { continue }
+            result[id] = Int(sqlite3_column_int(statement, 1))
+        }
+        return result
+    }
+
     public func frecencyBoosts(for stableIDs: [String], now: Date = Date()) throws -> [String: Double] {
         guard !stableIDs.isEmpty else { return [:] }
         let wanted = Set(stableIDs)

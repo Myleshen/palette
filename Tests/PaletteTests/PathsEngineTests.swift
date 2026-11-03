@@ -62,6 +62,26 @@ final class PathsEngineTests: XCTestCase {
         XCTAssertTrue(names.contains("note.txt"))
     }
 
+    func testPathFilterRejectsPartialAndBrokenEntries() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-filter-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let manager = FileManager.default
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        let good = root.appendingPathComponent("project")
+        let bracket = root.appendingPathComponent("[")
+        try manager.createDirectory(at: good, withIntermediateDirectories: true)
+        try "".write(to: bracket, atomically: true, encoding: .utf8)
+        let broken = root.appendingPathComponent("broken-link")
+        try manager.createSymbolicLink(atPath: broken.path, withDestinationPath: root.appendingPathComponent("missing").path)
+
+        XCTAssertTrue(PathFilter.isUsable(good.path, expected: .directories))
+        XCTAssertFalse(PathFilter.isUsable(bracket.path, expected: .files))
+        let flags = root.appendingPathComponent("[flags]")
+        try "".write(to: flags, atomically: true, encoding: .utf8)
+        XCTAssertFalse(PathFilter.isUsable(flags.path, expected: .files))
+        XCTAssertFalse(PathFilter.isUsable(broken.path, expected: .files))
+    }
+
     func testSplitNUL() {
         let data = Data("one\0two\0three".utf8)
         XCTAssertEqual(FDEnumerator.splitNUL(data), ["one", "two", "three"])

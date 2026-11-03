@@ -91,7 +91,7 @@ public final class ProviderRegistry: @unchecked Sendable {
             guard !providers.isEmpty else {
                 return RegistrySearchResult(items: [], diagnostics: diagnostics, parsed: parsed)
             }
-            let providerLimit = parsed.text.isEmpty ? 24 : 8
+            let providerLimit = parsed.text.isEmpty ? 500 : 8
 
             let collected = await withTaskGroup(of: (Int, [PaletteItem], Diagnostic?).self) { group in
                 for (index, provider) in providers.enumerated() {

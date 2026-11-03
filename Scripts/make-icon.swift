@@ -25,15 +25,15 @@ func color(_ hex: String, _ alpha: CGFloat = 1) -> NSColor {
     )
 }
 
-// Squircle background with a soft vertical gradient.
+// Squircle background.
 let radius: CGFloat = 226
-let shape = NSBezierPath(roundedRect: rect.insetBy(dx: 12, dy: 12), xRadius: radius, yRadius: radius)
+let background = NSBezierPath(roundedRect: rect.insetBy(dx: 12, dy: 12), xRadius: radius, yRadius: radius)
 ctx.saveGState()
-shape.addClip()
+background.addClip()
 let gradient = CGGradient(
     colorsSpace: CGColorSpaceCreateDeviceRGB(),
-    colors: [color("#2c1b28").cgColor, color("#1b1018").cgColor, color("#150c13").cgColor] as CFArray,
-    locations: [0, 0.55, 1]
+    colors: [color("#33202d").cgColor, color("#1b1018").cgColor, color("#120b11").cgColor] as CFArray,
+    locations: [0, 0.6, 1]
 )!
 ctx.drawLinearGradient(
     gradient,
@@ -41,71 +41,103 @@ ctx.drawLinearGradient(
     end: CGPoint(x: rect.midX, y: rect.minY),
     options: []
 )
-// Inner top highlight.
 let glow = CGGradient(
     colorsSpace: CGColorSpaceCreateDeviceRGB(),
-    colors: [color("#ffacea", 0.18).cgColor, color("#ffacea", 0).cgColor] as CFArray,
+    colors: [color("#ffacea", 0.16).cgColor, color("#ffacea", 0).cgColor] as CFArray,
     locations: [0, 1]
 )!
 ctx.drawRadialGradient(
     glow,
     startCenter: CGPoint(x: rect.midX, y: rect.maxY - 80), startRadius: 0,
-    endCenter: CGPoint(x: rect.midX, y: rect.maxY - 80), endRadius: 620,
+    endCenter: CGPoint(x: rect.midX, y: rect.maxY - 80), endRadius: 640,
     options: []
 )
 ctx.restoreGState()
 
-// Palette card.
-let card = CGRect(x: 150, y: 300, width: 724, height: 424)
-let cardPath = NSBezierPath(roundedRect: card, xRadius: 92, yRadius: 92)
-color("#100910", 0.78).setFill()
-cardPath.fill()
-color("#ffacea", 0.55).setStroke()
-cardPath.lineWidth = 10
-cardPath.stroke()
+let center = CGPoint(x: 512, y: 520)
+let petalRadius: CGFloat = 205
+let petalSize: CGFloat = 330
 
-// Search icon inside the card.
-let lens = CGRect(x: 232, y: 584, width: 118, height: 118)
-let lensPath = NSBezierPath(ovalIn: lens)
-color("#ffacea").setStroke()
-lensPath.lineWidth = 16
-lensPath.stroke()
-let handle = NSBezierPath()
-handle.move(to: CGPoint(x: lens.maxX - 6, y: lens.minY + 8))
-handle.line(to: CGPoint(x: lens.maxX + 48, y: lens.minY - 34))
-handle.lineCapStyle = .round
-handle.lineWidth = 18
-color("#ffacea").setStroke()
-handle.stroke()
-
-// Result bars.
-for (index, width) in [330.0, 430.0, 260.0].enumerated() {
-    let bar = NSBezierPath(
-        roundedRect: CGRect(x: 410, y: 632 - CGFloat(index) * 84, width: width, height: 30),
-        xRadius: 15, yRadius: 15
+// Soft drop shadow under the palette.
+ctx.saveGState()
+let shadow = NSShadow()
+shadow.shadowColor = color("#000000", 0.45)
+shadow.shadowBlurRadius = 48
+shadow.shadowOffset = NSSize(width: 0, height: -18)
+shadow.set()
+let silhouette = NSBezierPath()
+for index in 0..<6 {
+    let angle = Double(index) * Double.pi / 3 + Double.pi / 6
+    let petalCenter = CGPoint(
+        x: center.x + CGFloat(cos(angle)) * petalRadius,
+        y: center.y + CGFloat(sin(angle)) * petalRadius
     )
-    color(index == 0 ? "#ffacea" : "#ec4dd7", index == 0 ? 0.95 : 0.55).setFill()
-    bar.fill()
+    silhouette.append(NSBezierPath(ovalIn: NSRect(
+        x: petalCenter.x - petalSize / 2,
+        y: petalCenter.y - petalSize / 2,
+        width: petalSize, height: petalSize
+    )))
+}
+silhouette.append(NSBezierPath(ovalIn: NSRect(x: center.x - 190, y: center.y - 190, width: 380, height: 380)))
+color("#f6e7d8").setFill()
+silhouette.fill()
+ctx.restoreGState()
+
+// Palette body: warm cream petals.
+func petalPath(at petalCenter: CGPoint, size: CGFloat) -> NSBezierPath {
+    NSBezierPath(ovalIn: NSRect(
+        x: petalCenter.x - size / 2,
+        y: petalCenter.y - size / 2,
+        width: size, height: size
+    ))
+}
+var petals: [(CGPoint, NSColor)] = []
+let dabColors = ["#ff6fae", "#ec4dd7", "#7bdcb5", "#ffd166", "#7aa2ff", "#ff9f68"]
+for index in 0..<6 {
+    let angle = Double(index) * Double.pi / 3 + Double.pi / 6
+    let petalCenter = CGPoint(
+        x: center.x + CGFloat(cos(angle)) * petalRadius,
+        y: center.y + CGFloat(sin(angle)) * petalRadius
+    )
+    petals.append((petalCenter, color(dabColors[index])))
+    let path = petalPath(at: petalCenter, size: petalSize)
+    color("#f8ecdf").setFill()
+    path.fill()
+    color("#d8bfae", 0.55).setStroke()
+    path.lineWidth = 5
+    path.stroke()
+}
+// Center disc ties the flower together.
+let disc = NSBezierPath(ovalIn: NSRect(x: center.x - 195, y: center.y - 195, width: 390, height: 390))
+color("#f8ecdf").setFill()
+disc.fill()
+color("#d8bfae", 0.55).setStroke()
+disc.lineWidth = 5
+disc.stroke()
+
+// Paint dabs on each petal.
+for (petalCenter, dab) in petals {
+    let dabRect = NSRect(x: petalCenter.x - 52, y: petalCenter.y - 52, width: 104, height: 104)
+    dab.setFill()
+    NSBezierPath(ovalIn: dabRect).fill()
+    color("#ffffff", 0.45).setFill()
+    NSBezierPath(ovalIn: NSRect(
+        x: dabRect.minX + 18, y: dabRect.minY + 48,
+        width: 30, height: 24
+    )).fill()
 }
 
-// Spark accent.
-let sparkCenter = CGPoint(x: 790, y: 420)
-let spark = NSBezierPath()
-let points: [CGPoint] = [
-    CGPoint(x: sparkCenter.x, y: sparkCenter.y + 78),
-    CGPoint(x: sparkCenter.x + 22, y: sparkCenter.y + 22),
-    CGPoint(x: sparkCenter.x + 78, y: sparkCenter.y),
-    CGPoint(x: sparkCenter.x + 22, y: sparkCenter.y - 22),
-    CGPoint(x: sparkCenter.x, y: sparkCenter.y - 78),
-    CGPoint(x: sparkCenter.x - 22, y: sparkCenter.y - 22),
-    CGPoint(x: sparkCenter.x - 78, y: sparkCenter.y),
-    CGPoint(x: sparkCenter.x - 22, y: sparkCenter.y + 22),
-]
-spark.move(to: points[0])
-for point in points.dropFirst() { spark.line(to: point) }
-spark.close()
-color("#ec4dd7").setFill()
-spark.fill()
+// Thumb hole: the dark background shows through the palette.
+color("#1b1018").setFill()
+NSBezierPath(ovalIn: NSRect(x: center.x - 74, y: center.y + 16, width: 130, height: 130)).fill()
+color("#000000", 0.35).setStroke()
+let hole = NSBezierPath(ovalIn: NSRect(x: center.x - 74, y: center.y + 16, width: 130, height: 130))
+hole.lineWidth = 4
+hole.stroke()
+
+// Two specular highlights for a hand-painted feel.
+color("#ffffff", 0.16).setFill()
+NSBezierPath(ovalIn: NSRect(x: 330, y: 700, width: 190, height: 110)).fill()
 
 NSGraphicsContext.restoreGraphicsState()
 let png = rep.representation(using: .png, properties: [:])!

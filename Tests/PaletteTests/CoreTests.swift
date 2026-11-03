@@ -140,10 +140,12 @@ final class CoreTests: XCTestCase {
 
         var moved = config
         moved.searchPosition = .bottom
+        moved.appSort = .frequent
         let movedTable = try TOMLTable(string: ConfigWriter.render(moved))
         var movedDiagnostics: [Diagnostic] = []
         let movedParsed = try ConfigLoader.parse(movedTable, diagnostics: &movedDiagnostics)
         XCTAssertEqual(movedParsed.searchPosition, .bottom)
+        XCTAssertEqual(movedParsed.appSort, .frequent)
         XCTAssertTrue(movedDiagnostics.isEmpty)
     }
 

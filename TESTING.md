@@ -122,17 +122,18 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 ## Verified in this build
 
-Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
+Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 33 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 41 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
   breadth-first paths, default-off app grid, browser validation, and the
-  shortcut recorder, Bitwarden session classification).
+  shortcut recorder, Bitwarden session classification, encrypted cache expiry
+  and refresh, path filtering, and use counts).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.6.0). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.0). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -149,6 +150,18 @@ Checked on 2026-11-02, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.0 checks: the empty query showed only apps plus pinned items, with the
+  pinned Youtube Music web app first and the rest alphabetical; switching
+  `app_sort` to `frequent` put Safari first after seeding nine launches; the
+  clipboard action order showed **Paste** first and Enter pasted
+  `SECOND PASTE CHECK 98765` into TextEdit; the Settings Advanced tab exposed
+  config/providers/themes/log while the footer kept only Cancel/Save; the
+  menu-bar icon rendered as the flower palette and **Refresh Bitwarden Cache**
+  logged a refresh; `/neo` filtered out a `[` entry and a broken symlink.
+- Bitwarden cache: first unlock fetched the list in 2.8 s and wrote a 1 KB
+  encrypted file plus a 32-byte `0600` key; a fresh process with the same
+  profile unlocked and rendered `Test` with **zero** new `bw list` calls.
+  `strings` on the cache found no vault text.
 - v1.6.0 checks: `/bw` showed **Unlock Bitwarden — myleshennihonjin@gmail.com**
   and the prompt read “Master password for …”; after unlocking through the real
   secure prompt, `/bw`, `/bwn`, and `/bwu` shared one session with no repeated

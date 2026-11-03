@@ -10,20 +10,148 @@ public actor BitwardenVault {
     private var lastStatus: String?
     private var lastStatusDate: Date?
     private var email: String?
+    private var listCache: (date: Date, data: Data)?
+    private var itemCache: [String: (date: Date, data: Data)] = [:]
+    private var listTask: Task<ListResult, Never>?
+    private var generation = 0
+    private let persistCache: Bool
+    private let cacheScope: String
 
-    public init() {}
+    private static let cacheTTL = SecureVaultCache.ttl
+    private static let maxItemCache = 128
+
+    public init(
+        persistCache: Bool = true,
+        cacheScope: String = SecureVaultCache.scope()
+    ) {
+        self.persistCache = persistCache
+        self.cacheScope = cacheScope
+        if persistCache, let snapshot = SecureVaultCache.load(scope: cacheScope) {
+            listCache = (snapshot.date, snapshot.data)
+            email = snapshot.email
+        }
+    }
 
     public func currentSession() -> String? { session }
 
     public func accountEmail() -> String? { email }
 
+    /// Full logout: drop the session and every cached copy.
     public func clear() {
         session = nil
         lastStatusDate = nil
+        listCache = nil
+        itemCache.removeAll()
+        listTask = nil
+        generation += 1
+        if persistCache { SecureVaultCache.remove(scope: cacheScope) }
+    }
+
+    /// The CLI session went stale, but the encrypted vault snapshot is still
+    /// useful once the user unlocks again.
+    public func sessionExpired() {
+        session = nil
+        lastStatusDate = nil
+        itemCache.removeAll()
+        listTask = nil
+        generation += 1
+    }
+
+    /// Force the next search to read the vault again, keeping the session.
+    public func refresh() {
+        listCache = nil
+        itemCache.removeAll()
+        listTask = nil
+        generation += 1
+        if persistCache { SecureVaultCache.remove(scope: cacheScope) }
+        Log.shared.info("Bitwarden cache refreshed", source: "bitwarden")
+    }
+
+    public struct ListResult: Sendable {
+        public var data: Data?
+        public var status: Int32
+        public var stderr: String
+        public var timedOut: Bool
+        public var fromCache: Bool
+    }
+
+    /// One `bw list items` call is reused for every prefix and keystroke.
+    /// Switching `/bw` → `/bwn` → `/bwu` should not spawn the CLI again.
+    public func list(bw: String, session: String) async -> ListResult {
+        if let listCache, Date().timeIntervalSince(listCache.date) < Self.cacheTTL {
+            return ListResult(
+                data: listCache.data, status: 0, stderr: "",
+                timedOut: false, fromCache: true
+            )
+        }
+        // Coalesce simultaneous searches for the same vault instead of spawning
+        // two `bw list` processes.
+        if let listTask {
+            return await listTask.value
+        }
+        let startedAt = Date()
+        let activeGeneration = generation
+        let task = Task<ListResult, Never> {
+            do {
+                let result = try await ProcessRunner.run(
+                    [bw, "list", "items"],
+                    environment: ["BW_SESSION": session],
+                    timeout: 60
+                )
+                guard result.status == 0, !result.stdout.isEmpty else {
+                    return ListResult(
+                        data: nil, status: result.status,
+                        stderr: result.stderrString, timedOut: result.timedOut,
+                        fromCache: false
+                    )
+                }
+                let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
+                Log.shared.info("Bitwarden list fetched in \(ms) ms", source: "bitwarden")
+                return ListResult(
+                    data: result.stdout, status: 0, stderr: "",
+                    timedOut: false, fromCache: false
+                )
+            } catch {
+                return ListResult(
+                    data: nil, status: -1, stderr: error.localizedDescription,
+                    timedOut: false, fromCache: false
+                )
+            }
+        }
+        listTask = task
+        let result = await task.value
+        listTask = nil
+        if let data = result.data, generation == activeGeneration {
+            listCache = (Date(), data)
+            itemCache.removeAll()
+            if persistCache { SecureVaultCache.save(data: data, email: email, scope: cacheScope) }
+        }
+        return result
+    }
+
+    /// Reuse the JSON from the cached list for copy/open actions instead of a
+    /// second `bw get item` process.
+    public func entryData(id: String) -> Data? {
+        if let cached = itemCache[id], Date().timeIntervalSince(cached.date) < Self.cacheTTL {
+            return cached.data
+        }
+        guard let listCache, Date().timeIntervalSince(listCache.date) < Self.cacheTTL,
+              let entries = try? JSONSerialization.jsonObject(with: listCache.data) as? [[String: Any]],
+              let entry = entries.first(where: { $0["id"] as? String == id }),
+              let data = try? JSONSerialization.data(withJSONObject: entry) else { return nil }
+        itemCache[id] = (Date(), data)
+        if itemCache.count > Self.maxItemCache {
+            itemCache.removeAll()
+        }
+        return data
+    }
+
+    public func cacheEntry(id: String, data: Data) {
+        itemCache[id] = (Date(), data)
     }
 
     public func status(bw: String) async -> String {
-        if let lastStatus, let lastStatusDate, Date().timeIntervalSince(lastStatusDate) < 5 {
+        if let lastStatus, let lastStatusDate, Date().timeIntervalSince(lastStatusDate) < 30 {
             return lastStatus
         }
         guard let result = try? await ProcessRunner.run([bw, "status"], timeout: 10),
@@ -86,11 +214,15 @@ public actor BitwardenVault {
         session = key
         lastStatus = "unlocked"
         lastStatusDate = Date()
+        // Login may be a different account, so do not reuse another vault's
+        // cached payload.
+        listCache = nil
+        itemCache.removeAll()
+        if persistCache { SecureVaultCache.remove(scope: cacheScope) }
         await bridge.notify("Bitwarden unlocked")
     }
 
     public func unlock(bw: String, bridge: HostBridge, environment: [String: String]) async {
-        _ = await status(bw: bw)
         let account = email ?? "your account"
         var password = environment["BW_PASSWORD"]
         if password == nil || password?.isEmpty == true {
@@ -125,6 +257,8 @@ public actor BitwardenVault {
         session = key
         lastStatus = "unlocked"
         lastStatusDate = Date()
+        // Reuse a fresh six-hour snapshot so unlocking feels instant; use the
+        // menu-bar refresh when the vault has changed on another device.
         await bridge.notify("Bitwarden unlocked")
     }
 }
@@ -244,40 +378,36 @@ public actor BitwardenProvider: PaletteProvider {
         guard let session else { return [] }
 
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        var arguments = [bw, "list", "items"]
-        if !query.isEmpty { arguments.append(contentsOf: ["--search", query]) }
-
-        let result = try await ProcessRunner.run(arguments, environment: ["BW_SESSION": session], timeout: 60)
-        guard result.status == 0 else {
-            let stderr = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
-            Log.shared.warn(
-                "Bitwarden list failed (status \(result.status), timedOut=\(result.timedOut)): \(stderr.prefix(300))",
-                source: "bitwarden"
-            )
-            if result.timedOut {
-                // A slow vault is not a locked vault. Keep the session so the
-                // next query can retry without asking for the password again.
-                return [errorRow(message: "Bitwarden did not answer in time. Press \u{23CE} to retry.")]
+        let list = await vault.list(bw: bw, session: session)
+        if let data = list.data {
+            guard let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                Log.shared.warn("Bitwarden returned an unreadable item list", source: "bitwarden")
+                return [errorRow(message: "Could not read the vault response.")]
             }
-            if Self.looksLikeSessionFailure(stderr) {
-                await vault.clear()
-                return [unlockRow(message: "Session expired — unlock again", email: await vault.accountEmail())]
+            let matched = query.isEmpty ? raw : raw.filter { Self.matches($0, query: query) }
+            let items: [PaletteItem] = matched.compactMap { entry in
+                Self.makeItem(entry, kind: kind, descriptor: descriptor)
             }
-            // Network or server errors must not throw the session away.
-            let detail = stderr.isEmpty ? "bw list items failed" : String(stderr.prefix(200))
-            return [errorRow(message: detail)]
-        }
-        guard let data = result.stdoutString.data(using: .utf8),
-              let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            Log.shared.warn("Bitwarden returned an unreadable item list", source: "bitwarden")
-            return [errorRow(message: "Could not read the vault response.")]
+            return Array(items.prefix(max(1, request.limit)))
         }
 
-        let items: [PaletteItem] = raw.compactMap { entry in
-            guard let item = Self.makeItem(entry, kind: kind, descriptor: descriptor) else { return nil }
-            return item
+        let stderr = list.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        Log.shared.warn(
+            "Bitwarden list failed (status \(list.status), timedOut=\(list.timedOut)): \(stderr.prefix(300))",
+            source: "bitwarden"
+        )
+        if list.timedOut {
+            // A slow vault is not a locked vault. Keep the session so the
+            // next query can retry without asking for the password again.
+            return [errorRow(message: "Bitwarden did not answer in time. Press \u{23CE} to retry.")]
         }
-        return Array(items.prefix(max(1, request.limit)))
+        if Self.looksLikeSessionFailure(stderr) {
+            await vault.sessionExpired()
+            return [unlockRow(message: "Session expired — unlock again", email: await vault.accountEmail())]
+        }
+        // Network or server errors must not throw the session away.
+        let detail = stderr.isEmpty ? "bw list items failed" : String(stderr.prefix(200))
+        return [errorRow(message: detail)]
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -292,48 +422,62 @@ public actor BitwardenProvider: PaletteProvider {
         }
         guard let command = action.value.text else { return }
 
-        if command == "open-url" {
-            let result = try await ProcessRunner.run(
-                [bw, "get", "item", item.id],
-                environment: ["BW_SESSION": session],
-                timeout: 15
-            )
-            if let url = Self.firstURL(from: result.stdoutString) {
-                await MainActor.run { launcher.openURL(url) }
-            }
-            return
-        }
-
-        let entryResult = try await ProcessRunner.run(
-            [bw, "get", "item", item.id],
-            environment: ["BW_SESSION": session],
-            timeout: 15
-        )
-        guard entryResult.status == 0,
-              let data = entryResult.stdoutString.data(using: .utf8),
-              let entry = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            let stderr = entryResult.stderrString
-            Log.shared.warn("Bitwarden get item failed: \(stderr.prefix(300))", source: "bitwarden")
-            if Self.looksLikeSessionFailure(stderr) {
-                await vault.clear()
-                await bridge.notify("Session expired — unlock Bitwarden again")
-            } else {
-                await bridge.notify("Could not read the item: \(stderr.prefix(120))")
-            }
-            return
-        }
-
-        let value: String?
+        // TOTP is time-based, so it always comes from the CLI.
         if command == "copy-totp" {
             let totp = try await ProcessRunner.run(
                 [bw, "get", "totp", item.id],
                 environment: ["BW_SESSION": session],
                 timeout: 15
             )
-            value = totp.status == 0
-                ? totp.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
-                : nil
-        } else if command == "copy-notes" {
+            guard totp.status == 0 else {
+                await bridge.notify("Could not read the TOTP code")
+                return
+            }
+            let value = totp.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else {
+                await bridge.notify("That item has no TOTP code")
+                return
+            }
+            await copy(value)
+            return
+        }
+
+        // Everything else is already in the cached `bw list items` payload.
+        let entry: [String: Any]
+        if let cached = await vault.entryData(id: item.id),
+           let object = try? JSONSerialization.jsonObject(with: cached) as? [String: Any] {
+            entry = object
+        } else {
+            let result = try await ProcessRunner.run(
+                [bw, "get", "item", item.id],
+                environment: ["BW_SESSION": session],
+                timeout: 15
+            )
+            guard result.status == 0,
+                  let object = try? JSONSerialization.jsonObject(with: result.stdout) as? [String: Any] else {
+                let stderr = result.stderrString
+                Log.shared.warn("Bitwarden get item failed: \(stderr.prefix(300))", source: "bitwarden")
+                if Self.looksLikeSessionFailure(stderr) {
+                    await vault.sessionExpired()
+                    await bridge.notify("Session expired — unlock Bitwarden again")
+                } else {
+                    await bridge.notify("Could not read the item: \(stderr.prefix(120))")
+                }
+                return
+            }
+            await vault.cacheEntry(id: item.id, data: result.stdout)
+            entry = object
+        }
+
+        if command == "open-url" {
+            if let url = Self.firstURL(from: entry) {
+                await MainActor.run { launcher.openURL(url) }
+            }
+            return
+        }
+
+        let value: String?
+        if command == "copy-notes" {
             value = entry["notes"] as? String
         } else if let login = entry["login"] as? [String: Any] {
             value = login[command == "copy-username" ? "username" : "password"] as? String
@@ -345,6 +489,10 @@ public actor BitwardenProvider: PaletteProvider {
             await bridge.notify("That item has no \(kind.rawValue.dropLast())")
             return
         }
+        await copy(value)
+    }
+
+    private func copy(_ value: String) async {
         // Every vault value is concealed: Palette's monitor ignores concealed
         // pasteboard writes, so nothing copied from the vault enters history.
         await bridge.copyToClipboard(value, concealed: true, clearAfterMs: 30_000)
@@ -433,6 +581,18 @@ public actor BitwardenProvider: PaletteProvider {
 
     // MARK: - Item mapping
 
+    static func matches(_ entry: [String: Any], query: String) -> Bool {
+        let name = entry["name"] as? String ?? ""
+        let notes = entry["notes"] as? String ?? ""
+        let login = entry["login"] as? [String: Any]
+        let username = login?["username"] as? String ?? ""
+        let uris = (login?["uris"] as? [[String: Any]])?.compactMap { $0["uri"] as? String }.joined(separator: " ") ?? ""
+        let haystack = "\(name) \(username) \(uris) \(notes)".lowercased()
+        return query.split(whereSeparator: \.isWhitespace).allSatisfy {
+            haystack.contains($0.lowercased())
+        }
+    }
+
     private static func makeItem(
         _ entry: [String: Any],
         kind: BitwardenKind,
@@ -479,6 +639,12 @@ public actor BitwardenProvider: PaletteProvider {
             providerID: descriptor.id,
             providerName: descriptor.name
         )
+    }
+
+    private static func firstURL(from entry: [String: Any]) -> String? {
+        let login = entry["login"] as? [String: Any]
+        let uris = login?["uris"] as? [[String: Any]]
+        return uris?.compactMap { $0["uri"] as? String }.first
     }
 
     private static func firstURL(from stdout: String) -> String? {

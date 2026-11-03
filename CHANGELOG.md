@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.7.0 — 2026-11-03
+
+### Added
+
+- **Six-hour Bitwarden cache**, encrypted with AES-GCM under
+  `~/Library/Caches/Palette/Bitwarden` and scoped per CLI profile. The first
+  search reads the vault once; every prefix, keystroke, and copy after that uses
+  the snapshot. **Refresh Bitwarden Cache** in the menu-bar menu forces a fresh
+  read and deletes the local copy.
+- **Most used** app order in Settings → General. Alphabetical stays the default;
+  the frequent order ranks by the launch counts already stored in SQLite.
+- Clipboard rows now **paste on Enter/click** instead of only copying. With
+  Accessibility granted this is an immediate ⌘V into the previous app.
+- The menu-bar icon is now a flower-shaped paint palette matching the app icon.
+- README has the new logo and documents Bitwarden caching, app ordering, and
+  the Advanced settings tab.
+
+### Changed
+
+- Settings moved `config.toml`, providers, themes, and the log into **Advanced**;
+  the everyday tabs no longer expose file paths.
+- The empty-query screen shows apps plus pinned items only. Unpinned web apps,
+  sessions, and search rows no longer mix into the default app list. Pinned web
+  apps still lead the list.
+- The empty-query app limit was raised from 24 to 500 so the full app library is
+  searchable and sortable.
+
+### Fixed
+
+- Punctuation-only entries such as `[` or `]`, broken symlinks, control
+  characters, and wrong-kind files are filtered out of `/neo`, `/neof`, and
+  path browsing.
+- The menu-bar permission item disappears once Accessibility is granted.
+- Global empty searches no longer wait on provider spawning for every keystroke.
+
 ## 1.6.0 — 2026-11-03
 
 ### Added

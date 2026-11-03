@@ -5,6 +5,31 @@ public protocol PathEnumerating: Sendable {
     func enumerate(scope: Scope, kind: PathKind) async throws -> [String]
 }
 
+/// Drops entries no launcher should offer: punctuation-only names such as `[`
+/// or `]`, control characters, broken symlinks, and the wrong file kind.
+public enum PathFilter {
+    public static func isUsable(_ path: String, expected: PathKind = .any) -> Bool {
+        let name = (path as NSString).lastPathComponent
+        guard !name.isEmpty, name != ".", name != ".." else { return false }
+        guard name.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) }) else {
+            return false
+        }
+        guard name.rangeOfCharacter(from: .controlCharacters) == nil else { return false }
+        // Shell artifacts such as "[flags]" and "]" are not browsable paths.
+        guard !name.hasPrefix("["), !name.hasSuffix("]") else { return false }
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            return false
+        }
+        switch expected {
+        case .directories: return isDirectory.boolValue
+        case .files: return !isDirectory.boolValue
+        case .any: return true
+        }
+    }
+}
+
 public final class FDEnumerator: PathEnumerating {
     public init() {}
 
@@ -65,6 +90,7 @@ public final class FDEnumerator: PathEnumerating {
                 guard !path.isEmpty else { continue }
                 guard path.hasPrefix(canonicalRoot + "/") else { continue }
                 guard matcher.allows(path: path, isDirectory: kind != .files, root: canonicalRoot) else { continue }
+                guard PathFilter.isUsable(path, expected: kind) else { continue }
                 guard !seen.contains(path) else { continue }
                 seen.insert(path)
                 results.append(path)

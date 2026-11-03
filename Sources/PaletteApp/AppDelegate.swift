@@ -40,7 +40,7 @@ final class HostBridgeProxy: HostBridge, @unchecked Sendable {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var paths: PalettePaths!
     private var configuration: PaletteConfig!
     private var store: PaletteStore!
@@ -68,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var reloadInFlight = false
     private var settingsWindow: NSWindow?
     private var positionMenu: NSMenu?
+    private var accessibilityItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -577,13 +578,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
+    /// A monochrome flower-shaped palette, matching the app icon silhouette.
+    private static func statusBarIcon() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            let center = NSPoint(x: 9, y: 9)
+            NSColor.black.setFill()
+            for index in 0..<6 {
+                let angle = Double(index) * Double.pi / 3
+                let petal = NSRect(
+                    x: center.x + CGFloat(cos(angle)) * 4.1 - 3.7,
+                    y: center.y + CGFloat(sin(angle)) * 4.1 - 3.7,
+                    width: 7.4, height: 7.4
+                )
+                NSBezierPath(ovalIn: petal).fill()
+            }
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: NSRect(x: 6.3, y: 6.3, width: 5.4, height: 5.4)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
     private func buildStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            button.image = NSImage(
-                systemSymbolName: "command.square",
-                accessibilityDescription: "Palette"
-            )
+            button.image = Self.statusBarIcon()
             button.image?.isTemplate = true
             button.toolTip = "Palette — \(currentHotKey?.display ?? configuration.hotkey)"
         }
@@ -614,36 +635,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.positionMenu = positionMenu
         updatePositionMenu()
 
+        let refresh = NSMenuItem(title: "Refresh Bitwarden Cache", action: #selector(refreshBitwardenFromMenu), keyEquivalent: "")
+        refresh.target = self
+        menu.addItem(refresh)
+
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettingsFromMenu), keyEquivalent: "")
         settings.target = self
         menu.addItem(settings)
 
-        let config = NSMenuItem(title: "Open config.toml", action: #selector(openConfigFromMenu), keyEquivalent: "")
-        config.target = self
-        menu.addItem(config)
+        let advancedItem = NSMenuItem(title: "Advanced", action: nil, keyEquivalent: "")
+        let advancedMenu = NSMenu(title: "Advanced")
+        for (title, action) in [
+            ("Open config.toml", #selector(openConfigFromMenu)),
+            ("Open Providers Folder", #selector(openProvidersFromMenu)),
+            ("Open Themes Folder", #selector(openThemesFromMenu)),
+            ("Open Log", #selector(openLogFromMenu)),
+        ] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            advancedMenu.addItem(item)
+        }
+        advancedItem.submenu = advancedMenu
+        menu.addItem(advancedItem)
 
-        let providers = NSMenuItem(title: "Open Providers Folder", action: #selector(openProvidersFromMenu), keyEquivalent: "")
-        providers.target = self
-        menu.addItem(providers)
-
-        let themes = NSMenuItem(title: "Open Themes Folder", action: #selector(openThemesFromMenu), keyEquivalent: "")
-        themes.target = self
-        menu.addItem(themes)
-
-        menu.addItem(.separator())
-        let accessibility = NSMenuItem(title: "Clipboard Paste Permissions…", action: #selector(accessibilityFromMenu), keyEquivalent: "")
-        accessibility.target = self
-        menu.addItem(accessibility)
-
-        let logs = NSMenuItem(title: "Open Log", action: #selector(openLogFromMenu), keyEquivalent: "")
-        logs.target = self
-        menu.addItem(logs)
+        if !pasteboard.isAccessibilityTrusted {
+            menu.addItem(.separator())
+            let accessibility = NSMenuItem(title: "Clipboard Paste Permissions…", action: #selector(accessibilityFromMenu), keyEquivalent: "")
+            accessibility.target = self
+            menu.addItem(accessibility)
+            accessibilityItem = accessibility
+        }
 
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Palette", action: #selector(quitFromMenu), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
+        menu.delegate = self
         statusItem.menu = menu
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        let trusted = pasteboard.isAccessibilityTrusted
+        Log.shared.info("Status menu opened; accessibility trusted=\(trusted)", source: "app")
+        if trusted, let item = accessibilityItem, item.menu === menu {
+            menu.removeItem(item)
+            accessibilityItem = nil
+        }
     }
 
     private func installThemeObserver() {
@@ -769,6 +806,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Actions
 
     @objc private func togglePalette() {
+        // Permission can be granted while Palette keeps running.
+        accessibilityItem?.isHidden = pasteboard.isAccessibilityTrusted
         panel.toggle()
     }
 
@@ -878,6 +917,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openLogFromMenu() {
         launcher.openPath(paths.logFile.path)
+    }
+
+    @objc private func refreshBitwardenFromMenu() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.bitwardenVault.refresh()
+            self.searchController.refreshResults()
+            self.searchController.setStatus("Bitwarden cache refreshed", duration: 3)
+        }
     }
 
     @objc private func quitFromMenu() {

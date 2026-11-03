@@ -1,5 +1,7 @@
 # Palette
 
+<p align="center"><img src="docs/logo.png" width="160" alt="Palette — flower-shaped paint palette logo"></p>
+
 A keyboard-first launcher for macOS, built as a native app with a deliberately
 extensible provider system. Press a hotkey, type, act. No window chrome, no
 Dock icon, no script layer holding the core together.
@@ -10,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.6.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.7.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -138,6 +140,11 @@ Unprefixed queries search apps, web apps, zellij sessions, pinned items, web
 search engines, and any provider marked `global = true`. `= 2+2` and bare
 arithmetic also work.
 
+The empty-query screen is deliberately the **app list**: apps in alphabetical
+order (or most-used), with pinned apps and pinned web apps at the top. Unpinned
+web apps, running sessions, and search suggestions stay out of that screen until
+you type or pick their tab.
+
 ### Web search
 
 Type any query that is not a file or app and Palette offers one row per
@@ -149,11 +156,13 @@ the result in your default browser. Engines are ordinary config rows in
 
 `⌘,` (or the menu-bar icon) opens a native Settings window for the launcher and
 clipboard hotkeys, launcher position (Top / Center / Bottom), terminal, editor,
-app grid, themes,
-clipboard retention, web-search engines, and the browser used by web apps.
+app grid, app order (Alphabetical or Most used), themes, clipboard retention,
+web-search engines, and the browser used by web apps.
 Hotkeys are recorded by pressing them, not typed. Saving validates both
 shortcuts and refuses a browser that is not installed. Changes apply
-immediately; editing files by hand still works, then press `⌘R`.
+immediately. The **Advanced** tab holds the paths to `config.toml`, providers,
+themes, and the log; everyday customization stays in the other tabs. Editing
+files by hand still works, then press `⌘R`.
 
 ### Search position
 
@@ -170,9 +179,9 @@ grid; arrow keys move by cell, row, or column and `⏎` opens.
 
 ### Pinned items
 
-`⌘K` on any result includes **Pin to Palette**. Pinned results rise to the top
-of the empty-query grid and global search; choose **Unpin from Palette** to
-remove them. Pins are stored in Palette’s SQLite state.
+`⌘K` on any result includes **Pin to Palette**; every pinned row also offers
+**Unpin from Palette**. Pinned apps and pinned web apps rise to the top of the
+default app screen and global search. Pins are stored in Palette’s SQLite state.
 
 ### Clipboard
 
@@ -182,6 +191,9 @@ selections are stored separately and listed under **Text**, **Images**, and
 **Files** headings. Add a category word to filter: `/clip text`,
 `/clip images`, `/clip files`, optionally followed by a search.
 
+- `⏎` on any clipboard row **pastes immediately** into the app you came from,
+  after which the clipboard browser closes. With Accessibility granted this is
+  a real ⌘V; otherwise Palette copies the entry and opens the permission prompt.
 - Text rows preview in full; long entries can be copied in full or pasted.
 - Images store a thumbnail and dimensions, with Copy/Paste Image.
 - Files keep their paths, icon, size, and a `bat` render for text files, with
@@ -196,6 +208,16 @@ never recorded.
 
 Values copied from Bitwarden are always written as concealed and clear after 30
 seconds, so they never enter Palette’s clipboard history.
+
+### Bitwarden
+
+`/bw`, `/bwu`, `/bwt`, `/bwn`, and `/bwo` share one in-memory session. The first
+read of a vault is cached for **six hours** in an AES-GCM encrypted file under
+`~/Library/Caches/Palette/Bitwarden`; the key is a per-user `0600` file. Prefix
+switches, typing, and copy actions reuse the snapshot instead of spawning
+`bw list` again. Choose **Refresh Bitwarden Cache** in the menu-bar menu when the
+vault changed elsewhere; the next search reads it fresh. The cache is scoped to
+`BITWARDENCLI_APPDATA_DIR`, so test and real profiles never mix.
 
 ### Web apps
 
@@ -244,6 +266,7 @@ app_grid = false
 app_grid_columns = 6
 search_position = "top"        # top | center | bottom
 web_app_browser = "Helium"
+app_sort = "alphabetical"      # alphabetical | frequent
 
 [web_search]
 enabled = true

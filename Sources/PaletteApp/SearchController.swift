@@ -142,6 +142,11 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     /// Refresh the visible list when the clipboard monitor records a new item.
+    /// Re-run the current query, used after a forced vault refresh.
+    public func refreshResults() {
+        scheduleSearch(debounce: false)
+    }
+
     public func clipboardDidChange() {
         guard !resetting, registry.parser.parse(query).providerID == "clip" else { return }
         scheduleSearch(debounce: false)
@@ -220,19 +225,46 @@ public final class SearchController: ObservableObject, HostBridge {
             merged = Ranking.merge(result.items, boosts: boosts)
         }
 
-        // The empty-query screen is the app grid, so background providers
-        // (Zellij sessions, pins aside) do not push apps out of view.
-        let visible = (configuration.appGrid && !result.parsed.isBound
-            && result.parsed.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            ? merged.filter { $0.providerID == "apps" || $0.providerID == "pins" }
-            : merged
+        // The empty-query screen is the app list: only apps and pinned items,
+        // never unpinned web apps, sessions, or search suggestions.
+        let isEmptySearch = !result.parsed.isBound
+            && result.parsed.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let visible: [PaletteItem]
+        if isEmptySearch {
+            // Pinned snapshots keep their original provider id (so their
+            // normal actions still work); the unpin action marks them.
+            let pins = merged.filter { item in
+                item.actions.contains { $0.id == "unpin-item" }
+            }
+            let pinnedIDs = Set(pins.map(\.stableID))
+            var apps = merged.filter {
+                $0.providerID == "apps" && !pinnedIDs.contains($0.stableID)
+            }
+            switch configuration.appSort {
+            case .alphabetical:
+                apps.sort {
+                    $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+            case .frequent:
+                let counts = (try? await store.useCounts(for: apps.map(\.stableID))) ?? [:]
+                apps.sort {
+                    let lhs = counts[$0.stableID] ?? 0
+                    let rhs = counts[$1.stableID] ?? 0
+                    if lhs != rhs { return lhs > rhs }
+                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+            }
+            visible = pins + apps
+        } else {
+            visible = merged
+        }
 
         items = visible
         highlightTerms = result.parsed.text
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
             .filter { !$0.isEmpty }
-        if let previousID, let index = merged.firstIndex(where: { $0.stableID == previousID }) {
+        if let previousID, let index = visible.firstIndex(where: { $0.stableID == previousID }) {
             selectionIndex = index
         } else {
             selectionIndex = 0

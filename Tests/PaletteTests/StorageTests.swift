@@ -125,4 +125,16 @@ final class StorageTests: XCTestCase {
         let empty = try await store.pinnedItems()
         XCTAssertTrue(empty.isEmpty)
     }
+
+    func testUseCountsForFrequentOrdering() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        for _ in 0..<3 { try await store.recordUse(stableID: "apps:Zed", provider: "apps") }
+        try await store.recordUse(stableID: "apps:Safari", provider: "apps")
+        let counts = try await store.useCounts(for: ["apps:Zed", "apps:Safari", "apps:Missing"])
+        XCTAssertEqual(counts["apps:Zed"], 3)
+        XCTAssertEqual(counts["apps:Safari"], 1)
+        XCTAssertNil(counts["apps:Missing"])
+    }
 }

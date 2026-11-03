@@ -5,6 +5,11 @@ public enum ThemeMode: String, Sendable, Equatable {
     case dark, light, auto
 }
 
+public enum AppSort: String, Sendable, Equatable, CaseIterable {
+    case alphabetical
+    case frequent
+}
+
 public struct ThemeSelection: Sendable, Equatable {
     public var mode: ThemeMode
     public var dark: String
@@ -73,6 +78,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var webSearchEngines: [WebSearchEngine]
     public var searchPosition: SearchPosition
     public var webAppBrowser: String
+    public var appSort: AppSort
 
     public init(
         hotkey: String = "opt+space",
@@ -90,7 +96,8 @@ public struct PaletteConfig: Sendable, Equatable {
         webSearchEnabled: Bool = true,
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
         searchPosition: SearchPosition = .top,
-        webAppBrowser: String = "Helium"
+        webAppBrowser: String = "Helium",
+        appSort: AppSort = .alphabetical
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -108,6 +115,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.webSearchEngines = webSearchEngines
         self.searchPosition = searchPosition
         self.webAppBrowser = webAppBrowser
+        self.appSort = appSort
     }
 }
 
@@ -251,6 +259,9 @@ public enum ConfigLoader {
         if let browser = table.str("web_app_browser"), !browser.isEmpty {
             config.webAppBrowser = browser
         }
+        if let sort = table.str("app_sort"), let parsed = AppSort(rawValue: sort.lowercased()) {
+            config.appSort = parsed
+        }
 
         if let web = table.table("web_search") {
             if let enabled = web.bool("enabled") {
@@ -361,6 +372,7 @@ public enum ConfigLoader {
 
         # Chromium-based browser used for web apps. Defaults to Helium.
         web_app_browser = "Helium"
+        app_sort = "alphabetical"      # alphabetical | frequent
 
         # Global web search. Add or remove engines as you like; {query} is
         # replaced with the URL-encoded search text.
@@ -439,6 +451,7 @@ public enum ConfigWriter {
         out.append("app_grid_columns = \(config.appGridColumns)")
         out.append("search_position = \(quote(config.searchPosition.rawValue))")
         out.append("web_app_browser = \(quote(config.webAppBrowser))")
+        out.append("app_sort = \(quote(config.appSort.rawValue))")
         out.append("")
         out.append("[theme]")
         out.append("mode = \(quote(config.theme.mode.rawValue))")

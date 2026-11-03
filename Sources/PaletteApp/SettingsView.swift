@@ -33,14 +33,13 @@ struct SettingsView: View {
                 appearance.tabItem { Label("Appearance", systemImage: "paintpalette") }.tag(1)
                 clipboard.tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }.tag(2)
                 search.tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(3)
-                providers.tabItem { Label("Providers", systemImage: "square.stack.3d.up") }.tag(4)
+                advanced.tabItem { Label("Advanced", systemImage: "gearshape.2") }.tag(4)
             }
             .padding(20)
 
             Divider()
 
             HStack {
-                Button("Open config.toml") { onOpen(configURL) }
                 Spacer()
                 Button("Cancel") { NSApp.keyWindow?.close() }
                     .keyboardShortcut(.cancelAction)
@@ -92,6 +91,10 @@ struct SettingsView: View {
                 Toggle("Show applications as a grid", isOn: $config.appGrid)
                 Stepper("Grid columns: \(config.appGridColumns)", value: $config.appGridColumns, in: 3...8)
                     .disabled(!config.appGrid)
+                Picker("App order", selection: $config.appSort) {
+                    Text("Alphabetical").tag(AppSort.alphabetical)
+                    Text("Most used").tag(AppSort.frequent)
+                }
                 Text("Grid is only used for an empty, unprefixed query. With Bottom, the tabs and list stack above the search field.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -180,15 +183,21 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
-    private var providers: some View {
+    private var advanced: some View {
         Form {
-            Section("Locations") {
+            Section("Files") {
+                Button("Open config.toml") { onOpen(configURL) }
                 Button("Open Providers Folder") { onOpen(PalettePaths.resolve().providersDir) }
                 Button("Open Themes Folder") { onOpen(PalettePaths.resolve().themesDir) }
-                Button("Open config.toml") { onOpen(configURL) }
+                Button("Open Log") { onOpen(PalettePaths.resolve().logFile) }
             }
-            Section("Manifest providers") {
+            Section("Custom providers") {
                 Text("Add a folder under providers/ with provider.toml. User providers override bundled ones with the same id. Press ⌘R after editing files.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Config file") {
+                Text("Everything above is written to config.toml. Edit it directly only when you need options the Settings window does not expose.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
