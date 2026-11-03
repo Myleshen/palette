@@ -776,7 +776,8 @@ public final class SearchController: ObservableObject, HostBridge {
         let row = CGFloat(theme.effectiveRowHeight)
         let spacing = configuration.searchStyle == .pill ? 6 : CGFloat(theme.list.spacing)
         func rows(_ count: Int) -> CGFloat {
-            let visible = CGFloat(min(max(count, 1), 8))
+            let maxVisible = configuration.searchStyle == .pill ? 6 : 8
+            let visible = CGFloat(min(max(count, 1), maxVisible))
             return visible * row + max(0, visible - 1) * spacing + 8
         }
         var content: CGFloat
@@ -796,15 +797,22 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         let footer = theme.footer.show ? CGFloat(28) : 0
         // Provider tab strip, plus the clipboard filter chips when previewing.
-        let tabs = CGFloat(33 + (activeTabID == "clip" ? 27 : 0))
+        let tabs: CGFloat
+        if configuration.searchStyle == .pill {
+            // Two flow rows (three only with an unusually large provider set)
+            // plus the clipboard filter row.
+            tabs = activeTabID == "clip" ? 91 : 65
+        } else {
+            tabs = CGFloat(33 + (activeTabID == "clip" ? 27 : 0))
+        }
         if previewEnabled {
             // The preview pane sets the height; a few rows are always visible.
             content = max(content, 360)
             panel.widthOverride = 880
         }
-        // Pill floats the search capsule above the content card: 8 pt top and
-        // bottom margins plus an 8 pt gap replace the old inline spacing.
-        let pillExtra: CGFloat = configuration.searchStyle == .pill ? 12 : 0
+        // Pill floats the search capsule above the content card: 12 pt top and
+        // bottom margins plus a 10 pt gap replace the old inline spacing.
+        let pillExtra: CGFloat = configuration.searchStyle == .pill ? 22 : 0
         panel.setContentHeight(CGFloat(theme.search.height) + content + tabs + footer + pillExtra)
     }
 

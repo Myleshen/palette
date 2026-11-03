@@ -154,6 +154,10 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   and content card with no duplicate dark plates or outer window shadow. Classic
   still used its normal panel shadow. The fix disables `NSPanel.hasShadow` in
   floating-card mode and caps the per-card shadow at a subtle 6–8 pt radius.
+  All 15 provider tabs wrapped into two complete rows (`BW Passwords`, `BW
+  Notes`, `BW URLs`, `BW TOTP`, `BW Users`, …) with no clipped edge; the grid
+  used a rounded selection cell; actions and clipboard modes kept the same
+  two-card shell.
 - v1.7.5 checks: opening Settings, pressing **Record** for the launcher hotkey,
   and pressing `⌘Space` changed the field to `cmd+space`; the previous version
   left it as `opt+space`. Saving wrote `hotkey = "cmd+space"`, the log showed

@@ -11,6 +11,13 @@
 - Pill mode now uses only subtle per-card shadows; the window itself casts no
   shadow. The two-card layout stays clean on white and other bright wallpapers.
 - Classic mode keeps its normal window shadow and vibrancy.
+- Provider tabs now wrap into two rows instead of hiding behind a clipped
+  horizontal scroller. Bitwarden labels are shortened to `BW …` and the row has
+  proper spacing and vertical padding.
+- More breathing room throughout pill mode: 14 pt outer gutters, a 10 pt gap,
+  larger row insets, a 28 pt content-card radius, and a 6-row cap with a bottom fade.
+- Grid selection uses a rounded cell instead of a stretched capsule; long app
+  names no longer sit inside an oval blur.
 
 ## 1.7.5 — 2026-11-03
 

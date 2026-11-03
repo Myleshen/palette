@@ -116,7 +116,7 @@ struct SettingsView: View {
                     Text("Siri-style pill").tag(SearchStyle.pill)
                 }
                 .pickerStyle(.segmented)
-                Text("The pill rounds the search field, tabs, rows, and panel together; Classic keeps the original layout.")
+                Text("The pill separates the search capsule from the content card and rounds the active elements; Classic keeps the original layout.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Show applications as a grid", isOn: $config.appGrid)

@@ -431,13 +431,13 @@ struct LauncherRootView: View {
     /// Pill separates the search capsule from the content card, like the
     /// floating Siri search surface. The window itself stays transparent.
     private var pillLayout: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             searchBar
             pillContentCard
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
@@ -450,12 +450,12 @@ struct LauncherRootView: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(theme.color(theme.palette.bg).opacity(0.96))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .strokeBorder(theme.color(theme.palette.border).opacity(0.5), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
@@ -471,72 +471,81 @@ struct LauncherRootView: View {
                     filterChip("Files", value: "files")
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 6)
+                .padding(.horizontal, isPill ? 14 : 12)
+                .padding(.top, isPill ? 8 : 6)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
+            if isPill {
+                FlowLayout(spacing: 3) {
                     ForEach(controller.providerTabs) { tab in
-                        let selected = controller.activeTabID == tab.id
-                        Button {
-                            controller.selectTab(tab.id)
-                        } label: {
-                            HStack(spacing: 4) {
-                                if let icon = tabIcon(tab.icon) {
-                                    Image(systemName: icon)
-                                        .font(.system(size: 10, weight: .semibold))
-                                }
-                                Text(tab.title)
-                                    .font(.system(size: 10.5, weight: .medium))
-                                    .lineLimit(1)
-                            }
-                            .foregroundColor(theme.color(selected
-                                ? (isPill ? theme.palette.accent : theme.palette.accent)
-                                : theme.palette.fgMuted))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule().fill(
-                                    selected
-                                        ? (isPill
-                                            ? theme.color(theme.palette.accent).opacity(0.2)
-                                            : theme.color(theme.palette.accent).opacity(0.16))
-                                        : Color.clear
-                                )
-                            )
-                            .overlay(
-                                Capsule().strokeBorder(
-                                    theme.color(theme.palette.accent).opacity(selected && isPill ? 0.45 : 0),
-                                    lineWidth: 1
-                                )
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        tabChip(tab)
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-            }
-            .overlay(alignment: .trailing) {
-                if isPill {
-                    LinearGradient(
-                        colors: [
-                            theme.color(theme.palette.bg).opacity(0),
-                            theme.color(theme.palette.bg).opacity(0.95),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: 34)
-                    .allowsHitTesting(false)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(controller.providerTabs) { tab in
+                            tabChip(tab)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
                 }
             }
-            if !isPill {
-                Rectangle()
-                    .fill(theme.color(theme.palette.separator).opacity(0.6))
-                    .frame(height: 1)
-            }
+            Rectangle()
+                .fill(theme.color(theme.palette.separator).opacity(isPill ? 0.35 : 0.6))
+                .frame(height: 1)
         }
+    }
+
+    private func tabChip(_ tab: SearchController.ProviderTab) -> some View {
+        let selected = controller.activeTabID == tab.id
+        let title = isPill ? shortTabTitle(tab.title) : tab.title
+        return Button {
+            controller.selectTab(tab.id)
+        } label: {
+            HStack(spacing: 4) {
+                if let icon = tabIcon(tab.icon) {
+                    Image(systemName: icon)
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: isPill ? 10.5 : 10.5, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundColor(theme.color(selected
+                ? theme.palette.accent
+                : theme.palette.fgMuted))
+            .padding(.horizontal, isPill ? 8 : 10)
+            .padding(.vertical, isPill ? 5 : 4)
+            .background(
+                Capsule().fill(
+                    selected
+                        ? theme.color(theme.palette.accent).opacity(isPill ? 0.2 : 0.16)
+                        : Color.clear
+                )
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    theme.color(theme.palette.accent).opacity(selected && isPill ? 0.45 : 0),
+                    lineWidth: 1
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.title)
+    }
+
+    private func shortTabTitle(_ title: String) -> String {
+        if title.hasPrefix("Bitwarden ") {
+            let suffix = String(title.dropFirst("Bitwarden ".count))
+            return suffix == "Usernames" ? "BW Users" : "BW " + suffix
+        }
+        if title == "Clipboard History" { return "Clipboard" }
+        if title == "Neovide Folders" { return "Folders" }
+        if title == "Zellij Sessions" { return "Zellij" }
+        return title
     }
 
     private func filterChip(_ title: String, value: String?) -> some View {
@@ -604,7 +613,7 @@ struct LauncherRootView: View {
                     .clipShape(Capsule())
             }
         }
-        .padding(.horizontal, isPill ? 22 : 16)
+        .padding(.horizontal, isPill ? 24 : 16)
         .frame(height: isPill ? CGFloat(theme.search.height) - 12 : CGFloat(theme.search.height))
         .background(
             Capsule()
@@ -677,8 +686,8 @@ struct LauncherRootView: View {
                                 .onTapGesture { controller.activate(index) }
                             }
                         }
-                        .padding(.horizontal, isPill ? 10 : 6)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, isPill ? 14 : 6)
+                        .padding(.vertical, isPill ? 6 : 4)
                     }
                     .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
                     .onChange(of: controller.selectionIndex) { _, _ in
@@ -692,6 +701,20 @@ struct LauncherRootView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
+            if isPill, !controller.isGridMode, !controller.items.isEmpty {
+                LinearGradient(
+                    colors: [
+                        theme.color(theme.palette.bg).opacity(0),
+                        theme.color(theme.palette.bg).opacity(0.96),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 26)
+                .allowsHitTesting(false)
+            }
+        }
     }
 
     private var gridView: some View {
@@ -723,9 +746,10 @@ struct LauncherRootView: View {
                         .background(
                             Group {
                                 if isPill {
-                                    Capsule().fill(index == controller.selectionIndex
-                                        ? theme.color(theme.states.selected.bg ?? theme.palette.selectionBg)
-                                        : Color.clear)
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(index == controller.selectionIndex
+                                            ? theme.color(theme.states.selected.bg ?? theme.palette.selectionBg)
+                                            : Color.clear)
                                 } else {
                                     RoundedRectangle(cornerRadius: 9)
                                         .fill(index == controller.selectionIndex
@@ -769,7 +793,7 @@ struct LauncherRootView: View {
                 Spacer()
             }
             .foregroundColor(theme.color(theme.palette.fgMuted))
-            .padding(.horizontal, 16)
+            .padding(.horizontal, isPill ? 20 : 16)
             .frame(height: 34)
 
             ScrollViewReader { proxy in
@@ -789,8 +813,8 @@ struct LauncherRootView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, isPill ? 10 : 6)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, isPill ? 14 : 6)
+                    .padding(.bottom, isPill ? 6 : 4)
                 }
                 .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
                 .onChange(of: controller.actionIndex) { _, _ in
@@ -847,7 +871,7 @@ struct LauncherRootView: View {
         }
         .font(.system(size: 10, weight: .medium))
         .foregroundColor(theme.color(theme.footer.hintColor))
-        .padding(.horizontal, 16)
+        .padding(.horizontal, isPill ? 20 : 16)
         .frame(height: 28)
     }
 
@@ -1102,5 +1126,52 @@ struct ClipboardPreviewPane: View {
 
     private static func byteCount(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+}
+
+/// Wraps provider chips onto as many rows as they need. The old horizontal
+/// scroller hid half the providers behind a clipped edge; tab bars are for
+/// discovery, so every provider should be visible.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = max(1, proposal.width ?? 600)
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: maxWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > bounds.width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: bounds.minX + x, y: bounds.minY + y),
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
