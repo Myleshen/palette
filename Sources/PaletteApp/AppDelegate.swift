@@ -116,6 +116,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         seedUserProviders()
         launcher = LauncherService()
         pasteboard = PasteboardService()
+        if !pasteboard.isAccessibilityTrusted {
+            // Make the permission gap visible instead of silently copying.
+            pasteboard.requestAccessibility()
+        }
         appIndex = AppIndex()
         hostProxy = HostBridgeProxy()
 
@@ -869,6 +873,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         SettingsView(
             config: configuration,
             themesDirectory: paths.themesDir,
+            accessibilityTrusted: pasteboard.isAccessibilityTrusted,
             onSave: { [weak self] updated in
                 self?.saveSettings(updated)
             },

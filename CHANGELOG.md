@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.7.8 — 2026-11-03
+
+### Changed
+
+- **Pill is now the default launcher shape.** Existing configs keep whatever
+  they already specify; fresh installs and missing `search_style` values use
+  the two floating surfaces.
+- Entering `/clip` by typing or tabbing now opens the preview layout just like
+  the clipboard hotkey; leaving `/clip` removes the preview and returns the
+  normal width.
+
+### Fixed
+
+- **Stable code signing.** Builds now use an explicit designated requirement
+  based on `dev.myleshen.palette` instead of a per-build cdhash, so an
+  Accessibility grant survives future installs. The old cdhash grant is invalid
+  after this change and must be re-added once.
+- Settings now shows Accessibility status, an **Open Accessibility Settings**
+  button, and **Check Again**, plus the app version and a copyable
+  `brew upgrade --cask palette` command.
+- The shortcut recorder reports when it cannot create its event tap because
+  Accessibility is missing, and the app asks for that permission at launch.
+- Paste timing was increased slightly and target/trust is logged for diagnosis.
+
 ## 1.7.7 — 2026-11-03
 
 ### Changed

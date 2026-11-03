@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import CoreGraphics
 import SwiftUI
 import PaletteCore
@@ -11,6 +12,7 @@ struct SettingsView: View {
     @State private var saveError: String?
     @State private var launcherRecordToken = 0
     @State private var clipboardRecordToken = 0
+    @State private var accessibilityTrusted: Bool
 
     private let themesDirectory: URL
     private let onSave: (PaletteConfig) -> Void
@@ -19,11 +21,13 @@ struct SettingsView: View {
     init(
         config: PaletteConfig,
         themesDirectory: URL,
+        accessibilityTrusted: Bool,
         onSave: @escaping (PaletteConfig) -> Void,
         onOpen: @escaping (URL) -> Void
     ) {
         _config = State(initialValue: config)
         _engines = State(initialValue: config.webSearchEngines)
+        _accessibilityTrusted = State(initialValue: accessibilityTrusted)
         self.themesDirectory = themesDirectory
         self.onSave = onSave
         self.onOpen = onOpen
@@ -99,6 +103,30 @@ struct SettingsView: View {
                 TextField("Terminal", text: $config.terminalApp)
                 TextField("Editor", text: $config.editorOpenWith)
                 Text("Click Record, then press the shortcut you want. Save applies it immediately.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Permissions") {
+                HStack {
+                    Image(systemName: accessibilityTrusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(accessibilityTrusted ? .green : .orange)
+                    Text("Accessibility")
+                    Spacer()
+                    Text(accessibilityTrusted ? "Enabled" : "Not granted")
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Button("Open Accessibility Settings") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    Button("Check Again") {
+                        accessibilityTrusted = AXIsProcessTrusted()
+                    }
+                    .controlSize(.small)
+                }
+                Text("Needed for direct paste and recording system shortcuts. A new install may require granting once; subsequent updates keep the same signature.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -226,6 +254,18 @@ struct SettingsView: View {
             }
             Section("Config file") {
                 Text("Everything above is written to config.toml. Edit it directly only when you need options the Settings window does not expose.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("About") {
+                LabeledContent("Version") {
+                    Text("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")
+                }
+                Button("Copy Update Command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("brew upgrade --cask palette", forType: .string)
+                }
+                Text("Update with the Homebrew cask; the app has no self-updater.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -379,6 +419,7 @@ final class RecorderView: NSView {
         ) else {
             // Without Accessibility the local keyDown path still records
             // ordinary combinations; reserved system keys will not arrive.
+            Log.shared.warn("Shortcut recorder could not create an event tap; Accessibility is required for system shortcuts", source: "settings")
             return
         }
         eventTap = tap

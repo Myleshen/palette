@@ -133,7 +133,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(parsed.webSearchEngines.map(\.name), config.webSearchEngines.map(\.name))
         XCTAssertEqual(parsed.clipboardHotkey, config.clipboardHotkey)
         XCTAssertEqual(parsed.searchPosition, .top)
-        XCTAssertEqual(parsed.searchStyle, .classic)
+        XCTAssertEqual(parsed.searchStyle, .pill)
         XCTAssertEqual(parsed.webAppBrowser, "Helium")
         XCTAssertTrue(diagnostics.isEmpty)
         XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))

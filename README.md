@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.7.7. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.7.8. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -180,7 +180,7 @@ surfaces: a full-width search capsule and a separate rounded content card, with
 the desktop visible through the gap. The content card holds the tabs, list, and
 footer; the active tab, result, and action use soft accent pills. The window
 itself is transparent, so each surface carries its own border and shadow.
-Classic remains the default.
+Pill is the default; Classic remains available in Settings.
 
 ### App grid
 
@@ -282,7 +282,7 @@ clipboard_hotkey = "opt+v"
 app_grid = false
 app_grid_columns = 6
 search_position = "top"        # top | center
-search_style = "classic"       # classic | pill
+search_style = "pill"          # pill (default) | classic
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent
 

@@ -22,7 +22,7 @@ app: build
 	cp -R Resources/Themes "$(APP)/Contents/Resources/Themes"
 	cp -R Resources/Providers "$(APP)/Contents/Resources/Providers"
 	cp -R Resources/Examples "$(APP)/Contents/Resources/Examples"
-	codesign --force --deep --sign - "$(APP)"
+	codesign --force --deep --sign - --requirements '=designated => identifier "dev.myleshen.palette"' "$(APP)"
 	@echo "Built $(APP)"
 
 install: app

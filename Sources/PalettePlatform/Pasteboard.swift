@@ -231,12 +231,17 @@ public final class PasteboardService {
 
     private func deliver(to app: NSRunningApplication?) -> Bool {
         guard isAccessibilityTrusted else {
+            Log.shared.warn("Paste skipped: Accessibility is not trusted", source: "clipboard")
             requestAccessibility()
             return false
         }
 
-        app?.activate(options: [])
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+        Log.shared.info(
+            "Paste requested target=\(app?.localizedName ?? "nil") trusted=\(isAccessibilityTrusted)",
+            source: "clipboard"
+        )
+        app?.activate(options: [.activateAllWindows])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
             Self.sendCommandV()
         }
         return true

@@ -101,7 +101,7 @@ public struct PaletteConfig: Sendable, Equatable {
         webSearchEnabled: Bool = true,
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
         searchPosition: SearchPosition = .top,
-        searchStyle: SearchStyle = .classic,
+        searchStyle: SearchStyle = .pill,
         webAppBrowser: String = "Helium",
         appSort: AppSort = .alphabetical
     ) {
@@ -386,8 +386,8 @@ public enum ConfigLoader {
         # Where the launcher opens: top | center.
         search_position = "top"
 
-        # Search field shape: classic | pill (a rounded Siri-style capsule).
-        search_style = "classic"
+        # Search field shape: pill (floating Siri-style surfaces, default) | classic.
+        search_style = "pill"
 
         # Chromium-based browser used for web apps. Defaults to Helium.
         web_app_browser = "Helium"
