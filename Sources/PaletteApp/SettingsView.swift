@@ -13,6 +13,9 @@ struct SettingsView: View {
     @State private var launcherRecordToken = 0
     @State private var clipboardRecordToken = 0
     @State private var accessibilityTrusted: Bool
+    @State private var askKeyInput = ""
+    @State private var askKeyStored: Bool
+    @State private var askKeyMessage: String?
 
     private let themesDirectory: URL
     private let providerSummary: [String]
@@ -34,6 +37,7 @@ struct SettingsView: View {
         _config = State(initialValue: config)
         _engines = State(initialValue: config.webSearchEngines)
         _accessibilityTrusted = State(initialValue: accessibilityTrusted)
+        _askKeyStored = State(initialValue: AskKeychain.hasStoredKey(for: config.ask.endpoint))
         self.themesDirectory = themesDirectory
         self.providerSummary = providerSummary
         self.diagnostics = diagnostics
@@ -49,7 +53,8 @@ struct SettingsView: View {
                 appearance.tabItem { Label("Appearance", systemImage: "paintpalette") }.tag(1)
                 clipboard.tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }.tag(2)
                 search.tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(3)
-                advanced.tabItem { Label("Advanced", systemImage: "gearshape.2") }.tag(4)
+                ask.tabItem { Label("Ask", systemImage: "sparkles") }.tag(4)
+                advanced.tabItem { Label("Advanced", systemImage: "gearshape.2") }.tag(5)
             }
             .padding(20)
 
@@ -245,6 +250,86 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
+    private var ask: some View {
+        Form {
+            Section("Model") {
+                Picker("Provider", selection: $config.ask.endpoint) {
+                    ForEach(AskEndpoint.allCases, id: \.self) { endpoint in
+                        Text(endpoint.displayName).tag(endpoint)
+                    }
+                }
+                .onChange(of: config.ask.endpoint) { _, _ in
+                    normalizeAskModel()
+                    askKeyStored = AskKeychain.hasStoredKey(for: config.ask.endpoint)
+                    askKeyMessage = nil
+                }
+                Picker("Model", selection: $config.ask.model) {
+                    ForEach(AskModel.models(for: config.ask.endpoint)) { model in
+                        Text(model.free ? "FREE · \(model.name)" : "\(model.name) · \(model.note)")
+                            .tag(model.id)
+                    }
+                }
+                TextField("Max answer tokens", value: $config.ask.maxTokens, format: .number)
+                Toggle("Fall back to free or small models when quota runs out", isOn: $config.ask.fallback)
+                Text("Free models are listed first. If a free model is rate-limited, Ask tries the next free option, then a small paid model from an endpoint where you have a key.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("API key") {
+                if askKeyStored {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Text("Key saved in the macOS Keychain")
+                        Spacer()
+                        Button("Clear Key", role: .destructive) {
+                            AskKeychain.delete(endpoint: config.ask.endpoint)
+                            askKeyStored = false
+                            askKeyInput = ""
+                            askKeyMessage = "Key removed."
+                        }
+                    }
+                    Text("The saved value is never shown in Palette or written to config.toml.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    SecureField("Paste \(config.ask.endpoint.displayName) API key", text: $askKeyInput)
+                    HStack {
+                        Button("Save Key") {
+                            saveAskKey()
+                        }
+                        .disabled(askKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Spacer()
+                    }
+                    Text("The key is saved immediately in the macOS Keychain. After saving, Palette only shows that a key exists.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let askKeyMessage {
+                    Text(askKeyMessage).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
+            Section("History") {
+                Stepper("Keep \(config.ask.maxHistory) questions and answers", value: $config.ask.maxHistory, in: 10...20_000, step: 10)
+                Stepper("Delete answers older than \(config.ask.retentionDays) days", value: $config.ask.retentionDays, in: 1...3_650, step: 1)
+                Text("Ask History is the History sub-tab under /ask. Rows show the model, endpoint, age, duration, and token count.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Text("Keys can also come from OPENCODE_API_KEY, OPENCODE_GO_API_KEY, or OPENAI_API_KEY for a shell-launched build. The app never logs a key.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            normalizeAskModel()
+            askKeyStored = AskKeychain.hasStoredKey(for: config.ask.endpoint)
+        }
+    }
+
     private var advanced: some View {
         Form {
             Section("Files") {
@@ -310,6 +395,25 @@ struct SettingsView: View {
             ?? name.split(separator: "-").map { $0.capitalized }.joined(separator: " ")
     }
 
+    private func saveAskKey() {
+        let trimmed = askKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if AskKeychain.save(trimmed, for: config.ask.endpoint) {
+            askKeyStored = true
+            askKeyInput = ""
+            askKeyMessage = "Key saved. It will not be shown again."
+        } else {
+            askKeyMessage = "Could not save the key to the Keychain."
+        }
+    }
+
+    private func normalizeAskModel() {
+        let models = AskModel.models(for: config.ask.endpoint)
+        if !models.contains(where: { $0.id == config.ask.model }) {
+            config.ask.model = models.first?.id ?? AskModel.defaultModel.id
+        }
+    }
+
     private func save() {
         guard HotKeySpec.parse(config.hotkey) != nil else {
             saveError = "The launcher hotkey is not a valid shortcut. Click the field and press the keys you want."
@@ -327,6 +431,7 @@ struct SettingsView: View {
         config.webSearchEngines = engines.filter {
             !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && $0.urlTemplate.contains("{query}")
         }
+        normalizeAskModel()
         onSave(config)
     }
 }

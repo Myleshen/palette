@@ -82,6 +82,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var searchStyle: SearchStyle
     public var webAppBrowser: String
     public var appSort: AppSort
+    public var ask: AskConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -99,7 +100,8 @@ public struct PaletteConfig: Sendable, Equatable {
         searchPosition: SearchPosition = .top,
         searchStyle: SearchStyle = .pill,
         webAppBrowser: String = "Helium",
-        appSort: AppSort = .alphabetical
+        appSort: AppSort = .alphabetical,
+        ask: AskConfig = AskConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -117,6 +119,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.searchStyle = searchStyle
         self.webAppBrowser = webAppBrowser
         self.appSort = appSort
+        self.ask = ask
     }
 }
 
@@ -288,6 +291,30 @@ public enum ConfigLoader {
             }
         }
 
+        if let askTable = table.table("ask") {
+            var ask = config.ask
+            if let raw = askTable.str("provider"),
+               let endpoint = AskEndpoint(rawValue: raw.lowercased()) {
+                ask.endpoint = endpoint
+            }
+            if let model = askTable.str("model"), !model.isEmpty {
+                ask.model = model
+            }
+            if let count = askTable.int("max_history") {
+                ask.maxHistory = max(1, min(20_000, count))
+            }
+            if let days = askTable.int("retention_days") {
+                ask.retentionDays = max(1, min(3_650, days))
+            }
+            if let tokens = askTable.int("max_tokens") {
+                ask.maxTokens = max(32, min(8_192, tokens))
+            }
+            if let fallback = askTable.bool("fallback") {
+                ask.fallback = fallback
+            }
+            config.ask = ask
+        }
+
         if let themeTable = table.table("theme") {
             var theme = config.theme
             if let mode = themeTable.str("mode"), let parsed = ThemeMode(rawValue: mode.lowercased()) {
@@ -376,6 +403,16 @@ public enum ConfigLoader {
         web_app_browser = "Helium"
         app_sort = "alphabetical"      # alphabetical | frequent
 
+        # One-shot AI answers (/ask). The API key is never written here; it
+        # lives in the macOS Keychain and is entered in Settings > Ask.
+        [ask]
+        provider = "opencode-zen"      # opencode-zen | opencode-go | openai
+        model = "glm-5.3-flash-free"
+        max_history = 200
+        retention_days = 30
+        max_tokens = 512
+        fallback = true                # use free/cheap models when quota runs out
+
         # Global web search. Add or remove engines as you like; {query} is
         # replaced with the URL-encoded search text.
         [web_search]
@@ -453,6 +490,14 @@ public enum ConfigWriter {
         out.append("search_style = \(quote(config.searchStyle.rawValue))")
         out.append("web_app_browser = \(quote(config.webAppBrowser))")
         out.append("app_sort = \(quote(config.appSort.rawValue))")
+        out.append("")
+        out.append("[ask]")
+        out.append("provider = \(quote(config.ask.endpoint.rawValue))")
+        out.append("model = \(quote(config.ask.model))")
+        out.append("max_history = \(config.ask.maxHistory)")
+        out.append("retention_days = \(config.ask.retentionDays)")
+        out.append("max_tokens = \(config.ask.maxTokens)")
+        out.append("fallback = \(config.ask.fallback)")
         out.append("")
         out.append("[theme]")
         out.append("mode = \(quote(config.theme.mode.rawValue))")

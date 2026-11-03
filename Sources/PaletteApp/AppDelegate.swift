@@ -325,6 +325,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ))
         providers.append(PinProvider(store: store, bridge: hostProxy))
         providers.append(ClipboardProvider(store: store, bridge: hostProxy))
+        let askService = AskService(store: store, configuration: configuration.ask)
+        providers.append(AskProvider(service: askService, bridge: hostProxy))
+        providers.append(AskHistoryProvider(service: askService, bridge: hostProxy))
         providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, onChange: { [weak self] in
             await self?.exportWebApps()
         }))

@@ -131,6 +131,40 @@ final class StorageTests: XCTestCase {
         XCTAssertTrue(empty.isEmpty)
     }
 
+    func testAskHistoryTrimsAndDeletes() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        _ = try await store.insertAsk(
+            question: "one", answer: "first", model: "glm", provider: "opencode-zen",
+            durationMs: 10, maxHistory: 2, retentionDays: 30
+        )
+        _ = try await store.insertAsk(
+            question: "two", answer: "second", model: "glm", provider: "opencode-zen",
+            durationMs: 20, maxHistory: 2, retentionDays: 30
+        )
+        _ = try await store.insertAsk(
+            question: "three", answer: "third", model: "gpt-4o-mini", provider: "openai",
+            durationMs: 30, promptTokens: 4, completionTokens: 5, maxHistory: 2, retentionDays: 30
+        )
+        var records = try await store.askHistory(limit: 10)
+        XCTAssertEqual(records.count, 2)
+        XCTAssertEqual(records.first?.question, "three")
+        XCTAssertEqual(records.first?.promptTokens, 4)
+
+        let old = Date(timeIntervalSinceNow: -40 * 24 * 60 * 60)
+        _ = try await store.insertAsk(
+            question: "old", answer: "expired", model: "glm", provider: "opencode-zen",
+            durationMs: 1, maxHistory: 10, retentionDays: 30, at: old
+        )
+        records = try await store.askHistory(limit: 10)
+        XCTAssertFalse(records.contains { $0.question == "old" })
+
+        try await store.deleteAsk(id: records[0].id)
+        let after = try await store.askHistory(limit: 10)
+        XCTAssertEqual(after.count, 1)
+    }
+
     func testUseCountsForFrequentOrdering() async throws {
         let (store, url) = try makeStore()
         defer { try? FileManager.default.removeItem(at: url) }

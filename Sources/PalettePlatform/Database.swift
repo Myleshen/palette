@@ -75,6 +75,20 @@ public actor PaletteStore {
             created REAL NOT NULL
         );
         CREATE INDEX IF NOT EXISTS pins_created ON pins(created DESC);
+
+        CREATE TABLE IF NOT EXISTS ask_history (
+            id TEXT PRIMARY KEY,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            model TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            created REAL NOT NULL,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            prompt_tokens INTEGER NOT NULL DEFAULT 0,
+            completion_tokens INTEGER NOT NULL DEFAULT 0,
+            error TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ask_history_created ON ask_history(created DESC);
         """, on: database)
 
         if try !hasColumn("webapps", "shortcut", on: database) {
@@ -486,6 +500,111 @@ public actor PaletteStore {
             }
         }
         return items
+    }
+
+    // MARK: - Ask history
+
+    @discardableResult
+    public func insertAsk(
+        question: String,
+        answer: String,
+        model: String,
+        provider: String,
+        durationMs: Int,
+        promptTokens: Int = 0,
+        completionTokens: Int = 0,
+        error: String? = nil,
+        maxHistory: Int,
+        retentionDays: Int,
+        at date: Date = Date()
+    ) throws -> AskRecord {
+        let record = AskRecord(
+            id: UUID().uuidString,
+            question: question,
+            answer: answer,
+            model: model,
+            provider: provider,
+            createdAt: date,
+            durationMs: max(0, durationMs),
+            promptTokens: max(0, promptTokens),
+            completionTokens: max(0, completionTokens),
+            error: error
+        )
+        let statement = try prepare("""
+        INSERT INTO ask_history
+            (id, question, answer, model, provider, created, duration_ms,
+             prompt_tokens, completion_tokens, error)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, record.id)
+        bind(statement, 2, record.question)
+        bind(statement, 3, record.answer)
+        bind(statement, 4, record.model)
+        bind(statement, 5, record.provider)
+        sqlite3_bind_double(statement, 6, record.createdAt.timeIntervalSince1970)
+        sqlite3_bind_int64(statement, 7, Int64(record.durationMs))
+        sqlite3_bind_int64(statement, 8, Int64(record.promptTokens))
+        sqlite3_bind_int64(statement, 9, Int64(record.completionTokens))
+        bind(statement, 10, record.error)
+        try step(statement)
+        try trimAskHistory(maxHistory: maxHistory, retentionDays: retentionDays)
+        return record
+    }
+
+    public func askHistory(limit: Int = 200) throws -> [AskRecord] {
+        let statement = try prepare("""
+        SELECT id, question, answer, model, provider, created, duration_ms,
+               prompt_tokens, completion_tokens, error
+        FROM ask_history ORDER BY created DESC LIMIT ?;
+        """)
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int(statement, 1, Int32(max(1, limit)))
+        var records: [AskRecord] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let id = sqlite3_column_text(statement, 0),
+                  let question = sqlite3_column_text(statement, 1),
+                  let answer = sqlite3_column_text(statement, 2),
+                  let model = sqlite3_column_text(statement, 3),
+                  let provider = sqlite3_column_text(statement, 4) else { continue }
+            records.append(AskRecord(
+                id: String(cString: id),
+                question: String(cString: question),
+                answer: String(cString: answer),
+                model: String(cString: model),
+                provider: String(cString: provider),
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 5)),
+                durationMs: Int(sqlite3_column_int64(statement, 6)),
+                promptTokens: Int(sqlite3_column_int64(statement, 7)),
+                completionTokens: Int(sqlite3_column_int64(statement, 8)),
+                error: sqlite3_column_text(statement, 9).map { String(cString: $0) }
+            ))
+        }
+        return records
+    }
+
+    public func deleteAsk(id: String) throws {
+        let statement = try prepare("DELETE FROM ask_history WHERE id = ?;")
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, id)
+        try step(statement)
+    }
+
+    public func trimAskHistory(maxHistory: Int, retentionDays: Int, now: Date = Date()) throws {
+        let cutoff = now.timeIntervalSince1970 - TimeInterval(max(1, retentionDays) * 24 * 60 * 60)
+        let expired = try prepare("DELETE FROM ask_history WHERE created < ?;")
+        defer { sqlite3_finalize(expired) }
+        sqlite3_bind_double(expired, 1, cutoff)
+        try step(expired)
+
+        let overflow = try prepare("""
+        DELETE FROM ask_history WHERE id NOT IN (
+            SELECT id FROM ask_history ORDER BY created DESC LIMIT ?
+        );
+        """)
+        defer { sqlite3_finalize(overflow) }
+        sqlite3_bind_int(overflow, 1, Int32(max(1, maxHistory)))
+        try step(overflow)
     }
 
     // MARK: - Metadata

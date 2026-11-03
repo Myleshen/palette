@@ -263,6 +263,8 @@ on the roadmap.
 | `bwn` | `bwn` | native | Bitwarden notes |
 | `bwo` | `bwo` | native | Bitwarden URLs |
 | `clip` | `clip` | native | clipboard history: text, images, Finder files; grouped and previewable |
+| `ask` | `ask` | native | one-shot AI Q&A over OpenCode Zen/Go or OpenAI; free models first |
+| `askh` | `askh` | native | retained Ask history with fuzzy search and metadata |
 | `web` | `web` | native | global web apps with optional Hammerspoon shortcuts |
 | `emoji` | `emoji` | native | full Unicode emoji catalog with name search |
 | `system` | `sys` | native | sleep, lock, empty trash, reload, quit |

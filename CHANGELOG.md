@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.8.0 — 2026-11-03
+
+### Added
+
+- **`/ask` one-shot AI answers** over OpenCode Zen, OpenCode Go, and any
+  OpenAI-compatible chat-completions endpoint.
+- **Free-first model chooser.** `/ask` with no question lists the selected
+  endpoint's models with free options first and badges, and remembers the pick.
+  Quota or availability failures automatically fall back to other free models,
+  then to small paid models when the key has access.
+- **Ask History sub-tab and `/askh`** with fuzzy search over questions and
+  answers, model/endpoint/time/duration/token metadata, answer preview, copy,
+  ask-again, and per-row delete.
+- **Keychain-only API keys.** A key is visible only before saving; afterward
+  Settings reports that a key exists without ever showing it. Nothing is written
+  to `config.toml`, logs, or history.
+- **`[ask]` config and Settings tab** for endpoint, model, answer tokens,
+  fallback, retained Q&A count, and retention age.
+
+### Verified
+
+- `swift test`: 60 tests, 0 failures, including free-first ordering, model
+  scoping, quota fallback, invalid-key endpoint skipping, config round-trip
+  without secrets, response parsing, and history trimming.
+- Live mock OpenAI-compatible endpoint: `/ask hello openai` answered in 0.35 s,
+  persisted the Q&A, and `/askh` displayed model, provider, latency, and token
+  metadata.
+- Real OpenCode endpoints: free Zen key returned 429 quota and expired Go key
+  returned 401, both handled without crashing and with a readable status.
+
 ## 1.7.13 — 2026-11-03
 
 ### Fixed

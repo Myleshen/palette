@@ -152,11 +152,13 @@ public final class SearchController: ObservableObject, HostBridge {
         // Bound searches can take a moment (Bitwarden, external processes).
         // Show the target provider immediately instead of stale global rows.
         let parsed = registry.parser.parse(query)
-        // Preview belongs to the clipboard browser only. Opening /clip by
-        // typing, tabbing, or the clipboard hotkey must show it; leaving /clip
-        // (Tab, another prefix, clearing the query) must drop it and the wide
-        // layout.
-        if parsed.providerID == "clip" {
+        // Preview belongs to the clipboard browser and Ask. Opening them by
+        // typing, tabbing, or a hotkey must show it; leaving must drop it and
+        // the wide layout.
+        let previewProvider = parsed.providerID == "clip"
+            || parsed.providerID == "ask"
+            || parsed.providerID == "askh"
+        if previewProvider {
             if !previewEnabled {
                 previewEnabled = true
                 panel?.widthOverride = 880
@@ -411,6 +413,8 @@ public final class SearchController: ObservableObject, HostBridge {
         ]
         for provider in registry.providers {
             guard let trigger = provider.descriptor.trigger else { continue }
+            // History is a sub-tab under Ask, not another top-level chip.
+            if provider.descriptor.id == "askh" { continue }
             tabs.append(ProviderTab(
                 id: provider.descriptor.id,
                 title: provider.descriptor.name,
@@ -422,7 +426,8 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public var activeTabID: String {
-        registry.parser.parse(query).providerID ?? "apps"
+        let provider = registry.parser.parse(query).providerID
+        return provider == "askh" ? "ask" : (provider ?? "apps")
     }
 
     public func selectTab(_ id: String) {
@@ -451,6 +456,14 @@ public final class SearchController: ObservableObject, HostBridge {
         if text.hasPrefix("file") { return "files" }
         if text.hasPrefix("text") { return "text" }
         return nil
+    }
+
+    public var askHistoryMode: Bool {
+        registry.parser.parse(query).providerID == "askh"
+    }
+
+    public func setAskMode(history: Bool) {
+        query = registry.parser.prefix + (history ? "askh " : "ask ")
     }
 
     public func setClipboardFilter(_ kind: String?) {
@@ -651,7 +664,16 @@ public final class SearchController: ObservableObject, HostBridge {
                 }
 
             case .custom:
-                if action.id == "pin-item" {
+                if action.id == "ask-settings" {
+                    onOpenConfig?()
+                    panel?.hide()
+                } else if action.id == "ask-again" {
+                    if let question = action.value.text {
+                        query = registry.parser.prefix + "ask " + question
+                    }
+                } else if action.id == "ask-history" {
+                    query = registry.parser.prefix + "askh "
+                } else if action.id == "pin-item" {
                     try await store.pinItem(item)
                     setStatus("Pinned \(item.title)", duration: 2)
                     scheduleSearch(debounce: false)
@@ -683,6 +705,10 @@ public final class SearchController: ObservableObject, HostBridge {
             return ["add", "remove", "shortcut", "clear-shortcut"].contains(action.id)
         case "bw", "bwu", "bwt", "bwn", "bwo":
             return ["install", "login", "unlock", "retry"].contains(action.id)
+        case "ask":
+            return ["select-model", "ask"].contains(action.id)
+        case "askh":
+            return action.id == "delete-ask"
         default:
             return false
         }
@@ -786,10 +812,10 @@ public final class SearchController: ObservableObject, HostBridge {
         let tabs: CGFloat
         if configuration.searchStyle == .pill {
             // Two flow rows (three only with an unusually large provider set)
-            // plus the clipboard filter row.
-            tabs = activeTabID == "clip" ? 110 : 82
+            // plus the clipboard/Ask sub-tab row.
+            tabs = (activeTabID == "clip" || activeTabID == "ask") ? 110 : 82
         } else {
-            tabs = CGFloat(33 + (activeTabID == "clip" ? 27 : 0))
+            tabs = CGFloat(33 + ((activeTabID == "clip" || activeTabID == "ask") ? 27 : 0))
         }
         if previewEnabled {
             // The preview pane sets the height; a few rows are always visible.

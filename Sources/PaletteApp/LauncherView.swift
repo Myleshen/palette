@@ -474,6 +474,19 @@ struct LauncherRootView: View {
                 .padding(.horizontal, isPill ? 14 : 12)
                 .padding(.top, isPill ? 8 : 6)
             }
+            if controller.activeTabID == "ask" {
+                HStack(spacing: 6) {
+                    modeChip("Ask", selected: !controller.askHistoryMode) {
+                        controller.setAskMode(history: false)
+                    }
+                    modeChip("History", selected: controller.askHistoryMode) {
+                        controller.setAskMode(history: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, isPill ? 14 : 12)
+                .padding(.top, isPill ? 8 : 6)
+            }
             if isPill {
                 FlowLayout(spacing: 3) {
                     ForEach(controller.providerTabs) { tab in
@@ -553,6 +566,22 @@ struct LauncherRootView: View {
         return Button {
             controller.setClipboardFilter(value)
         } label: {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule().fill(selected
+                        ? theme.color(theme.palette.accent)
+                        : theme.color(theme.palette.elevated))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func modeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
