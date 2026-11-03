@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.7.4. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.7.5. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -155,14 +155,17 @@ the result in your default browser. Engines are ordinary config rows in
 ### Settings
 
 `⌘,` (or the menu-bar icon) opens a native Settings window for the launcher and
-clipboard hotkeys, launcher position (Top / Center / Bottom), terminal, editor,
+clipboard hotkeys, launcher position (Top / Center), terminal, editor,
 app grid, app order (Alphabetical or Most used), themes, clipboard retention,
 web-search engines, and the browser used by web apps.
-Hotkeys are recorded by pressing them, not typed. Saving validates both
-shortcuts and refuses a browser that is not installed. Changes apply
-immediately. The **Advanced** tab holds the paths to `config.toml`, providers,
-themes, and the log; everyday customization stays in the other tabs. Editing
-files by hand still works, then press `⌘R`.
+Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
+session event tap, so macOS-reserved combinations such as `⌘Space` are captured
+instead of being swallowed by the system; it stops as soon as Settings loses
+focus. Accessibility permission is needed for reserved-key capture. Saving
+validates both shortcuts and refuses a browser that is not installed. Changes
+apply immediately. The **Advanced** tab holds the paths to `config.toml`,
+providers, themes, and the log; everyday customization stays in the other tabs.
+Editing files by hand still works, then press `⌘R`.
 
 ### Search position
 

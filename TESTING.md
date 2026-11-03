@@ -133,7 +133,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   and refresh, path filtering, and use counts).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.4). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.5). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,11 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.5 checks: opening Settings, pressing **Record** for the launcher hotkey,
+  and pressing `⌘Space` changed the field to `cmd+space`; the previous version
+  left it as `opt+space`. Saving wrote `hotkey = "cmd+space"`, the log showed
+  `Hotkey registered: cmd+space`, and pressing `⌘Space` with Palette running
+  opened the panel. The recorder’s event tap stops on capture and on focus loss.
 - v1.7.4 checks: enabling `search_style = "pill"` through the real Settings
   picker and pressing Save produced a standalone search capsule plus a separate
   rounded content card with a visible desktop gap and independent shadows. The

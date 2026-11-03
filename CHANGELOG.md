@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.5 — 2026-11-03
+
+### Fixed
+
+- **Shortcut recorder now captures macOS-reserved combinations** such as
+  `⌘Space`. A focused text field never received those key-downs because the
+  system consumed them first. The recorder now installs a short-lived session
+  event tap while recording, records the combination, and consumes its key-up.
+  The tap is torn down on capture, Esc, focus loss, or app deactivation, so it
+  cannot keep intercepting keys.
+- Verified `⌘Space` can be recorded, saved to `config.toml`, registered by the
+  Carbon hotkey manager, and used to open Palette.
+- README no longer lists the removed **Bottom** launcher position.
+
 ## 1.7.4 — 2026-11-03
 
 ### Changed

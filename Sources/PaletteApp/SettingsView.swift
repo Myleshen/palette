@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import SwiftUI
 import PaletteCore
 import PalettePlatform
@@ -310,6 +311,10 @@ final class RecorderView: NSView {
     }
     var onChange: ((String) -> Void)?
 
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    private var isRecording = false
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setAccessibilityElement(true)
@@ -323,6 +328,10 @@ final class RecorderView: NSView {
         setAccessibilityRole(.button)
     }
 
+    deinit {
+        stopRecording()
+    }
+
     override var acceptsFirstResponder: Bool { true }
 
     override func accessibilityPerformPress() -> Bool {
@@ -331,11 +340,13 @@ final class RecorderView: NSView {
     }
 
     override func becomeFirstResponder() -> Bool {
+        startRecording()
         needsDisplay = true
         return true
     }
 
     override func resignFirstResponder() -> Bool {
+        stopRecording()
         needsDisplay = true
         return true
     }
@@ -344,14 +355,116 @@ final class RecorderView: NSView {
         window?.makeFirstResponder(self)
     }
 
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 {
-            window?.makeFirstResponder(nil)
+    /// A local key monitor never sees reserved combinations such as ⌘Space:
+    /// macOS consumes them before AppKit dispatches keyDown. A session event
+    /// tap at the head of the stream can record and suppress the combination
+    /// while the recorder is active, which is how shortcut recorders capture
+    /// system-reserved keys.
+    private func startRecording() {
+        guard !isRecording else { return }
+        isRecording = true
+        needsDisplay = true
+
+        let mask = (1 << CGEventType.keyDown.rawValue)
+            | (1 << CGEventType.keyUp.rawValue)
+            | (1 << CGEventType.tapDisabledByTimeout.rawValue)
+            | (1 << CGEventType.tapDisabledByUserInput.rawValue)
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(mask),
+            callback: recorderEventTapCallback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            // Without Accessibility the local keyDown path still records
+            // ordinary combinations; reserved system keys will not arrive.
             return
         }
-        guard let spec = HotKeySpec.from(event: event) else { return }
-        value = spec.display
-        onChange?(spec.display)
+        eventTap = tap
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        runLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        Log.shared.info("Shortcut recorder event tap started", source: "settings")
+
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(recordingContextLost),
+            name: NSWindow.didResignKeyNotification, object: window
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(recordingContextLost),
+            name: NSApplication.didResignActiveNotification, object: nil
+        )
+    }
+
+    @objc private func recordingContextLost() {
+        finishRecording(nil)
+    }
+
+    private func stopRecording() {
+        guard isRecording || eventTap != nil || runLoopSource != nil else { return }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSApplication.didResignActiveNotification, object: nil)
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+        }
+        runLoopSource = nil
+        eventTap = nil
+        isRecording = false
+        Log.shared.info("Shortcut recorder event tap stopped", source: "settings")
+    }
+
+    fileprivate func handleEventTap(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
+            return Unmanaged.passUnretained(event)
+        }
+        guard isRecording, type == .keyDown || type == .keyUp else {
+            return Unmanaged.passUnretained(event)
+        }
+        // Consume the matching key-up as well, so a reserved shortcut cannot
+        // fire after we record its key-down.
+        guard type == .keyDown else { return nil }
+
+        let code = event.getIntegerValueField(.keyboardEventKeycode)
+        if code == 53 {
+            finishRecording(nil)
+            return nil
+        }
+        guard let nsEvent = NSEvent(cgEvent: event),
+              let spec = HotKeySpec.from(event: nsEvent) else {
+            NSSound.beep()
+            return nil
+        }
+        finishRecording(spec.display)
+        return nil
+    }
+
+    private func finishRecording(_ display: String?) {
+        stopRecording()
+        if let display {
+            value = display
+            onChange?(display)
+        }
+        window?.makeFirstResponder(nil)
+        needsDisplay = true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            finishRecording(nil)
+            return
+        }
+        guard let spec = HotKeySpec.from(event: event) else {
+            NSSound.beep()
+            return
+        }
+        finishRecording(spec.display)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -375,4 +488,15 @@ final class RecorderView: NSView {
             withAttributes: attributes
         )
     }
+}
+
+private func recorderEventTapCallback(
+    proxy: CGEventTapProxy,
+    type: CGEventType,
+    event: CGEvent,
+    refcon: UnsafeMutableRawPointer?
+) -> Unmanaged<CGEvent>? {
+    guard let refcon else { return Unmanaged.passUnretained(event) }
+    let view = Unmanaged<RecorderView>.fromOpaque(refcon).takeUnretainedValue()
+    return view.handleEventTap(type: type, event: event)
 }

@@ -212,6 +212,23 @@ final class CoreTests: XCTestCase {
         let spec = event.flatMap(HotKeySpec.from(event:))
         XCTAssertEqual(spec?.display, "opt+space")
         XCTAssertEqual(spec?.keyCode, UInt32(kVK_Space))
+
+        let commandEvent = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.command],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: " ",
+            charactersIgnoringModifiers: " ",
+            isARepeat: false,
+            keyCode: 49
+        )
+        let commandSpec = commandEvent.flatMap(HotKeySpec.from(event:))
+        XCTAssertEqual(commandSpec?.display, "cmd+space")
+        XCTAssertEqual(commandSpec?.keyCode, UInt32(kVK_Space))
+        XCTAssertEqual(commandSpec?.modifiers, UInt32(cmdKey))
     }
 
     func testEmojiCatalogIsLargeAndSearchable() async throws {
