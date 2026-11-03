@@ -124,7 +124,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 41 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 42 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
@@ -133,7 +133,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   and refresh, path filtering, and use counts).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.0). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.1). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,16 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.1 checks: the status menu contained Open Palette, Reload, Launcher
+  Position, Refresh Bitwarden Cache, Settings, Advanced, and Quit — no
+  Clipboard Paste Permissions item. A fresh Palette process with the same test
+  profile and **no** `BW_PASSWORD` logged “Bitwarden restored the cached
+  session” and listed `Test` immediately; the sealed session file was 186 bytes
+  at `0600`. Settings exposed the Siri-style pill picker; with
+  `search_style = "pill"`, the search field, tab rail, selected result, badge,
+  and panel corners all rendered as the rounded pill treatment, while Classic
+  kept the original layout. Legacy `search_position = "bottom"` parsed as
+  Center.
 - v1.7.0 checks: the empty query showed only apps plus pinned items, with the
   pinned Youtube Music web app first and the rest alphabetical; switching
   `app_sort` to `frequent` put Safari first after seeding nine launches; the
@@ -169,9 +179,9 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   `Helium --app=https://music.youtube.com --user-data-dir=…/Palette/WebApps/helium`,
   producing a standalone YouTube Music window with no tabs or address bar.
   Pressing the Hammerspoon shortcut `ctrl+alt+m` launched the identical app-mode
-  command instead of Safari. Settings showed a segmented Top/Center/Bottom
-  control; selecting Bottom and saving moved the search field and tabs under the
-  results at the bottom of the screen.
+  command instead of Safari. The 1.6.0 build offered a segmented
+  Top/Center/Bottom control; the Bottom option was removed in 1.7.1 because it
+  inverted the layout, and old `bottom` configs now open in the center.
 - v1.5.1 physical round on the installed app (screen unlocked):
   `⌥Space` opened the launcher and `⌥V` opened the clipboard browser with the
   wide preview and filter chips; `Esc` dismissed them. In Settings, clicking the
@@ -187,8 +197,9 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   (was 423 ms with the window animation).
 - v1.5 checks: the empty query showed the Apps tab first; `Tab` switched to
   `/calc` and `⇧Tab` returns; typing `finder` ranked the CoreServices Finder
-  first with web-search rows below; `search_position = "bottom"` put the tab
-  strip and search field under the results; `/clip` showed pinned-first
+  first with web-search rows below; the 1.5 build's `search_position =
+  "bottom"` put the tab strip and search field under the results (removed in
+  1.7.1); `/clip` showed pinned-first
   Text/Images/Files groups, the All/Text/Images/Files chips highlighted the
   matching filter, and `/clip image` showed only the 1024×1024 image with its
   preview; Settings showed recorded `opt+space` / `opt+v` and the position

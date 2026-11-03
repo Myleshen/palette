@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.7.1 — 2026-11-03
+
+### Changed
+
+- **Bitwarden sessions now survive app restarts for six hours.** The CLI session
+  key is sealed with AES-GCM next to the vault cache instead of living only in
+  memory. Logout or a real CLI expiry still removes it; **Refresh Bitwarden
+  Cache** keeps the session.
+- The status-bar menu no longer carries a Clipboard Paste Permissions item.
+  macOS asks for Accessibility on the first paste that needs it, like other
+  apps, and the menu never opens System Settings and a second OS prompt at the
+  same time.
+
+### Fixed
+
+- Removed the **Bottom** launcher position. It fought with the normal top-first
+  layout; **Top** and **Center** remain, and existing `search_position =
+  "bottom"` configs migrate to **Center**.
+- Added an optional **Siri-style pill** chrome (`search_style = "pill"`),
+  selectable in Settings → General. The search field and tab rail become
+  capsules, result/action selections become capsules, and the panel corners
+  round further. Classic remains the default.
+- Bitwarden only discards the session when the CLI reports an actual auth
+  failure, not whenever a log line happens to contain the word “session”.
+- Session clears now log their reason.
+
 ## 1.7.0 — 2026-11-03
 
 ### Added

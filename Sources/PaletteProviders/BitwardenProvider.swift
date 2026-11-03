@@ -2,9 +2,12 @@ import Foundation
 import PaletteCore
 import PalettePlatform
 
-/// Shared, in-memory Bitwarden session for the five vault providers. The
-/// session key never touches disk and the master password is only handed to the
-/// child process through its environment.
+/// Shared Bitwarden session for the five vault providers. The CLI receives the
+/// key as `BW_SESSION` for each call; Palette keeps one copy in memory and an
+/// AES-GCM-sealed copy beside the six-hour vault cache, so restarting the app
+/// does not ask for the master password again inside that window. The master
+/// password itself is only handed to the `bw` child process through its
+/// environment and is never stored.
 public actor BitwardenVault {
     private var session: String?
     private var lastStatus: String?
@@ -30,6 +33,12 @@ public actor BitwardenVault {
             listCache = (snapshot.date, snapshot.data)
             email = snapshot.email
         }
+        if persistCache, let saved = SecureVaultCache.loadSession(scope: cacheScope) {
+            session = saved.session
+            lastStatus = "unlocked"
+            lastStatusDate = Date()
+            Log.shared.info("Bitwarden restored the cached session", source: "bitwarden")
+        }
     }
 
     public func currentSession() -> String? { session }
@@ -38,23 +47,29 @@ public actor BitwardenVault {
 
     /// Full logout: drop the session and every cached copy.
     public func clear() {
+        Log.shared.info("Bitwarden session cleared: logout", source: "bitwarden")
         session = nil
         lastStatusDate = nil
         listCache = nil
         itemCache.removeAll()
         listTask = nil
         generation += 1
-        if persistCache { SecureVaultCache.remove(scope: cacheScope) }
+        if persistCache {
+            SecureVaultCache.remove(scope: cacheScope)
+            SecureVaultCache.removeSession(scope: cacheScope)
+        }
     }
 
     /// The CLI session went stale, but the encrypted vault snapshot is still
     /// useful once the user unlocks again.
     public func sessionExpired() {
+        Log.shared.info("Bitwarden session cleared: CLI reported an expired session", source: "bitwarden")
         session = nil
         lastStatusDate = nil
         itemCache.removeAll()
         listTask = nil
         generation += 1
+        if persistCache { SecureVaultCache.removeSession(scope: cacheScope) }
     }
 
     /// Force the next search to read the vault again, keeping the session.
@@ -214,6 +229,7 @@ public actor BitwardenVault {
         session = key
         lastStatus = "unlocked"
         lastStatusDate = Date()
+        if persistCache { SecureVaultCache.saveSession(key, scope: cacheScope) }
         // Login may be a different account, so do not reuse another vault's
         // cached payload.
         listCache = nil
@@ -257,6 +273,7 @@ public actor BitwardenVault {
         session = key
         lastStatus = "unlocked"
         lastStatusDate = Date()
+        if persistCache { SecureVaultCache.saveSession(key, scope: cacheScope) }
         // Reuse a fresh six-hour snapshot so unlocking feels instant; use the
         // menu-bar refresh when the vault has changed on another device.
         await bridge.notify("Bitwarden unlocked")
@@ -572,11 +589,18 @@ public actor BitwardenProvider: PaletteProvider {
     /// Only clear the cached session when the CLI actually says it is stale.
     static func looksLikeSessionFailure(_ stderr: String) -> Bool {
         let text = stderr.lowercased()
-        return text.contains("session")
+        // Avoid matching the word "session" on its own: a timeout or network
+        // error often includes it, and dropping the session for those makes
+        // the master password prompt appear at random.
+        return text.contains("invalid session")
+            || text.contains("session key")
+            || text.contains("session expired")
+            || text.contains("session is expired")
             || text.contains("not logged in")
             || text.contains("unauthorized")
             || text.contains("401")
             || text.contains("vault is locked")
+            || text.contains("locked")
     }
 
     // MARK: - Item mapping

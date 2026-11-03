@@ -68,7 +68,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var reloadInFlight = false
     private var settingsWindow: NSWindow?
     private var positionMenu: NSMenu?
-    private var accessibilityItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -658,29 +657,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         advancedItem.submenu = advancedMenu
         menu.addItem(advancedItem)
 
-        if !pasteboard.isAccessibilityTrusted {
-            menu.addItem(.separator())
-            let accessibility = NSMenuItem(title: "Clipboard Paste Permissions…", action: #selector(accessibilityFromMenu), keyEquivalent: "")
-            accessibility.target = self
-            menu.addItem(accessibility)
-            accessibilityItem = accessibility
-        }
-
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Palette", action: #selector(quitFromMenu), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
-        menu.delegate = self
         statusItem.menu = menu
-    }
-
-    func menuWillOpen(_ menu: NSMenu) {
-        let trusted = pasteboard.isAccessibilityTrusted
-        Log.shared.info("Status menu opened; accessibility trusted=\(trusted)", source: "app")
-        if trusted, let item = accessibilityItem, item.menu === menu {
-            menu.removeItem(item)
-            accessibilityItem = nil
-        }
     }
 
     private func installThemeObserver() {
@@ -806,8 +787,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Actions
 
     @objc private func togglePalette() {
-        // Permission can be granted while Palette keeps running.
-        accessibilityItem?.isHidden = pasteboard.isAccessibilityTrusted
         panel.toggle()
     }
 
@@ -906,13 +885,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openThemesFromMenu() {
         launcher.openPath(paths.themesDir.path)
-    }
-
-    @objc private func accessibilityFromMenu() {
-        pasteboard.requestAccessibility()
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
     }
 
     @objc private func openLogFromMenu() {

@@ -133,20 +133,30 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(parsed.webSearchEngines.map(\.name), config.webSearchEngines.map(\.name))
         XCTAssertEqual(parsed.clipboardHotkey, config.clipboardHotkey)
         XCTAssertEqual(parsed.searchPosition, .top)
+        XCTAssertEqual(parsed.searchStyle, .classic)
         XCTAssertEqual(parsed.webAppBrowser, "Helium")
         XCTAssertTrue(diagnostics.isEmpty)
         XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))
         XCTAssertTrue(ThemeLoader.builtinNames.contains("aetheria-pink"))
 
         var moved = config
-        moved.searchPosition = .bottom
+        moved.searchPosition = .center
+        moved.searchStyle = .pill
         moved.appSort = .frequent
         let movedTable = try TOMLTable(string: ConfigWriter.render(moved))
         var movedDiagnostics: [Diagnostic] = []
         let movedParsed = try ConfigLoader.parse(movedTable, diagnostics: &movedDiagnostics)
-        XCTAssertEqual(movedParsed.searchPosition, .bottom)
+        XCTAssertEqual(movedParsed.searchPosition, .center)
+        XCTAssertEqual(movedParsed.searchStyle, .pill)
         XCTAssertEqual(movedParsed.appSort, .frequent)
         XCTAssertTrue(movedDiagnostics.isEmpty)
+
+        // 1.7.0 configs may still contain the removed "bottom" value.
+        let legacy = try TOMLTable(string: "search_position = \"bottom\"")
+        var legacyDiagnostics: [Diagnostic] = []
+        let legacyParsed = try ConfigLoader.parse(legacy, diagnostics: &legacyDiagnostics)
+        XCTAssertEqual(legacyParsed.searchPosition, .center)
+        XCTAssertTrue(legacyDiagnostics.isEmpty)
     }
 
     func testWebAppBrowserValidation() {

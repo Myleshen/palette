@@ -3,12 +3,12 @@ import Foundation
 import PaletteCore
 import Security
 
-/// Encrypted, six-hour cache for Bitwarden vault listings.
+/// Encrypted, six-hour cache for Bitwarden vault listings and the CLI session.
 ///
 /// The vault payload is personal data, so it never lands on disk in plaintext.
-/// A random key lives in the login Keychain and the cached JSON is sealed with
-/// AES-GCM. The cache is scoped to a CLI profile so test and real vaults cannot
-/// read each other's data.
+/// A random 32-byte key is stored beside the cache with `0600` permissions and
+/// both files are sealed with AES-GCM. The cache is scoped to a CLI profile so
+/// test and real vaults cannot read each other's data.
 public enum SecureVaultCache {
     public static let ttl: TimeInterval = 6 * 60 * 60
 
@@ -16,6 +16,11 @@ public enum SecureVaultCache {
         public var date: Date
         public var email: String?
         public var data: Data
+    }
+
+    public struct SessionSnapshot: Sendable {
+        public var date: Date
+        public var session: String
     }
 
     private struct Envelope: Codable {
@@ -32,7 +37,39 @@ public enum SecureVaultCache {
     }
 
     public static func load(scope: String, now: Date = Date()) -> Snapshot? {
-        let url = fileURL(scope: scope)
+        guard let stored = loadSnapshot(scope: scope, suffix: "", now: now) else { return nil }
+        return Snapshot(date: stored.date, email: stored.email, data: stored.data)
+    }
+
+    public static func save(data: Data, email: String?, scope: String) {
+        saveSnapshot(data: data, email: email, scope: scope, suffix: "")
+    }
+
+    public static func remove(scope: String) {
+        try? FileManager.default.removeItem(at: fileURL(scope: scope))
+    }
+
+    /// The CLI session key lives in the same encrypted envelope as the vault
+    /// snapshot, under its own file. It expires with the six-hour cache so a
+    /// restart within that window does not ask for the master password again.
+    public static func loadSession(scope: String, now: Date = Date()) -> SessionSnapshot? {
+        guard let stored = loadSnapshot(scope: scope, suffix: "-session", now: now),
+              let session = String(data: stored.data, encoding: .utf8),
+              !session.isEmpty else { return nil }
+        return SessionSnapshot(date: stored.date, session: session)
+    }
+
+    public static func saveSession(_ session: String, scope: String) {
+        guard !session.isEmpty else { return }
+        saveSnapshot(data: Data(session.utf8), email: nil, scope: scope, suffix: "-session")
+    }
+
+    public static func removeSession(scope: String) {
+        try? FileManager.default.removeItem(at: fileURL(scope: scope, suffix: "-session"))
+    }
+
+    private static func loadSnapshot(scope: String, suffix: String, now: Date) -> Snapshot? {
+        let url = fileURL(scope: scope, suffix: suffix)
         guard let sealed = try? Data(contentsOf: url),
               let key = cacheKey(),
               let box = try? AES.GCM.SealedBox(combined: sealed),
@@ -48,12 +85,12 @@ public enum SecureVaultCache {
         return Snapshot(date: saved, email: envelope.email, data: envelope.data)
     }
 
-    public static func save(data: Data, email: String?, scope: String) {
+    private static func saveSnapshot(data: Data, email: String?, scope: String, suffix: String) {
         guard let key = cacheKey(), !data.isEmpty else { return }
         let envelope = Envelope(saved: Date().timeIntervalSince1970, email: email, data: data)
         guard let clear = try? JSONEncoder().encode(envelope),
               let sealed = try? AES.GCM.seal(clear, using: key).combined else { return }
-        let url = fileURL(scope: scope)
+        let url = fileURL(scope: scope, suffix: suffix)
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
@@ -67,16 +104,12 @@ public enum SecureVaultCache {
         }
     }
 
-    public static func remove(scope: String) {
-        try? FileManager.default.removeItem(at: fileURL(scope: scope))
-    }
-
     private static func directory() -> URL {
         PalettePaths.resolve().cacheDir.appendingPathComponent("Bitwarden", isDirectory: true)
     }
 
-    private static func fileURL(scope: String) -> URL {
-        directory().appendingPathComponent(String(scope.prefix(32)) + ".bin")
+    private static func fileURL(scope: String, suffix: String = "") -> URL {
+        directory().appendingPathComponent(String(scope.prefix(32)) + suffix + ".bin")
     }
 
     private static func cacheKey() -> SymmetricKey? {

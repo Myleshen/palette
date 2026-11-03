@@ -82,10 +82,17 @@ struct SettingsView: View {
                 Picker("Opens at", selection: $config.searchPosition) {
                     Text("Top").tag(SearchPosition.top)
                     Text("Center").tag(SearchPosition.center)
-                    Text("Bottom").tag(SearchPosition.bottom)
                 }
                 .pickerStyle(.segmented)
-                Text("Top drops down from the menu bar, Center opens in the middle, and Bottom rises from the bottom with the search field and tabs underneath the results.")
+                Text("Top drops down from the menu bar; Center opens in the middle of the screen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Search bar", selection: $config.searchStyle) {
+                    Text("Classic").tag(SearchStyle.classic)
+                    Text("Siri-style pill").tag(SearchStyle.pill)
+                }
+                .pickerStyle(.segmented)
+                Text("The pill rounds the search field, tabs, rows, and panel together; Classic keeps the original layout.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Show applications as a grid", isOn: $config.appGrid)
@@ -95,9 +102,6 @@ struct SettingsView: View {
                     Text("Alphabetical").tag(AppSort.alphabetical)
                     Text("Most used").tag(AppSort.frequent)
                 }
-                Text("Grid is only used for an empty, unprefixed query. With Bottom, the tabs and list stack above the search field.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

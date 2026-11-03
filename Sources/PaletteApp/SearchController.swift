@@ -34,6 +34,7 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public private(set) var previewEnabled = false
     @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
+    public var searchStyle: SearchStyle { configuration.searchStyle }
 
     public var panel: PanelController?
     public var onReload: (() -> Void)?

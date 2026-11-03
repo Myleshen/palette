@@ -23,4 +23,25 @@ final class SecureVaultCacheTests: XCTestCase {
             SecureVaultCache.scope(environment: ["BITWARDENCLI_APPDATA_DIR": "/tmp/b"])
         )
     }
+
+    func testSessionRoundTripAndSixHourExpiry() throws {
+        let scope = "palette-session-\(UUID().uuidString)"
+        defer {
+            SecureVaultCache.removeSession(scope: scope)
+            SecureVaultCache.remove(scope: scope)
+        }
+        SecureVaultCache.saveSession("session-key-123", scope: scope)
+        let loaded = try XCTUnwrap(SecureVaultCache.loadSession(scope: scope))
+        XCTAssertEqual(loaded.session, "session-key-123")
+
+        // The session and the vault snapshot must not share a file.
+        let payload = Data(#"[{"id":"1"}]"#.utf8)
+        SecureVaultCache.save(data: payload, email: "test@example.com", scope: scope)
+        XCTAssertEqual(try XCTUnwrap(SecureVaultCache.load(scope: scope)).data, payload)
+        XCTAssertEqual(try XCTUnwrap(SecureVaultCache.loadSession(scope: scope)).session, "session-key-123")
+
+        let expired = Date().addingTimeInterval(SecureVaultCache.ttl + 1)
+        XCTAssertNil(SecureVaultCache.loadSession(scope: scope, now: expired))
+        XCTAssertNil(SecureVaultCache.loadSession(scope: scope), "An expired session should be deleted")
+    }
 }

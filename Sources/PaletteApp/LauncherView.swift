@@ -155,6 +155,7 @@ struct ItemIconView: View {
 struct BadgeView: View {
     var text: String
     var theme: Theme
+    var pill: Bool = false
 
     var body: some View {
         Text(text.uppercased())
@@ -163,7 +164,7 @@ struct BadgeView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(theme.color(theme.palette.badgeBg).opacity(0.8))
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 4, style: .continuous)))
     }
 }
 
@@ -173,6 +174,7 @@ struct ResultRow: View {
     var terms: [String]
     var showProvider: Bool
     var theme: Theme
+    var pill: Bool = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -198,7 +200,7 @@ struct ResultRow: View {
             }
             Spacer(minLength: 8)
             if let badge = item.badge {
-                BadgeView(text: badge, theme: theme)
+                BadgeView(text: badge, theme: theme, pill: pill)
             }
             if showProvider, let name = item.providerName, !name.isEmpty, item.providerID != "apps" {
                 Text(name)
@@ -210,7 +212,7 @@ struct ResultRow: View {
         .padding(.horizontal, 10)
         .frame(height: CGFloat(theme.effectiveRowHeight))
         .background(selectionBackground)
-        .contentShape(Rectangle())
+        .contentShape(pill ? AnyShape(Capsule()) : AnyShape(Rectangle()))
     }
 
     @ViewBuilder
@@ -229,13 +231,21 @@ struct ResultRow: View {
                 }
                 .padding(.leading, 2)
             case "outline":
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
+                if pill {
+                    Capsule().strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
+                } else {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
+                }
             case "none":
                 Color.clear
             default:
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(color.opacity(0.95))
+                if pill {
+                    Capsule().fill(color.opacity(0.95))
+                } else {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(color.opacity(0.95))
+                }
             }
         } else {
             Color.clear
@@ -247,6 +257,7 @@ struct ActionRow: View {
     var action: PaletteAction
     var selected: Bool
     var theme: Theme
+    var pill: Bool = false
 
     private var actionIcon: String {
         if action.concealed { return "lock.fill" }
@@ -293,7 +304,7 @@ struct ActionRow: View {
         .padding(.horizontal, 10)
         .frame(height: CGFloat(theme.effectiveRowHeight))
         .background(selectionBackground)
-        .contentShape(Rectangle())
+        .contentShape(pill ? AnyShape(Capsule()) : AnyShape(Rectangle()))
     }
 
     @ViewBuilder
@@ -312,13 +323,21 @@ struct ActionRow: View {
                 }
                 .padding(.leading, 2)
             case "outline":
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
+                if pill {
+                    Capsule().strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
+                } else {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
+                }
             case "none":
                 Color.clear
             default:
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(color.opacity(0.95))
+                if pill {
+                    Capsule().fill(color.opacity(0.95))
+                } else {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(color.opacity(0.95))
+                }
             }
         } else {
             Color.clear
@@ -333,36 +352,36 @@ struct LauncherRootView: View {
     @FocusState private var promptFocused: Bool
 
     private var theme: Theme { themeManager.theme }
+    private var isPill: Bool { controller.searchStyle == .pill }
+    private var panelRadius: CGFloat {
+        isPill ? 30 : CGFloat(theme.window.cornerRadius)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            if controller.searchPosition == .bottom {
-                content
-                tabBar
+            searchBar
+            if !isPill {
                 Rectangle()
                     .fill(theme.color(theme.palette.separator))
                     .frame(height: 1)
-                searchBar
-                if theme.footer.show {
-                    footer
-                }
-            } else {
-                searchBar
-                Rectangle()
-                    .fill(theme.color(theme.palette.separator))
-                    .frame(height: 1)
-                tabBar
-                content
-                if theme.footer.show {
-                    footer
-                }
+            }
+            tabBar
+                .background(
+                    Capsule()
+                        .fill(theme.color(theme.palette.elevated).opacity(isPill ? 0.5 : 0))
+                        .padding(.horizontal, isPill ? 10 : 0)
+                        .padding(.vertical, isPill ? 2 : 0)
+                )
+            content
+            if theme.footer.show {
+                footer
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(theme.color(theme.palette.bg).opacity(0.72))
-        .clipShape(RoundedRectangle(cornerRadius: CGFloat(theme.window.cornerRadius), style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: panelRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: CGFloat(theme.window.cornerRadius), style: .continuous)
+            RoundedRectangle(cornerRadius: panelRadius, style: .continuous)
                 .strokeBorder(theme.color(theme.palette.border).opacity(0.55), lineWidth: CGFloat(theme.window.borderWidth))
         )
         .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
@@ -421,9 +440,11 @@ struct LauncherRootView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
             }
-            Rectangle()
-                .fill(theme.color(theme.palette.separator).opacity(0.6))
-                .frame(height: 1)
+            if !isPill {
+                Rectangle()
+                    .fill(theme.color(theme.palette.separator).opacity(0.6))
+                    .frame(height: 1)
+            }
         }
     }
 
@@ -482,8 +503,25 @@ struct LauncherRootView: View {
                     .clipShape(Capsule())
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, controller.searchStyle == .pill ? 22 : 16)
         .frame(height: CGFloat(theme.search.height))
+        .background(
+            Capsule()
+                .fill(theme.color(theme.palette.elevated).opacity(controller.searchStyle == .pill ? 0.92 : 0))
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(
+                    theme.color(theme.palette.accent).opacity(controller.searchStyle == .pill ? 0.45 : 0),
+                    lineWidth: 1
+                )
+        )
+        .shadow(
+            color: theme.color(theme.palette.accent).opacity(controller.searchStyle == .pill ? 0.16 : 0),
+            radius: controller.searchStyle == .pill ? 12 : 0,
+            y: 2
+        )
+        .padding(.horizontal, controller.searchStyle == .pill ? 10 : 0)
     }
 
     @ViewBuilder
@@ -532,7 +570,8 @@ struct LauncherRootView: View {
                                     selected: index == controller.selectionIndex,
                                     terms: controller.highlightTerms,
                                     showProvider: controller.scopeLabel == nil,
-                                    theme: theme
+                                    theme: theme,
+                                    pill: isPill
                                 )
                                 .id(item.stableID)
                                 .onTapGesture { controller.activate(index) }
@@ -582,10 +621,18 @@ struct LauncherRootView: View {
                         .frame(height: 78)
                         .padding(.horizontal, 2)
                         .background(
-                            RoundedRectangle(cornerRadius: 9)
-                                .fill(index == controller.selectionIndex
-                                      ? theme.color(theme.states.selected.bg ?? theme.palette.selectionBg)
-                                      : Color.clear)
+                            Group {
+                                if isPill {
+                                    Capsule().fill(index == controller.selectionIndex
+                                        ? theme.color(theme.states.selected.bg ?? theme.palette.selectionBg)
+                                        : Color.clear)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 9)
+                                        .fill(index == controller.selectionIndex
+                                              ? theme.color(theme.states.selected.bg ?? theme.palette.selectionBg)
+                                              : Color.clear)
+                                }
+                            }
                         )
                         .contentShape(Rectangle())
                         .id(item.stableID)
@@ -632,7 +679,8 @@ struct LauncherRootView: View {
                             ActionRow(
                                 action: action,
                                 selected: index == controller.actionIndex,
-                                theme: theme
+                                theme: theme,
+                                pill: isPill
                             )
                             .id(action.id)
                             .onTapGesture {

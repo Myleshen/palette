@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.7.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.7.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -166,10 +166,16 @@ files by hand still works, then press `⌘R`.
 
 ### Search position
 
-`search_position = "top" | "center" | "bottom"` controls where the panel opens.
-With `bottom`, the results and provider tabs stack above the search field and the
-panel anchors to the bottom of the screen; `center` keeps the top-first layout
-but opens the panel in the middle.
+`search_position = "top" | "center"` controls where the panel opens. `center`
+keeps the top-first layout but opens the panel in the middle of the screen.
+The older `bottom` value is accepted for compatibility and now maps to
+`center`.
+
+`search_style = "classic" | "pill"` changes the launcher chrome. Classic is the
+original flat layout. Pill draws the search field and tab rail as rounded,
+softly glowing capsules, gives the result and action selections capsule shapes,
+and rounds the panel more — the Siri-style look throughout. Classic remains the
+default.
 
 ### App grid
 
@@ -208,6 +214,12 @@ never recorded.
 
 Values copied from Bitwarden are always written as concealed and clear after 30
 seconds, so they never enter Palette’s clipboard history.
+
+The vault listing and the CLI session key are sealed with AES-GCM under
+`~/Library/Caches/Palette/Bitwarden` for six hours, scoped to the active CLI
+profile. Restarting Palette inside that window does not ask for the master
+password again; **Refresh Bitwarden Cache** forces a fresh read without logging
+you out. The master password itself is never stored.
 
 ### Bitwarden
 
@@ -264,7 +276,8 @@ editor_open_with = "neovide"
 clipboard_hotkey = "opt+v"
 app_grid = false
 app_grid_columns = 6
-search_position = "top"        # top | center | bottom
+search_position = "top"        # top | center
+search_style = "classic"       # classic | pill
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent
 

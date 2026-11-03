@@ -23,7 +23,11 @@ public struct ThemeSelection: Sendable, Equatable {
 }
 
 public enum SearchPosition: String, Sendable, Equatable, CaseIterable {
-    case top, center, bottom
+    case top, center
+}
+
+public enum SearchStyle: String, Sendable, Equatable, CaseIterable {
+    case classic, pill
 }
 
 public struct WebSearchEngine: Sendable, Equatable, Identifiable {
@@ -77,6 +81,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var webSearchEnabled: Bool
     public var webSearchEngines: [WebSearchEngine]
     public var searchPosition: SearchPosition
+    public var searchStyle: SearchStyle
     public var webAppBrowser: String
     public var appSort: AppSort
 
@@ -96,6 +101,7 @@ public struct PaletteConfig: Sendable, Equatable {
         webSearchEnabled: Bool = true,
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
         searchPosition: SearchPosition = .top,
+        searchStyle: SearchStyle = .classic,
         webAppBrowser: String = "Helium",
         appSort: AppSort = .alphabetical
     ) {
@@ -114,6 +120,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.webSearchEnabled = webSearchEnabled
         self.webSearchEngines = webSearchEngines
         self.searchPosition = searchPosition
+        self.searchStyle = searchStyle
         self.webAppBrowser = webAppBrowser
         self.appSort = appSort
     }
@@ -252,9 +259,19 @@ public enum ConfigLoader {
         if let columns = table.int("app_grid_columns") {
             config.appGridColumns = min(8, max(3, columns))
         }
-        if let position = table.str("search_position"),
-           let parsed = SearchPosition(rawValue: position.lowercased()) {
-            config.searchPosition = parsed
+        if let position = table.str("search_position") {
+            // `bottom` was removed in 1.7.1; keep old configs working by
+            // treating them as centered instead of dropping the setting.
+            let value = position.lowercased()
+            if value == "bottom" {
+                config.searchPosition = .center
+            } else if let parsed = SearchPosition(rawValue: value) {
+                config.searchPosition = parsed
+            }
+        }
+        if let style = table.str("search_style"),
+           let parsed = SearchStyle(rawValue: style.lowercased()) {
+            config.searchStyle = parsed
         }
         if let browser = table.str("web_app_browser"), !browser.isEmpty {
             config.webAppBrowser = browser
@@ -366,9 +383,11 @@ public enum ConfigLoader {
         app_grid = false
         app_grid_columns = 6
 
-        # Where the launcher opens: top | center | bottom. The search field and
-        # provider tabs follow this position.
+        # Where the launcher opens: top | center.
         search_position = "top"
+
+        # Search field shape: classic | pill (a rounded Siri-style capsule).
+        search_style = "classic"
 
         # Chromium-based browser used for web apps. Defaults to Helium.
         web_app_browser = "Helium"
@@ -450,6 +469,7 @@ public enum ConfigWriter {
         out.append("app_grid = \(config.appGrid)")
         out.append("app_grid_columns = \(config.appGridColumns)")
         out.append("search_position = \(quote(config.searchPosition.rawValue))")
+        out.append("search_style = \(quote(config.searchStyle.rawValue))")
         out.append("web_app_browser = \(quote(config.webAppBrowser))")
         out.append("app_sort = \(quote(config.appSort.rawValue))")
         out.append("")
