@@ -156,9 +156,6 @@ struct SettingsView: View {
                 Text("The pill separates the search capsule from the content card and rounds the active elements; Classic keeps the original layout.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Toggle("Show applications as a grid", isOn: $config.appGrid)
-                Stepper("Grid columns: \(config.appGridColumns)", value: $config.appGridColumns, in: 3...8)
-                    .disabled(!config.appGrid)
                 Picker("App order", selection: $config.appSort) {
                     Text("Alphabetical").tag(AppSort.alphabetical)
                     Text("Most used").tag(AppSort.frequent)
@@ -330,7 +327,6 @@ struct SettingsView: View {
         config.webSearchEngines = engines.filter {
             !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && $0.urlTemplate.contains("{query}")
         }
-        config.appGridColumns = min(8, max(3, config.appGridColumns))
         onSave(config)
     }
 }

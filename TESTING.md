@@ -124,16 +124,16 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 42 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 43 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
-  breadth-first paths, default-off app grid, browser validation, and the
+  breadth-first paths, browser validation, and the
   shortcut recorder, Bitwarden session classification, encrypted cache expiry
   and refresh, path filtering, and use counts).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.7.9). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.7.10). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -150,6 +150,9 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   on the same Carbon target. After the shared-router fix, the brew-installed
   1.4.1 opened the launcher with `⌥Space` and the clipboard browser with `⌥V` in
   the same session, with Raycast running.
+- v1.7.10 checks: app grid mode is gone; the empty query renders the same
+  single-list layout as every provider, and legacy `app_grid` keys are ignored.
+  `swift test`: 43 tests, 0 failures.
 - v1.7.9 checks: image paste logged `target=kitty modifiers=262144` (Ctrl+V) and
   `target=TextEdit modifiers=1048576` (Cmd+V); a Finder-launched build logged
   `Accessibility trusted=true` after the stable-signature grant. Settings

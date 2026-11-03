@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.7.9. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.7.10. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -182,12 +182,6 @@ footer; the active tab, result, and action use soft accent pills. The window
 itself is transparent, so each surface carries its own border and shadow.
 Pill is the default; Classic remains available in Settings.
 
-### App grid
-
-The app list is a plain compact list by default. With an empty query, set
-`app_grid = true` in Settings or `config.toml` to browse applications as an icon
-grid; arrow keys move by cell, row, or column and `⏎` opens.
-
 ### Pinned items
 
 `⌘K` on any result includes **Pin to Palette**; every pinned row also offers
@@ -279,8 +273,6 @@ terminal = "kitty"
 terminal_app = "kitty"
 editor_open_with = "neovide"
 clipboard_hotkey = "opt+v"
-app_grid = false
-app_grid_columns = 6
 search_position = "top"        # top | center
 search_style = "pill"          # pill (default) | classic
 web_app_browser = "Helium"

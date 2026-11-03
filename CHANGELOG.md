@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.10 — 2026-11-03
+
+### Removed
+
+- **App grid mode is gone.** Every provider, including applications, now uses
+  the single list layout. `app_grid` and `app_grid_columns` are no longer read
+  or written; the keys are simply ignored, with no migration or compatibility
+  path. Arrow keys always move one row at a time.
+
 ## 1.7.9 — 2026-11-03
 
 ### Changed

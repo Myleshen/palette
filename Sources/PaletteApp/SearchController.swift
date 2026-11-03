@@ -82,19 +82,6 @@ public final class SearchController: ObservableObject, HostBridge {
         return items[selectionIndex]
     }
 
-    public var isGridMode: Bool {
-        configuration.appGrid
-            && prompt == nil
-            && !actionsMode
-            && scopeLabel == nil
-            && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !items.isEmpty
-    }
-
-    public var gridColumns: Int {
-        configuration.appGridColumns
-    }
-
     public func replace(registry: ProviderRegistry, configuration: PaletteConfig) {
         self.registry = registry
         self.configuration = configuration
@@ -362,17 +349,11 @@ public final class SearchController: ObservableObject, HostBridge {
 
         switch keyCode {
         case 125:
-            moveSelection(by: isGridMode ? configuration.appGridColumns : 1)
+            moveSelection(by: 1)
             return true
         case 126:
-            moveSelection(by: isGridMode ? -configuration.appGridColumns : -1)
+            moveSelection(by: -1)
             return true
-        case 123, 124:
-            if isGridMode, !actionsMode {
-                moveSelection(by: keyCode == 123 ? -1 : 1)
-                return true
-            }
-            return false
         case 36, 76:
             if actionsMode { executeAction() } else { executePrimary() }
             return true
@@ -794,11 +775,6 @@ public final class SearchController: ObservableObject, HostBridge {
             content = 38 + rows(actionItems.count)
         } else if items.isEmpty {
             content = 58
-        } else if isGridMode {
-            let columns = configuration.appGridColumns
-            let visible = min(items.count, columns * 4)
-            let gridRows = Int(ceil(Double(visible) / Double(columns)))
-            content = CGFloat(gridRows) * 86 + CGFloat(max(0, gridRows - 1)) * 8 + 12
         } else {
             content = rows(items.count)
         }

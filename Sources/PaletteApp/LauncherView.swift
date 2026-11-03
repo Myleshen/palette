@@ -657,8 +657,6 @@ struct LauncherRootView: View {
         Group {
             if controller.items.isEmpty {
                 emptyState
-            } else if controller.isGridMode {
-                gridView
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -702,7 +700,7 @@ struct LauncherRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
-            if isPill, !controller.isGridMode, !controller.items.isEmpty {
+            if isPill, !controller.items.isEmpty {
                 LinearGradient(
                     colors: [
                         theme.color(theme.palette.bg).opacity(0),
@@ -715,67 +713,6 @@ struct LauncherRootView: View {
                 .allowsHitTesting(false)
             }
         }
-    }
-
-    private var gridView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVGrid(
-                    columns: Array(
-                        repeating: GridItem(.flexible(), spacing: 8),
-                        count: controller.gridColumns
-                    ),
-                    spacing: 8
-                ) {
-                    ForEach(Array(controller.items.enumerated()), id: \.element.stableID) { index, item in
-                        VStack(spacing: 4) {
-                            ItemIconView(item: item, theme: theme, size: 40)
-                            Text(item.title)
-                                .font(theme.font(size: 11))
-                                .foregroundColor(theme.color(
-                                    index == controller.selectionIndex
-                                        ? (theme.states.selected.fg ?? theme.palette.selectionFg)
-                                        : theme.palette.fg
-                                ))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 78)
-                        .padding(.horizontal, 2)
-                        .background(
-                            Group {
-                                if isPill {
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(index == controller.selectionIndex
-                                            ? theme.color(theme.states.selected.bg ?? theme.palette.selectionBg)
-                                            : Color.clear)
-                                } else {
-                                    RoundedRectangle(cornerRadius: 9)
-                                        .fill(index == controller.selectionIndex
-                                              ? theme.color(theme.states.selected.bg ?? theme.palette.selectionBg)
-                                              : Color.clear)
-                                }
-                            }
-                        )
-                        .contentShape(Rectangle())
-                        .id(item.stableID)
-                        .onTapGesture { controller.activate(index) }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-            }
-            .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
-            .onChange(of: controller.selectionIndex) { _, _ in
-                guard controller.items.indices.contains(controller.selectionIndex) else { return }
-                let stableID = controller.items[controller.selectionIndex].stableID
-                withAnimation(theme.scrollAnimation) {
-                    proxy.scrollTo(stableID, anchor: .center)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var actionsView: some View {

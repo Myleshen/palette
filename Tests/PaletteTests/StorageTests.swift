@@ -84,7 +84,7 @@ final class StorageTests: XCTestCase {
         XCTAssertTrue(first)
         let duplicate = try await store.insertClipboardFiles(paths: paths, thumbnail: thumbnail, maxEntries: 10)
         XCTAssertFalse(duplicate)
-        try await store.insertClipboard(text: "hello", maxEntries: 10)
+        _ = try await store.insertClipboard(text: "hello", maxEntries: 10)
 
         let files = try await store.clipboardEntries(limit: 10, kind: .files)
         XCTAssertEqual(files.count, 1)

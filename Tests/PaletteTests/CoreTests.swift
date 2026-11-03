@@ -118,7 +118,6 @@ final class CoreTests: XCTestCase {
 
     func testParityDefaultsAndWebSearchConfigRoundTrip() throws {
         let config = PaletteConfig()
-        XCTAssertFalse(config.appGrid)
         XCTAssertEqual(config.clipboard.maxEntries, 5_000)
         XCTAssertEqual(config.webSearchEngines.count, 4)
         XCTAssertEqual(config.clipboardHotkey, "opt+v")
@@ -128,7 +127,6 @@ final class CoreTests: XCTestCase {
         let table = try TOMLTable(string: ConfigWriter.render(config))
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
-        XCTAssertFalse(parsed.appGrid)
         XCTAssertEqual(parsed.clipboard.maxEntries, 5_000)
         XCTAssertEqual(parsed.webSearchEngines.map(\.name), config.webSearchEngines.map(\.name))
         XCTAssertEqual(parsed.clipboardHotkey, config.clipboardHotkey)
@@ -157,6 +155,14 @@ final class CoreTests: XCTestCase {
         let legacyParsed = try ConfigLoader.parse(legacy, diagnostics: &legacyDiagnostics)
         XCTAssertEqual(legacyParsed.searchPosition, .center)
         XCTAssertTrue(legacyDiagnostics.isEmpty)
+    }
+
+    func testLegacyGridKeysAreIgnored() throws {
+        let legacy = try TOMLTable(string: "app_grid = true\napp_grid_columns = 8")
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(legacy, diagnostics: &diagnostics)
+        XCTAssertEqual(parsed, PaletteConfig())
+        XCTAssertTrue(diagnostics.isEmpty)
     }
 
     func testWebAppBrowserValidation() {

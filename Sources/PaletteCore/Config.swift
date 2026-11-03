@@ -76,8 +76,6 @@ public struct PaletteConfig: Sendable, Equatable {
     public var theme: ThemeSelection
     public var scopes: [String: Scope]
     public var clipboard: ClipboardConfig
-    public var appGrid: Bool
-    public var appGridColumns: Int
     public var webSearchEnabled: Bool
     public var webSearchEngines: [WebSearchEngine]
     public var searchPosition: SearchPosition
@@ -96,8 +94,6 @@ public struct PaletteConfig: Sendable, Equatable {
         theme: ThemeSelection = ThemeSelection(),
         scopes: [String: Scope] = ["projects": .projects, "home": .home],
         clipboard: ClipboardConfig = ClipboardConfig(),
-        appGrid: Bool = false,
-        appGridColumns: Int = 6,
         webSearchEnabled: Bool = true,
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
         searchPosition: SearchPosition = .top,
@@ -115,8 +111,6 @@ public struct PaletteConfig: Sendable, Equatable {
         self.theme = theme
         self.scopes = scopes
         self.clipboard = clipboard
-        self.appGrid = appGrid
-        self.appGridColumns = min(8, max(3, appGridColumns))
         self.webSearchEnabled = webSearchEnabled
         self.webSearchEngines = webSearchEngines
         self.searchPosition = searchPosition
@@ -253,12 +247,6 @@ public enum ConfigLoader {
         if let editor = table.str("editor_open_with"), !editor.isEmpty {
             config.editorOpenWith = editor
         }
-        if let appGrid = table.bool("app_grid") {
-            config.appGrid = appGrid
-        }
-        if let columns = table.int("app_grid_columns") {
-            config.appGridColumns = min(8, max(3, columns))
-        }
         if let position = table.str("search_position") {
             // `bottom` was removed in 1.7.1; keep old configs working by
             // treating them as centered instead of dropping the setting.
@@ -378,11 +366,6 @@ public enum ConfigLoader {
         # App or absolute command used by /neo and /neof.
         editor_open_with = "neovide"
 
-        # Empty query shows the apps as a grid; left/right/up/down navigate it.
-        # Set app_grid = true to browse applications as an icon grid.
-        app_grid = false
-        app_grid_columns = 6
-
         # Where the launcher opens: top | center.
         search_position = "top"
 
@@ -466,8 +449,6 @@ public enum ConfigWriter {
         out.append("terminal = \(quote(config.terminal))")
         out.append("terminal_app = \(quote(config.terminalApp))")
         out.append("editor_open_with = \(quote(config.editorOpenWith))")
-        out.append("app_grid = \(config.appGrid)")
-        out.append("app_grid_columns = \(config.appGridColumns)")
         out.append("search_position = \(quote(config.searchPosition.rawValue))")
         out.append("search_style = \(quote(config.searchStyle.rawValue))")
         out.append("web_app_browser = \(quote(config.webAppBrowser))")
