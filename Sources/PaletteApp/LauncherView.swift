@@ -451,7 +451,7 @@ struct LauncherRootView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(theme.color(theme.palette.bg).opacity(0.96))
+                .fill(theme.color(theme.palette.bg))
         )
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
@@ -480,8 +480,8 @@ struct LauncherRootView: View {
                         tabChip(tab)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 4) {
@@ -518,7 +518,7 @@ struct LauncherRootView: View {
                 ? theme.palette.accent
                 : theme.palette.fgMuted))
             .padding(.horizontal, isPill ? 8 : 10)
-            .padding(.vertical, isPill ? 5 : 4)
+            .padding(.vertical, isPill ? 8 : 4)
             .background(
                 Capsule().fill(
                     selected
@@ -617,7 +617,7 @@ struct LauncherRootView: View {
         .frame(height: isPill ? CGFloat(theme.search.height) - 12 : CGFloat(theme.search.height))
         .background(
             Capsule()
-                .fill(theme.color(theme.palette.surface).opacity(isPill ? 0.96 : 0))
+                .fill(theme.color(theme.palette.surface).opacity(isPill ? 1 : 0))
         )
         .overlay(
             Capsule()

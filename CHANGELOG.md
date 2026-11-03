@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.7 — 2026-11-03
+
+### Changed
+
+- More vertical padding on provider tabs and the tab strip, plus a clear gap
+  between wrapped rows. Tabs remain two rows with every provider visible.
+- Pill cards are now fully opaque. The previous 96% fill let high-contrast text
+  from windows behind the launcher ghost through the list.
+- The list keeps its bottom fade so the scroll edge does not end on a hard cut.
+
 ## 1.7.6 — 2026-11-03
 
 ### Fixed

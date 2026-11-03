@@ -801,7 +801,7 @@ public final class SearchController: ObservableObject, HostBridge {
         if configuration.searchStyle == .pill {
             // Two flow rows (three only with an unusually large provider set)
             // plus the clipboard filter row.
-            tabs = activeTabID == "clip" ? 91 : 65
+            tabs = activeTabID == "clip" ? 110 : 82
         } else {
             tabs = CGFloat(33 + (activeTabID == "clip" ? 27 : 0))
         }
