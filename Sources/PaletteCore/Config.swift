@@ -100,6 +100,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var typography: TypographyConfig
     public var providerAliases: [String: [String]]
     public var providerOrder: [String]
+    public var disabledProviders: [String]
 
     public init(
         hotkey: String = "opt+space",
@@ -121,7 +122,8 @@ public struct PaletteConfig: Sendable, Equatable {
         ask: AskConfig = AskConfig(),
         typography: TypographyConfig = TypographyConfig(),
         providerAliases: [String: [String]] = [:],
-        providerOrder: [String] = []
+        providerOrder: [String] = [],
+        disabledProviders: [String] = []
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -143,6 +145,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.typography = typography
         self.providerAliases = providerAliases
         self.providerOrder = providerOrder
+        self.disabledProviders = disabledProviders
     }
 }
 
@@ -311,6 +314,9 @@ public enum ConfigLoader {
 
         if let providers = table.table("providers") {
             config.providerOrder = providers.strArray("order") ?? []
+            config.disabledProviders = (providers.strArray("disabled") ?? [])
+                .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                .filter { !$0.isEmpty && $0 != "apps" }
             if let aliases = providers.table("aliases") {
                 var parsed: [String: [String]] = [:]
                 for key in aliases.keys {
@@ -466,6 +472,7 @@ public enum ConfigLoader {
         # Provider tab order and optional trigger aliases.
         [providers]
         order = []
+        disabled = []
 
         [providers.aliases]
 
@@ -565,6 +572,7 @@ public enum ConfigWriter {
         out.append("")
         out.append("[providers]")
         out.append("order = [\(config.providerOrder.map(quote).joined(separator: ", "))]")
+        out.append("disabled = [\(config.disabledProviders.map(quote).joined(separator: ", "))]")
         out.append("")
         out.append("[providers.aliases]")
         for id in config.providerAliases.keys.sorted() {

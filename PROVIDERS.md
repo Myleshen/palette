@@ -267,7 +267,6 @@ on the roadmap.
 | `cmd` | `cmd` | native | manifest commands from commands.toml |
 | `proj` | `proj` | native | devx projects/worktrees, ~/dev fallback |
 | `git` | `git` | native | repository status and safe Git actions |
-| `finder` | `finder` | native | actions for the current Finder selection |
 | `ask` | `ask` | native | one-shot AI Q&A over OpenCode Zen/Go or OpenAI; free models first |
 | `askh` | `askh` | native | retained Ask history with fuzzy search and metadata |
 | `web` | `web` | native | global web apps with optional Hammerspoon shortcuts |

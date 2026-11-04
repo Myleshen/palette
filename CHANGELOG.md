@@ -1,23 +1,18 @@
 # Changelog
 
-## 1.9.3 — 2026-11-04
+## 1.9.4 — 2026-11-04
 
-### Fixed
+### Changed
 
-- `/finder` now reads the Finder selection through macOS Accessibility instead
-  of AppleScript. This removes the Automation prompt and the hang when the
-  AppleScript child process was waiting on Finder.
-- Finder actions can now compress selections (fixed `zip` arguments), create
-  files/folders, copy paths, reveal, and open in Terminal/Ghostty/Neovide.
-- Child-process timeouts now escalate from SIGTERM to SIGKILL, so a stuck tool
-  cannot leave Palette "Searching…" forever.
+- Added per-provider enable/disable controls in Settings → Advanced. Disabled
+  providers disappear from the tab bar, Tab cycling, and trigger parsing.
+  `[providers] disabled = ["port"]` stores the same choice in config.toml.
 
 ### Verified
 
-- Selected `Package.swift` in Finder and `/finder` listed it; Copy Absolute
-  Paths put `/Users/myleshen/dev/palette-launcher/Package.swift` on the clipboard.
-- Compress created a real ZIP; New File and New Folder created real entries.
-- `swift test`: 66 tests, 0 failures.
+- `swift test`: 67 tests, 0 failures.
+- Registry test confirms a disabled provider is absent from tabs and its
+  trigger falls back to global search.
 
 ## 1.9.2 — 2026-11-03
 
@@ -73,8 +68,6 @@
   repositories when devx is absent.
 - **`/git`**: repository list with branch/dirty state plus stage all, commit,
   fast-forward pull, push, log, and LazyGit. No force-push or history rewriting.
-- **`/finder`**: actions for the current Finder selection, including Terminal/
-  Ghostty, Neovide, copy paths, reveal, compress, and new file/folder.
 - **Provider aliases and order**: extra trigger words and persisted tab order,
   editable in Settings with duplicate validation.
 

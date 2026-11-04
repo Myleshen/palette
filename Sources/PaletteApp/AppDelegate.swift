@@ -346,7 +346,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(CommandProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
         providers.append(ProjectProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
         providers.append(GitProvider(launcher: launcher, bridge: hostProxy))
-        providers.append(FinderProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
         for kind in BitwardenKind.allCases {
             providers.append(BitwardenProvider(
                 kind: kind,
@@ -395,6 +394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             prefix: configuration.providerPrefix,
             aliases: configuration.providerAliases,
             order: configuration.providerOrder,
+            disabled: configuration.disabledProviders,
             diagnostics: diagnostics
         )
         Log.shared.info("Registered providers: \(registry.providers.map { "\($0.descriptor.id)/\($0.descriptor.trigger ?? "-")" }.joined(separator: ", "))", source: "providers")

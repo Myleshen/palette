@@ -24,6 +24,7 @@ struct SettingsView: View {
     @State private var askKeyMessage: String?
     @State private var providerOrder: [String]
     @State private var aliases: [String: String]
+    @State private var disabledProviders: [String]
 
     private let themesDirectory: URL
     private let providerSummary: [String]
@@ -57,6 +58,7 @@ struct SettingsView: View {
             aliasState[provider.id] = (config.providerAliases[provider.id] ?? []).joined(separator: ", ")
         }
         _aliases = State(initialValue: aliasState)
+        _disabledProviders = State(initialValue: config.disabledProviders.filter { $0 != "apps" })
         self.themesDirectory = themesDirectory
         self.providerSummary = providerSummary
         self.providers = providers
@@ -412,6 +414,23 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("Enabled providers") {
+                Text("Turn off providers you do not use to shorten the tab bar. Apps stay enabled.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(allProviderIDs, id: \.self) { id in
+                    Toggle(providerName(id), isOn: Binding(
+                        get: { !disabledProviders.contains(id) },
+                        set: { enabled in
+                            if enabled {
+                                disabledProviders.removeAll { $0 == id }
+                            } else if !disabledProviders.contains(id) {
+                                disabledProviders.append(id)
+                            }
+                        }
+                    ))
+                }
+            }
             Section("Provider order") {
                 Text("Tabs and Tab cycling follow this order. Triggers stay stable; aliases are extra words for the same provider.")
                     .font(.caption)
@@ -495,6 +514,12 @@ struct SettingsView: View {
         providers.first(where: { $0.id == id })?.name ?? id
     }
 
+    private var allProviderIDs: [String] {
+        (providerOrder + disabledProviders).reduce(into: [String]()) { result, id in
+            if id != "apps", !result.contains(id) { result.append(id) }
+        }
+    }
+
     private func displayName(_ name: String) -> String {
         ThemeLoader.catalog(themesDirectory: themesDirectory).first(where: { $0.name == name })?.displayName
             ?? name.split(separator: "-").map { $0.capitalized }.joined(separator: " ")
@@ -561,6 +586,7 @@ struct SettingsView: View {
         }
         config.providerAliases = aliasMap
         config.providerOrder = providerOrder
+        config.disabledProviders = disabledProviders.filter { $0 != "apps" }
         onSave(config)
     }
 }

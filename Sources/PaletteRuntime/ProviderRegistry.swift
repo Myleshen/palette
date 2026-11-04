@@ -26,12 +26,15 @@ public final class ProviderRegistry: @unchecked Sendable {
         prefix: String,
         aliases: [String: [String]] = [:],
         order: [String] = [],
+        disabled: [String] = [],
         diagnostics initialDiagnostics: [Diagnostic] = []
     ) {
         var diagnostics = initialDiagnostics
+        let disabledIDs = Set(disabled.map { $0.lowercased() })
         var byID: [String: any PaletteProvider] = [:]
         for provider in providers {
             let id = provider.descriptor.id
+            if disabledIDs.contains(id.lowercased()), id != "apps" { continue }
             if byID[id] != nil {
                 diagnostics.append(Diagnostic(.warning, "Duplicate provider id '\(id)'; the later provider was ignored.", source: "providers"))
                 continue

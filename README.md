@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.9.3. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.9.4. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -131,7 +131,6 @@ trigger word:
 | `/cmd <query>` | commands from `~/.config/palette/commands.toml` |
 | `/proj <query>` | devx projects and worktrees, or `~/dev` fallback |
 | `/git <query>` | repositories with safe, focused Git actions |
-| `/finder <query>` | actions on the current Finder selection |
 | `/ask <question>` | one-shot answer from a configured AI endpoint |
 | `/askh <query>` | search retained Ask questions and answers |
 | `/web <query>` | saved web apps; type a domain to add one |
@@ -335,7 +334,7 @@ terminal = true
 confirm = false
 ```
 
-### Projects, ports, Git, Finder
+### Projects, ports, and Git
 
 - `/proj` lists devx projects and worktrees when devx is installed, with Open in
   Neovide, Open Terminal, Open Workspace, New/Remove Worktree, and Apply Config.
@@ -346,10 +345,6 @@ confirm = false
 - `/git` lists repositories and exposes status, branch, stage all, commit with a
   message, fast-forward-only pull, push, recent log, and LazyGit. Complex Git
   work still belongs in LazyGit; Palette never force-pushes or rewrites history.
-- `/finder` acts on the current Finder selection: open Terminal/Ghostty there,
-  open Neovide, copy absolute paths, reveal, compress, and create a file or
-  folder. It reads the selection through macOS Accessibility, so it uses the
-  same permission Palette already needs for direct paste; no Automation prompt.
 
 ### Typography
 
@@ -367,15 +362,18 @@ ui_size = 15
 mono_size = 13
 ```
 
-### Provider aliases and order
+### Provider aliases, order, and visibility
 
-`[providers]` stores tab order and extra trigger words. Order in Settings with
-the up/down buttons; aliases are comma-separated. The canonical trigger never
-changes. Duplicate aliases or triggers are rejected when saving.
+`[providers]` stores tab order, extra trigger words, and providers you want to
+hide. Turn providers on or off in Settings → Advanced; the tab bar and Tab
+cycling only include enabled providers. Order with the up/down buttons; aliases
+are comma-separated. The canonical trigger never changes. Duplicate aliases or
+triggers are rejected when saving.
 
 ```toml
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]
+disabled = []
 
 [providers.aliases]
 apps = ["launch", "a"]
@@ -413,6 +411,7 @@ mono_size = 0
 
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]
+disabled = []
 
 [providers.aliases]
 apps = ["launch"]

@@ -35,13 +35,24 @@ final class DeveloperWorkflowTests: XCTestCase {
         config.typography = TypographyConfig(uiFamily: "Avenir Next", monoFamily: "Menlo", uiSize: 15, monoSize: 13)
         config.providerAliases = ["apps": ["a", "launch"], "clip": ["cb"]]
         config.providerOrder = ["clip", "apps"]
+        config.disabledProviders = ["port"]
         let table = try TOMLTable(string: ConfigWriter.render(config))
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
         XCTAssertEqual(parsed.typography, config.typography)
         XCTAssertEqual(parsed.providerAliases["apps"] ?? [], ["a", "launch"])
         XCTAssertEqual(parsed.providerOrder, ["clip", "apps"])
+        XCTAssertEqual(parsed.disabledProviders, ["port"])
         XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testRegistrySkipsDisabledProviders() {
+        let apps = StubProvider(id: "apps", trigger: "apps", priority: 100)
+        let clip = StubProvider(id: "clip", trigger: "clip", priority: 10)
+        let port = StubProvider(id: "port", trigger: "port", priority: 5)
+        let registry = ProviderRegistry(providers: [apps, clip, port], prefix: "/", disabled: ["port"])
+        XCTAssertEqual(registry.providers.map(\.descriptor.id), ["apps", "clip"])
+        XCTAssertEqual(registry.parser.parse("/port 3000").scope, .global)
     }
 
     func testRegistryAliasesAndConfiguredOrder() {
