@@ -5,6 +5,7 @@ import PaletteCore
 import PalettePlatform
 import PaletteProviders
 import PaletteRuntime
+import ServiceManagement
 import SwiftUI
 
 final class HostBridgeProxy: HostBridge, @unchecked Sendable {
@@ -125,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         seedUserProviders()
         seedCommandsFile()
+        registerLoginItemOnFirstLaunch()
         launcher = LauncherService()
         pasteboard = PasteboardService()
         Log.shared.info("Accessibility trusted=\(pasteboard.isAccessibilityTrusted)", source: "app")
@@ -529,6 +531,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try CommandProvider.example.write(to: file, atomically: true, encoding: .utf8)
         } catch {
             Log.shared.warn("Could not seed commands.toml: \(error.localizedDescription)", source: "providers")
+        }
+    }
+
+    private func registerLoginItemOnFirstLaunch() {
+        // Seed once: after this the Settings toggle owns the login item, so
+        // turning it off sticks.
+        let bundlePath = Bundle.main.bundlePath
+        let isInstalled = bundlePath.hasPrefix("/Applications/")
+            || bundlePath.hasPrefix(NSHomeDirectory() + "/Applications/")
+        // A debug build must never become the login item or consume the seed.
+        guard isInstalled else { return }
+        let seeded = "loginItemSeeded"
+        guard !UserDefaults.standard.bool(forKey: seeded) else { return }
+        UserDefaults.standard.set(true, forKey: seeded)
+        // mainApp reports .notFound until it has been registered at least once.
+        guard SMAppService.mainApp.status != .enabled else { return }
+        do {
+            try SMAppService.mainApp.register()
+            Log.shared.info("Registered login item", source: "app")
+        } catch {
+            Log.shared.warn("Could not register login item: \(error.localizedDescription)", source: "app")
         }
     }
 

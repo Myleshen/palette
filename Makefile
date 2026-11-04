@@ -16,6 +16,8 @@ build:
 app: build
 	rm -rf "$(APP)"
 	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
+	@# Keep the dev build out of Spotlight so it does not shadow the installed app.
+	touch "$(BUILD_DIR)/.metadata_never_index"
 	cp "$(BINARY)" "$(APP)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
 	cp Resources/AppIcon.icns "$(APP)/Contents/Resources/AppIcon.icns"

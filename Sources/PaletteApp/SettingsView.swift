@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import CoreGraphics
+import ServiceManagement
 import SwiftUI
 import PaletteCore
 import PalettePlatform
@@ -25,6 +26,7 @@ struct SettingsView: View {
     @State private var providerOrder: [String]
     @State private var aliases: [String: String]
     @State private var disabledProviders: [String]
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     private let themesDirectory: URL
     private let providerSummary: [String]
@@ -168,6 +170,13 @@ struct SettingsView: View {
                     .controlSize(.small)
                 }
                 Text("Needed for direct paste and recording system shortcuts. A new install may require granting once; subsequent updates keep the same signature.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Startup") {
+                Toggle("Open at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
+                Text("Applies immediately. If macOS asks for approval, allow Palette under System Settings > General > Login Items.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -541,6 +550,19 @@ struct SettingsView: View {
         let models = AskModel.models(for: config.ask.endpoint)
         if !models.contains(where: { $0.id == config.ask.model }) {
             config.ask.model = models.first?.id ?? AskModel.defaultModel.id
+        }
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            saveError = "Could not update the login item: \(error.localizedDescription)"
+            launchAtLogin = SMAppService.mainApp.status == .enabled
         }
     }
 
