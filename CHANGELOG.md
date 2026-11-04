@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.0.2 — 2026-11-04
+
+### Changed
+
+- `/term` now attaches or creates a persistent Zellij session named **Palette**.
+  Closing the panel detaches the client; long-running commands keep going and
+  the next `/term` reattaches. Fish is the initial shell.
+- `/cmd` → **Run in Panel** waits for the Zellij session to be ready before
+  sending the command.
+
+### Verified
+
+- `zellij list-sessions` shows one `Palette` session.
+- Reopening `/term` reattached to the same session.
+- Terminal state showed the Zellij Palette tab, fish 4.9.3, and a live shell.
+- `swift test`: 70 tests, 0 failures.
+
 ## 2.0.1 — 2026-11-04
 
 ### Fixed

@@ -1306,16 +1306,29 @@ struct TerminalPane: NSViewRepresentable {
             stoppable.terminate()
         }
         DispatchQueue.main.async {
-            terminal.startProcess(
-                executable: "/bin/zsh",
-                args: ["-l"],
-                environment: nil,
-                execName: "zsh",
-                currentDirectory: NSHomeDirectory()
-            )
+            let fish = ToolLocator.shared.path(for: "fish") ?? "/bin/zsh"
+            if let zellij = ToolLocator.shared.path(for: "zellij") {
+                terminal.startProcess(
+                    executable: zellij,
+                    args: ["attach", "--create", "Palette", "--", fish, "-l"],
+                    environment: nil,
+                    execName: "zellij",
+                    currentDirectory: NSHomeDirectory()
+                )
+            } else {
+                terminal.startProcess(
+                    executable: fish,
+                    args: ["-l"],
+                    environment: nil,
+                    execName: (fish as NSString).lastPathComponent,
+                    currentDirectory: NSHomeDirectory()
+                )
+            }
             terminal.window?.makeFirstResponder(terminal)
             if let command = initialCommand, !command.isEmpty {
-                terminal.send(txt: command + "\n")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                    terminal.send(txt: command + "\n")
+                }
             }
             if ProcessInfo.processInfo.environment["PALETTE_TERMINAL_DEBUG"] == "1" {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
