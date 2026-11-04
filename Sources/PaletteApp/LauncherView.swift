@@ -1296,7 +1296,7 @@ struct TerminalPane: NSViewRepresentable {
         terminal.wantsLayer = true
         terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
         terminal.layer?.cornerRadius = 10
-        terminal.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        terminal.font = resolvedFont()
         context.coordinator.view = terminal
         nonisolated(unsafe) let stoppable = terminal
         context.coordinator.observer = NotificationCenter.default.addObserver(
@@ -1349,11 +1349,62 @@ struct TerminalPane: NSViewRepresentable {
                     let rows = terminal.terminalStateSnapshot().visibleRows
                         .map(\.text)
                         .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    Log.shared.info("Terminal font: \(terminal.font.fontName) \(terminal.font.pointSize)", source: "terminal")
                     Log.shared.info("Terminal rows: \(rows.joined(separator: " | "))", source: "terminal")
                 }
             }
         }
         return terminal
+    }
+
+    private func resolvedFont() -> NSFont {
+        let configured = session.font.trimmingCharacters(in: .whitespacesAndNewlines)
+        let kitty = kittyFont()
+        let size = session.fontSize > 0 ? session.fontSize : (kitty?.1 ?? 13)
+
+        if !configured.isEmpty, let font = font(named: configured, size: size) {
+            return font
+        }
+        if let kitty, let font = font(named: kitty.0, size: size) {
+            return font
+        }
+        let mono = theme.typography.mono.trimmingCharacters(in: .whitespaces)
+        if !mono.isEmpty, let font = font(named: mono, size: size) {
+            return font
+        }
+        return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+
+    private func font(named name: String, size: Double) -> NSFont? {
+        if let font = NSFont(name: name, size: size) { return font }
+        if let font = NSFontManager.shared.font(
+            withFamily: name,
+            traits: [],
+            weight: 5,
+            size: size
+        ) { return font }
+        return nil
+    }
+
+    private func kittyFont() -> (String, Double)? {
+        let url = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(".config/kitty/kitty.conf")
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        var family: String?
+        var size: Double?
+        for raw in text.split(separator: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.hasPrefix("#") else { continue }
+            let parts = line.split(maxSplits: 1, whereSeparator: { $0 == " " || $0 == "\t" })
+            guard parts.count == 2 else { continue }
+            switch parts[0] {
+            case "font_family": family = String(parts[1]).trimmingCharacters(in: .whitespaces)
+            case "font_size": size = Double(parts[1].trimmingCharacters(in: .whitespaces))
+            default: break
+            }
+        }
+        guard let family else { return nil }
+        return (family, size ?? 13)
     }
 
     private func resolvedShell() -> String {
@@ -1379,6 +1430,7 @@ struct TerminalPane: NSViewRepresentable {
     func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
         terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
         terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
+        terminal.font = resolvedFont()
         terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
     }
 

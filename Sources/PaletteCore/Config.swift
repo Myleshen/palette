@@ -38,15 +38,21 @@ public struct TerminalSessionConfig: Sendable, Equatable {
     public var name: String
     /// Empty means fish when installed, otherwise the login zsh.
     public var shell: String
+    public var font: String
+    public var fontSize: Double
 
     public init(
         multiplexer: TerminalMultiplexer = .auto,
         name: String = "Palette",
-        shell: String = ""
+        shell: String = "",
+        font: String = "",
+        fontSize: Double = 0
     ) {
         self.multiplexer = multiplexer
         self.name = name
         self.shell = shell
+        self.font = font
+        self.fontSize = fontSize
     }
 }
 
@@ -358,6 +364,12 @@ public enum ConfigLoader {
             if let shell = terminalTable.str("shell") {
                 session.shell = shell
             }
+            if let font = terminalTable.str("font") {
+                session.font = font
+            }
+            if let size = terminalTable.number("font_size"), size > 0 {
+                session.fontSize = max(8, min(48, size))
+            }
             config.terminalSession = session
         }
 
@@ -514,6 +526,8 @@ public enum ConfigLoader {
         multiplexer = "auto"           # auto | zellij | tmux | none
         name = "Palette"
         shell = ""                     # empty = fish if installed, else zsh
+        font = ""                      # empty = kitty font, then theme mono
+        font_size = 0                  # 0 = kitty size, then 13
 
         # One-shot AI answers (/ask). The API key is never written here; it
         # lives in an encrypted local file and is entered in Settings > Ask.
@@ -622,6 +636,8 @@ public enum ConfigWriter {
         out.append("multiplexer = \(quote(config.terminalSession.multiplexer.rawValue))")
         out.append("name = \(quote(config.terminalSession.name))")
         out.append("shell = \(quote(config.terminalSession.shell))")
+        out.append("font = \(quote(config.terminalSession.font))")
+        out.append("font_size = \(config.terminalSession.fontSize)")
         out.append("")
         out.append("[ask]")
         out.append("provider = \(quote(config.ask.endpoint.rawValue))")

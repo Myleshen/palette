@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.0.4 — 2026-11-04
+
+### Added
+
+- Embedded terminal font and size settings: `[terminal_session] font`,
+  `font_size`, plus fields in Settings. Empty values auto-detect Kitty's
+  `font_family` / `font_size`, then the theme mono font.
+
+### Fixed
+
+- `/term` now uses the detected Nerd Font instead of the system monospace font,
+  so Zellij/fish icons and Powerline glyphs render correctly.
+
+### Verified
+
+- `swift test`: 70 tests, 0 failures.
+- Terminal picked up `DepartureMonoNF` at `18.0` from Kitty's config.
+
 ## 2.0.3 — 2026-11-04
 
 ### Added

@@ -172,6 +172,16 @@ struct SettingsView: View {
                 if terminalShellChoice == "custom" {
                     TextField("Custom shell executable", text: $config.terminalSession.shell)
                 }
+                TextField("Font family", text: $config.terminalSession.font)
+                Stepper(
+                    "Font size: \(config.terminalSession.fontSize == 0 ? "auto" : "\(Int(config.terminalSession.fontSize)) pt")",
+                    value: $config.terminalSession.fontSize,
+                    in: 0...48,
+                    step: 1
+                )
+                Text("Empty font and size auto-detect Kitty's font, then the theme mono font. Use a Nerd Font for icons.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text("Auto uses Zellij, then tmux, then a plain shell. Plain shell sessions end when the panel closes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

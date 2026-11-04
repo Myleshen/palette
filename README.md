@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.0.3. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.0.4. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -333,7 +333,13 @@ command in that same shell.
 multiplexer = "auto"   # auto | zellij | tmux | none
 name = "Palette"
 shell = ""             # empty = fish if installed, else zsh
+font = ""              # empty = kitty font, then theme mono
+font_size = 0          # 0 = kitty size, then 13
 ```
+
+The embedded terminal auto-detects Kitty's `font_family` and `font_size`.
+Set a Nerd Font here (or install the one Kitty uses) so Zellij/fish icons render
+correctly.
 
 Palette sets `SHELL` to the chosen shell when it starts the multiplexer, so new
 Zellij or tmux panes use fish too. An existing Zellij/tmux server keeps its old
@@ -444,6 +450,8 @@ apps = ["launch"]
 multiplexer = "auto"
 name = "Palette"
 shell = ""
+font = ""
+font_size = 0
 
 [web_search]
 enabled = true
