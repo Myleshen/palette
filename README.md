@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.0.2. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.0.3. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -319,10 +319,25 @@ supports normal selection and editing, and provides **Paste**, **Copy All**,
 **Clear**, and **Save & Close**. Clipboard text entries also have **Open in
 Scratchpad** in `⌘K`; the last draft is restored automatically.
 
-`/term` opens a persistent Zellij session named **Palette** in the content panel using SwiftTerm. Closing the panel detaches the client; the session and any long-running command keep running, and the next `/term` reattaches. Fish is the initial shell when installed; without Zellij it falls back to a plain fish/zsh login shell. `⌘W`
-closes the panel. `/cmd` items also expose **Run in
-Panel**, which opens the shell and runs the command there so output stays
-visible.
+`/term` opens a persistent multiplexer session in the content panel using
+SwiftTerm. By default it attaches Zellij's **Palette** session, then falls back
+to tmux, then a plain shell. Closing the panel detaches the client; the session
+and any long-running command keep running, and the next `/term` reattaches.
+`⌘W` closes the panel. `/cmd` items also expose **Run in Panel**, which runs the
+command in that same shell.
+
+`[terminal_session]` controls this:
+
+```toml
+[terminal_session]
+multiplexer = "auto"   # auto | zellij | tmux | none
+name = "Palette"
+shell = ""             # empty = fish if installed, else zsh
+```
+
+Palette sets `SHELL` to the chosen shell when it starts the multiplexer, so new
+Zellij or tmux panes use fish too. An existing Zellij/tmux server keeps its old
+environment; restart that session once after changing the shell.
 
 ### Developer commands
 
@@ -424,6 +439,11 @@ disabled = []
 
 [providers.aliases]
 apps = ["launch"]
+
+[terminal_session]
+multiplexer = "auto"
+name = "Palette"
+shell = ""
 
 [web_search]
 enabled = true

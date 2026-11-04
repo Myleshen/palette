@@ -42,6 +42,7 @@ final class DeveloperWorkflowTests: XCTestCase {
         config.providerAliases = ["apps": ["a", "launch"], "clip": ["cb"]]
         config.providerOrder = ["clip", "apps"]
         config.disabledProviders = ["port"]
+        config.terminalSession = TerminalSessionConfig(multiplexer: .tmux, name: "Work", shell: "fish")
         let table = try TOMLTable(string: ConfigWriter.render(config))
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
@@ -49,6 +50,7 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertEqual(parsed.providerAliases["apps"] ?? [], ["a", "launch"])
         XCTAssertEqual(parsed.providerOrder, ["clip", "apps"])
         XCTAssertEqual(parsed.disabledProviders, ["port"])
+        XCTAssertEqual(parsed.terminalSession, config.terminalSession)
         XCTAssertTrue(diagnostics.isEmpty)
     }
 

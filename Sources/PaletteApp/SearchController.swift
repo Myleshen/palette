@@ -39,6 +39,7 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public var scratchpadText = ""
     @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
+    public var terminalSession: TerminalSessionConfig { configuration.terminalSession }
 
     public var panel: PanelController?
     public var onReload: (() -> Void)?

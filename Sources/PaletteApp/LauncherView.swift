@@ -658,7 +658,7 @@ struct LauncherRootView: View {
     @ViewBuilder
     private var content: some View {
         if controller.terminalActive {
-            TerminalPane(theme: theme, initialCommand: controller.terminalInitialCommand)
+            TerminalPane(theme: theme, initialCommand: controller.terminalInitialCommand, session: controller.terminalSession)
         } else if controller.scratchpadActive {
             ScratchpadView(controller: controller, theme: theme)
         } else if let prompt = controller.prompt {
@@ -1277,6 +1277,7 @@ extension Notification.Name {
 struct TerminalPane: NSViewRepresentable {
     var theme: Theme
     var initialCommand: String?
+    var session: TerminalSessionConfig
 
     final class Coordinator {
         weak var view: LocalProcessTerminalView?
@@ -1306,21 +1307,34 @@ struct TerminalPane: NSViewRepresentable {
             stoppable.terminate()
         }
         DispatchQueue.main.async {
-            let fish = ToolLocator.shared.path(for: "fish") ?? "/bin/zsh"
-            if let zellij = ToolLocator.shared.path(for: "zellij") {
+            let shell = resolvedShell()
+            let environment = terminalEnvironment(shell: shell)
+            let zellij = ToolLocator.shared.path(for: "zellij")
+            let tmux = ToolLocator.shared.path(for: "tmux")
+            let name = session.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Palette" : session.name
+            switch session.multiplexer {
+            case .zellij where zellij != nil, .auto where zellij != nil:
                 terminal.startProcess(
-                    executable: zellij,
-                    args: ["attach", "--create", "Palette", "--", fish, "-l"],
-                    environment: nil,
+                    executable: zellij!,
+                    args: ["attach", "--create", name],
+                    environment: environment,
                     execName: "zellij",
                     currentDirectory: NSHomeDirectory()
                 )
-            } else {
+            case .tmux where tmux != nil, .auto where tmux != nil:
                 terminal.startProcess(
-                    executable: fish,
+                    executable: tmux!,
+                    args: ["new-session", "-A", "-s", name, "--", shell, "-l"],
+                    environment: environment,
+                    execName: "tmux",
+                    currentDirectory: NSHomeDirectory()
+                )
+            default:
+                terminal.startProcess(
+                    executable: shell,
                     args: ["-l"],
-                    environment: nil,
-                    execName: (fish as NSString).lastPathComponent,
+                    environment: environment,
+                    execName: (shell as NSString).lastPathComponent,
                     currentDirectory: NSHomeDirectory()
                 )
             }
@@ -1340,6 +1354,26 @@ struct TerminalPane: NSViewRepresentable {
             }
         }
         return terminal
+    }
+
+    private func resolvedShell() -> String {
+        let configured = session.shell.trimmingCharacters(in: .whitespacesAndNewlines)
+        if configured.isEmpty {
+            return ToolLocator.shared.path(for: "fish") ?? "/bin/zsh"
+        }
+        if configured.contains("/") {
+            return FileManager.default.isExecutableFile(atPath: configured) ? configured : "/bin/zsh"
+        }
+        return ToolLocator.shared.path(for: configured) ?? "/bin/zsh"
+    }
+
+    private func terminalEnvironment(shell: String) -> [String] {
+        var environment = ProcessInfo.processInfo.environment
+            .filter { $0.key != "SHELL" && $0.key != "TERM" }
+            .map { "\($0.key)=\($0.value)" }
+        environment.append("SHELL=\(shell)")
+        environment.append("TERM=xterm-256color")
+        return environment
     }
 
     func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {

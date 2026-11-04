@@ -26,6 +26,7 @@ struct SettingsView: View {
     @State private var providerOrder: [String]
     @State private var aliases: [String: String]
     @State private var disabledProviders: [String]
+    @State private var terminalShellChoice: String
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     private let themesDirectory: URL
@@ -61,6 +62,11 @@ struct SettingsView: View {
         }
         _aliases = State(initialValue: aliasState)
         _disabledProviders = State(initialValue: config.disabledProviders.filter { $0 != "apps" })
+        let configuredShell = config.terminalSession.shell.trimmingCharacters(in: .whitespaces)
+        let shellName = (configuredShell as NSString).lastPathComponent.lowercased()
+        _terminalShellChoice = State(initialValue: configuredShell.isEmpty
+            ? "auto"
+            : (["fish", "zsh"].contains(shellName) ? shellName : "custom"))
         self.themesDirectory = themesDirectory
         self.providerSummary = providerSummary
         self.providers = providers
@@ -146,6 +152,27 @@ struct SettingsView: View {
                 TextField("Terminal", text: $config.terminalApp)
                 TextField("Editor", text: $config.editorOpenWith)
                 Text("Used by projects, commands, Zellij, and Bitwarden. Examples: kitty, Terminal, neovide.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Embedded terminal") {
+                Picker("Session", selection: $config.terminalSession.multiplexer) {
+                    Text("Auto").tag(TerminalMultiplexer.auto)
+                    Text("Zellij").tag(TerminalMultiplexer.zellij)
+                    Text("tmux").tag(TerminalMultiplexer.tmux)
+                    Text("Plain shell").tag(TerminalMultiplexer.none)
+                }
+                TextField("Session name", text: $config.terminalSession.name)
+                Picker("Shell", selection: $terminalShellChoice) {
+                    Text("Auto (fish, then zsh)").tag("auto")
+                    Text("Fish").tag("fish")
+                    Text("Zsh").tag("zsh")
+                    Text("Custom…").tag("custom")
+                }
+                if terminalShellChoice == "custom" {
+                    TextField("Custom shell executable", text: $config.terminalSession.shell)
+                }
+                Text("Auto uses Zellij, then tmux, then a plain shell. Plain shell sessions end when the panel closes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -633,6 +660,14 @@ struct SettingsView: View {
         config.providerAliases = aliasMap
         config.providerOrder = providerOrder
         config.disabledProviders = disabledProviders.filter { $0 != "apps" }
+        switch terminalShellChoice {
+        case "auto": config.terminalSession.shell = ""
+        case "fish", "zsh": config.terminalSession.shell = terminalShellChoice
+        default:
+            if config.terminalSession.shell.trimmingCharacters(in: .whitespaces).isEmpty {
+                config.terminalSession.shell = ""
+            }
+        }
         onSave(config)
     }
 }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.0.3 — 2026-11-04
+
+### Added
+
+- Terminal session configuration: multiplexer `auto | zellij | tmux | none`,
+  session name, and shell (`fish`, `zsh`, or a custom executable), editable in
+  Settings → General → Embedded terminal and stored in `[terminal_session]`.
+
+### Fixed
+
+- The embedded terminal now sets `SHELL` for the multiplexer process, so new
+  Zellij/tmux panes use fish instead of falling back to `sh`.
+- `auto` prefers Zellij, then tmux, then a plain shell.
+
+### Verified
+
+- `swift test`: 70 tests, 0 failures.
+- Config round-trip test covers the terminal session settings.
+- Zellij Palette session shows fish 4.9.3; `/cmd` Run in Panel still executes.
+
 ## 2.0.2 — 2026-11-04
 
 ### Changed

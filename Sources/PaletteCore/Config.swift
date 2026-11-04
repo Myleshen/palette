@@ -26,6 +26,30 @@ public enum SearchPosition: String, Sendable, Equatable, CaseIterable {
     case top, center
 }
 
+public enum TerminalMultiplexer: String, Sendable, Equatable, CaseIterable {
+    case auto
+    case zellij
+    case tmux
+    case none
+}
+
+public struct TerminalSessionConfig: Sendable, Equatable {
+    public var multiplexer: TerminalMultiplexer
+    public var name: String
+    /// Empty means fish when installed, otherwise the login zsh.
+    public var shell: String
+
+    public init(
+        multiplexer: TerminalMultiplexer = .auto,
+        name: String = "Palette",
+        shell: String = ""
+    ) {
+        self.multiplexer = multiplexer
+        self.name = name
+        self.shell = shell
+    }
+}
+
 public struct WebSearchEngine: Sendable, Equatable, Identifiable {
     public var name: String
     public var urlTemplate: String
@@ -96,6 +120,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var providerAliases: [String: [String]]
     public var providerOrder: [String]
     public var disabledProviders: [String]
+    public var terminalSession: TerminalSessionConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -117,7 +142,8 @@ public struct PaletteConfig: Sendable, Equatable {
         typography: TypographyConfig = TypographyConfig(),
         providerAliases: [String: [String]] = [:],
         providerOrder: [String] = [],
-        disabledProviders: [String] = []
+        disabledProviders: [String] = [],
+        terminalSession: TerminalSessionConfig = TerminalSessionConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -139,6 +165,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.providerAliases = providerAliases
         self.providerOrder = providerOrder
         self.disabledProviders = disabledProviders
+        self.terminalSession = terminalSession
     }
 }
 
@@ -319,6 +346,21 @@ public enum ConfigLoader {
             }
         }
 
+        if let terminalTable = table.table("terminal_session") {
+            var session = config.terminalSession
+            if let raw = terminalTable.str("multiplexer"),
+               let value = TerminalMultiplexer(rawValue: raw.lowercased()) {
+                session.multiplexer = value
+            }
+            if let name = terminalTable.str("name"), !name.isEmpty {
+                session.name = name
+            }
+            if let shell = terminalTable.str("shell") {
+                session.shell = shell
+            }
+            config.terminalSession = session
+        }
+
         if let web = table.table("web_search") {
             if let enabled = web.bool("enabled") {
                 config.webSearchEnabled = enabled
@@ -467,6 +509,12 @@ public enum ConfigLoader {
 
         [providers.aliases]
 
+        # Embedded terminal. auto uses Zellij, then tmux, then a plain shell.
+        [terminal_session]
+        multiplexer = "auto"           # auto | zellij | tmux | none
+        name = "Palette"
+        shell = ""                     # empty = fish if installed, else zsh
+
         # One-shot AI answers (/ask). The API key is never written here; it
         # lives in an encrypted local file and is entered in Settings > Ask.
         [ask]
@@ -569,6 +617,11 @@ public enum ConfigWriter {
             guard let aliases = config.providerAliases[id], !aliases.isEmpty else { continue }
             out.append("\(quote(id)) = [\(aliases.map(quote).joined(separator: ", "))]")
         }
+        out.append("")
+        out.append("[terminal_session]")
+        out.append("multiplexer = \(quote(config.terminalSession.multiplexer.rawValue))")
+        out.append("name = \(quote(config.terminalSession.name))")
+        out.append("shell = \(quote(config.terminalSession.shell))")
         out.append("")
         out.append("[ask]")
         out.append("provider = \(quote(config.ask.endpoint.rawValue))")
