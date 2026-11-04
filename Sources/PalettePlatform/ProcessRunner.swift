@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import PaletteCore
 
@@ -104,6 +105,12 @@ public enum ProcessRunner {
                             if process.isRunning {
                                 timedOut.value = true
                                 process.terminate()
+                                let pid = process.processIdentifier
+                                DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+                                    if process.isRunning {
+                                        kill(pid, SIGKILL)
+                                    }
+                                }
                             }
                         }
                         timeoutWork = work

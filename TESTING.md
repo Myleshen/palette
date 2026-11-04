@@ -125,7 +125,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 65 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 66 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
@@ -136,7 +136,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   skipping, response parsing, and Ask history trimming).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.9.2). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.9.3). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -165,7 +165,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   The no-key path showed the Keychain setup row, and Settings Ask displayed only
   “Key saved in the macOS Keychain” after saving. Real Zen free quota returned
   429 and the expired Go key returned 401; both were reported without a crash.
-  `swift test`: 65 tests, 0 failures.
+  `swift test`: 66 tests, 0 failures.
 - v1.7.13 checks: after opening the clipboard browser and pressing `Esc`, the
   snapshot showed the empty app list at normal width with no preview pane or
   “No preview available” placeholder.

@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.9.2. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.9.3. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -348,7 +348,8 @@ confirm = false
   work still belongs in LazyGit; Palette never force-pushes or rewrites history.
 - `/finder` acts on the current Finder selection: open Terminal/Ghostty there,
   open Neovide, copy absolute paths, reveal, compress, and create a file or
-  folder. The first read asks macOS for Automation permission once.
+  folder. It reads the selection through macOS Accessibility, so it uses the
+  same permission Palette already needs for direct paste; no Automation prompt.
 
 ### Typography
 

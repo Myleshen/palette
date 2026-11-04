@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.9.3 — 2026-11-04
+
+### Fixed
+
+- `/finder` now reads the Finder selection through macOS Accessibility instead
+  of AppleScript. This removes the Automation prompt and the hang when the
+  AppleScript child process was waiting on Finder.
+- Finder actions can now compress selections (fixed `zip` arguments), create
+  files/folders, copy paths, reveal, and open in Terminal/Ghostty/Neovide.
+- Child-process timeouts now escalate from SIGTERM to SIGKILL, so a stuck tool
+  cannot leave Palette "Searching…" forever.
+
+### Verified
+
+- Selected `Package.swift` in Finder and `/finder` listed it; Copy Absolute
+  Paths put `/Users/myleshen/dev/palette-launcher/Package.swift` on the clipboard.
+- Compress created a real ZIP; New File and New Folder created real entries.
+- `swift test`: 66 tests, 0 failures.
+
 ## 1.9.2 — 2026-11-03
 
 ### Fixed

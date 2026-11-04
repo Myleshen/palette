@@ -1,9 +1,12 @@
+import AppKit
+import ApplicationServices
 import Foundation
 import PaletteCore
 import PalettePlatform
 
-/// Actions on the current Finder selection. Reading the selection uses
-/// AppleScript, so macOS may ask for Automation permission once.
+/// Actions on the current Finder selection. The selection is read through the
+/// Accessibility API, so it works with the Accessibility grant Palette already
+/// needs and does not depend on AppleScript/Automation.
 public final class FinderProvider: PaletteProvider, @unchecked Sendable {
     public let descriptor = ProviderDescriptor(
         id: "finder",
@@ -16,15 +19,11 @@ public final class FinderProvider: PaletteProvider, @unchecked Sendable {
 
     private actor Cache {
         var paths: [String] = []
-        var error: String?
         var at = Date.distantPast
-        var attempted = false
 
-        func update(_ paths: [String], error: String?, at date: Date) {
+        func update(_ paths: [String], at date: Date) {
             self.paths = paths
-            self.error = error
             self.at = date
-            self.attempted = true
         }
     }
 
@@ -40,43 +39,28 @@ public final class FinderProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
-        let attempted = await cache.attempted
-        if !attempted {
+        guard AXIsProcessTrusted() else {
             return [PaletteItem(
-                id: "finder:load",
-                title: "Read Current Finder Selection",
-                subtitle: "Palette asks macOS for Automation access the first time",
-                icon: .symbol("cursorarrow"),
-                badge: "FINDER",
+                id: "finder:accessibility",
+                title: "Accessibility permission required",
+                subtitle: "Palette needs Accessibility to read Finder’s selection",
+                icon: .symbol("lock.shield"),
+                badge: "PERMISSION",
                 score: 10_000,
-                actions: [PaletteAction(id: "load", title: "Read Selection", kind: .custom, value: .text("load"))],
-                preview: .text("Select files in Finder, press Enter here, then run /finder again. macOS will ask once for permission to control Finder."),
+                actions: [PaletteAction(
+                    id: "permission",
+                    title: "Open Accessibility Settings",
+                    kind: .openURL,
+                    value: .text("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+                )],
+                preview: .text("Allow Palette in System Settings → Privacy & Security → Accessibility, then run /finder again."),
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )]
         }
+
         let paths = await selection()
         if paths.isEmpty {
-            let error = await cache.error
-            if let error, !error.isEmpty {
-                return [PaletteItem(
-                    id: "finder:permission",
-                    title: "Finder Automation permission required",
-                    subtitle: error,
-                    icon: .symbol("lock.shield"),
-                    badge: "PERMISSION",
-                    score: 10_000,
-                    actions: [PaletteAction(
-                        id: "permission",
-                        title: "Open Automation Settings",
-                        kind: .openURL,
-                        value: .text("x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
-                    )],
-                    preview: .text("Allow Palette to control Finder in System Settings → Privacy & Security → Automation, then run /finder again."),
-                    providerID: descriptor.id,
-                    providerName: descriptor.name
-                )]
-            }
             return [PaletteItem(
                 id: "finder:none",
                 title: "No Finder selection",
@@ -117,11 +101,6 @@ public final class FinderProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        if action.id == "load" {
-            _ = await selection()
-            await bridge.notify("Finder selection read; run /finder again")
-            return
-        }
         guard let value = action.value.object,
               let paths = value["paths"]?.split(separator: "\n").map(String.init),
               let folder = value["folder"] else { return }
@@ -161,9 +140,14 @@ public final class FinderProvider: PaletteProvider, @unchecked Sendable {
         let stamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
         let target = (folder as NSString).appendingPathComponent("Archive-\(stamp).zip")
-        var arguments = ["-c", "-k", "--sequesterRsrc", target]
-        arguments.append(contentsOf: paths)
-        let result = try await ProcessRunner.run(["/usr/bin/ditto"] + arguments, timeout: 120)
+        let names = paths.map { path -> String in
+            path.hasPrefix(folder + "/") ? String(path.dropFirst(folder.count + 1)) : path
+        }
+        let result = try await ProcessRunner.run(
+            ["/usr/bin/zip", "-r", "-y", "-q", target] + names,
+            cwd: folder,
+            timeout: 120
+        )
         if result.status == 0 {
             await bridge.notify("Compressed to \((target as NSString).lastPathComponent)")
         } else {
@@ -177,24 +161,103 @@ public final class FinderProvider: PaletteProvider, @unchecked Sendable {
         let cachedAt = await cache.at
         if now.timeIntervalSince(cachedAt) < 3 { return cached }
 
-        let script = """
-        tell application "Finder"
-            set out to ""
-            repeat with f in selection
-                set out to out & POSIX path of (f as alias) & linefeed
-            end repeat
-            return out
-        end tell
-        """
-        let result = try? await ProcessRunner.run(["/usr/bin/osascript", "-e", script], timeout: 5)
-        let paths = (result?.stdoutString ?? "")
-            .split(separator: "\n")
-            .map { String($0).trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) }
-        let error = (result?.status ?? 0) == 0 ? nil : result?.stderrString
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        await cache.update(paths, error: error, at: now)
+        let paths = Self.accessibilitySelection()
+        await cache.update(paths, at: now)
         return paths
+    }
+
+    /// Finder does not expose a scripting-free selection API, but its browser
+    /// rows and icon cells are ordinary Accessibility elements. Walk the
+    /// focused window and collect anything marked AXSelected, then resolve its
+    /// URL (or filename relative to the window's folder).
+    private static func accessibilitySelection() -> [String] {
+        guard let finder = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier == "com.apple.finder"
+        }) else { return [] }
+
+        let app = AXUIElementCreateApplication(finder.processIdentifier)
+        var roots: [AXUIElement] = []
+        if let focused = attribute(app, kAXFocusedWindowAttribute) {
+            roots = [focused as! AXUIElement]
+        } else if let windows = attribute(app, kAXWindowsAttribute) as? [AXUIElement] {
+            roots = windows
+        }
+
+        var paths = Set<String>()
+        var visited = 0
+        for window in roots {
+            let folder = path(from: attribute(window, kAXDocumentAttribute))
+                ?? path(from: attribute(window, kAXURLAttribute))
+            walk(window, folder: folder, depth: 0, visited: &visited, paths: &paths)
+        }
+        let result = paths.sorted()
+        Log.shared.info(
+            "Finder AX selection: \(result.count) path(s) from \(visited) element(s)",
+            source: "finder"
+        )
+        return result
+    }
+
+    private static func walk(
+        _ element: AXUIElement,
+        folder: String?,
+        depth: Int,
+        visited: inout Int,
+        paths: inout Set<String>
+    ) {
+        guard depth <= 14, visited < 8_000 else { return }
+        visited += 1
+
+        if let selectedChildren = attribute(element, kAXSelectedChildrenAttribute) as? [AXUIElement] {
+            for child in selectedChildren {
+                if let value = path(from: attribute(child, kAXURLAttribute))
+                    ?? path(from: attribute(child, kAXDocumentAttribute)) {
+                    paths.insert(value)
+                } else if let name = attribute(child, kAXFilenameAttribute) as? String,
+                          let folder, !name.isEmpty {
+                    paths.insert((folder as NSString).appendingPathComponent(name))
+                }
+            }
+        }
+
+        let selected = attribute(element, kAXSelectedAttribute) as? Bool ?? false
+        if selected {
+            let currentFolder = path(from: attribute(element, kAXURLAttribute))
+                ?? path(from: attribute(element, kAXDocumentAttribute))
+            if let value = currentFolder {
+                paths.insert(value)
+            } else if let name = attribute(element, kAXFilenameAttribute) as? String,
+                      let folder, !name.isEmpty {
+                paths.insert((folder as NSString).appendingPathComponent(name))
+            }
+        }
+
+        guard let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] else { return }
+        for child in children {
+            walk(child, folder: folder, depth: depth + 1, visited: &visited, paths: &paths)
+        }
+    }
+
+    private static func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
+        return value
+    }
+
+    private static func path(from value: CFTypeRef?) -> String? {
+        guard let value else { return nil }
+        if CFGetTypeID(value) == CFURLGetTypeID(), let url = value as? URL {
+            return url.isFileURL ? url.path : nil
+        }
+        if let string = value as? String {
+            if string.hasPrefix("file://"), let url = URL(string: string) {
+                return url.path
+            }
+            if string.hasPrefix("/"), FileManager.default.fileExists(atPath: string) {
+                return string
+            }
+        }
+        return nil
     }
 
     private static func folder(for path: String) -> String {

@@ -59,6 +59,13 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertEqual(parsed.text, "safari")
     }
 
+    func testProcessRunnerTimeoutKillsChild() async throws {
+        let start = Date()
+        let result = try await ProcessRunner.run(["/bin/sleep", "5"], timeout: 0.2)
+        XCTAssertTrue(result.timedOut)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 4)
+    }
+
     func testLocalWebAppURLsNormalize() {
         XCTAssertEqual(WebAppURL.normalize("http://localhost:5871")?.absoluteString, "http://localhost:5871")
         XCTAssertEqual(WebAppURL.normalize("http://127.0.0.1:5871")?.absoluteString, "http://127.0.0.1:5871")
