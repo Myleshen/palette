@@ -21,6 +21,7 @@ public final class SystemProvider: PaletteProvider, @unchecked Sendable {
         case restart
         case shutdown
         case reload
+        case openSettings
         case openConfig
         case openProviders
         case quit
@@ -40,6 +41,7 @@ public final class SystemProvider: PaletteProvider, @unchecked Sendable {
     private let bridge: HostBridge
 
     public var onReload: (() -> Void)?
+    public var onOpenSettings: (() -> Void)?
     public var onOpenConfig: (() -> Void)?
     public var onOpenProviders: (() -> Void)?
     public var onQuit: (() -> Void)?
@@ -58,6 +60,7 @@ public final class SystemProvider: PaletteProvider, @unchecked Sendable {
             Entry(command: .shutdown, title: "Shut Down…", subtitle: "Shut down the Mac", icon: "power", keywords: "power off shutdown", destructive: true, group: "Power"),
             Entry(command: .emptyTrash, title: "Empty Trash", subtitle: "Permanently delete items in the Trash", icon: "trash", keywords: "trash delete empty", destructive: true, group: "Maintenance"),
             Entry(command: .reload, title: "Reload Configuration", subtitle: "Re-read config.toml, themes, and providers", icon: "arrow.triangle.2.circlepath", keywords: "reload refresh config", destructive: false, group: "Palette"),
+            Entry(command: .openSettings, title: "Open Palette Settings", subtitle: "Hotkeys, appearance, providers, clipboard, and Ask", icon: "gearshape.2", keywords: "settings preferences configure options ui", destructive: false, group: "Palette"),
             Entry(command: .openConfig, title: "Open config.toml", subtitle: "Edit Palette configuration", icon: "doc.text", keywords: "config settings preferences edit", destructive: false, group: "Palette"),
             Entry(command: .openProviders, title: "Open Providers Folder", subtitle: "Add or edit provider manifests", icon: "puzzlepiece.extension", keywords: "providers extensions plugins folder", destructive: false, group: "Palette"),
             Entry(command: .quit, title: "Quit Palette", subtitle: "Stop the launcher", icon: "xmark.circle", keywords: "quit exit stop", destructive: false, group: "Palette"),
@@ -119,6 +122,8 @@ public final class SystemProvider: PaletteProvider, @unchecked Sendable {
         case .reload:
             await MainActor.run { onReload?() }
             await bridge.notify("Reloaded configuration and providers")
+        case .openSettings:
+            await MainActor.run { onOpenSettings?() }
         case .openConfig:
             await MainActor.run { onOpenConfig?() }
         case .openProviders:

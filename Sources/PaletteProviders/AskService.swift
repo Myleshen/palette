@@ -144,7 +144,7 @@ public actor AskService {
             if keys.insert(model.key).inserted { result.append(model) }
         }
         let paid = AskModel.fallbackOrder.filter { !$0.free }
-        for model in paid where result.count < 6 {
+        for model in paid where result.count < 12 {
             if keys.insert(model.key).inserted { result.append(model) }
         }
         return result

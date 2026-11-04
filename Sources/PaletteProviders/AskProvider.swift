@@ -84,11 +84,11 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
             } else if model.free {
                 badge = "FREE"
             } else {
-                badge = "SMALL"
+                badge = "PAID"
             }
             var details = [
                 "\(model.endpoint.displayName) · \(model.id)",
-                model.free ? "Free model" : (model.note.isEmpty ? "Paid model" : model.note),
+                model.free ? "Free model" : model.costLabel,
                 hasKey ? "Key saved for this endpoint" : "No key for this endpoint",
                 "Enter selects this model. Then type /ask followed by your question.",
             ]
@@ -96,10 +96,10 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
             return PaletteItem(
                 id: "model:\(model.key)",
                 title: "\(model.free ? "FREE · " : "")\(model.name)",
-                subtitle: "\(model.endpoint.displayName) · \(model.id)",
+                subtitle: "\(model.endpoint.displayName) · \(model.id) · \(model.costLabel)",
                 icon: .symbol(model.free ? "gift" : "bolt"),
                 badge: badge,
-                group: isSelected ? "Current model" : (model.free ? "Free models" : "Small / paid models"),
+                group: isSelected ? "Current model" : (model.free ? "Free models" : "Paid models · cheapest first"),
                 score: 10_000 - Double(index),
                 actions: [
                     PaletteAction(id: "select-model", title: "Use \(model.name)", kind: .custom, value: .text(model.key)),
@@ -116,14 +116,14 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
         PaletteItem(
             id: "question:\(question)",
             title: "Ask \(model.name): \(question)",
-            subtitle: "\(model.free ? "FREE" : "SMALL") · \(model.endpoint.displayName) · ⏎ sends one request",
+            subtitle: "\(model.free ? "FREE" : model.costLabel) · \(model.endpoint.displayName) · ⏎ sends one request",
             icon: .symbol("sparkles"),
             badge: model.free ? "FREE" : "ASK",
             score: 50_000,
             actions: [
                 PaletteAction(id: "ask", title: "Ask \(model.name)", kind: .custom, value: .text(question)),
             ],
-            preview: .text("Question\n\n\(question)\n\nModel\n\n\(model.name) · \(model.endpoint.displayName)\n\nOne-shot request. The answer is saved to Ask History."),
+            preview: .text("Question\n\n\(question)\n\nModel\n\n\(model.name) · \(model.endpoint.displayName)\n\(model.costLabel)\n\nOne-shot request. The answer is saved to Ask History."),
             providerID: descriptor.id,
             providerName: descriptor.name
         )
@@ -153,7 +153,7 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
         return PaletteItem(
             id: "setup",
             title: "Add an API key for Ask",
-            subtitle: "The key is stored in the macOS Keychain and never written to config.toml",
+            subtitle: "The key is stored in an encrypted local file and never written to config.toml",
             icon: .symbol("key"),
             badge: "SETUP",
             score: 50_000,

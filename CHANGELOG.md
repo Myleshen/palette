@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.9.6 — 2026-11-04
+
+### Added
+
+- `/sys` now has **Open Palette Settings**, so the Settings window is reachable
+  from the launcher without the menu bar or `⌘,`.
+- `/ask` now includes every OpenAI-compatible OpenCode Go chat model, ordered by
+  output price with input/output costs shown. Cheaper models no longer disappear
+  behind a fixed "small model" list.
+- Ask keys moved from the login Keychain to an encrypted user-only file under
+  Palette's config directory. Ad-hoc debug builds no longer trigger repeated
+  Keychain access prompts.
+
+### Changed
+
+- Summary subtitles say "local key file", not Keychain. You may need to re-enter
+  an existing key once after this migration.
+
+### Verified
+
+- `/sys settings` shows the row; pressing Return opens the Settings window.
+- `swift test`: 69 tests, 0 failures.
+
 ## 1.9.5 — 2026-11-04
 
 ### Changed
@@ -15,7 +38,7 @@
 
 ### Verified
 
-- `swift test`: 67 tests, 0 failures.
+- `swift test`: 69 tests, 0 failures.
 - Empty-query snapshot shows the two-surface pill layout with no classic branch.
 
 ## 1.9.4 — 2026-11-04
@@ -28,7 +51,7 @@
 
 ### Verified
 
-- `swift test`: 67 tests, 0 failures.
+- `swift test`: 69 tests, 0 failures.
 - Registry test confirms a disabled provider is absent from tabs and its
   trigger falls back to global search.
 

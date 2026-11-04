@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.9.5. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.9.6. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -135,7 +135,7 @@ trigger word:
 | `/askh <query>` | search retained Ask questions and answers |
 | `/web <query>` | saved web apps; type a domain to add one |
 | `/emoji <query>` | emoji picker |
-| `/sys <query>` | lock, sleep, trash, reload, quit |
+| `/sys <query>` | settings, lock, sleep, trash, reload, quit |
 | `/theme <query>` | switch themes live |
 | `/calc <expr>` | calculator (also works unprefixed) |
 
@@ -179,23 +179,26 @@ question is independent.
 Supported endpoints:
 
 - **OpenCode Zen** (`https://opencode.ai/zen/v1`) — free models first.
-- **OpenCode Go** (`https://opencode.ai/inference/go/openai/v1`) — free models,
-  then small paid models; requires an active Go subscription.
+- **OpenCode Go** (`https://opencode.ai/inference/go/openai/v1`) — every
+  OpenAI-compatible chat model, ordered cheapest output price first; requires
+  an active Go subscription.
 - **OpenAI** (`https://api.openai.com/v1`) — any OpenAI chat-completions key.
 
 Type `/ask` with no question to choose a model. Free models are listed first and
-marked `FREE`; when the selected model reports a quota or availability error,
-Palette automatically tries the next free model, then a small paid model if the
-key has access. `/ask what is 2+2` asks the selected model directly. Answers can
-be copied, asked again, or found later in history.
+marked `FREE`; paid models show their input/output price per million tokens and
+are ordered cheapest first. When the selected model reports a quota or
+availability error, Palette automatically tries the next free model, then the
+cheapest paid model the key can access. `/ask what is 2+2` asks the selected
+model directly. Answers can be copied, asked again, or found later in history.
 
 The **Ask History** sub-tab (or `/askh`) searches retained questions and answers.
 Each row shows the model, endpoint, age, latency, and token usage. Ask history is
 kept up to the count and age configured in Settings and can be deleted per row.
 
-API keys are stored only in the macOS Keychain. A key is visible in the Settings
+API keys are stored in an encrypted user-only file under Palette's config
+directory, not in `config.toml`. A key is visible in the Settings
 field only before you save it; afterward Palette shows “Key saved in the macOS
-Keychain” and never displays the value again. Keys are never written to
+local key file” and never displays the value again. Keys are never written to
 `config.toml`, logs, or history. `OPENCODE_API_KEY`, `OPENCODE_GO_API_KEY`, and
 `OPENAI_API_KEY` are also accepted as environment fallbacks.
 
@@ -207,7 +210,7 @@ order. **Appearance** holds themes and typography. **Clipboard**, **Search**, an
 **Ask** cover their own features. **Providers** controls which tabs are visible,
 their order, and optional aliases. **Advanced** has config/theme/log links,
 backup, diagnostics, and version information. The **Ask** tab selects the endpoint and model,
-saves a Keychain API key, toggles automatic fallback, and controls how many Q&A
+saves a local API key, toggles automatic fallback, and controls how many Q&A
 entries and how many days of history are kept.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
 session event tap, so macOS-reserved combinations such as `⌘Space` are captured

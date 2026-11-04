@@ -331,7 +331,7 @@ struct SettingsView: View {
                 }
                 TextField("Max answer tokens", value: $config.ask.maxTokens, format: .number)
                 Toggle("Fall back to free or small models when quota runs out", isOn: $config.ask.fallback)
-                Text("Free models are listed first. If a free model is rate-limited, Ask tries the next free option, then a small paid model from an endpoint where you have a key.")
+                Text("Free models are listed first. If a free model is rate-limited, Ask tries the next free option, then the cheapest paid model from an endpoint where you have a key.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -340,7 +340,7 @@ struct SettingsView: View {
                 if askKeyStored {
                     HStack {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                        Text("Key saved in the macOS Keychain")
+                        Text("Key saved locally (encrypted, user-only)")
                         Spacer()
                         Button("Clear Key", role: .destructive) {
                             AskKeychain.delete(endpoint: config.ask.endpoint)
@@ -361,7 +361,7 @@ struct SettingsView: View {
                         .disabled(askKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         Spacer()
                     }
-                    Text("The key is saved immediately in the macOS Keychain. After saving, Palette only shows that a key exists.")
+                    Text("The key is saved immediately in an encrypted user-only file. After saving, Palette only shows that a key exists.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -533,7 +533,7 @@ struct SettingsView: View {
             askKeyInput = ""
             askKeyMessage = "Key saved. It will not be shown again."
         } else {
-            askKeyMessage = "Could not save the key to the Keychain."
+            askKeyMessage = "Could not save the key to the local key file."
         }
     }
 

@@ -365,6 +365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let system = SystemProvider(launcher: launcher, bridge: hostProxy)
         system.onReload = { [weak self] in self?.reload(quiet: false) }
+        system.onOpenSettings = { [weak self] in self?.showSettings() }
         system.onOpenConfig = { [weak self] in self?.openConfig() }
         system.onOpenProviders = { [weak self] in self?.openProviders() }
         system.onQuit = { NSApp.terminate(nil) }

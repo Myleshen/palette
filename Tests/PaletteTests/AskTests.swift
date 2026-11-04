@@ -49,6 +49,36 @@ final class AskTests: XCTestCase {
         XCTAssertTrue(zen.allSatisfy(\.free))
     }
 
+    func testAskKeyFileRoundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-ask-keys-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        setenv("PALETTE_CONFIG_DIR", directory.path, 1)
+        defer { unsetenv("PALETTE_CONFIG_DIR") }
+
+        XCTAssertFalse(AskKeychain.hasStoredKey(for: .opencodeGo))
+        XCTAssertTrue(AskKeychain.save("test-key", for: .opencodeGo))
+        XCTAssertTrue(AskKeychain.hasStoredKey(for: .opencodeGo))
+        XCTAssertEqual(AskKeychain.resolve(endpoint: .opencodeGo, environment: [:]), "test-key")
+        XCTAssertEqual(
+            try FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent("ask-keys.bin").path)[.posixPermissions] as? Int,
+            0o600
+        )
+        AskKeychain.delete(endpoint: .opencodeGo)
+        XCTAssertFalse(AskKeychain.hasStoredKey(for: .opencodeGo))
+    }
+
+    func testGoModelsAreOrderedByCost() {
+        let paid = AskModel.models(for: .opencodeGo).filter { !$0.free }
+        XCTAssertGreaterThanOrEqual(paid.count, 15)
+        let outputs = paid.map(\.outputCost)
+        XCTAssertEqual(outputs, outputs.sorted())
+        XCTAssertTrue(paid.contains { $0.id == "hy3" })
+        XCTAssertTrue(paid.contains { $0.id == "mimo-v2.6-pro" })
+        XCTAssertTrue(paid.contains { $0.id == "longcat-2.0" })
+        XCTAssertTrue(paid.contains { $0.id == "glm-5.2" })
+    }
+
     func testAskResponseParsing() throws {
         let data = Data("""
         {"choices":[{"message":{"role":"assistant","content":"  forty-two  "}}],

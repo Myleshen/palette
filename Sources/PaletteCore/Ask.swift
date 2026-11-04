@@ -36,13 +36,35 @@ public struct AskModel: Identifiable, Equatable, Sendable {
     public var endpoint: AskEndpoint
     public var free: Bool
     public var note: String
+    /// USD per million input tokens. Zero for free models.
+    public var inputCost: Double
+    /// USD per million output tokens. Zero for free models.
+    public var outputCost: Double
 
-    public init(id: String, name: String, endpoint: AskEndpoint, free: Bool, note: String = "") {
+    public init(
+        id: String,
+        name: String,
+        endpoint: AskEndpoint,
+        free: Bool,
+        note: String = "",
+        inputCost: Double = 0,
+        outputCost: Double = 0
+    ) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.free = free
         self.note = note
+        self.inputCost = inputCost
+        self.outputCost = outputCost
+    }
+
+    public var costLabel: String {
+        free ? "Free" : "$\(Self.price(inputCost)) in / $\(Self.price(outputCost)) out per 1M"
+    }
+
+    private static func price(_ value: Double) -> String {
+        value == value.rounded() ? String(Int(value)) : String(format: "%.2f", value)
     }
 
     /// Endpoint-qualified identity used in the runtime preference.
@@ -64,12 +86,21 @@ public struct AskModel: Identifiable, Equatable, Sendable {
         .init(id: "beam-free", name: "Beam (Go)", endpoint: .opencodeGo, free: true),
         .init(id: "iceman-contributor-free", name: "Iceman Contributor", endpoint: .opencodeGo, free: true),
 
-        .init(id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", endpoint: .opencodeGo, free: false, note: "Small"),
-        .init(id: "glm-5.3-flash", name: "GLM 5.3 Flash", endpoint: .opencodeGo, free: false, note: "Small"),
-        .init(id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash", endpoint: .opencodeGo, free: false, note: "Small"),
-        .init(id: "minimax-m3.1-flash", name: "MiniMax M3.1 Flash", endpoint: .opencodeGo, free: false, note: "Small"),
-        .init(id: "qwen3.8-flash", name: "Qwen 3.8 Flash", endpoint: .opencodeGo, free: false, note: "Small"),
-        .init(id: "claude-haiku-5-5", name: "Claude Haiku 5.5", endpoint: .opencodeGo, free: false, note: "Small"),
+        .init(id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.14, outputCost: 0.28),
+        .init(id: "hy3", name: "Hy3", endpoint: .opencodeGo, free: false, inputCost: 0.14, outputCost: 0.58),
+        .init(id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.60),
+        .init(id: "minimax-m3.1-flash", name: "MiniMax M3.1 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.60),
+        .init(id: "glm-5.3-flash", name: "GLM 5.3 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.50),
+        .init(id: "longcat-2.0", name: "LongCat 2.0", endpoint: .opencodeGo, free: false, inputCost: 0.30, outputCost: 1.20),
+        .init(id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro", endpoint: .opencodeGo, free: false, inputCost: 0.435, outputCost: 0.87),
+        .init(id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", endpoint: .opencodeGo, free: false, inputCost: 0.66, outputCost: 1.98),
+        .init(id: "hy4-preview", name: "Hy4 Preview", endpoint: .opencodeGo, free: false, inputCost: 0.834, outputCost: 2.501),
+        .init(id: "kimi-k2.7-code", name: "Kimi K2.7 Code", endpoint: .opencodeGo, free: false, inputCost: 0.95, outputCost: 4.00),
+        .init(id: "glm-5.2", name: "GLM 5.2", endpoint: .opencodeGo, free: false, inputCost: 1.40, outputCost: 4.40),
+        .init(id: "glm-5.3", name: "GLM 5.3", endpoint: .opencodeGo, free: false, inputCost: 1.40, outputCost: 4.40),
+        .init(id: "step-5-preview", name: "Step 5 Preview", endpoint: .opencodeGo, free: false, inputCost: 1.00, outputCost: 2.70),
+        .init(id: "kimi-k3.1-pro", name: "Kimi K3.1 Pro", endpoint: .opencodeGo, free: false, inputCost: 2.00, outputCost: 10.00),
+        .init(id: "kimi-k3", name: "Kimi K3", endpoint: .opencodeGo, free: false, inputCost: 3.00, outputCost: 15.00),
 
         .init(id: "gpt-4o-mini", name: "GPT-4o mini", endpoint: .openai, free: false, note: "Small"),
         .init(id: "gpt-4.1-mini", name: "GPT-4.1 mini", endpoint: .openai, free: false, note: "Small"),
@@ -77,10 +108,15 @@ public struct AskModel: Identifiable, Equatable, Sendable {
 
     /// Free models first, then the cheap/small fallbacks. Keeping this stable
     /// makes the chooser predictable even when a provider catalog changes.
-    public static let fallbackOrder: [AskModel] = catalog.enumerated().sorted { lhs, rhs in
-        if lhs.element.free != rhs.element.free { return lhs.element.free }
-        return lhs.offset < rhs.offset
-    }.map(\.element)
+    public static let fallbackOrder: [AskModel] = {
+        let free = catalog.filter(\.free)
+        let paid = catalog.filter { !$0.free }.sorted { lhs, rhs in
+            if lhs.outputCost != rhs.outputCost { return lhs.outputCost < rhs.outputCost }
+            if lhs.inputCost != rhs.inputCost { return lhs.inputCost < rhs.inputCost }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+        return free + paid
+    }()
 
     public static func models(for endpoint: AskEndpoint) -> [AskModel] {
         fallbackOrder.filter { $0.endpoint == endpoint }
