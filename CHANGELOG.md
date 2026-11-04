@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.1 — 2026-11-04
+
+### Fixed
+
+- Existing configs that still name `opencode-zen` or an old Zen model now migrate
+  cleanly to the Go default instead of keeping an invalid model id.
+- Onboarding uses an explicit dark background, so its header and footer remain
+  readable.
+
+### Verified
+
+- `swift test`: 70 tests, 0 failures.
+- Embedded terminal logs a real zsh prompt and command output.
+- `/cmd` → **Run in Panel** executed `/bin/echo hello-from-panel` inside the
+  embedded terminal.
+
 ## 2.0.0 — 2026-11-04
 
 ### Added

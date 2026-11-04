@@ -360,6 +360,9 @@ public enum ConfigLoader {
             if let fallback = askTable.bool("fallback") {
                 ask.fallback = fallback
             }
+            if AskModel.find(id: ask.model)?.endpoint != ask.endpoint {
+                ask.model = AskModel.defaultModel.id
+            }
             config.ask = ask
         }
 

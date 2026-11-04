@@ -30,6 +30,19 @@ final class AskTests: XCTestCase {
         XCTAssertTrue(diagnostics.isEmpty)
     }
 
+    func testLegacyAskEndpointMigratesToGo() throws {
+        let table = try TOMLTable(string: """
+        [ask]
+        provider = "opencode-zen"
+        model = "glm-5.3-flash-free"
+        """)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.ask.endpoint, .opencodeGo)
+        XCTAssertEqual(parsed.ask.model, AskModel.defaultModel.id)
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
     func testAskModelsPutFreeOptionsFirst() {
         let ordered = AskModel.fallbackOrder
         XCTAssertEqual(ordered.prefix(2).filter(\.free).count, 2)
