@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.9.4. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v1.9.5. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -201,10 +201,12 @@ Keychain” and never displays the value again. Keys are never written to
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window for the launcher and
-clipboard hotkeys, launcher position (Top / Center), terminal, editor, app order
-(Alphabetical or Most used), themes and typography, clipboard retention,
-web-search engines, and the browser used by web apps. The **Ask** tab selects the endpoint and model,
+`⌘,` (or the menu-bar icon) opens a native Settings window. **General** holds
+shortcuts, the terminal/editor used by providers, launcher position, and app
+order. **Appearance** holds themes and typography. **Clipboard**, **Search**, and
+**Ask** cover their own features. **Providers** controls which tabs are visible,
+their order, and optional aliases. **Advanced** has config/theme/log links,
+backup, diagnostics, and version information. The **Ask** tab selects the endpoint and model,
 saves a Keychain API key, toggles automatic fallback, and controls how many Q&A
 entries and how many days of history are kept.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
@@ -212,9 +214,7 @@ session event tap, so macOS-reserved combinations such as `⌘Space` are capture
 instead of being swallowed by the system; it stops as soon as Settings loses
 focus. Accessibility permission is needed for reserved-key capture. Saving
 validates both shortcuts and refuses a browser that is not installed. Changes
-apply immediately. The **Advanced** tab holds the paths to `config.toml`,
-providers, themes, and the log; everyday customization stays in the other tabs.
-Editing files by hand still works, then press `⌘R`.
+apply immediately. Editing files by hand still works, then press `⌘R`.
 
 ### Search position
 
@@ -223,13 +223,8 @@ keeps the top-first layout but opens the panel in the middle of the screen.
 The older `bottom` value is accepted for compatibility and now maps to
 `center`.
 
-`search_style = "classic" | "pill"` changes the launcher chrome. Classic is the
-original continuous panel. Pill separates the launcher into two floating
-surfaces: a full-width search capsule and a separate rounded content card, with
-the desktop visible through the gap. The content card holds the tabs, list, and
-footer; the active tab, result, and action use soft accent pills. The window
-itself is transparent, so each surface carries its own border and shadow.
-Pill is the default; Classic remains available in Settings.
+The launcher is always the two-surface pill: a floating search capsule above a
+rounded content card. There is no alternate classic layout.
 
 ### Pinned items
 
@@ -399,7 +394,6 @@ terminal_app = "kitty"
 editor_open_with = "neovide"
 clipboard_hotkey = "opt+v"
 search_position = "top"        # top | center
-search_style = "pill"          # pill (default) | classic
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent
 

@@ -76,7 +76,8 @@ struct SettingsView: View {
                 clipboard.tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }.tag(2)
                 search.tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(3)
                 ask.tabItem { Label("Ask", systemImage: "sparkles") }.tag(4)
-                advanced.tabItem { Label("Advanced", systemImage: "gearshape.2") }.tag(5)
+                providerSettings.tabItem { Label("Providers", systemImage: "square.stack.3d.up") }.tag(5)
+                advanced.tabItem { Label("Advanced", systemImage: "gearshape.2") }.tag(6)
             }
             .padding(20)
 
@@ -108,8 +109,8 @@ struct SettingsView: View {
 
     private var general: some View {
         Form {
-            Section("Launcher") {
-                LabeledContent("Hotkey") {
+            Section("Shortcuts") {
+                LabeledContent("Launcher shortcut") {
                     HStack(spacing: 6) {
                         ShortcutRecorder(
                             value: $config.hotkey,
@@ -122,7 +123,7 @@ struct SettingsView: View {
                             .accessibilityLabel("Record launcher hotkey")
                     }
                 }
-                LabeledContent("Clipboard hotkey") {
+                LabeledContent("Clipboard shortcut") {
                     HStack(spacing: 6) {
                         ShortcutRecorder(
                             value: $config.clipboardHotkey,
@@ -135,10 +136,14 @@ struct SettingsView: View {
                             .accessibilityLabel("Record clipboard hotkey")
                     }
                 }
-                TextField("Provider prefix", text: $config.providerPrefix)
+                Text("Click Record, then press the shortcut you want. Save applies it immediately.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Apps") {
                 TextField("Terminal", text: $config.terminalApp)
                 TextField("Editor", text: $config.editorOpenWith)
-                Text("Click Record, then press the shortcut you want. Save applies it immediately.")
+                Text("Used by projects, commands, Zellij, and Bitwarden. Examples: kitty, Terminal, neovide.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -166,21 +171,13 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Launcher position") {
+            Section("Launcher") {
                 Picker("Opens at", selection: $config.searchPosition) {
                     Text("Top").tag(SearchPosition.top)
                     Text("Center").tag(SearchPosition.center)
                 }
                 .pickerStyle(.segmented)
                 Text("Top drops down from the menu bar; Center opens in the middle of the screen.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Picker("Search bar", selection: $config.searchStyle) {
-                    Text("Classic").tag(SearchStyle.classic)
-                    Text("Siri-style pill").tag(SearchStyle.pill)
-                }
-                .pickerStyle(.segmented)
-                Text("The pill separates the search capsule from the content card and rounds the active elements; Classic keeps the original layout.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Picker("App order", selection: $config.appSort) {
@@ -393,29 +390,10 @@ struct SettingsView: View {
         }
     }
 
-    private var advanced: some View {
+    private var providerSettings: some View {
         Form {
-            Section("Files") {
-                Button("Open config.toml") { onOpen(configURL) }
-                Button("Open Providers Folder") { onOpen(PalettePaths.resolve().providersDir) }
-                Button("Open Themes Folder") { onOpen(PalettePaths.resolve().themesDir) }
-                Button("Open commands.toml") {
-                    onOpen(PalettePaths.resolve().configDir.appendingPathComponent("commands.toml"))
-                }
-                Button("Open Log") { onOpen(PalettePaths.resolve().logFile) }
-            }
-            Section("Custom providers") {
-                Text("Add a folder under providers/ with provider.toml. User providers override bundled ones with the same id. Press ⌘R after editing files.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Config file") {
-                Text("Everything above is written to config.toml. Edit it directly only when you need options the Settings window does not expose.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Enabled providers") {
-                Text("Turn off providers you do not use to shorten the tab bar. Apps stay enabled.")
+            Section("Visible tabs") {
+                Text("Turn off providers you do not use. Hidden providers disappear from the tab bar and Tab cycling; apps always stay visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ForEach(allProviderIDs, id: \.self) { id in
@@ -431,32 +409,36 @@ struct SettingsView: View {
                     ))
                 }
             }
-            Section("Provider order") {
-                Text("Tabs and Tab cycling follow this order. Triggers stay stable; aliases are extra words for the same provider.")
+            Section("Order") {
+                Text("Use the arrows to move a provider left or right in the tab bar.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ForEach(Array(providerOrder.enumerated()), id: \.element) { index, id in
                     HStack {
                         Text(providerName(id))
                         Spacer()
-                        Text(aliases[id] ?? "").font(.caption).foregroundStyle(.secondary)
                         Button {
                             guard index > 0 else { return }
                             providerOrder.swapAt(index, index - 1)
-                        } label: { Image(systemName: "chevron.up") }
+                        } label: { Image(systemName: "chevron.left") }
                             .buttonStyle(.borderless)
+                            .disabled(index == 0)
                         Button {
                             guard index + 1 < providerOrder.count else { return }
                             providerOrder.swapAt(index, index + 1)
-                        } label: { Image(systemName: "chevron.down") }
+                        } label: { Image(systemName: "chevron.right") }
                             .buttonStyle(.borderless)
+                            .disabled(index + 1 == providerOrder.count)
                     }
                 }
             }
-            Section("Provider aliases") {
+            DisclosureGroup("Aliases (optional)") {
+                Text("An alias is another word that opens the same provider. Commas separate aliases.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 ForEach(providers) { provider in
                     TextField(
-                        "\(provider.name) aliases (comma separated)",
+                        "\(provider.name) aliases",
                         text: Binding(
                             get: { aliases[provider.id] ?? "" },
                             set: { aliases[provider.id] = $0 }
@@ -464,14 +446,32 @@ struct SettingsView: View {
                     )
                 }
             }
-            Section("Providers") {
-                if providerSummary.isEmpty {
-                    Text("No providers loaded.").font(.caption).foregroundStyle(.secondary)
-                } else {
-                    ForEach(providerSummary, id: \.self) { line in
-                        Text(line).font(.caption).textSelection(.enabled)
-                    }
+            Section("Files") {
+                Button("Open Providers Folder") { onOpen(PalettePaths.resolve().providersDir) }
+                Button("Open commands.toml") {
+                    onOpen(PalettePaths.resolve().configDir.appendingPathComponent("commands.toml"))
                 }
+                Text("Add your own provider by creating a folder under providers/ with a provider.toml. User providers override bundled ones with the same id. Press ⌘R after editing files.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var advanced: some View {
+        Form {
+            Section("Configuration") {
+                TextField("Command prefix", text: $config.providerPrefix)
+                Text("Prefix for provider commands such as /clip and /port. Usually /.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Open config.toml") { onOpen(configURL) }
+                Button("Open Themes Folder") { onOpen(PalettePaths.resolve().themesDir) }
+                Button("Open Log") { onOpen(PalettePaths.resolve().logFile) }
+                Text("Settings writes this file for you. Edit it directly only for options that are not in this window, then press ⌘R.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Backup & diagnostics") {
                 Button("Export Backup…") { onExportBackup() }

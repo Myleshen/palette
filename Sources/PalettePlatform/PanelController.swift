@@ -35,16 +35,6 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         didSet { if isShowing { position() } }
     }
 
-    /// When true the window is transparent and SwiftUI draws separate floating
-    /// cards (search capsule + content card). The vibrancy view must be hidden
-    /// or it would paint a rectangle behind both cards.
-    public var floatingCards = false {
-        didSet {
-            effectView.isHidden = floatingCards
-            panel.hasShadow = !floatingCards && theme.window.shadow
-            if isShowing { position() }
-        }
-    }
     private var keyMonitor: Any?
     private var contentHeight: CGFloat = 200
     private var theme: Theme
@@ -133,8 +123,8 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         effectView.material = Self.material(named: theme.window.material)
         effectView.layer?.cornerRadius = theme.window.cornerRadius
         effectView.layer?.borderWidth = 0
-        effectView.isHidden = floatingCards
-        panel.hasShadow = !floatingCards && theme.window.shadow
+        effectView.isHidden = true
+        panel.hasShadow = false
         panel.appearance = NSAppearance(named: theme.appearance == "light" ? .aqua : .darkAqua)
         effectView.alphaValue = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? 1 : theme.window.opacity
         if isShowing { position() }

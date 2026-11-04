@@ -390,16 +390,10 @@ struct LauncherRootView: View {
     @FocusState private var promptFocused: Bool
 
     private var theme: Theme { themeManager.theme }
-    private var isPill: Bool { controller.searchStyle == .pill }
+    private var isPill: Bool { true }
 
     var body: some View {
-        Group {
-            if isPill {
-                pillLayout
-            } else {
-                classicLayout
-            }
-        }
+        pillLayout
         .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
         .onAppear {
             DispatchQueue.main.async { searchFocused = true }
@@ -412,28 +406,6 @@ struct LauncherRootView: View {
         .onChange(of: controller.prompt?.id) { _, _ in
             DispatchQueue.main.async { promptFocused = controller.prompt != nil }
         }
-    }
-
-    /// Classic is one continuous panel.
-    private var classicLayout: some View {
-        VStack(spacing: 0) {
-            searchBar
-            Rectangle()
-                .fill(theme.color(theme.palette.separator))
-                .frame(height: 1)
-            tabBar
-            content
-            if theme.footer.show {
-                footer
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(theme.color(theme.palette.bg).opacity(0.72))
-        .clipShape(RoundedRectangle(cornerRadius: CGFloat(theme.window.cornerRadius), style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: CGFloat(theme.window.cornerRadius), style: .continuous)
-                .strokeBorder(theme.color(theme.palette.border).opacity(0.55), lineWidth: CGFloat(theme.window.borderWidth))
-        )
     }
 
     /// Pill separates the search capsule from the content card, like the

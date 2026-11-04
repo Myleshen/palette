@@ -26,10 +26,6 @@ public enum SearchPosition: String, Sendable, Equatable, CaseIterable {
     case top, center
 }
 
-public enum SearchStyle: String, Sendable, Equatable, CaseIterable {
-    case classic, pill
-}
-
 public struct WebSearchEngine: Sendable, Equatable, Identifiable {
     public var name: String
     public var urlTemplate: String
@@ -93,7 +89,6 @@ public struct PaletteConfig: Sendable, Equatable {
     public var webSearchEnabled: Bool
     public var webSearchEngines: [WebSearchEngine]
     public var searchPosition: SearchPosition
-    public var searchStyle: SearchStyle
     public var webAppBrowser: String
     public var appSort: AppSort
     public var ask: AskConfig
@@ -116,7 +111,6 @@ public struct PaletteConfig: Sendable, Equatable {
         webSearchEnabled: Bool = true,
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
         searchPosition: SearchPosition = .top,
-        searchStyle: SearchStyle = .pill,
         webAppBrowser: String = "Helium",
         appSort: AppSort = .alphabetical,
         ask: AskConfig = AskConfig(),
@@ -138,7 +132,6 @@ public struct PaletteConfig: Sendable, Equatable {
         self.webSearchEnabled = webSearchEnabled
         self.webSearchEngines = webSearchEngines
         self.searchPosition = searchPosition
-        self.searchStyle = searchStyle
         self.webAppBrowser = webAppBrowser
         self.appSort = appSort
         self.ask = ask
@@ -285,10 +278,6 @@ public enum ConfigLoader {
             } else if let parsed = SearchPosition(rawValue: value) {
                 config.searchPosition = parsed
             }
-        }
-        if let style = table.str("search_style"),
-           let parsed = SearchStyle(rawValue: style.lowercased()) {
-            config.searchStyle = parsed
         }
         if let browser = table.str("web_app_browser"), !browser.isEmpty {
             config.webAppBrowser = browser
@@ -456,7 +445,6 @@ public enum ConfigLoader {
         search_position = "top"
 
         # Search field shape: pill (floating Siri-style surfaces, default) | classic.
-        search_style = "pill"
 
         # Chromium-based browser used for web apps. Defaults to Helium.
         web_app_browser = "Helium"
@@ -560,7 +548,6 @@ public enum ConfigWriter {
         out.append("terminal_app = \(quote(config.terminalApp))")
         out.append("editor_open_with = \(quote(config.editorOpenWith))")
         out.append("search_position = \(quote(config.searchPosition.rawValue))")
-        out.append("search_style = \(quote(config.searchStyle.rawValue))")
         out.append("web_app_browser = \(quote(config.webAppBrowser))")
         out.append("app_sort = \(quote(config.appSort.rawValue))")
         out.append("")

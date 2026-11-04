@@ -136,7 +136,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   skipping, response parsing, and Ask history trimming).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 1.9.4). Hotkeys `opt+space` and `opt+v` registered without a
+  version 1.9.5). Hotkeys `opt+space` and `opt+v` registered without a
   conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`

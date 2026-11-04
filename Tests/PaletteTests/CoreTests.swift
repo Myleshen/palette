@@ -131,7 +131,6 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(parsed.webSearchEngines.map(\.name), config.webSearchEngines.map(\.name))
         XCTAssertEqual(parsed.clipboardHotkey, config.clipboardHotkey)
         XCTAssertEqual(parsed.searchPosition, .top)
-        XCTAssertEqual(parsed.searchStyle, .pill)
         XCTAssertEqual(parsed.webAppBrowser, "Helium")
         XCTAssertTrue(diagnostics.isEmpty)
         XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))
@@ -139,17 +138,15 @@ final class CoreTests: XCTestCase {
 
         var moved = config
         moved.searchPosition = .center
-        moved.searchStyle = .pill
         moved.appSort = .frequent
         let movedTable = try TOMLTable(string: ConfigWriter.render(moved))
         var movedDiagnostics: [Diagnostic] = []
         let movedParsed = try ConfigLoader.parse(movedTable, diagnostics: &movedDiagnostics)
         XCTAssertEqual(movedParsed.searchPosition, .center)
-        XCTAssertEqual(movedParsed.searchStyle, .pill)
         XCTAssertEqual(movedParsed.appSort, .frequent)
         XCTAssertTrue(movedDiagnostics.isEmpty)
 
-        // 1.7.0 configs may still contain the removed "bottom" value.
+        // Older configs may still contain removed layout keys.
         let legacy = try TOMLTable(string: "search_position = \"bottom\"")
         var legacyDiagnostics: [Diagnostic] = []
         let legacyParsed = try ConfigLoader.parse(legacy, diagnostics: &legacyDiagnostics)

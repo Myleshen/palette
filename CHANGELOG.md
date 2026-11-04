@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.9.5 — 2026-11-04
+
+### Changed
+
+- Settings is reorganized around user tasks: General (shortcuts, apps, window,
+  app order), Appearance, Clipboard, Search, Ask, Providers, and Advanced.
+- Provider visibility, order, and aliases now live together under **Providers**
+  instead of being buried in Advanced. Aliases are collapsed unless needed.
+- The command prefix moved to Advanced; General no longer asks users to edit
+  low-level options.
+- The launcher is pill-only. The classic layout and its `search_style` config
+  key are removed; old configs with that key continue to load normally.
+
+### Verified
+
+- `swift test`: 67 tests, 0 failures.
+- Empty-query snapshot shows the two-surface pill layout with no classic branch.
+
 ## 1.9.4 — 2026-11-04
 
 ### Changed

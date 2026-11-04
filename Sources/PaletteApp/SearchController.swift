@@ -34,7 +34,6 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public private(set) var previewEnabled = false
     @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
-    public var searchStyle: SearchStyle { configuration.searchStyle }
 
     public var panel: PanelController?
     public var onReload: (() -> Void)?
@@ -795,9 +794,9 @@ public final class SearchController: ObservableObject, HostBridge {
         guard let panel else { return }
         let theme = themeManager.theme
         let row = CGFloat(theme.effectiveRowHeight)
-        let spacing = configuration.searchStyle == .pill ? 6 : CGFloat(theme.list.spacing)
+        let spacing: CGFloat = 6
         func rows(_ count: Int) -> CGFloat {
-            let maxVisible = configuration.searchStyle == .pill ? 6 : 8
+            let maxVisible = 6
             let visible = CGFloat(min(max(count, 1), maxVisible))
             return visible * row + max(0, visible - 1) * spacing + 8
         }
@@ -813,14 +812,9 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         let footer = theme.footer.show ? CGFloat(28) : 0
         // Provider tab strip, plus the clipboard filter chips when previewing.
-        let tabs: CGFloat
-        if configuration.searchStyle == .pill {
-            // Two flow rows (three only with an unusually large provider set)
-            // plus the clipboard/Ask sub-tab row.
-            tabs = (activeTabID == "clip" || activeTabID == "ask") ? 110 : 82
-        } else {
-            tabs = CGFloat(33 + ((activeTabID == "clip" || activeTabID == "ask") ? 27 : 0))
-        }
+        // Two flow rows (three only with an unusually large provider set) plus
+        // the clipboard/Ask sub-tab row.
+        let tabs: CGFloat = (activeTabID == "clip" || activeTabID == "ask") ? 110 : 82
         if previewEnabled {
             // The preview pane sets the height; a few rows are always visible.
             content = max(content, 360)
@@ -828,7 +822,7 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         // Pill floats the search capsule above the content card: 12 pt top and
         // bottom margins plus a 10 pt gap replace the old inline spacing.
-        let pillExtra: CGFloat = configuration.searchStyle == .pill ? 22 : 0
+        let pillExtra: CGFloat = 22
         panel.setContentHeight(CGFloat(theme.search.height) + content + tabs + footer + pillExtra)
     }
 

@@ -420,7 +420,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         panel = controller
         controller.anchorOverride = configuration.searchPosition.rawValue
-        controller.floatingCards = configuration.searchStyle == .pill
         searchController.panel = controller
     }
 
@@ -803,7 +802,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.typography = configuration.typography
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
-        panel?.floatingCards = configuration.searchStyle == .pill
         updatePositionMenu()
 
         let oldRegistry = registry
