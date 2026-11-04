@@ -20,13 +20,24 @@ public final class GitProvider: PaletteProvider, @unchecked Sendable {
         var changes: Int
     }
 
+    private struct Output {
+        var path: String
+        var title: String
+        var text: String
+    }
+
     private actor Cache {
         var repos: [Repo] = []
         var at = Date.distantPast
+        var output: Output?
 
         func update(_ repos: [Repo]) {
             self.repos = repos
             at = Date()
+        }
+
+        func setOutput(_ output: Output?) {
+            self.output = output
         }
     }
 
@@ -50,47 +61,95 @@ public final class GitProvider: PaletteProvider, @unchecked Sendable {
             await cache.update(repos)
         }
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return repos.compactMap { repo in
+        var items: [PaletteItem] = []
+        if let output = await cache.output,
+           query.isEmpty || Ranking.score(query: query, candidate: "\(output.path) \(output.title)") != nil {
+            items.append(outputItem(output))
+        }
+        items.append(contentsOf: repos.compactMap { repo in
             if !query.isEmpty,
                Ranking.score(query: query, candidate: "\(repo.name) \(repo.branch) \(repo.path)") == nil {
                 return nil
             }
             return item(repo)
-        }
+        })
+        return items
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
+        if action.id == "clear-output" {
+            await cache.setOutput(nil)
+            await bridge.notify("Git output cleared")
+            return
+        }
         guard let value = action.value.object, let path = value["path"] else { return }
-        let quoted = Self.shellQuote(path)
+        let repo = (path as NSString).lastPathComponent
         switch action.id {
+        case "status":
+            await run(["status", "--short", "--branch"], path: path, title: "Status · \(repo)", timeout: 20)
+        case "log":
+            await run(["log", "--oneline", "-30"], path: path, title: "Recent Log · \(repo)", timeout: 20)
         case "stage":
-            _ = try await ProcessRunner.run(["git", "-C", path, "add", "-A"], timeout: 20)
-            await bridge.notify("Staged all changes in \((path as NSString).lastPathComponent)")
+            await run(["add", "-A"], path: path, title: "Stage All · \(repo)", timeout: 20)
         case "commit":
             guard let message = await bridge.prompt(
                 kind: .text,
-                title: "Commit message for \((path as NSString).lastPathComponent)",
+                title: "Commit message for \(repo)",
                 placeholder: "Describe the change"
             ), !message.isEmpty else { return }
-            let result = try await ProcessRunner.run(["git", "-C", path, "commit", "-m", message], timeout: 60)
-            await bridge.notify(result.status == 0 ? "Committed" : result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines))
+            await run(["commit", "-m", message], path: path, title: "Commit · \(repo)", timeout: 60)
         case "pull":
-            let result = try await ProcessRunner.run(["git", "-C", path, "pull", "--ff-only"], timeout: 120)
-            await bridge.notify(result.status == 0 ? "Pulled (fast-forward only)" : result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines))
+            await run(["pull", "--ff-only"], path: path, title: "Pull · \(repo)", timeout: 120)
         case "push":
-            let result = try await ProcessRunner.run(["git", "-C", path, "push"], timeout: 120)
-            await bridge.notify(result.status == 0 ? "Pushed" : result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines))
-        case "status":
-            try await MainActor.run { try launcher.openTerminal(command: "cd \(quoted) && git status", app: "kitty") }
-        case "log":
-            try await MainActor.run { try launcher.openTerminal(command: "cd \(quoted) && git log --oneline -30", app: "kitty") }
+            await run(["push"], path: path, title: "Push · \(repo)", timeout: 120)
         case "lazygit":
-            try await MainActor.run { try launcher.openTerminal(command: "cd \(quoted) && lazygit", app: "kitty") }
+            try await MainActor.run {
+                try launcher.openTerminal(command: "cd \(Self.shellQuote(path)) && lazygit", app: "kitty")
+            }
         case "reveal":
             await MainActor.run { launcher.reveal(path) }
         default:
             break
         }
+    }
+
+    private func run(_ arguments: [String], path: String, title: String, timeout: TimeInterval) async {
+        let command = (["git", "-C", path] + arguments).joined(separator: " ")
+        do {
+            let result = try await ProcessRunner.run(["git", "-C", path] + arguments, timeout: timeout)
+            let stdout = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+            let stderr = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
+            var text = "$ \(command)\n\nexit \(result.status)"
+            if !stdout.isEmpty { text += "\n\n\(stdout)" }
+            if !stderr.isEmpty { text += "\n\n\(stderr)" }
+            await cache.setOutput(Output(path: path, title: title, text: text))
+            await bridge.notify(result.status == 0 ? "\(title): done" : "\(title): exit \(result.status)")
+        } catch {
+            await cache.setOutput(Output(
+                path: path,
+                title: title,
+                text: "$ \(command)\n\n\(error.localizedDescription)"
+            ))
+            await bridge.notify("\(title): \(error.localizedDescription)")
+        }
+    }
+
+    private func outputItem(_ output: Output) -> PaletteItem {
+        PaletteItem(
+            id: "git-output:\(output.path)",
+            title: output.title,
+            subtitle: output.path,
+            icon: .symbol("terminal"),
+            badge: "OUTPUT",
+            score: 10_000,
+            actions: [
+                PaletteAction(id: "copy-output", title: "Copy Output", kind: .copyText, value: .text(output.text)),
+                PaletteAction(id: "clear-output", title: "Dismiss Output", kind: .custom, value: .text(output.path)),
+            ],
+            preview: .text(output.text),
+            providerID: descriptor.id,
+            providerName: descriptor.name
+        )
     }
 
     private func item(_ repo: Repo) -> PaletteItem {

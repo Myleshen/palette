@@ -160,7 +160,7 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
             actions: [
                 PaletteAction(id: "ask-settings", title: "Open Ask Settings", kind: .custom, value: .text("settings")),
             ],
-            preview: .text("Ask needs an OpenCode Zen, OpenCode Go, or OpenAI API key.\n\nOpen Settings → Ask, paste a key once, and save. Palette only shows whether a key exists after that.\(waiting)"),
+            preview: .text("Ask needs an OpenCode Go API key.\n\nOpen Settings → Ask, paste a key once, and save. Palette only shows whether a key exists after that.\(waiting)"),
             providerID: descriptor.id,
             providerName: descriptor.name
         )

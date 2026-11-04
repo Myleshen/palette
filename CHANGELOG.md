@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.0.0 — 2026-11-04
+
+### Added
+
+- **Scratchpad** (`/scratch`): persistent in-panel editor seeded from clipboard
+  text, with Paste, Copy All, Clear, and Save & Close.
+- **Terminal** (`/term`): SwiftTerm login shell embedded in the content panel.
+  `/cmd` items can now **Run in Panel** through the same terminal.
+- **First-run setup** window for shortcuts, login item, provider visibility,
+  terminal/editor, and an optional Go key.
+- **YAML and TOML format** clipboard transforms.
+- Preview keyboard scrolling: `⌥P` focuses the preview; `Ctrl+J/K`, `Ctrl+D/U`,
+  `Ctrl+F/B`, `Ctrl+G`, and `Shift+G` scroll; `⌘C` copies selected text.
+
+### Changed
+
+- `/ask` is Go-only. OpenAI and Zen were removed; Zen free models are only
+  supported inside OpenCode itself, not third-party clients.
+- Ask keys moved to an encrypted user-only file, avoiding repeated Keychain
+  prompts from ad-hoc debug builds.
+- `/git` no longer opens a terminal for status/log or mutations. Commands run as
+  managed subprocesses and their output appears in the panel. Only **Open
+  LazyGit** launches a terminal.
+- Search settings now show simple engine toggles; custom URL templates live
+  under an Advanced disclosure.
+- Provider tabs are grouped: Neovide (Files/Folders), Bitwarden (five modes),
+  and Ask (Ask/History).
+- Ask model chooser lists every OpenAI-compatible Go model, cheapest first,
+  with input/output prices.
+
+### Verified
+
+- `swift test`: 69 tests, 0 failures.
+- `/term` opens an embedded login shell; `/scratch` opens the editor.
+- `/git` status/log output renders in the panel and does not launch zsh.
+- `/ask` lists Go models only, with costs and cheapest-first ordering.
+- New profiles show the setup window; existing profiles are unchanged.
+
 ## 1.9.6 — 2026-11-04
 
 ### Added

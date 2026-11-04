@@ -28,6 +28,12 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertNotNil(ClipboardTransform.jsonPretty.apply(to: "{\"b\":1,\"a\":2}"))
         XCTAssertNil(ClipboardTransform.jsonPretty.apply(to: "not json"))
         XCTAssertEqual(ClipboardTransform.stripANSI.apply(to: "\u{001B}[31mred\u{001B}[0m"), "red")
+        let yaml = ClipboardTransform.yamlFormat.apply(to: "b: 2\na: 1\n")
+        XCTAssertNotNil(yaml)
+        XCTAssertTrue(yaml?.contains("a: 1") == true)
+        let toml = ClipboardTransform.tomlFormat.apply(to: "title = \"x\"\n")
+        XCTAssertNotNil(toml)
+        XCTAssertTrue(toml?.contains("title") == true)
     }
 
     func testTypographyAndProviderConfigRoundTrip() throws {

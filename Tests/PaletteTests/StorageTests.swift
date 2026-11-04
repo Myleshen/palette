@@ -136,11 +136,11 @@ final class StorageTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
 
         _ = try await store.insertAsk(
-            question: "one", answer: "first", model: "glm", provider: "opencode-zen",
+            question: "one", answer: "first", model: "glm", provider: "opencode-go",
             durationMs: 10, maxHistory: 2, retentionDays: 30
         )
         _ = try await store.insertAsk(
-            question: "two", answer: "second", model: "glm", provider: "opencode-zen",
+            question: "two", answer: "second", model: "glm", provider: "opencode-go",
             durationMs: 20, maxHistory: 2, retentionDays: 30
         )
         _ = try await store.insertAsk(
@@ -154,7 +154,7 @@ final class StorageTests: XCTestCase {
 
         let old = Date(timeIntervalSinceNow: -40 * 24 * 60 * 60)
         _ = try await store.insertAsk(
-            question: "old", answer: "expired", model: "glm", provider: "opencode-zen",
+            question: "old", answer: "expired", model: "glm", provider: "opencode-go",
             durationMs: 1, maxHistory: 10, retentionDays: 30, at: old
         )
         records = try await store.askHistory(limit: 10)

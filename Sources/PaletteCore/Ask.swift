@@ -1,32 +1,18 @@
 import Foundation
 
 public enum AskEndpoint: String, Sendable, Equatable, Hashable, CaseIterable, Codable {
-    case opencodeZen = "opencode-zen"
     case opencodeGo = "opencode-go"
-    case openai
 
     public var displayName: String {
-        switch self {
-        case .opencodeZen: return "OpenCode Zen"
-        case .opencodeGo: return "OpenCode Go"
-        case .openai: return "OpenAI"
-        }
+        "OpenCode Go"
     }
 
     public var baseURL: URL {
-        switch self {
-        case .opencodeZen: return URL(string: "https://opencode.ai/zen/v1")!
-        case .opencodeGo: return URL(string: "https://opencode.ai/inference/go/openai/v1")!
-        case .openai: return URL(string: "https://api.openai.com/v1")!
-        }
+        URL(string: "https://opencode.ai/inference/go/openai/v1")!
     }
 
     public var keyEnvironment: [String] {
-        switch self {
-        case .opencodeZen: return ["PALETTE_ASK_KEY", "OPENCODE_API_KEY"]
-        case .opencodeGo: return ["PALETTE_ASK_KEY", "OPENCODE_GO_API_KEY"]
-        case .openai: return ["PALETTE_ASK_KEY", "OPENAI_API_KEY"]
-        }
+        ["PALETTE_ASK_KEY", "OPENCODE_GO_API_KEY"]
     }
 }
 
@@ -71,21 +57,8 @@ public struct AskModel: Identifiable, Equatable, Sendable {
     public var key: String { "\(endpoint.rawValue)/\(id)" }
 
     public static let catalog: [AskModel] = [
-        // Zen free models come first and the small flash models lead: `/ask`
-        // is for quick questions, not long reasoning sessions.
-        .init(id: "glm-5.3-flash-free", name: "GLM 5.3 Flash", endpoint: .opencodeZen, free: true),
-        .init(id: "deepseek-v4.1-flash-free", name: "DeepSeek V4.1 Flash", endpoint: .opencodeZen, free: true),
-        .init(id: "mimo-v2.6-flash-free", name: "MiMo V2.6 Flash", endpoint: .opencodeZen, free: true),
-        .init(id: "flint-40b-free", name: "Flint 40B", endpoint: .opencodeZen, free: true),
-        .init(id: "nemotron-3.5-lightning-free", name: "Nemotron 3.5 Lightning", endpoint: .opencodeZen, free: true),
-        .init(id: "pulse-alpha-free", name: "Pulse Alpha", endpoint: .opencodeZen, free: true),
-        .init(id: "beam-free", name: "Beam", endpoint: .opencodeZen, free: true),
-        .init(id: "nemotron-3.5-super-vl-free", name: "Nemotron 3.5 Super VL", endpoint: .opencodeZen, free: true),
-        .init(id: "big-pickle", name: "Big Pickle", endpoint: .opencodeZen, free: true, note: "Reasoning"),
-
-        .init(id: "beam-free", name: "Beam (Go)", endpoint: .opencodeGo, free: true),
+        .init(id: "beam-free", name: "Beam", endpoint: .opencodeGo, free: true),
         .init(id: "iceman-contributor-free", name: "Iceman Contributor", endpoint: .opencodeGo, free: true),
-
         .init(id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.14, outputCost: 0.28),
         .init(id: "hy3", name: "Hy3", endpoint: .opencodeGo, free: false, inputCost: 0.14, outputCost: 0.58),
         .init(id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.60),
@@ -101,9 +74,6 @@ public struct AskModel: Identifiable, Equatable, Sendable {
         .init(id: "step-5-preview", name: "Step 5 Preview", endpoint: .opencodeGo, free: false, inputCost: 1.00, outputCost: 2.70),
         .init(id: "kimi-k3.1-pro", name: "Kimi K3.1 Pro", endpoint: .opencodeGo, free: false, inputCost: 2.00, outputCost: 10.00),
         .init(id: "kimi-k3", name: "Kimi K3", endpoint: .opencodeGo, free: false, inputCost: 3.00, outputCost: 15.00),
-
-        .init(id: "gpt-4o-mini", name: "GPT-4o mini", endpoint: .openai, free: false, note: "Small"),
-        .init(id: "gpt-4.1-mini", name: "GPT-4.1 mini", endpoint: .openai, free: false, note: "Small"),
     ]
 
     /// Free models first, then the cheap/small fallbacks. Keeping this stable
@@ -142,7 +112,7 @@ public struct AskConfig: Sendable, Equatable {
     public var fallback: Bool
 
     public init(
-        endpoint: AskEndpoint = .opencodeZen,
+        endpoint: AskEndpoint = .opencodeGo,
         model: String = AskModel.defaultModel.id,
         maxHistory: Int = 200,
         retentionDays: Int = 30,

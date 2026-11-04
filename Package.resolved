@@ -1,6 +1,42 @@
 {
-  "originHash" : "d74178e1a79d0b390816e0d6bc33a3738bbf8cf7e474958ab38471bd20b089c6",
+  "originHash" : "fe02676626ec2837d8404eaa457d7eddd6d406724ad5138b434fbaa0471cb7ed",
   "pins" : [
+    {
+      "identity" : "h",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rarestype/h",
+      "state" : {
+        "revision" : "aa3626829160917d4378330617971977cbd78f5b",
+        "version" : "1.0.1"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser",
+      "state" : {
+        "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
+        "version" : "1.8.2"
+      }
+    },
+    {
+      "identity" : "swift-png",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tayloraswift/swift-png",
+      "state" : {
+        "revision" : "2d17c6c51c098628574c0383f1119892655a73a2",
+        "version" : "4.5.2"
+      }
+    },
+    {
+      "identity" : "swiftterm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
+      "state" : {
+        "revision" : "a183c15b52858530a17de57dcc72b93eeebc9857",
+        "version" : "1.99.2"
+      }
+    },
     {
       "identity" : "tomlkit",
       "kind" : "remoteSourceControl",
@@ -8,6 +44,15 @@
       "state" : {
         "revision" : "ec6198d37d495efc6acd4dffbd262cdca7ff9b3f",
         "version" : "0.6.0"
+      }
+    },
+    {
+      "identity" : "yams",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jpsim/Yams.git",
+      "state" : {
+        "revision" : "3d6871d5b4a5cd519adf233fbb576e0a2af71c17",
+        "version" : "5.4.0"
       }
     }
   ],

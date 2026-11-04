@@ -158,6 +158,7 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             actions.append(PaletteAction(id: "copy-all", title: "Copy Full Text", kind: .copyText, value: .text(entry.text)))
         }
         actions.append(PaletteAction(id: "clip-transform", title: "Transform Text…", kind: .custom, value: .text(entry.id)))
+        actions.append(PaletteAction(id: "scratch-entry", title: "Open in Scratchpad", kind: .custom, value: .text(entry.id)))
         return PaletteItem(
             id: entry.id,
             title: title.isEmpty ? "(whitespace)" : title,

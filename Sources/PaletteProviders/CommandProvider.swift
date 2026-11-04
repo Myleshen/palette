@@ -93,7 +93,19 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("terminal"),
             badge: command.terminal ? "TERMINAL" : "RUN",
             score: 1_000,
-            actions: [PaletteAction(id: "run", title: "Run Command", kind: .custom, value: .text(command.id))],
+            actions: [
+                PaletteAction(id: "run", title: "Run Command", kind: .custom, value: .text(command.id)),
+                PaletteAction(
+                    id: "cmd-run-panel",
+                    title: "Run in Panel",
+                    kind: .custom,
+                    value: .object([
+                        "executable": command.executable,
+                        "args": command.arguments.joined(separator: "\u{1F}"),
+                        "cwd": command.workingDirectory ?? "",
+                    ])
+                ),
+            ],
             preview: .text("\(subtitle)\n\nWorking directory: \(command.workingDirectory ?? "current")"),
             providerID: descriptor.id,
             providerName: descriptor.name

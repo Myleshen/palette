@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v1.9.6. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.0.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -130,8 +130,10 @@ trigger word:
 | `/port <query>` | listening TCP ports, with process and PID |
 | `/cmd <query>` | commands from `~/.config/palette/commands.toml` |
 | `/proj <query>` | devx projects and worktrees, or `~/dev` fallback |
-| `/git <query>` | repositories with safe, focused Git actions |
-| `/ask <question>` | one-shot answer from a configured AI endpoint |
+| `/git <query>` | repositories with managed Git actions and panel output |
+| `/term` | embedded terminal shell |
+| `/scratch` | persistent text scratchpad |
+| `/ask <question>` | one-shot OpenCode Go answer |
 | `/askh <query>` | search retained Ask questions and answers |
 | `/web <query>` | saved web apps; type a domain to add one |
 | `/emoji <query>` | emoji picker |
@@ -176,20 +178,16 @@ the result in your default browser. Engines are ordinary config rows in
 answer. It is deliberately one-shot: there is no conversation thread, so every
 question is independent.
 
-Supported endpoints:
+Supported endpoint:
 
-- **OpenCode Zen** (`https://opencode.ai/zen/v1`) — free models first.
 - **OpenCode Go** (`https://opencode.ai/inference/go/openai/v1`) — every
-  OpenAI-compatible chat model, ordered cheapest output price first; requires
-  an active Go subscription.
-- **OpenAI** (`https://api.openai.com/v1`) — any OpenAI chat-completions key.
+  OpenAI-compatible Go chat model, ordered cheapest output price first. A Go
+  key is required.
 
-Type `/ask` with no question to choose a model. Free models are listed first and
-marked `FREE`; paid models show their input/output price per million tokens and
-are ordered cheapest first. When the selected model reports a quota or
-availability error, Palette automatically tries the next free model, then the
-cheapest paid model the key can access. `/ask what is 2+2` asks the selected
-model directly. Answers can be copied, asked again, or found later in history.
+Type `/ask` with no question to choose a model. Free Go models are listed first
+and marked `FREE`; paid models show their input/output price per million tokens
+and are ordered cheapest first. `/ask what is 2+2` asks the selected model
+directly. Answers can be copied, asked again, or found later in history.
 
 The **Ask History** sub-tab (or `/askh`) searches retained questions and answers.
 Each row shows the model, endpoint, age, latency, and token usage. Ask history is
@@ -309,10 +307,22 @@ state, not in `config.toml`.
 
 `⌘K` on any text entry includes **Transform Text…**. Pick a transform and the
 result opens with a full preview; `⏎` copies it and `⌘⏎` pastes it. Built-ins:
-trim, JSON pretty/minify, Base64 encode/decode, URL encode/decode, shell quote,
-path quote, uppercase/lowercase, sort/dedupe lines, strip ANSI, Markdown link,
-and slug. Transforms are local and deterministic; no user script runs from a
+trim, JSON pretty/minify, YAML format, TOML format, Base64 encode/decode, URL
+encode/decode, shell quote, path quote, uppercase/lowercase, sort/dedupe lines,
+strip ANSI, Markdown link, and slug. Transforms are local and deterministic; no user script runs from a
 clipboard copy.
+
+### Scratchpad and terminal
+
+`/scratch` opens a persistent editor inside the panel. It accepts pasted text,
+supports normal selection and editing, and provides **Paste**, **Copy All**,
+**Clear**, and **Save & Close**. Clipboard text entries also have **Open in
+Scratchpad** in `⌘K`; the last draft is restored automatically.
+
+`/term` opens a real login shell in the content panel using SwiftTerm. `⌘W`
+closes the panel and terminates the shell. `/cmd` items also expose **Run in
+Panel**, which opens the shell and runs the command there so output stays
+visible.
 
 ### Developer commands
 
@@ -341,8 +351,10 @@ confirm = false
   directory. Open `localhost:PORT`, copy the port/PID, or terminate with SIGTERM
   and explicitly force-kill with SIGKILL; both kills require confirmation.
 - `/git` lists repositories and exposes status, branch, stage all, commit with a
-  message, fast-forward-only pull, push, recent log, and LazyGit. Complex Git
-  work still belongs in LazyGit; Palette never force-pushes or rewrites history.
+  message, fast-forward-only pull, push, recent log, and LazyGit. Status, log,
+  and mutations run as managed subprocesses and return their output to the
+  panel; only **Open LazyGit** launches a terminal. Complex Git work still
+  belongs in LazyGit; Palette never force-pushes or rewrites history.
 
 ### Typography
 

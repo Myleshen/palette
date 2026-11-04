@@ -8,8 +8,8 @@ import PaletteProviders
 final class AskTests: XCTestCase {
     func testAskConfigRoundTripsWithoutSecrets() throws {
         var config = PaletteConfig()
-        config.ask.endpoint = .openai
-        config.ask.model = "gpt-4o-mini"
+        config.ask.endpoint = .opencodeGo
+        config.ask.model = "hy3"
         config.ask.maxHistory = 42
         config.ask.retentionDays = 9
         config.ask.maxTokens = 256
@@ -21,8 +21,8 @@ final class AskTests: XCTestCase {
 
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(TOMLTable(string: rendered), diagnostics: &diagnostics)
-        XCTAssertEqual(parsed.ask.endpoint, .openai)
-        XCTAssertEqual(parsed.ask.model, "gpt-4o-mini")
+        XCTAssertEqual(parsed.ask.endpoint, .opencodeGo)
+        XCTAssertEqual(parsed.ask.model, "hy3")
         XCTAssertEqual(parsed.ask.maxHistory, 42)
         XCTAssertEqual(parsed.ask.retentionDays, 9)
         XCTAssertEqual(parsed.ask.maxTokens, 256)
@@ -32,21 +32,17 @@ final class AskTests: XCTestCase {
 
     func testAskModelsPutFreeOptionsFirst() {
         let ordered = AskModel.fallbackOrder
-        XCTAssertEqual(ordered.prefix(11).filter(\.free).count, 11)
-        XCTAssertTrue(ordered.contains { !$0.free && $0.endpoint == .opencodeGo })
-        XCTAssertTrue(ordered.contains { $0.endpoint == .openai })
-        XCTAssertEqual(AskModel.defaultModel.endpoint, .opencodeZen)
+        XCTAssertEqual(ordered.prefix(2).filter(\.free).count, 2)
+        XCTAssertTrue(ordered.allSatisfy { $0.endpoint == .opencodeGo })
+        XCTAssertEqual(AskModel.defaultModel.endpoint, .opencodeGo)
         XCTAssertTrue(AskModel.defaultModel.free)
     }
 
-    func testAskModelListIsScopedToTheSelectedEndpoint() {
-        let openAI = AskModel.models(for: .openai)
-        XCTAssertFalse(openAI.isEmpty)
-        XCTAssertTrue(openAI.allSatisfy { $0.endpoint == .openai })
-
-        let zen = AskModel.models(for: .opencodeZen)
-        XCTAssertTrue(zen.allSatisfy { $0.endpoint == .opencodeZen })
-        XCTAssertTrue(zen.allSatisfy(\.free))
+    func testAskModelListIsGoOnly() {
+        let models = AskModel.models(for: .opencodeGo)
+        XCTAssertFalse(models.isEmpty)
+        XCTAssertTrue(models.allSatisfy { $0.endpoint == .opencodeGo })
+        XCTAssertEqual(models.filter(\.free).count, 2)
     }
 
     func testAskKeyFileRoundTrip() throws {
@@ -107,20 +103,20 @@ final class AskTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         let store = try PaletteStore(path: url.path)
         let stub = StubCompleter { _, model in
-            if model == "glm-5.3-flash-free" {
+            if model == "mimo-v2.6-flash" {
                 throw AskClientError.quota("Free usage limit reached")
             }
             return AskCompletion(answer: "fallback answer", promptTokens: 4, completionTokens: 2, durationMs: 12)
         }
         let service = AskService(
             store: store,
-            configuration: AskConfig(endpoint: .opencodeZen, model: "glm-5.3-flash-free"),
-            environment: ["OPENCODE_API_KEY": "test"],
+            configuration: AskConfig(endpoint: .opencodeGo, model: "mimo-v2.6-flash"),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
             completer: stub
         )
         let record = try await service.ask("hello")
         XCTAssertEqual(record.answer, "fallback answer")
-        XCTAssertEqual(record.model, "deepseek-v4.1-flash-free")
+        XCTAssertEqual(record.model, "beam-free")
     }
 
     func testSettingsModelWinsOverAStaleRuntimeChoice() async throws {
@@ -129,50 +125,50 @@ final class AskTests: XCTestCase {
         let store = try PaletteStore(path: url.path)
         let first = AskService(
             store: store,
-            configuration: AskConfig(endpoint: .opencodeZen, model: "glm-5.3-flash-free")
+            configuration: AskConfig(endpoint: .opencodeGo, model: "beam-free")
         )
-        try await first.selectModel(try XCTUnwrap(AskModel.find(id: "mimo-v2.6-flash-free")))
+        try await first.selectModel(try XCTUnwrap(AskModel.find(id: "mimo-v2.6-pro")))
         let chosen = await first.selectedModel()
-        XCTAssertEqual(chosen.id, "mimo-v2.6-flash-free")
+        XCTAssertEqual(chosen.id, "mimo-v2.6-pro")
 
         let unchanged = AskService(
             store: store,
-            configuration: AskConfig(endpoint: .opencodeZen, model: "glm-5.3-flash-free")
+            configuration: AskConfig(endpoint: .opencodeGo, model: "beam-free")
         )
         let remembered = await unchanged.selectedModel()
-        XCTAssertEqual(remembered.id, "mimo-v2.6-flash-free")
+        XCTAssertEqual(remembered.id, "mimo-v2.6-pro")
 
         let changed = AskService(
             store: store,
-            configuration: AskConfig(endpoint: .openai, model: "gpt-4o-mini")
+            configuration: AskConfig(endpoint: .opencodeGo, model: "hy3")
         )
         let configured = await changed.selectedModel()
-        XCTAssertEqual(configured.endpoint, .openai)
-        XCTAssertEqual(configured.id, "gpt-4o-mini")
+        XCTAssertEqual(configured.id, "hy3")
     }
 
-    func testAskInvalidKeySkipsTheRestOfTheEndpoint() async throws {
+    func testAskInvalidKeyStopsWithoutSpinning() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: url) }
         let store = try PaletteStore(path: url.path)
         let counter = CallCounter()
-        let stub = StubCompleter { endpoint, _ in
+        let stub = StubCompleter { _, _ in
             await counter.increment()
-            if endpoint == .opencodeZen {
-                throw AskClientError.invalidKey
-            }
-            return AskCompletion(answer: "go answer", promptTokens: 1, completionTokens: 1, durationMs: 5)
+            throw AskClientError.invalidKey
         }
         let service = AskService(
             store: store,
-            configuration: AskConfig(endpoint: .opencodeZen, model: "glm-5.3-flash-free"),
-            environment: ["OPENCODE_API_KEY": "zen", "OPENCODE_GO_API_KEY": "go"],
+            configuration: AskConfig(endpoint: .opencodeGo, model: "hy3"),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
             completer: stub
         )
-        let record = try await service.ask("hello")
-        XCTAssertEqual(record.provider, AskEndpoint.opencodeGo.rawValue)
+        do {
+            _ = try await service.ask("hello")
+            XCTFail("expected invalid key")
+        } catch {
+            XCTAssertEqual(error as? AskClientError, .invalidKey)
+        }
         let calls = await counter.value
-        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(calls, 1)
     }
 }
 
@@ -193,9 +189,9 @@ private struct StubCompleter: AskCompleting {
 }
 
 private actor CallCounter {
-    private(set) var value = 0
+    private var count = 0
 
-    func increment() {
-        value += 1
-    }
+    func increment() { count += 1 }
+
+    var value: Int { count }
 }

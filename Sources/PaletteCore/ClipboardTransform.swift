@@ -1,4 +1,6 @@
 import Foundation
+import TOMLKit
+import Yams
 
 /// Safe, built-in clipboard transforms. Nothing here executes a shell or a
 /// user script: the transformed text is only shown, then copied or pasted.
@@ -6,6 +8,8 @@ public enum ClipboardTransform: String, CaseIterable, Identifiable, Sendable {
     case trim
     case jsonPretty
     case jsonMinify
+    case yamlFormat
+    case tomlFormat
     case base64Encode
     case base64Decode
     case urlEncode
@@ -27,6 +31,8 @@ public enum ClipboardTransform: String, CaseIterable, Identifiable, Sendable {
         case .trim: return "Trim Whitespace"
         case .jsonPretty: return "Pretty-print JSON"
         case .jsonMinify: return "Minify JSON"
+        case .yamlFormat: return "Format YAML"
+        case .tomlFormat: return "Format TOML"
         case .base64Encode: return "Base64 Encode"
         case .base64Decode: return "Base64 Decode"
         case .urlEncode: return "URL Encode"
@@ -59,6 +65,13 @@ public enum ClipboardTransform: String, CaseIterable, Identifiable, Sendable {
                   let compact = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
                   let result = String(data: compact, encoding: .utf8) else { return nil }
             return result
+        case .yamlFormat:
+            guard let value = try? Yams.load(yaml: text) else { return nil }
+            return try? Yams.dump(object: value)
+        case .tomlFormat:
+            guard let table = try? TOMLTable(string: text),
+                  let encoded = try? TOMLEncoder().encode(table) else { return nil }
+            return encoded
         case .base64Encode:
             return Data(text.utf8).base64EncodedString()
         case .base64Decode:

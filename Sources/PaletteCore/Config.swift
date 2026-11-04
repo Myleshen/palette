@@ -467,8 +467,8 @@ public enum ConfigLoader {
         # One-shot AI answers (/ask). The API key is never written here; it
         # lives in an encrypted local file and is entered in Settings > Ask.
         [ask]
-        provider = "opencode-zen"      # opencode-zen | opencode-go | openai
-        model = "glm-5.3-flash-free"
+        provider = "opencode-go"       # OpenCode Go (requires a Go key)
+        model = "beam-free"
         max_history = 200
         retention_days = 30
         max_tokens = 512

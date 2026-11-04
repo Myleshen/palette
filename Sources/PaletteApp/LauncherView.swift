@@ -1,4 +1,5 @@
 import AppKit
+import class SwiftTerm.LocalProcessTerminalView
 import PaletteCore
 import PalettePlatform
 import SwiftUI
@@ -467,6 +468,18 @@ struct LauncherRootView: View {
                 .padding(.horizontal, isPill ? 14 : 12)
                 .padding(.top, isPill ? 8 : 6)
             }
+            if controller.activeGroupMembers.count > 1 {
+                HStack(spacing: 6) {
+                    ForEach(controller.activeGroupMembers) { member in
+                        modeChip(member.title, selected: controller.activeProviderID == member.id) {
+                            controller.selectTab(member.id)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, isPill ? 14 : 12)
+                .padding(.top, isPill ? 8 : 6)
+            }
             if isPill {
                 FlowLayout(spacing: 3) {
                     ForEach(controller.providerTabs) { tab in
@@ -601,7 +614,7 @@ struct LauncherRootView: View {
                     .font(theme.font(size: theme.typography.size + 3))
                     .foregroundColor(theme.color(theme.palette.fg))
                     .focused($searchFocused)
-                    .disabled(controller.prompt != nil)
+                    .disabled(controller.prompt != nil || controller.scratchpadActive || controller.terminalActive)
                     .accessibilityLabel(theme.search.placeholder)
                     .onSubmit {
                         if controller.actionsMode { controller.executeAction() } else { controller.executePrimary() }
@@ -644,7 +657,11 @@ struct LauncherRootView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let prompt = controller.prompt {
+        if controller.terminalActive {
+            TerminalPane(theme: theme, initialCommand: controller.terminalInitialCommand)
+        } else if controller.scratchpadActive {
+            ScratchpadView(controller: controller, theme: theme)
+        } else if let prompt = controller.prompt {
             PromptView(prompt: prompt, controller: controller, theme: theme, focused: $promptFocused, pill: isPill)
         } else if controller.actionsMode {
             actionsView
@@ -654,7 +671,7 @@ struct LauncherRootView: View {
                 Rectangle()
                     .fill(theme.color(theme.palette.separator))
                     .frame(width: 1)
-                ClipboardPreviewPane(item: controller.selectedItem, theme: theme)
+                ClipboardPreviewPane(item: controller.selectedItem, theme: theme, focused: controller.previewFocused)
                     .frame(width: 320)
             }
         } else {
@@ -908,6 +925,7 @@ struct PromptView: View {
 struct ClipboardPreviewPane: View {
     var item: PaletteItem?
     var theme: Theme
+    var focused: Bool = false
 
     @State private var files: [FileDetail] = []
     @State private var textPreview: String?
@@ -945,6 +963,10 @@ struct ClipboardPreviewPane: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(theme.color(theme.palette.accent).opacity(focused ? 0.55 : 0), lineWidth: 1)
+        )
         .task(id: item?.stableID) { await load() }
     }
 
@@ -952,13 +974,7 @@ struct ClipboardPreviewPane: View {
     private func preview(for item: PaletteItem) -> some View {
         switch item.preview {
         case .text(let value):
-            ScrollView {
-                Text(value)
-                    .font(theme.monoFont(size: 11))
-                    .foregroundColor(theme.color(theme.palette.fg))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            PreviewTextView(text: value, theme: theme)
         case .image(let base64, let width, let height):
             VStack(alignment: .leading, spacing: 6) {
                 if let data = Data(base64Encoded: base64), let image = NSImage(data: data) {
@@ -1119,5 +1135,210 @@ struct FlowLayout: Layout {
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
+    }
+}
+
+
+extension Notification.Name {
+    static let palettePreviewScroll = Notification.Name("palette.preview.scroll")
+}
+
+/// Read-only, selectable text preview with keyboard scrolling. Mouse selection
+/// plus ⌘C still works through AppKit's standard text machinery.
+struct PreviewTextView: NSViewRepresentable {
+    var text: String
+    var theme: Theme
+
+    final class Coordinator {
+        var observer: NSObjectProtocol?
+        weak var scrollView: NSScrollView?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: 2, height: 4)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.textContainer?.widthTracksTextView = true
+        textView.autoresizingMask = [.width]
+        scroll.documentView = textView
+        context.coordinator.scrollView = scroll
+        context.coordinator.observer = NotificationCenter.default.addObserver(
+            forName: .palettePreviewScroll,
+            object: nil,
+            queue: .main
+        ) { [weak scroll] note in
+            guard let scroll else { return }
+            let dy = note.userInfo?["dy"] as? CGFloat ?? 0
+            let dx = note.userInfo?["dx"] as? CGFloat ?? 0
+            let clip = scroll.contentView
+            let maxY = max(0, (scroll.documentView?.frame.height ?? 0) - clip.bounds.height)
+            let maxX = max(0, (scroll.documentView?.frame.width ?? 0) - clip.bounds.width)
+            var origin = clip.bounds.origin
+            if abs(dy) == .greatestFiniteMagnitude {
+                origin.y = dy > 0 ? maxY : 0
+            } else {
+                origin.y = min(max(0, origin.y + dy), maxY)
+            }
+            origin.x = min(max(0, origin.x + dx), maxX)
+            clip.scroll(to: origin)
+            scroll.reflectScrolledClipView(clip)
+        }
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let textView = scroll.documentView as? NSTextView else { return }
+        if textView.string != text {
+            textView.string = text
+            textView.scrollToBeginningOfDocument(nil)
+        }
+        let family = theme.typography.mono
+        textView.font = NSFont(name: family, size: 11) ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.textColor = theme.nsColor(theme.palette.fg)
+    }
+
+    static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+        if let observer = coordinator.observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+}
+
+
+struct ScratchpadView: View {
+    @ObservedObject var controller: SearchController
+    var theme: Theme
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.pencil")
+                    .foregroundColor(theme.color(theme.palette.accent))
+                Text("Scratchpad")
+                    .font(theme.font(size: 12, weight: .semibold))
+                    .foregroundColor(theme.color(theme.palette.fg))
+                Spacer()
+                Button("Paste") { controller.pasteIntoScratchpad() }
+                Button("Copy All") { controller.copyScratchpad() }
+                Button("Clear") { controller.clearScratchpad() }
+                Button("Save & Close") { controller.closeScratchpad(save: true) }
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 11))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            Rectangle()
+                .fill(theme.color(theme.palette.separator))
+                .frame(height: 1)
+
+            TextEditor(text: $controller.scratchpadText)
+                .font(theme.monoFont(size: 12))
+                .foregroundColor(theme.color(theme.palette.fg))
+                .scrollContentBackground(.hidden)
+                .background(theme.color(theme.palette.bg))
+                .focused($focused)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+
+            HStack(spacing: 14) {
+                Text("⌘⏎ copy all")
+                Text("⌘S / esc save & close")
+                Spacer()
+                Text("\(controller.scratchpadText.count) chars")
+            }
+            .font(.system(size: 10))
+            .foregroundColor(theme.color(theme.palette.fgMuted))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+        .onAppear { focused = true }
+        .onChange(of: controller.focusToken) { _, _ in focused = true }
+    }
+}
+
+
+extension Notification.Name {
+    static let paletteTerminalStop = Notification.Name("palette.terminal.stop")
+}
+
+struct TerminalPane: NSViewRepresentable {
+    var theme: Theme
+    var initialCommand: String?
+
+    final class Coordinator {
+        weak var view: LocalProcessTerminalView?
+        var observer: NSObjectProtocol?
+        var started = false
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> LocalProcessTerminalView {
+        let terminal = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 560))
+        terminal.configureNativeColors()
+        terminal.usesMetalLayerSurface = false
+        terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
+        terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
+        terminal.wantsLayer = true
+        terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
+        terminal.layer?.cornerRadius = 10
+        terminal.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        context.coordinator.view = terminal
+        nonisolated(unsafe) let stoppable = terminal
+        context.coordinator.observer = NotificationCenter.default.addObserver(
+            forName: .paletteTerminalStop,
+            object: nil,
+            queue: .main
+        ) { _ in
+            stoppable.terminate()
+        }
+        DispatchQueue.main.async {
+            terminal.startProcess(
+                executable: "/bin/zsh",
+                args: ["-l"],
+                environment: nil,
+                execName: "zsh",
+                currentDirectory: NSHomeDirectory()
+            )
+            terminal.window?.makeFirstResponder(terminal)
+            if let command = initialCommand, !command.isEmpty {
+                terminal.send(txt: command + "\n")
+            }
+            if ProcessInfo.processInfo.environment["PALETTE_TERMINAL_DEBUG"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    let rows = terminal.terminalStateSnapshot().visibleRows
+                        .map(\.text)
+                        .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    Log.shared.info("Terminal rows: \(rows.joined(separator: " | "))", source: "terminal")
+                }
+            }
+        }
+        return terminal
+    }
+
+    func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
+        terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
+        terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
+        terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
+    }
+
+    static func dismantleNSView(_ terminal: LocalProcessTerminalView, coordinator: Coordinator) {
+        if let observer = coordinator.observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        terminal.terminate()
     }
 }

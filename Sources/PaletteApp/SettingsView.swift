@@ -285,33 +285,49 @@ struct SettingsView: View {
     private var search: some View {
         Form {
             Section("Web search") {
-                Toggle("Offer web searches for every query", isOn: $config.webSearchEnabled)
-                ForEach($engines) { $engine in
-                    HStack {
-                        TextField("Name", text: $engine.name)
-                        TextField("https://example.com/?q={query}", text: $engine.urlTemplate)
-                        Button(role: .destructive) {
-                            engines.removeAll { $0.id == engine.id }
-                        } label: {
-                            Image(systemName: "minus.circle")
+                Toggle("Show web results in search", isOn: $config.webSearchEnabled)
+                Text("When a query does not match an app or file, Palette offers a browser search.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(webSearchChoices) { engine in
+                    Toggle(engine.name, isOn: Binding(
+                        get: { engines.contains { $0.id == engine.id } },
+                        set: { enabled in
+                            if enabled {
+                                if !engines.contains(where: { $0.id == engine.id }) {
+                                    engines.append(engine)
+                                }
+                            } else {
+                                engines.removeAll { $0.id == engine.id }
+                            }
                         }
-                        .buttonStyle(.borderless)
+                    ))
+                }
+            }
+            DisclosureGroup("Advanced: custom engines") {
+                ForEach($engines) { $engine in
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextField("Name", text: $engine.name)
+                        TextField("Search URL with {query}", text: $engine.urlTemplate)
+                        Button("Remove", role: .destructive) {
+                            engines.removeAll { $0.id == engine.id }
+                        }
+                        .font(.caption)
                     }
+                    .padding(.vertical, 3)
                 }
                 Button("Add Engine") {
-                    engines.append(WebSearchEngine(name: "New Engine", urlTemplate: "https://example.com/?q={query}"))
+                    engines.append(WebSearchEngine(
+                        name: "New Engine",
+                        urlTemplate: "https://example.com/?q={query}"
+                    ))
                 }
             }
             Section("Web apps") {
                 Picker("Open web apps in", selection: $config.webAppBrowser) {
                     ForEach(BrowserCatalog.chromiumChoices, id: \.self) { Text($0).tag($0) }
                 }
-                Text("Chromium-based browsers only; Helium is the default. Palette refuses to save a browser that is not installed.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section {
-                Text("Web results appear after apps; {query} is replaced with the URL-encoded text.")
+                Text("Chromium-based browsers only. Helium is the default.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -509,6 +525,14 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var webSearchChoices: [WebSearchEngine] {
+        var result = WebSearchEngine.defaults
+        for engine in engines where !result.contains(where: { $0.id == engine.id }) {
+            result.append(engine)
+        }
+        return result
     }
 
     private var themeNames: [String] {

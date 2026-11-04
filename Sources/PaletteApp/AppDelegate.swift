@@ -68,6 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lastProvidersSignature: Date?
     private var reloadInFlight = false
     private var settingsWindow: NSWindow?
+    private var onboardingWindow: NSWindow?
+    private var shouldShowOnboarding = false
     private var positionMenu: NSMenu?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -107,6 +109,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let configResult = ConfigLoader.load(paths: paths)
         configuration = configResult.config
         startupDiagnostics = configResult.diagnostics
+        shouldShowOnboarding = configResult.createdDefault
+            && !UserDefaults.standard.bool(forKey: "onboardingCompleted")
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
 
         do {
@@ -164,6 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configureClipboard()
         buildStatusItem()
         installThemeObserver()
+        showOnboardingIfNeeded()
 
         if let firstError = startupDiagnostics.first(where: { $0.level == .error }) {
             searchController.setStatus(firstError.message, duration: nil)
@@ -217,6 +222,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.writeSnapshot(to: value)
                 } else if let value = step.dropPrefix("settings_snapshot=") {
                     self.writeSettingsSnapshot(to: value)
+                } else if let value = step.dropPrefix("onboarding_snapshot=") {
+                    self.writeOnboardingSnapshot(to: value)
                 } else if let value = step.dropPrefix("prompt=") {
                     self.searchController.promptValue = value
                 } else if let value = step.dropPrefix("wait=") {
@@ -238,6 +245,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func writeSettingsSnapshot(to destination: String) {
         guard let view = settingsWindow?.contentView else { return }
+        write(view: view, to: destination)
+    }
+
+    private func writeOnboardingSnapshot(to destination: String) {
+        guard let view = onboardingWindow?.contentView else { return }
         write(view: view, to: destination)
     }
 
@@ -330,6 +342,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(AppProvider(index: appIndex, launcher: launcher))
         providers.append(CalculatorProvider())
         providers.append(EmojiProvider())
+        providers.append(ScratchpadProvider())
+        providers.append(TerminalProvider())
         providers.append(WebSearchProvider(
             engines: configuration.webSearchEngines,
             enabled: configuration.webSearchEnabled,
@@ -521,6 +535,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         monitor.start(intervalMs: configuration.clipboard.pollMs)
         clipboardMonitor = monitor
+    }
+
+    private func showOnboardingIfNeeded() {
+        guard shouldShowOnboarding else { return }
+        let view = OnboardingView(
+            config: configuration,
+            providers: registry.providers.map {
+                ProviderSettingsInfo(id: $0.descriptor.id, name: $0.descriptor.name, trigger: $0.descriptor.trigger)
+            },
+            onFinish: { [weak self] updated in
+                guard let self else { return }
+                do {
+                    try ConfigWriter.render(updated).write(to: self.paths.configFile, atomically: true, encoding: .utf8)
+                } catch {
+                    self.searchController.setStatus("Could not save setup: \(error.localizedDescription)", duration: 4)
+                }
+                UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+                self.onboardingWindow?.close()
+                self.onboardingWindow = nil
+                self.reload(quiet: false)
+            },
+            onSkip: { [weak self] in
+                UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+                self?.onboardingWindow?.close()
+                self?.onboardingWindow = nil
+            }
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Set up Palette"
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = NSHostingController(rootView: view)
+        window.center()
+        onboardingWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
     }
 
     private func seedCommandsFile() {

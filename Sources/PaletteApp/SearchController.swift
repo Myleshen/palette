@@ -32,6 +32,11 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public private(set) var focusToken = 0
     /// Wider layout with a live preview pane; used by the clipboard hotkey.
     @Published public private(set) var previewEnabled = false
+    @Published public private(set) var previewFocused = false
+    @Published public private(set) var scratchpadActive = false
+    @Published public private(set) var terminalActive = false
+    @Published public private(set) var terminalInitialCommand: String?
+    @Published public var scratchpadText = ""
     @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
 
@@ -121,6 +126,9 @@ public final class SearchController: ObservableObject, HostBridge {
         scopeLabel = nil
         highlightTerms = []
         previewEnabled = false
+        previewFocused = false
+        terminalActive = false
+        panel?.suppressAutoHide = false
         panel?.widthOverride = nil
     }
 
@@ -142,7 +150,7 @@ public final class SearchController: ObservableObject, HostBridge {
     // MARK: - Searching
 
     private func queryDidChange() {
-        guard !resetting else { return }
+        guard !resetting, !scratchpadActive else { return }
         if actionsMode {
             actionsMode = false
             actionItems = []
@@ -164,6 +172,8 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         } else if previewEnabled {
             previewEnabled = false
+            previewFocused = false
+            panel?.suppressAutoHide = false
             clipboardFilter = nil
             panel?.widthOverride = nil
         }
@@ -294,8 +304,64 @@ public final class SearchController: ObservableObject, HostBridge {
     public func handleKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let command = flags.contains(.command)
+        let option = flags.contains(.option)
+        let control = flags.contains(.control)
         let keyCode = event.keyCode
         let characters = event.charactersIgnoringModifiers?.lowercased() ?? ""
+
+        if terminalActive {
+            if command, keyCode == 13 {
+                closeTerminalPanel()
+                panel?.hide(activatePrevious: false)
+                return true
+            }
+            return false
+        }
+
+        if scratchpadActive {
+            if keyCode == 53 {
+                closeScratchpad(save: true)
+                return true
+            }
+            if command, keyCode == 36 || keyCode == 76 {
+                copyScratchpad()
+                return true
+            }
+            if command, characters == "s" {
+                closeScratchpad(save: true)
+                return true
+            }
+            return false
+        }
+
+        if option, characters == "p", previewEnabled {
+            previewFocused.toggle()
+            panel?.suppressAutoHide = previewFocused
+            return true
+        }
+        if previewFocused {
+            if keyCode == 53 {
+                previewFocused = false
+                panel?.suppressAutoHide = false
+                return true
+            }
+            if control {
+                switch characters {
+                case "j": postPreviewScroll(dy: 40); return true
+                case "k": postPreviewScroll(dy: -40); return true
+                case "d": postPreviewScroll(dy: 300); return true
+                case "u": postPreviewScroll(dy: -300); return true
+                case "f": postPreviewScroll(dy: 600); return true
+                case "b": postPreviewScroll(dy: -600); return true
+                case "h": postPreviewScroll(dx: -60); return true
+                case "l": postPreviewScroll(dx: 60); return true
+                case "g":
+                    postPreviewScroll(dy: flags.contains(.shift) ? .greatestFiniteMagnitude : -.greatestFiniteMagnitude)
+                    return true
+                default: break
+                }
+            }
+        }
 
         if prompt != nil {
             switch keyCode {
@@ -404,16 +470,42 @@ public final class SearchController: ObservableObject, HostBridge {
         public var title: String
         public var trigger: String?
         public var icon: String?
+        public var memberIDs: [String] = []
     }
+
+    public struct ProviderMember: Identifiable, Equatable {
+        public var id: String
+        public var title: String
+    }
+
+    private static let groups: [(id: String, title: String, icon: String, members: [String])] = [
+        ("neovide", "Neovide", "symbol:folder", ["neo", "neof"]),
+        ("bitwarden", "Bitwarden", "symbol:key.fill", ["bw", "bwu", "bwt", "bwn", "bwo"]),
+    ]
 
     public var providerTabs: [ProviderTab] {
         var tabs: [ProviderTab] = [
-            ProviderTab(id: "apps", title: "Apps", trigger: nil, icon: "square.grid.2x2"),
+            ProviderTab(id: "apps", title: "Apps", trigger: nil, icon: "symbol:square.grid.2x2"),
         ]
+        var handled = Set<String>()
+        for group in Self.groups {
+            let members = group.members.filter { id in
+                registry.providers.contains { $0.descriptor.id == id }
+            }
+            guard !members.isEmpty else { continue }
+            handled.formUnion(members)
+            let first = registry.providers.first { $0.descriptor.id == members[0] }
+            tabs.append(ProviderTab(
+                id: group.id,
+                title: group.title,
+                trigger: first?.descriptor.trigger,
+                icon: group.icon,
+                memberIDs: members
+            ))
+        }
         for provider in registry.providers {
             guard let trigger = provider.descriptor.trigger else { continue }
-            // History is a sub-tab under Ask, not another top-level chip.
-            if provider.descriptor.id == "askh" { continue }
+            if provider.descriptor.id == "askh" || handled.contains(provider.descriptor.id) { continue }
             tabs.append(ProviderTab(
                 id: provider.descriptor.id,
                 title: provider.descriptor.name,
@@ -426,7 +518,28 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public var activeTabID: String {
         let provider = registry.parser.parse(query).providerID
-        return provider == "askh" ? "ask" : (provider ?? "apps")
+        if provider == nil { return "apps" }
+        if provider == "askh" { return "ask" }
+        for group in Self.groups where group.members.contains(provider ?? "") {
+            return group.id
+        }
+        return provider ?? "apps"
+    }
+
+    public var activeProviderID: String {
+        registry.parser.parse(query).providerID ?? "apps"
+    }
+
+    public var activeGroupMembers: [ProviderMember] {
+        guard let tab = providerTabs.first(where: { $0.id == activeTabID }),
+              tab.memberIDs.count > 1 else { return [] }
+        return tab.memberIDs.compactMap { id in
+            guard let provider = registry.providers.first(where: { $0.descriptor.id == id }) else { return nil }
+            let name = provider.descriptor.name
+                .replacingOccurrences(of: "Bitwarden ", with: "")
+                .replacingOccurrences(of: "Neovide ", with: "")
+            return ProviderMember(id: id, title: name)
+        }
     }
 
     public func selectTab(_ id: String) {
@@ -434,9 +547,16 @@ public final class SearchController: ObservableObject, HostBridge {
             query = ""
             return
         }
-        guard let provider = registry.providers.first(where: { $0.descriptor.id == id }),
+        let selectedID = Self.groupMembers(for: id)?.first(where: { member in
+            registry.providers.contains { $0.descriptor.id == member }
+        }) ?? id
+        guard let provider = registry.providers.first(where: { $0.descriptor.id == selectedID }),
               let trigger = provider.descriptor.trigger else { return }
         query = registry.parser.prefix + trigger + " "
+    }
+
+    private static func groupMembers(for id: String) -> [String]? {
+        groups.first(where: { $0.id == id })?.members
     }
 
     public func cycleTab(by delta: Int) {
@@ -663,7 +783,24 @@ public final class SearchController: ObservableObject, HostBridge {
                 }
 
             case .custom:
-                if action.id == "clip-transform" {
+                if action.id == "term-open" {
+                    openTerminalPanel()
+                } else if action.id == "cmd-run-panel" {
+                    if let value = action.value.object,
+                       let executable = value["executable"] {
+                        let parts = [executable] + (value["args"] ?? "").split(separator: "\u{1F}").map(String.init)
+                        let line = parts.map(Self.shellQuote).joined(separator: " ")
+                        let cwd = value["cwd"].flatMap { $0.isEmpty ? nil : $0 }
+                        openTerminalPanel(command: cwd.map { "cd \(Self.shellQuote($0)) && \(line)" } ?? line)
+                    }
+                } else if action.id == "scratch-open" {
+                    openScratchpad()
+                } else if action.id == "scratch-entry" {
+                    if let entryID = action.value.text,
+                       let entry = try await store.clipboardEntry(id: entryID) {
+                        openScratchpad(seed: entry.text)
+                    }
+                } else if action.id == "clip-transform" {
                     if let entryID = action.value.text {
                         query = registry.parser.prefix + "clip transform:" + entryID
                     }
@@ -712,6 +849,8 @@ public final class SearchController: ObservableObject, HostBridge {
             return ["select-model", "ask"].contains(action.id)
         case "askh":
             return action.id == "delete-ask"
+        case "git":
+            return ["status", "log", "stage", "commit", "pull", "push", "clear-output"].contains(action.id)
         default:
             return false
         }
@@ -793,6 +932,14 @@ public final class SearchController: ObservableObject, HostBridge {
     public func updatePanelHeight() {
         guard let panel else { return }
         let theme = themeManager.theme
+        if scratchpadActive {
+            panel.setContentHeight(CGFloat(theme.search.height) + 500 + 22)
+            return
+        }
+        if terminalActive {
+            panel.setContentHeight(660)
+            return
+        }
         let row = CGFloat(theme.effectiveRowHeight)
         let spacing: CGFloat = 6
         func rows(_ count: Int) -> CGFloat {
@@ -814,7 +961,7 @@ public final class SearchController: ObservableObject, HostBridge {
         // Provider tab strip, plus the clipboard filter chips when previewing.
         // Two flow rows (three only with an unusually large provider set) plus
         // the clipboard/Ask sub-tab row.
-        let tabs: CGFloat = (activeTabID == "clip" || activeTabID == "ask") ? 110 : 82
+        let tabs: CGFloat = (activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1) ? 110 : 82
         if previewEnabled {
             // The preview pane sets the height; a few rows are always visible.
             content = max(content, 360)
@@ -824,6 +971,102 @@ public final class SearchController: ObservableObject, HostBridge {
         // bottom margins plus a 10 pt gap replace the old inline spacing.
         let pillExtra: CGFloat = 22
         panel.setContentHeight(CGFloat(theme.search.height) + content + tabs + footer + pillExtra)
+    }
+
+    public func openTerminalPanel(command: String? = nil) {
+        terminalInitialCommand = command
+        terminalActive = true
+        scratchpadActive = false
+        previewEnabled = false
+        previewFocused = false
+        panel?.widthOverride = 1000
+        panel?.show()
+        updatePanelHeight()
+        requestFocus()
+    }
+
+    public func closeTerminalPanel() {
+        guard terminalActive else { return }
+        terminalActive = false
+        panel?.widthOverride = nil
+        NotificationCenter.default.post(name: .paletteTerminalStop, object: nil)
+        resetting = true
+        query = ""
+        resetting = false
+        scheduleSearch(debounce: false)
+        updatePanelHeight()
+    }
+
+    public func openScratchpad(seed: String? = nil) {
+        panel?.show()
+        panel?.widthOverride = 880
+        scratchpadActive = true
+        scratchpadText = seed ?? ""
+        previewFocused = false
+        actionsMode = false
+        actionItems = []
+        if seed == nil {
+            Task { [weak self] in
+                guard let self else { return }
+                if let saved = try? await self.store.metaValue("scratchpad.text"),
+                   (self.scratchpadText.isEmpty) {
+                    self.scratchpadText = saved
+                }
+            }
+        }
+        updatePanelHeight()
+        requestFocus()
+    }
+
+    public func closeScratchpad(save: Bool) {
+        guard scratchpadActive else { return }
+        if save {
+            let text = scratchpadText
+            Task { [weak self] in
+                try? await self?.store.setMeta("scratchpad.text", value: text)
+            }
+        }
+        scratchpadActive = false
+        panel?.widthOverride = nil
+        panel?.suppressAutoHide = false
+        resetting = true
+        query = ""
+        resetting = false
+        scheduleSearch(debounce: false)
+        updatePanelHeight()
+        requestFocus()
+    }
+
+    public func copyScratchpad() {
+        pasteboard.write(text: scratchpadText)
+        setStatus("Scratchpad copied", duration: 2)
+        panel?.suppressAutoHide = false
+    }
+
+    public func pasteIntoScratchpad() {
+        if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty {
+            if scratchpadText.isEmpty {
+                scratchpadText = text
+            } else {
+                scratchpadText += "\n" + text
+            }
+        }
+    }
+
+    public func clearScratchpad() {
+        scratchpadText = ""
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private func postPreviewScroll(dy: CGFloat = 0, dx: CGFloat = 0) {
+        NotificationCenter.default.post(
+            name: .palettePreviewScroll,
+            object: nil,
+            userInfo: ["dx": dx, "dy": dy]
+        )
     }
 
     public func refreshTheme() {
