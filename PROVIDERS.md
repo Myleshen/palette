@@ -269,6 +269,7 @@ on the roadmap.
 | `git` | `git` | native | repository status and safe Git actions |
 | `ask` | `ask` | native | one-shot OpenCode Go Q&A; free models first, cheapest paid next |
 | `term` | `term` | native | embedded SwiftTerm login shell |
+| `awake` | `awake` | native | keep-awake durations and lid-closed clamshell guard |
 | `scratch` | `scratch` | native | named, searchable scratch notes and in-panel editor |
 | `recent` | `recent` | native | recently opened projects and files |
 | `snip` | `snip` | native | snippets from snippets.toml with safe placeholder expansion |

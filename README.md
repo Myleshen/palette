@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.1.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.2.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -136,6 +136,7 @@ trigger word:
 | `/git <query>` | repositories with managed Git actions and panel output |
 | `/term` | embedded terminal shell |
 | `/scratch` | scratch notes and the editor |
+| `/awake` | keep the Mac awake; timed or clamshell mode |
 | `/recent` | recently used projects and files |
 | `/snip <query>` | snippets with placeholder expansion |
 | `/ask <question>` | one-shot OpenCode Go answer |
@@ -371,7 +372,7 @@ terminal = true
 confirm = false
 ```
 
-### Scratch notes, recent items, snippets, and windows
+### Scratch notes, recent items, and snippets
 
 `/scratch` lists named scratch notes plus **New Scratch Note**. Each note has a
 title and body; edits are saved when you close the editor. Use `⌘⌥S` to open the
@@ -391,6 +392,21 @@ Snippets are never executed. `⌘K` copies the expanded text, copies the raw
 template, or opens the expansion in the scratchpad. Supported placeholders:
 `{{date}}`, `{{time}}`, `{{datetime}}`, `{{clipboard}}`, `{{uuid}}`,
 `{{home}}`, and `{{user}}`.
+
+### Keep awake
+
+`/awake` (or the **Keep Awake** provider tab) keeps the Mac awake for 15
+minutes, 30 minutes, 1, 2, 4, or 8 hours, or until you stop it. It also has a
+**Clamshell Mode (Lid Closed)** row and a menu-bar **Keep Awake** submenu.
+
+Normal keep-awake uses native power assertions, so it needs no password. The
+assertions are recreated after wake and display changes, and a timer restores
+normal sleep automatically. Clamshell mode is different: macOS treats a lid
+close as forced sleep, so Palette arms a tiny root guard through the standard
+administrator prompt. The guard disables lid sleep only while Palette is
+running, clamshell mode is on, and the Mac is on AC power. Unplugging power,
+turning clamshell off, or quitting Palette restores normal lid sleep within a
+few seconds. Never leave an awake, closed MacBook in a bag.
 
 ### Projects, ports, and Git
 

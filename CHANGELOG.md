@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.2.0 — 2026-11-06
+
+### Added
+
+- **`/awake` keep-awake provider** with timed sessions (15 min–8 h), an
+  indefinite mode, and a native `IOPMAssertion` implementation. Assertions are
+  recreated after wake/display changes and expire automatically.
+- **Clamshell mode (lid closed)**. macOS treats a lid close as forced sleep, so
+  Palette arms a small root guard with the standard administrator prompt. The
+  guard holds `pmset disablesleep` only while Palette is running, clamshell is
+  on, and the Mac is on AC power; it restores normal sleep on stop, quit, or
+  unplug.
+- **Keep Awake menu-bar submenu** for quick toggles and durations.
+- Five new `KeepAwakeTests` (start/stop, timed expiry, provider rows/actions,
+  clamshell flag cleanup, and AC/battery transitions through the root guard
+  helper).
+
 ## 2.1.0 — 2026-11-05
 
 ### Added

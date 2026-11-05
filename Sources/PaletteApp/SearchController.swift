@@ -870,6 +870,8 @@ public final class SearchController: ObservableObject, HostBridge {
         switch item.providerID {
         case "theme", "clip":
             return true
+        case "awake":
+            return true
         case "web":
             return ["add", "remove", "shortcut", "clear-shortcut"].contains(action.id)
         case "bw", "bwu", "bwt", "bwn", "bwo":

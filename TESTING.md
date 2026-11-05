@@ -16,6 +16,7 @@ provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
 | `PathsEngineTests` | fd enumeration, excludes, fzf ranking, weird filenames |
 | `ManifestTests` | provider manifest parsing and validation diagnostics |
 | `AskTests` | Ask config round-trip without secrets, free-first model order, endpoint scoping, response/error parsing, quota fallback, invalid-key endpoint skipping, Settings model precedence |
+| `KeepAwakeTests` | keep-awake start/stop, timed expiry, provider rows/actions, clamshell flag cleanup |
 | `ExternalProviderTests` | NDJSON round-trip against the hello example |
 
 ## Provider conformance harness
@@ -125,7 +126,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 73 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 78 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
@@ -137,7 +138,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   queries, and snippet placeholder expansion).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 2.1.0). Launcher, clipboard, terminal, scratchpad, and Ask hotkeys
+  version 2.2.0). Launcher, clipboard, terminal, scratchpad, and Ask hotkeys
   registered without a conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -157,6 +158,14 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   expose **Open in Embedded Terminal**; clipboard file previews use QuickLook;
   app rows expose **Quit App** and **Move App to the Trash…**; physical
   `⌘⌥T`, `⌘⌥S`, and `⌘⌥A` opened terminal, scratchpad, and Ask respectively.
+- v2.2.0 checks: `/awake` rendered the Keep Awake provider tab with the
+  indefinite, 15-minute–8-hour, and clamshell rows; pressing `⏎` on the
+  indefinite row created live `PreventUserIdleSystemSleep` and
+  `PreventUserIdleDisplaySleep` assertions named Palette; the UI changed to
+  `ACTIVE` and the footer reported keeping the Mac awake; the clamshell row
+  opened the standard macOS administrator prompt and cancelling it removed the
+  guard flag. `pmset -g assertions` showed both Palette assertions while the
+  session was active.
 - Hotkey regression (1.4.1): the previous build's `⌥Space` was dead whenever
   `⌥V` was registered, because a second `InstallEventHandler` replaced the first
   on the same Carbon target. After the shared-router fix, the brew-installed
@@ -174,7 +183,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   The no-key path showed the setup row, and Settings Ask displayed only
   “Key saved in the macOS Keychain” after saving. Real Zen free quota returned
   429 and the expired Go key returned 401; both were reported without a crash.
-  `swift test`: 73 tests, 0 failures.
+  `swift test`: 78 tests, 0 failures.
 - v1.7.13 checks: after opening the clipboard browser and pressing `Esc`, the
   snapshot showed the empty app list at normal width with no preview pane or
   “No preview available” placeholder.

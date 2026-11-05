@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var clipboardMonitor: ClipboardMonitor?
     private var registry: ProviderRegistry!
     private let bitwardenVault = BitwardenVault()
+    private let keepAwake = KeepAwakeService()
     private var searchController: SearchController!
     private var panel: PanelController!
     private var hotkey: HotKeyManager!
@@ -77,6 +78,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var onboardingWindow: NSWindow?
     private var shouldShowOnboarding = false
     private var positionMenu: NSMenu?
+    private var keepAwakeMenu: NSMenu?
+    private var keepAwakeToggleItem: NSMenuItem?
+    private var keepAwakeClamshellItem: NSMenuItem?
+    private var keepAwakeStopItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -327,6 +332,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         watcherTimer?.invalidate()
         clipboardMonitor?.stop()
         hotkey?.unregister()
+        // Restore normal lid sleep even if the async cleanup does not finish.
+        ClamshellGuard.clearFlag()
         if let themeObserver {
             DistributedNotificationCenter.default().removeObserver(themeObserver)
         }
@@ -350,6 +357,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(EmojiProvider())
         providers.append(ScratchpadProvider(store: store))
         providers.append(TerminalProvider())
+        providers.append(KeepAwakeProvider(service: keepAwake, bridge: hostProxy, launcher: launcher))
         providers.append(WebSearchProvider(
             engines: configuration.webSearchEngines,
             enabled: configuration.webSearchEnabled,
@@ -862,6 +870,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.positionMenu = positionMenu
         updatePositionMenu()
 
+        let keepAwakeItem = NSMenuItem(title: "Keep Awake", action: nil, keyEquivalent: "")
+        let keepAwakeSubmenu = NSMenu(title: "Keep Awake")
+        let toggle = NSMenuItem(title: "Keep Mac Awake", action: #selector(toggleKeepAwakeFromMenu), keyEquivalent: "")
+        toggle.target = self
+        keepAwakeSubmenu.addItem(toggle)
+        keepAwakeToggleItem = toggle
+        let keepAwakeDurations: [(Double, String)] = [
+            (15.0 * 60, "For 15 Minutes"),
+            (30.0 * 60, "For 30 Minutes"),
+            (60.0 * 60, "For 1 Hour"),
+            (2.0 * 60 * 60, "For 2 Hours"),
+            (4.0 * 60 * 60, "For 4 Hours"),
+            (8.0 * 60 * 60, "For 8 Hours"),
+        ]
+        for (seconds, title) in keepAwakeDurations {
+            let item = NSMenuItem(title: title, action: #selector(startKeepAwakeFromMenu(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NSNumber(value: seconds)
+            keepAwakeSubmenu.addItem(item)
+        }
+        keepAwakeSubmenu.addItem(.separator())
+        let clamshell = NSMenuItem(title: "Clamshell (Lid Closed)", action: #selector(toggleClamshellFromMenu), keyEquivalent: "")
+        clamshell.target = self
+        keepAwakeSubmenu.addItem(clamshell)
+        keepAwakeClamshellItem = clamshell
+        let stop = NSMenuItem(title: "Stop Keeping Awake", action: #selector(stopKeepAwakeFromMenu), keyEquivalent: "")
+        stop.target = self
+        keepAwakeSubmenu.addItem(stop)
+        keepAwakeStopItem = stop
+        keepAwakeItem.submenu = keepAwakeSubmenu
+        menu.addItem(keepAwakeItem)
+        self.keepAwakeMenu = keepAwakeSubmenu
+
         let refresh = NSMenuItem(title: "Refresh Bitwarden Cache", action: #selector(refreshBitwardenFromMenu), keyEquivalent: "")
         refresh.target = self
         menu.addItem(refresh)
@@ -889,6 +930,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let quit = NSMenuItem(title: "Quit Palette", action: #selector(quitFromMenu), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
+        menu.delegate = self
         statusItem.menu = menu
     }
 
@@ -1198,6 +1240,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.searchController.refreshResults()
             self.searchController.setStatus("Bitwarden cache refreshed", duration: 3)
         }
+    }
+
+    @objc private func toggleKeepAwakeFromMenu() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let status = await self.keepAwake.snapshot()
+            if status.active {
+                await self.keepAwake.stop()
+                self.searchController.setStatus("Normal sleep restored", duration: 2)
+            } else {
+                try? await self.keepAwake.start(duration: nil)
+                self.searchController.setStatus("Keeping your Mac awake", duration: 2)
+            }
+            await self.refreshKeepAwakeMenu()
+            self.searchController.refreshResults()
+        }
+    }
+
+    @objc private func startKeepAwakeFromMenu(_ sender: NSMenuItem) {
+        let seconds = (sender.representedObject as? NSNumber)?.doubleValue ?? 0
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await self.keepAwake.start(duration: seconds > 0 ? seconds : nil)
+            self.searchController.setStatus("Keeping your Mac awake for \(sender.title.lowercased())", duration: 2)
+            await self.refreshKeepAwakeMenu()
+            self.searchController.refreshResults()
+        }
+    }
+
+    @objc private func toggleClamshellFromMenu() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let status = await self.keepAwake.snapshot()
+            do {
+                if status.active {
+                    try await self.keepAwake.setClamshell(!status.clamshell)
+                } else {
+                    try await self.keepAwake.start(duration: nil, clamshell: true)
+                }
+                self.searchController.setStatus(
+                    status.clamshell ? "Clamshell mode off" : "Clamshell mode armed · AC power only",
+                    duration: 3
+                )
+            } catch {
+                self.searchController.setStatus(error.localizedDescription, duration: 5)
+            }
+            await self.refreshKeepAwakeMenu()
+            self.searchController.refreshResults()
+        }
+    }
+
+    @objc private func stopKeepAwakeFromMenu() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.keepAwake.stop()
+            await self.refreshKeepAwakeMenu()
+            self.searchController.setStatus("Normal sleep restored", duration: 2)
+            self.searchController.refreshResults()
+        }
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        guard menu === statusItem.menu else { return }
+        Task { @MainActor [weak self] in
+            await self?.refreshKeepAwakeMenu()
+        }
+    }
+
+    private func refreshKeepAwakeMenu() async {
+        let status = await keepAwake.snapshot()
+        keepAwakeToggleItem?.title = status.active ? "Stop Keeping Awake" : "Keep Mac Awake (Indefinitely)"
+        keepAwakeToggleItem?.state = status.active ? .on : .off
+        keepAwakeClamshellItem?.title = status.clamshell ? "Disable Clamshell (Lid Closed)" : "Clamshell (Lid Closed)"
+        keepAwakeClamshellItem?.state = status.clamshell ? .on : .off
+        keepAwakeStopItem?.isEnabled = status.active
     }
 
     @objc private func quitFromMenu() {
