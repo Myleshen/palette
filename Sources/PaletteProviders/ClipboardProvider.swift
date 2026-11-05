@@ -224,6 +224,17 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
         if paths.count == 1 {
             actions.append(PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .reveal, value: .text(paths[0])))
         }
+        if let first = paths.first {
+            var isDirectory: ObjCBool = false
+            FileManager.default.fileExists(atPath: first, isDirectory: &isDirectory)
+            let terminalPath = isDirectory.boolValue ? first : (first as NSString).deletingLastPathComponent
+            actions.append(PaletteAction(
+                id: "term-here",
+                title: "Open in Embedded Terminal",
+                kind: .custom,
+                value: .object(["path": terminalPath])
+            ))
+        }
         actions.append(pinAction(entry))
         actions.append(PaletteAction(id: "delete", title: "Delete Entry", kind: .custom, value: .text("delete")))
 

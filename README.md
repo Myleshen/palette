@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.0.4. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.1.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -90,6 +90,9 @@ Caches live in `~/Library/Caches/Palette`.
 |---|---|
 | `⌥Space` | show / hide |
 | `⌥V` | clipboard browser with live preview |
+| `⌘⌥T` | embedded terminal |
+| `⌘⌥S` | scratchpad |
+| `⌘⌥A` | Ask |
 | `↑` `↓` | move selection |
 | `⏎` | primary action |
 | `⌘⏎` | secondary action (usually paste, or reveal for paths) |
@@ -132,7 +135,9 @@ trigger word:
 | `/proj <query>` | devx projects and worktrees, or `~/dev` fallback |
 | `/git <query>` | repositories with managed Git actions and panel output |
 | `/term` | embedded terminal shell |
-| `/scratch` | persistent text scratchpad |
+| `/scratch` | scratch notes and the editor |
+| `/recent` | recently used projects and files |
+| `/snip <query>` | snippets with placeholder expansion |
 | `/ask <question>` | one-shot OpenCode Go answer |
 | `/askh <query>` | search retained Ask questions and answers |
 | `/web <query>` | saved web apps; type a domain to add one |
@@ -214,8 +219,10 @@ Hotkeys are recorded by pressing them, not typed. The recorder uses a short-live
 session event tap, so macOS-reserved combinations such as `⌘Space` are captured
 instead of being swallowed by the system; it stops as soon as Settings loses
 focus. Accessibility permission is needed for reserved-key capture. Saving
-validates both shortcuts and refuses a browser that is not installed. Changes
-apply immediately. Editing files by hand still works, then press `⌘R`.
+validates every shortcut, rejects duplicates, and refuses a browser that is not
+installed. The search field at the top of Settings jumps directly to a matching
+section. Changes apply immediately. Editing files by hand still works, then
+press `⌘R`.
 
 ### Search position
 
@@ -314,10 +321,11 @@ clipboard copy.
 
 ### Scratchpad and terminal
 
-`/scratch` opens a persistent editor inside the panel. It accepts pasted text,
-supports normal selection and editing, and provides **Paste**, **Copy All**,
-**Clear**, and **Save & Close**. Clipboard text entries also have **Open in
-Scratchpad** in `⌘K`; the last draft is restored automatically.
+`/scratch` lists saved notes and opens a persistent editor with a title field.
+It accepts pasted text, supports normal selection and editing, and provides
+**Paste**, **Copy All**, **Clear**, and **Save & Close**. Clipboard text entries
+also have **Open in Scratchpad** in `⌘K`; the most recent note is restored by
+the `⌘⌥S` shortcut.
 
 `/term` opens a persistent multiplexer session in the content panel using
 SwiftTerm. By default it attaches Zellij's **Palette** session, then falls back
@@ -363,6 +371,27 @@ terminal = true
 confirm = false
 ```
 
+### Scratch notes, recent items, snippets, and windows
+
+`/scratch` lists named scratch notes plus **New Scratch Note**. Each note has a
+title and body; edits are saved when you close the editor. Use `⌘⌥S` to open the
+most recent note directly. `/recent` lists projects and files you have opened
+through Palette, newest first.
+
+`/snip` reads `~/.config/palette/snippets.toml`:
+
+```toml
+[[snippet]]
+title = "Email signature"
+keywords = ["mail"]
+text = "Best,\nMyles\n{{date}}"
+```
+
+Snippets are never executed. `⌘K` copies the expanded text, copies the raw
+template, or opens the expansion in the scratchpad. Supported placeholders:
+`{{date}}`, `{{time}}`, `{{datetime}}`, `{{clipboard}}`, `{{uuid}}`,
+`{{home}}`, and `{{user}}`.
+
 ### Projects, ports, and Git
 
 - `/proj` lists devx projects and worktrees when devx is installed, with Open in
@@ -376,6 +405,15 @@ confirm = false
   and mutations run as managed subprocesses and return their output to the
   panel; only **Open LazyGit** launches a terminal. Complex Git work still
   belongs in LazyGit; Palette never force-pushes or rewrites history.
+
+### App and file actions
+
+Application rows offer **Open**, **Show in Finder**, **Copy Bundle ID**, **Copy
+Path**, **Quit App**, and, for apps under `/Applications`, **Move App to the
+Trash…** with a confirmation. Project, path, recent, command, port, Git, and
+Finder-file rows include **Open in Embedded Terminal** at the row's directory.
+Clipboard file previews use QuickLook, so PDFs, images, archives, and other
+formats render directly in the preview pane.
 
 ### Typography
 
@@ -429,6 +467,9 @@ terminal = "kitty"
 terminal_app = "kitty"
 editor_open_with = "neovide"
 clipboard_hotkey = "opt+v"
+terminal_hotkey = "cmd+option+t"     # empty disables
+scratchpad_hotkey = "cmd+option+s"   # empty disables
+ask_hotkey = "cmd+option+a"          # empty disables
 search_position = "top"        # top | center
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent

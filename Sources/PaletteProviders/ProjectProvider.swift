@@ -118,6 +118,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         var actions: [PaletteAction] = [
             PaletteAction(id: "neovide", title: "Open in Neovide", kind: .custom, value: .object(value)),
             PaletteAction(id: "terminal", title: "Open Terminal", kind: .custom, value: .object(value)),
+            PaletteAction(id: "term-here", title: "Open in Embedded Terminal", kind: .custom, value: .object(value)),
             PaletteAction(id: "workspace", title: "Open devx Workspace", kind: .custom, value: .object(value)),
             PaletteAction(id: "apply-config", title: "Apply devx Config", kind: .custom, value: .object(value)),
             PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .custom, value: .object(value)),

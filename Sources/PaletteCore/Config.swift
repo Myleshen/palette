@@ -108,6 +108,9 @@ public struct TypographyConfig: Sendable, Equatable {
 public struct PaletteConfig: Sendable, Equatable {
     public var hotkey: String
     public var clipboardHotkey: String
+    public var terminalHotkey: String
+    public var scratchpadHotkey: String
+    public var askHotkey: String
     public var providerPrefix: String
     public var toolsPath: [String]
     public var terminal: String
@@ -131,6 +134,9 @@ public struct PaletteConfig: Sendable, Equatable {
     public init(
         hotkey: String = "opt+space",
         clipboardHotkey: String = "opt+v",
+        terminalHotkey: String = "cmd+option+t",
+        scratchpadHotkey: String = "cmd+option+s",
+        askHotkey: String = "cmd+option+a",
         providerPrefix: String = "/",
         toolsPath: [String] = [],
         terminal: String = "kitty",
@@ -153,6 +159,9 @@ public struct PaletteConfig: Sendable, Equatable {
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
+        self.terminalHotkey = terminalHotkey
+        self.scratchpadHotkey = scratchpadHotkey
+        self.askHotkey = askHotkey
         self.providerPrefix = providerPrefix
         self.toolsPath = toolsPath
         self.terminal = terminal
@@ -284,8 +293,17 @@ public enum ConfigLoader {
         if let hotkey = table.str("hotkey"), !hotkey.isEmpty {
             config.hotkey = hotkey
         }
-        if let hotkey = table.str("clipboard_hotkey"), !hotkey.isEmpty {
+        if let hotkey = table.str("clipboard_hotkey") {
             config.clipboardHotkey = hotkey
+        }
+        if let hotkey = table.str("terminal_hotkey") {
+            config.terminalHotkey = hotkey
+        }
+        if let hotkey = table.str("scratchpad_hotkey") {
+            config.scratchpadHotkey = hotkey
+        }
+        if let hotkey = table.str("ask_hotkey") {
+            config.askHotkey = hotkey
         }
         if let prefix = table.str("provider_prefix"), !prefix.isEmpty {
             config.providerPrefix = prefix
@@ -484,6 +502,11 @@ public enum ConfigLoader {
         # Opens the clipboard browser with a live preview. Set to "" to disable.
         clipboard_hotkey = "opt+v"
 
+        # Optional global shortcuts. Set either to "" to disable it.
+        terminal_hotkey = "cmd+option+t"
+        scratchpad_hotkey = "cmd+option+s"
+        ask_hotkey = "cmd+option+a"
+
         # Shared prefix. Every provider trigger is appended to this character.
         provider_prefix = "/"
 
@@ -607,6 +630,9 @@ public enum ConfigWriter {
         out.append("")
         out.append("hotkey = \(quote(config.hotkey))")
         out.append("clipboard_hotkey = \(quote(config.clipboardHotkey))")
+        out.append("terminal_hotkey = \(quote(config.terminalHotkey))")
+        out.append("scratchpad_hotkey = \(quote(config.scratchpadHotkey))")
+        out.append("ask_hotkey = \(quote(config.askHotkey))")
         out.append("provider_prefix = \(quote(config.providerPrefix))")
         out.append("tools_path = [\(config.toolsPath.map(quote).joined(separator: ", "))]")
         out.append("terminal = \(quote(config.terminal))")

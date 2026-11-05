@@ -125,7 +125,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 70 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 73 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
@@ -133,11 +133,12 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   session classification, encrypted cache expiry and refresh, path filtering,
   use counts, fuzzy abbreviations, fuzzy clipboard/file search, Ask config
   without secrets, free-first models, quota fallback, invalid-key endpoint
-  skipping, response parsing, and Ask history trimming).
+  skipping, response parsing, Ask history trimming, scratch notes, recent-use
+  queries, and snippet placeholder expansion).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 2.0.4). Hotkeys `opt+space` and `opt+v` registered without a
-  conflict.
+  version 2.1.0). Launcher, clipboard, terminal, scratchpad, and Ask hotkeys
+  registered without a conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
   copied `8` and returned focus to the previous app; typing `/ne` and pressing
@@ -148,6 +149,14 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   Catppuccin Mocha; `/neof package.swift` resolved the right file; `/zj` listed
   sessions and offered a create row; selecting **Copy Bundle ID** on Safari put
   `com.apple.Safari` on the clipboard.
+- v2.1.0 checks: the Settings search field jumps to matching sections; the
+  global shortcut summary reports conflicts; `/scratch` lists notes with a
+  **New Scratch Note** row; `/snip` loaded a TOML snippet and expanded
+  `{{date}}`/`{{clipboard}}` in the preview; `/recent`, project, path, port,
+  command, Git, and Finder-file rows
+  expose **Open in Embedded Terminal**; clipboard file previews use QuickLook;
+  app rows expose **Quit App** and **Move App to the Trash…**; physical
+  `⌘⌥T`, `⌘⌥S`, and `⌘⌥A` opened terminal, scratchpad, and Ask respectively.
 - Hotkey regression (1.4.1): the previous build's `⌥Space` was dead whenever
   `⌥V` was registered, because a second `InstallEventHandler` replaced the first
   on the same Carbon target. After the shared-router fix, the brew-installed
@@ -165,7 +174,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   The no-key path showed the setup row, and Settings Ask displayed only
   “Key saved in the macOS Keychain” after saving. Real Zen free quota returned
   429 and the expired Go key returned 401; both were reported without a crash.
-  `swift test`: 70 tests, 0 failures.
+  `swift test`: 73 tests, 0 failures.
 - v1.7.13 checks: after opening the clipboard browser and pressing `Esc`, the
   snapshot showed the empty app list at normal width with no preview pane or
   “No preview available” placeholder.

@@ -34,6 +34,8 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public private(set) var previewEnabled = false
     @Published public private(set) var previewFocused = false
     @Published public private(set) var scratchpadActive = false
+    @Published public private(set) var scratchpadNoteID: String?
+    @Published public var scratchpadTitle = ""
     @Published public private(set) var terminalActive = false
     @Published public private(set) var terminalInitialCommand: String?
     @Published public var scratchpadText = ""
@@ -113,6 +115,15 @@ public final class SearchController: ObservableObject, HostBridge {
         panelDidShow()
     }
 
+    public func openAsk() {
+        previewEnabled = true
+        panel?.widthOverride = 880
+        actionsMode = false
+        actionItems = []
+        query = "\(configuration.providerPrefix)ask "
+        panelDidShow()
+    }
+
     public func panelDidHide() {
         searchTask?.cancel()
         isSearching = false
@@ -160,12 +171,10 @@ public final class SearchController: ObservableObject, HostBridge {
         // Bound searches can take a moment (Bitwarden, external processes).
         // Show the target provider immediately instead of stale global rows.
         let parsed = registry.parser.parse(query)
-        // Preview belongs to the clipboard browser and Ask. Opening them by
-        // typing, tabbing, or a hotkey must show it; leaving must drop it and
-        // the wide layout.
-        let previewProvider = parsed.providerID == "clip"
-            || parsed.providerID == "ask"
-            || parsed.providerID == "askh"
+        // Preview is useful wherever a row has something worth showing:
+        // clipboard, Ask, snippets, and path/project providers.
+        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj"]
+            .contains(parsed.providerID ?? "")
         if previewProvider {
             if !previewEnabled {
                 previewEnabled = true
@@ -795,11 +804,30 @@ public final class SearchController: ObservableObject, HostBridge {
                         openTerminalPanel(command: cwd.map { "cd \(Self.shellQuote($0)) && \(line)" } ?? line)
                     }
                 } else if action.id == "scratch-open" {
-                    openScratchpad()
+                    openScratchpad(noteID: nil, seed: action.value.text == "new" ? "" : nil)
+                } else if action.id == "scratch-edit" {
+                    if let noteID = action.value.object?["id"] {
+                        openScratchpad(noteID: noteID, seed: nil)
+                    }
+                } else if action.id == "scratch-delete" {
+                    try await registry.activate(item: item, action: action)
+                    scheduleSearch(debounce: false)
                 } else if action.id == "scratch-entry" {
                     if let entryID = action.value.text,
                        let entry = try await store.clipboardEntry(id: entryID) {
-                        openScratchpad(seed: entry.text)
+                        openScratchpad(noteID: nil, seed: entry.text)
+                    }
+                } else if action.id == "snippet-scratch" {
+                    if let raw = action.value.text {
+                        let expanded = SnippetExpansion.expand(
+                            raw,
+                            clipboard: NSPasteboard.general.string(forType: .string) ?? ""
+                        )
+                        openScratchpad(noteID: nil, seed: expanded)
+                    }
+                } else if action.id == "term-here" {
+                    if let path = action.value.object?["path"], !path.isEmpty {
+                        openTerminalPanel(command: "cd \(Self.shellQuote(path))")
                     }
                 } else if action.id == "clip-transform" {
                     if let entryID = action.value.text {
@@ -998,20 +1026,33 @@ public final class SearchController: ObservableObject, HostBridge {
         updatePanelHeight()
     }
 
-    public func openScratchpad(seed: String? = nil) {
+    public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
         panel?.show()
         panel?.widthOverride = 880
         scratchpadActive = true
+        scratchpadNoteID = noteID
+        scratchpadTitle = ""
         scratchpadText = seed ?? ""
         previewFocused = false
         actionsMode = false
         actionItems = []
-        if seed == nil {
+
+        if let noteID {
+            Task { [weak self] in
+                guard let self, let note = try? await self.store.scratchNote(id: noteID) else { return }
+                self.scratchpadTitle = note.title
+                self.scratchpadText = note.text
+            }
+        } else if seed == nil {
             Task { [weak self] in
                 guard let self else { return }
-                if let saved = try? await self.store.metaValue("scratchpad.text"),
-                   (self.scratchpadText.isEmpty) {
-                    self.scratchpadText = saved
+                if let note = try? await self.store.scratchNotes(limit: 1).first {
+                    self.scratchpadNoteID = note.id
+                    self.scratchpadTitle = note.title
+                    self.scratchpadText = note.text
+                } else if let legacy = try? await self.store.metaValue("scratchpad.text"),
+                          !legacy.isEmpty {
+                    self.scratchpadText = legacy
                 }
             }
         }
@@ -1022,9 +1063,20 @@ public final class SearchController: ObservableObject, HostBridge {
     public func closeScratchpad(save: Bool) {
         guard scratchpadActive else { return }
         if save {
+            let title = scratchpadTitle
             let text = scratchpadText
-            Task { [weak self] in
-                try? await self?.store.setMeta("scratchpad.text", value: text)
+            let noteID = scratchpadNoteID
+            if !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Task { [weak self] in
+                    guard let self,
+                          let note = try? await self.store.saveScratchNote(
+                            id: noteID,
+                            title: title,
+                            text: text
+                          ) else { return }
+                    self.scratchpadNoteID = note.id
+                }
             }
         }
         scratchpadActive = false

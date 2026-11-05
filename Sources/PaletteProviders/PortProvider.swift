@@ -96,6 +96,8 @@ public final class PortProvider: PaletteProvider, @unchecked Sendable {
         if let cwd {
             actions.append(PaletteAction(id: "reveal", title: "Reveal Working Directory", kind: .custom,
                                          value: .object(["pid": "\(listener.pid)", "cwd": cwd])))
+            actions.append(PaletteAction(id: "term-here", title: "Open in Embedded Terminal", kind: .custom,
+                                         value: .object(["path": cwd])))
         }
         let subtitle = [listener.user, listener.command, cwd].compactMap { $0 }.joined(separator: " · ")
         return PaletteItem(

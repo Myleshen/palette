@@ -5,6 +5,31 @@ import PaletteCore
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
+public struct ScratchNote: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var text: String
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: String, title: String, text: String, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.title = title
+        self.text = text
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct RecentUse: Identifiable, Equatable, Sendable {
+    public var stableID: String
+    public var provider: String
+    public var itemID: String
+    public var lastUsed: Date
+    public var uses: Int
+    public var id: String { stableID }
+}
+
 public actor PaletteStore {
     private var database: OpaquePointer?
 
@@ -89,6 +114,15 @@ public actor PaletteStore {
             error TEXT
         );
         CREATE INDEX IF NOT EXISTS ask_history_created ON ask_history(created DESC);
+
+        CREATE TABLE IF NOT EXISTS scratch_notes (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            text TEXT NOT NULL,
+            created REAL NOT NULL,
+            updated REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS scratch_notes_updated ON scratch_notes(updated DESC);
         """, on: database)
 
         if try !hasColumn("webapps", "shortcut", on: database) {
@@ -153,6 +187,40 @@ public actor PaletteStore {
             result[id] = Int(sqlite3_column_int(statement, 1))
         }
         return result
+    }
+
+    public func recentUses(providers: [String], limit: Int = 50) throws -> [RecentUse] {
+        guard !providers.isEmpty else { return [] }
+        let placeholders = Array(repeating: "?", count: providers.count).joined(separator: ",")
+        let statement = try prepare("""
+        SELECT id, provider, uses, last_used FROM items
+        WHERE provider IN (\(placeholders)) AND last_used IS NOT NULL
+        ORDER BY last_used DESC LIMIT ?;
+        """)
+        defer { sqlite3_finalize(statement) }
+        for (index, provider) in providers.enumerated() {
+            bind(statement, Int32(index + 1), provider)
+        }
+        sqlite3_bind_int(statement, Int32(providers.count + 1), Int32(max(1, limit)))
+        var uses: [RecentUse] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idText = sqlite3_column_text(statement, 0),
+                  let providerText = sqlite3_column_text(statement, 1) else { continue }
+            let stableID = String(cString: idText)
+            let provider = String(cString: providerText)
+            let prefix = provider + ":"
+            let itemID = stableID.hasPrefix(prefix)
+                ? String(stableID.dropFirst(prefix.count))
+                : stableID
+            uses.append(RecentUse(
+                stableID: stableID,
+                provider: provider,
+                itemID: itemID,
+                lastUsed: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3)),
+                uses: Int(sqlite3_column_int(statement, 2))
+            ))
+        }
+        return uses
     }
 
     public func frecencyBoosts(for stableIDs: [String], now: Date = Date()) throws -> [String: Double] {
@@ -634,6 +702,92 @@ public actor PaletteStore {
         defer { sqlite3_finalize(overflow) }
         sqlite3_bind_int(overflow, 1, Int32(max(1, maxHistory)))
         try step(overflow)
+    }
+
+    // MARK: - Scratch notes
+
+    @discardableResult
+    public func saveScratchNote(
+        id: String? = nil,
+        title: String,
+        text: String,
+        at date: Date = Date()
+    ) throws -> ScratchNote {
+        let noteID = id ?? UUID().uuidString
+        let existing = try scratchNote(id: noteID)
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let resolvedTitle = String((trimmedTitle.isEmpty ? fallback : trimmedTitle).prefix(80))
+        let finalTitle = resolvedTitle.isEmpty ? "Untitled note" : resolvedTitle
+        let created = existing?.createdAt ?? date
+
+        let statement = try prepare("""
+        INSERT INTO scratch_notes (id, title, text, created, updated) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET title = excluded.title,
+            text = excluded.text, updated = excluded.updated;
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, noteID)
+        bind(statement, 2, finalTitle)
+        bind(statement, 3, text)
+        sqlite3_bind_double(statement, 4, created.timeIntervalSince1970)
+        sqlite3_bind_double(statement, 5, date.timeIntervalSince1970)
+        try step(statement)
+
+        return ScratchNote(id: noteID, title: finalTitle, text: text, createdAt: created, updatedAt: date)
+    }
+
+    public func scratchNote(id: String) throws -> ScratchNote? {
+        let statement = try prepare("""
+        SELECT id, title, text, created, updated FROM scratch_notes WHERE id = ? LIMIT 1;
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, id)
+        guard sqlite3_step(statement) == SQLITE_ROW,
+              let idText = sqlite3_column_text(statement, 0),
+              let titleText = sqlite3_column_text(statement, 1),
+              let bodyText = sqlite3_column_text(statement, 2) else { return nil }
+        return ScratchNote(
+            id: String(cString: idText),
+            title: String(cString: titleText),
+            text: String(cString: bodyText),
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3)),
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4))
+        )
+    }
+
+    public func scratchNotes(limit: Int = 200) throws -> [ScratchNote] {
+        let statement = try prepare("""
+        SELECT id, title, text, created, updated FROM scratch_notes
+        ORDER BY updated DESC LIMIT ?;
+        """)
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int(statement, 1, Int32(max(1, limit)))
+        var notes: [ScratchNote] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idText = sqlite3_column_text(statement, 0),
+                  let titleText = sqlite3_column_text(statement, 1),
+                  let bodyText = sqlite3_column_text(statement, 2) else { continue }
+            notes.append(ScratchNote(
+                id: String(cString: idText),
+                title: String(cString: titleText),
+                text: String(cString: bodyText),
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3)),
+                updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4))
+            ))
+        }
+        return notes
+    }
+
+    public func deleteScratchNote(id: String) throws {
+        let statement = try prepare("DELETE FROM scratch_notes WHERE id = ?;")
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, id)
+        try step(statement)
     }
 
     // MARK: - Metadata

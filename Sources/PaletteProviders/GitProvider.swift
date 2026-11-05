@@ -162,6 +162,7 @@ public final class GitProvider: PaletteProvider, @unchecked Sendable {
             PaletteAction(id: "push", title: "Push", kind: .custom, value: .object(value)),
             PaletteAction(id: "log", title: "Recent Log", kind: .custom, value: .object(value)),
             PaletteAction(id: "lazygit", title: "Open in LazyGit", kind: .custom, value: .object(value)),
+            PaletteAction(id: "term-here", title: "Open in Embedded Terminal", kind: .custom, value: .object(value)),
             PaletteAction(id: "copy-branch", title: "Copy Branch", kind: .copyText, value: .text(repo.branch)),
             PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .custom, value: .object(value)),
         ]

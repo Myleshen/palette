@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.0 — 2026-11-05
+
+### Added
+
+- Global shortcuts for the embedded terminal (`⌘⌥T`), scratchpad (`⌘⌥S`), and
+  Ask (`⌘⌥A`), with Settings recorders, duplicate validation, and empty values
+  to disable any of them.
+- Scratchpad history: named notes stored in Palette's database, with `/scratch`
+  search, create, edit, and delete.
+- **Open in Embedded Terminal** from project, path, port, command, Git, recent,
+  and Finder-file rows.
+- QuickLook previews for files in the preview pane.
+- `/recent` for recently opened projects and files.
+- `/snip` with `~/.config/palette/snippets.toml` and safe placeholder expansion.
+- Application actions for **Quit App** and **Move App to the Trash…**.
+- Settings search field, shortcut summary, and duplicate-shortcut warning.
+
 ## 2.0.4 — 2026-11-04
 
 ### Added

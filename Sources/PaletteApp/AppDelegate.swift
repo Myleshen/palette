@@ -55,11 +55,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var panel: PanelController!
     private var hotkey: HotKeyManager!
     private var clipboardHotkey: HotKeyManager!
+    private var terminalHotkey: HotKeyManager!
+    private var scratchpadHotkey: HotKeyManager!
     private var statusItem: NSStatusItem!
     private var hostProxy: HostBridgeProxy!
     private var appIndex: AppIndex!
     private var currentHotKey: HotKeySpec?
     private var currentClipboardHotKey: HotKeySpec?
+    private var currentTerminalHotKey: HotKeySpec?
+    private var currentScratchpadHotKey: HotKeySpec?
+    private var askHotkey: HotKeyManager!
+    private var currentAskHotKey: HotKeySpec?
     private var startupDiagnostics: [Diagnostic] = []
     private var themeObserver: NSObjectProtocol?
     private var watcherTimer: Timer?
@@ -339,10 +345,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var diagnostics = startupDiagnostics
         var providers: [any PaletteProvider] = []
 
-        providers.append(AppProvider(index: appIndex, launcher: launcher))
+        providers.append(AppProvider(index: appIndex, launcher: launcher, bridge: hostProxy))
         providers.append(CalculatorProvider())
         providers.append(EmojiProvider())
-        providers.append(ScratchpadProvider())
+        providers.append(ScratchpadProvider(store: store))
         providers.append(TerminalProvider())
         providers.append(WebSearchProvider(
             engines: configuration.webSearchEngines,
@@ -361,6 +367,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(PortProvider(launcher: launcher, bridge: hostProxy))
         providers.append(CommandProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
         providers.append(ProjectProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
+        providers.append(RecentProvider(store: store, launcher: launcher, editor: configuration.editorOpenWith))
+        providers.append(SnippetProvider(bridge: hostProxy))
         providers.append(GitProvider(launcher: launcher, bridge: hostProxy))
         for kind in BitwardenKind.allCases {
             providers.append(BitwardenProvider(
@@ -450,6 +458,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func installHotKey() {
         installLauncherHotKey()
         installClipboardHotKey()
+        installTerminalHotKey()
+        installScratchpadHotKey()
+        installAskHotKey()
     }
 
     private func installLauncherHotKey() {
@@ -496,6 +507,106 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 source: "hotkey"
             )
         }
+    }
+
+    private func installTerminalHotKey() {
+        guard !configuration.terminalHotkey.isEmpty else {
+            terminalHotkey?.unregister()
+            currentTerminalHotKey = nil
+            return
+        }
+        if terminalHotkey == nil {
+            terminalHotkey = HotKeyManager(hotKeyID: 3)
+            terminalHotkey.onPressed = { [weak self] in self?.toggleTerminalPanel() }
+        }
+        do {
+            currentTerminalHotKey = try terminalHotkey.register(configuration.terminalHotkey)
+            Log.shared.info("Terminal hotkey registered: \(currentTerminalHotKey?.display ?? configuration.terminalHotkey)", source: "hotkey")
+        } catch {
+            currentTerminalHotKey = nil
+            Log.shared.warn(
+                "Terminal hotkey '\(configuration.terminalHotkey)' unavailable: \(error.localizedDescription)",
+                source: "hotkey"
+            )
+        }
+    }
+
+    private func installScratchpadHotKey() {
+        guard !configuration.scratchpadHotkey.isEmpty else {
+            scratchpadHotkey?.unregister()
+            currentScratchpadHotKey = nil
+            return
+        }
+        if scratchpadHotkey == nil {
+            scratchpadHotkey = HotKeyManager(hotKeyID: 4)
+            scratchpadHotkey.onPressed = { [weak self] in self?.toggleScratchpad() }
+        }
+        do {
+            currentScratchpadHotKey = try scratchpadHotkey.register(configuration.scratchpadHotkey)
+            Log.shared.info("Scratchpad hotkey registered: \(currentScratchpadHotKey?.display ?? configuration.scratchpadHotkey)", source: "hotkey")
+        } catch {
+            currentScratchpadHotKey = nil
+            Log.shared.warn(
+                "Scratchpad hotkey '\(configuration.scratchpadHotkey)' unavailable: \(error.localizedDescription)",
+                source: "hotkey"
+            )
+        }
+    }
+
+    private func installAskHotKey() {
+        guard !configuration.askHotkey.isEmpty else {
+            askHotkey?.unregister()
+            currentAskHotKey = nil
+            return
+        }
+        if askHotkey == nil {
+            askHotkey = HotKeyManager(hotKeyID: 5)
+            askHotkey.onPressed = { [weak self] in self?.showAsk() }
+        }
+        do {
+            currentAskHotKey = try askHotkey.register(configuration.askHotkey)
+            Log.shared.info("Ask hotkey registered: \(currentAskHotKey?.display ?? configuration.askHotkey)", source: "hotkey")
+        } catch {
+            currentAskHotKey = nil
+            Log.shared.warn(
+                "Ask hotkey '\(configuration.askHotkey)' unavailable: \(error.localizedDescription)",
+                source: "hotkey"
+            )
+        }
+    }
+
+    private func showAsk() {
+        guard let panel, let controller = searchController else { return }
+        if panel.isVisible, controller.activeTabID == "ask" {
+            panel.hide()
+            return
+        }
+        panel.show()
+        controller.openAsk()
+    }
+
+    private func toggleTerminalPanel() {
+        guard let controller = searchController else { return }
+        if controller.terminalActive {
+            controller.closeTerminalPanel()
+            return
+        }
+        if controller.scratchpadActive {
+            controller.closeScratchpad(save: true)
+        }
+        controller.openTerminalPanel()
+    }
+
+    private func toggleScratchpad() {
+        guard let controller = searchController else { return }
+        if controller.scratchpadActive {
+            controller.closeScratchpad(save: true)
+            return
+        }
+        if controller.terminalActive {
+            controller.closeTerminalPanel()
+        }
+        controller.openScratchpad()
     }
 
     private func configureClipboard() {
@@ -890,7 +1001,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         searchController.replace(registry: newRegistry, configuration: configuration)
 
         if currentHotKey?.display.lowercased() != configuration.hotkey.lowercased()
-            || currentClipboardHotKey?.display.lowercased() != configuration.clipboardHotkey.lowercased() {
+            || currentClipboardHotKey?.display.lowercased() != configuration.clipboardHotkey.lowercased()
+            || currentTerminalHotKey?.display.lowercased() != configuration.terminalHotkey.lowercased()
+            || currentScratchpadHotKey?.display.lowercased() != configuration.scratchpadHotkey.lowercased()
+            || currentAskHotKey?.display.lowercased() != configuration.askHotkey.lowercased() {
             installHotKey()
         }
         configureClipboard()

@@ -112,6 +112,20 @@ public final class LauncherService {
         try ProcessRunner.launch(argv, cwd: cwd)
     }
 
+    public func quitApp(path: String) {
+        let target = PathExpansion.expand(path)
+        for app in NSWorkspace.shared.runningApplications
+        where app.bundleURL?.path == target {
+            app.terminate()
+        }
+    }
+
+    public func uninstallApp(path: String) throws {
+        let target = URL(fileURLWithPath: PathExpansion.expand(path))
+        var trashed: NSURL?
+        try FileManager.default.trashItem(at: target, resultingItemURL: &trashed)
+    }
+
     public func activateApp(path: String) {
         let url = URL(fileURLWithPath: PathExpansion.expand(path))
         let configuration = NSWorkspace.OpenConfiguration()

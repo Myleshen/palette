@@ -2,6 +2,7 @@ import XCTest
 import Foundation
 import PaletteCore
 import PalettePlatform
+import PaletteProviders
 
 final class StorageTests: XCTestCase {
     private func makeStore() throws -> (PaletteStore, URL) {
@@ -175,5 +176,52 @@ final class StorageTests: XCTestCase {
         XCTAssertEqual(counts["apps:Zed"], 3)
         XCTAssertEqual(counts["apps:Safari"], 1)
         XCTAssertNil(counts["apps:Missing"])
+    }
+
+    func testScratchNotesAndRecentUses() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let first = try await store.saveScratchNote(title: "", text: "First line\nbody")
+        XCTAssertEqual(first.title, "First line")
+        let updated = try await store.saveScratchNote(id: first.id, title: "Renamed", text: "changed")
+        XCTAssertEqual(updated.id, first.id)
+        XCTAssertEqual(updated.title, "Renamed")
+        let notes = try await store.scratchNotes()
+        XCTAssertEqual(notes.count, 1)
+        XCTAssertEqual(notes.first?.text, "changed")
+
+        try await store.recordUse(stableID: "neo:/tmp/a", provider: "neo")
+        try await store.recordUse(stableID: "proj:proj:/tmp/b", provider: "proj")
+        let recent = try await store.recentUses(providers: ["neo", "proj"], limit: 10)
+        XCTAssertEqual(recent.count, 2)
+        XCTAssertTrue(recent.contains { $0.itemID == "/tmp/a" })
+        XCTAssertTrue(recent.contains { $0.itemID == "proj:/tmp/b" })
+
+        try await store.deleteScratchNote(id: first.id)
+        let after = try await store.scratchNotes()
+        XCTAssertTrue(after.isEmpty)
+    }
+
+    func testScratchpadAndRecentProviders() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let launcher = await MainActor.run { LauncherService() }
+        let scratch = ScratchpadProvider(store: store)
+        _ = try await store.saveScratchNote(title: "Build notes", text: "gradle build")
+        let scratchRows = try await scratch.search(SearchRequest(text: "", limit: 20, isBound: true))
+        XCTAssertTrue(scratchRows.contains { $0.title == "New Scratch Note" })
+        XCTAssertTrue(scratchRows.contains { $0.title == "Build notes" })
+        let matched = try await scratch.search(SearchRequest(text: "gradle", limit: 20, isBound: true))
+        XCTAssertTrue(matched.contains { $0.title == "Build notes" })
+
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("palette-recent-\(UUID().uuidString).swift")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try "let x = 1".write(to: file, atomically: true, encoding: .utf8)
+        try await store.recordUse(stableID: "neo:\(file.path)", provider: "neo")
+        let recent = RecentProvider(store: store, launcher: launcher, editor: "neovide")
+        let rows = try await recent.search(SearchRequest(text: "", limit: 20, isBound: true))
+        XCTAssertTrue(rows.contains { $0.title == file.lastPathComponent })
+        XCTAssertTrue(rows.first?.preview != nil)
     }
 }

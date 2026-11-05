@@ -12,6 +12,13 @@ struct ProviderSettingsInfo: Identifiable, Equatable {
     var trigger: String?
 }
 
+private struct SettingsDestination: Identifiable {
+    var id: String { "\(tab)-\(title)" }
+    var title: String
+    var tab: Int
+    var keywords: String
+}
+
 struct SettingsView: View {
     @State private var config: PaletteConfig
     @State private var engines: [WebSearchEngine]
@@ -19,6 +26,10 @@ struct SettingsView: View {
     @State private var saveError: String?
     @State private var launcherRecordToken = 0
     @State private var clipboardRecordToken = 0
+    @State private var terminalRecordToken = 0
+    @State private var scratchpadRecordToken = 0
+    @State private var askRecordToken = 0
+    @State private var settingsSearch = ""
     @State private var accessibilityTrusted: Bool
     @State private var askKeyInput = ""
     @State private var askKeyStored: Bool
@@ -78,16 +89,39 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TabView(selection: $selectedTab) {
-                general.tabItem { Label("General", systemImage: "slider.horizontal.3") }.tag(0)
-                appearance.tabItem { Label("Appearance", systemImage: "paintpalette") }.tag(1)
-                clipboard.tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }.tag(2)
-                search.tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(3)
-                ask.tabItem { Label("Ask", systemImage: "sparkles") }.tag(4)
-                providerSettings.tabItem { Label("Providers", systemImage: "square.stack.3d.up") }.tag(5)
-                advanced.tabItem { Label("Advanced", systemImage: "gearshape.2") }.tag(6)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search settings", text: $settingsSearch)
+                    .textFieldStyle(.plain)
+                if !settingsSearch.isEmpty {
+                    Button {
+                        settingsSearch = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                }
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 4)
+
+            if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {
+                TabView(selection: $selectedTab) {
+                    general.tabItem { Label("General", systemImage: "slider.horizontal.3") }.tag(0)
+                    appearance.tabItem { Label("Appearance", systemImage: "paintpalette") }.tag(1)
+                    clipboard.tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }.tag(2)
+                    search.tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(3)
+                    ask.tabItem { Label("Ask", systemImage: "sparkles") }.tag(4)
+                    providerSettings.tabItem { Label("Providers", systemImage: "square.stack.3d.up") }.tag(5)
+                    advanced.tabItem { Label("Advanced", systemImage: "gearshape.2") }.tag(6)
+                }
+                .padding(20)
+            } else {
+                settingsSearchResults
+            }
 
             Divider()
 
@@ -113,6 +147,79 @@ struct SettingsView: View {
 
     private var configURL: URL {
         PalettePaths.resolve().configFile
+    }
+
+    private var destinations: [SettingsDestination] {
+        [
+            .init(title: "Global shortcuts", tab: 0, keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record"),
+            .init(title: "Apps and editor", tab: 0, keywords: "terminal editor neovide kitty external app"),
+            .init(title: "Embedded terminal", tab: 0, keywords: "terminal session zellij tmux fish shell font"),
+            .init(title: "Startup", tab: 0, keywords: "login start startup launch item"),
+            .init(title: "Permissions", tab: 0, keywords: "accessibility permission paste automation"),
+            .init(title: "Launcher position and app order", tab: 0, keywords: "top center alphabetical frequent layout"),
+            .init(title: "Themes", tab: 1, keywords: "theme dark light catppuccin gruvbox aetheria"),
+            .init(title: "Typography and fonts", tab: 1, keywords: "font family size mono typography"),
+            .init(title: "Clipboard history", tab: 2, keywords: "clipboard history entries poll clear retention"),
+            .init(title: "Web search", tab: 3, keywords: "web search engine google duckduckgo github youtube"),
+            .init(title: "Web app browser", tab: 3, keywords: "browser helium chrome chromium web app"),
+            .init(title: "Ask models and API key", tab: 4, keywords: "ask model api key token endpoint history retention"),
+            .init(title: "Provider order and aliases", tab: 5, keywords: "provider order alias visibility trigger"),
+            .init(title: "Backup and diagnostics", tab: 6, keywords: "backup export restore diagnostics crash log version"),
+            .init(title: "Configuration files", tab: 6, keywords: "config providers themes log folder file"),
+        ]
+    }
+
+    private var settingsSearchResults: some View {
+        let query = settingsSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matches = query.isEmpty ? [] : destinations.filter {
+            $0.title.localizedCaseInsensitiveContains(query)
+                || $0.keywords.localizedCaseInsensitiveContains(query)
+        }
+        return List(matches) { destination in
+            Button {
+                selectedTab = destination.tab
+                settingsSearch = ""
+            } label: {
+                HStack {
+                    Text(destination.title)
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .listStyle(.inset)
+        .overlay {
+            if matches.isEmpty {
+                Text("No matching settings")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var shortcutSummary: String {
+        let entries = [
+            ("Launcher", config.hotkey),
+            ("Clipboard", config.clipboardHotkey),
+            ("Terminal", config.terminalHotkey),
+            ("Scratchpad", config.scratchpadHotkey),
+            ("Ask", config.askHotkey),
+        ].filter { !$0.1.isEmpty }
+        let values = entries.map { "\($0.0) \($0.1)" }.joined(separator: " · ")
+        return hasShortcutConflict ? "Conflict: each global shortcut must be unique." : values
+    }
+
+    private var hasShortcutConflict: Bool {
+        let values = [
+            config.hotkey,
+            config.clipboardHotkey,
+            config.terminalHotkey,
+            config.scratchpadHotkey,
+            config.askHotkey,
+        ].filter { !$0.isEmpty }.map { $0.lowercased() }
+        return Set(values).count != values.count
     }
 
     private var general: some View {
@@ -144,9 +251,51 @@ struct SettingsView: View {
                             .accessibilityLabel("Record clipboard hotkey")
                     }
                 }
-                Text("Click Record, then press the shortcut you want. Save applies it immediately.")
+                LabeledContent("Terminal shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.terminalHotkey,
+                            label: "Terminal hotkey",
+                            recordToken: terminalRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { terminalRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record terminal hotkey")
+                    }
+                }
+                LabeledContent("Scratchpad shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.scratchpadHotkey,
+                            label: "Scratchpad hotkey",
+                            recordToken: scratchpadRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { scratchpadRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record scratchpad hotkey")
+                    }
+                }
+                LabeledContent("Ask shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.askHotkey,
+                            label: "Ask hotkey",
+                            recordToken: askRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { askRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record Ask hotkey")
+                    }
+                }
+                Text("Click Record, then press the shortcut you want. Save applies it immediately; clear an optional shortcut to disable it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text(shortcutSummary)
+                    .font(.caption)
+                    .foregroundStyle(hasShortcutConflict ? .red : .secondary)
             }
             Section("Apps") {
                 TextField("Terminal", text: $config.terminalApp)
@@ -634,6 +783,28 @@ struct SettingsView: View {
         }
         guard HotKeySpec.parse(config.clipboardHotkey) != nil else {
             saveError = "The clipboard hotkey is not a valid shortcut. Click the field and press the keys you want."
+            return
+        }
+        let optional = [
+            ("terminal", config.terminalHotkey),
+            ("scratchpad", config.scratchpadHotkey),
+            ("Ask", config.askHotkey),
+        ]
+        for (name, value) in optional where !value.isEmpty {
+            guard HotKeySpec.parse(value) != nil else {
+                saveError = "The \(name) hotkey is not a valid shortcut. Click the field and press the keys you want."
+                return
+            }
+        }
+        let shortcuts = [
+            config.hotkey,
+            config.clipboardHotkey,
+            config.terminalHotkey,
+            config.scratchpadHotkey,
+            config.askHotkey,
+        ].filter { !$0.isEmpty }.map { $0.lowercased() }
+        if Set(shortcuts).count != shortcuts.count {
+            saveError = "Each global shortcut must be unique."
             return
         }
         let browser = config.webAppBrowser

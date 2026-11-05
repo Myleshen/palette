@@ -2,6 +2,7 @@ import AppKit
 import class SwiftTerm.LocalProcessTerminalView
 import PaletteCore
 import PalettePlatform
+import QuickLookUI
 import SwiftUI
 
 extension RGBA {
@@ -295,6 +296,7 @@ struct ActionRow: View {
         let id = action.id.lowercased()
         if id.contains("pin") { return "pin" }
         if id.contains("delete") { return "trash" }
+        if id.contains("term") { return "terminal" }
         if id.contains("unlock") { return "lock.open" }
         if id.contains("login") { return "person.crop.circle" }
         if id.contains("install") { return "arrow.down.circle" }
@@ -919,9 +921,30 @@ struct PromptView: View {
     }
 }
 
+struct QuickLookPreviewView: NSViewRepresentable {
+    var path: String
+
+    func makeNSView(context: Context) -> QLPreviewView {
+        let view: QLPreviewView = QLPreviewView(frame: .zero, style: .compact)
+            ?? QLPreviewView(frame: .zero)!
+        view.autostarts = true
+        view.shouldCloseWithWindow = true
+        view.previewItem = URL(fileURLWithPath: path) as NSURL
+        return view
+    }
+
+    func updateNSView(_ view: QLPreviewView, context: Context) {
+        let url = URL(fileURLWithPath: path)
+        if (view.previewItem as? URL) != url {
+            view.previewItem = url as NSURL
+            view.refreshPreviewItem()
+        }
+    }
+}
+
 /// Right-hand preview used by the dedicated clipboard window. Text is shown
-/// verbatim, images at their stored size, and Finder selections get icons,
-/// `stat` metadata plus a `bat` render for plain-text files.
+/// verbatim, images at their stored size, and Finder selections get a
+/// QuickLook preview plus icons and file metadata.
 struct ClipboardPreviewPane: View {
     var item: PaletteItem?
     var theme: Theme
@@ -989,8 +1012,14 @@ struct ClipboardPreviewPane: View {
                     .foregroundColor(theme.color(theme.palette.fgMuted))
             }
         case .files(let paths):
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
+                if files.count == 1, let file = files.first, !file.isDirectory {
+                    QuickLookPreviewView(path: file.path)
+                        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 230)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
                     ForEach(files, id: \.path) { file in
                         HStack(alignment: .top, spacing: 8) {
                             Image(nsImage: NSWorkspace.shared.icon(forFile: file.path))
@@ -1018,10 +1047,11 @@ struct ClipboardPreviewPane: View {
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    if paths.isEmpty {
-                        Text("No paths")
-                            .font(.system(size: 11))
-                            .foregroundColor(theme.color(theme.palette.fgMuted))
+                        if paths.isEmpty {
+                            Text("No paths")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.color(theme.palette.fgMuted))
+                        }
                     }
                 }
             }
@@ -1229,6 +1259,11 @@ struct ScratchpadView: View {
                 Text("Scratchpad")
                     .font(theme.font(size: 12, weight: .semibold))
                     .foregroundColor(theme.color(theme.palette.fg))
+                TextField("Untitled note", text: $controller.scratchpadTitle)
+                    .textFieldStyle(.plain)
+                    .font(theme.font(size: 12))
+                    .foregroundColor(theme.color(theme.palette.fgMuted))
+                    .frame(maxWidth: 260)
                 Spacer()
                 Button("Paste") { controller.pasteIntoScratchpad() }
                 Button("Copy All") { controller.copyScratchpad() }

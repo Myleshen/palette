@@ -121,6 +121,9 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(config.clipboard.maxEntries, 5_000)
         XCTAssertEqual(config.webSearchEngines.count, 4)
         XCTAssertEqual(config.clipboardHotkey, "opt+v")
+        XCTAssertEqual(config.terminalHotkey, "cmd+option+t")
+        XCTAssertEqual(config.scratchpadHotkey, "cmd+option+s")
+        XCTAssertEqual(config.askHotkey, "cmd+option+a")
         XCTAssertEqual(config.searchPosition, .top)
         XCTAssertEqual(config.webAppBrowser, "Helium")
 
@@ -130,11 +133,26 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(parsed.clipboard.maxEntries, 5_000)
         XCTAssertEqual(parsed.webSearchEngines.map(\.name), config.webSearchEngines.map(\.name))
         XCTAssertEqual(parsed.clipboardHotkey, config.clipboardHotkey)
+        XCTAssertEqual(parsed.terminalHotkey, config.terminalHotkey)
+        XCTAssertEqual(parsed.scratchpadHotkey, config.scratchpadHotkey)
+        XCTAssertEqual(parsed.askHotkey, config.askHotkey)
         XCTAssertEqual(parsed.searchPosition, .top)
         XCTAssertEqual(parsed.webAppBrowser, "Helium")
         XCTAssertTrue(diagnostics.isEmpty)
         XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))
         XCTAssertTrue(ThemeLoader.builtinNames.contains("aetheria-pink"))
+
+        var disabled = config
+        disabled.terminalHotkey = ""
+        disabled.scratchpadHotkey = ""
+        disabled.askHotkey = ""
+        let disabledTable = try TOMLTable(string: ConfigWriter.render(disabled))
+        var disabledDiagnostics: [Diagnostic] = []
+        let disabledParsed = try ConfigLoader.parse(disabledTable, diagnostics: &disabledDiagnostics)
+        XCTAssertTrue(disabledParsed.terminalHotkey.isEmpty)
+        XCTAssertTrue(disabledParsed.scratchpadHotkey.isEmpty)
+        XCTAssertTrue(disabledParsed.askHotkey.isEmpty)
+        XCTAssertTrue(disabledDiagnostics.isEmpty)
 
         var moved = config
         moved.searchPosition = .center
@@ -152,6 +170,33 @@ final class CoreTests: XCTestCase {
         let legacyParsed = try ConfigLoader.parse(legacy, diagnostics: &legacyDiagnostics)
         XCTAssertEqual(legacyParsed.searchPosition, .center)
         XCTAssertTrue(legacyDiagnostics.isEmpty)
+    }
+
+    func testSnippetExpansionAndLoading() throws {
+        let expanded = SnippetExpansion.expand(
+            "{{date}}|{{time}}|{{clipboard}}|{{unknown}}",
+            now: Date(timeIntervalSince1970: 0),
+            clipboard: "copied",
+            home: "/home/test",
+            user: "tester"
+        )
+        XCTAssertFalse(expanded.contains("{{date}}"))
+        XCTAssertFalse(expanded.contains("{{time}}"))
+        XCTAssertTrue(expanded.contains("|copied|"))
+        XCTAssertTrue(expanded.hasSuffix("|{{unknown}}"))
+
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("snippets-\(UUID().uuidString).toml")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        [[snippet]]
+        title = "Signature"
+        keywords = ["mail"]
+        text = "Best,\\nMyles"
+        """.write(to: url, atomically: true, encoding: .utf8)
+        let snippets = SnippetProvider.load(from: url)
+        XCTAssertEqual(snippets.count, 1)
+        XCTAssertEqual(snippets.first?.title, "Signature")
+        XCTAssertEqual(snippets.first?.keywords, ["mail"])
     }
 
     func testLegacyGridKeysAreIgnored() throws {

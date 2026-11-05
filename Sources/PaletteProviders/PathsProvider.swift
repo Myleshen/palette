@@ -191,6 +191,13 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         if !actions.contains(where: { $0.kind == .copyText }) {
             actions.append(PaletteAction(id: "copy-extra", title: "Copy Path", kind: .copyText, value: .text(path)))
         }
+        let terminalPath = isDirectory.boolValue ? path : (path as NSString).deletingLastPathComponent
+        actions.append(PaletteAction(
+            id: "term-here",
+            title: "Open in Embedded Terminal",
+            kind: .custom,
+            value: .object(["path": terminalPath])
+        ))
 
         return PaletteItem(
             id: path,
@@ -200,6 +207,7 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
             badge: isDirectory.boolValue ? "folder" : (ext.isEmpty ? nil : ext.uppercased()),
             score: 1_000 - Double(rank),
             actions: actions,
+            preview: .files(paths: [path]),
             providerID: configuration.id,
             providerName: configuration.name
         )

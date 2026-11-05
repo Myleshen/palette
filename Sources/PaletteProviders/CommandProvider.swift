@@ -105,6 +105,12 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
                         "cwd": command.workingDirectory ?? "",
                     ])
                 ),
+                PaletteAction(
+                    id: "term-here",
+                    title: "Open in Embedded Terminal",
+                    kind: .custom,
+                    value: .object(["path": PathExpansion.expand(command.workingDirectory ?? "~")])
+                ),
             ],
             preview: .text("\(subtitle)\n\nWorking directory: \(command.workingDirectory ?? "current")"),
             providerID: descriptor.id,
