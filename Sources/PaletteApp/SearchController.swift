@@ -489,7 +489,7 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     private static let groups: [(id: String, title: String, icon: String, members: [String])] = [
-        ("neovide", "Neovide", "symbol:folder", ["neo", "neof"]),
+        ("editor", "Editor", "symbol:folder", ["neo", "neof"]),
         ("bitwarden", "Bitwarden", "symbol:key.fill", ["bw", "bwu", "bwt", "bwn", "bwo"]),
     ]
 
@@ -548,6 +548,7 @@ public final class SearchController: ObservableObject, HostBridge {
             let name = provider.descriptor.name
                 .replacingOccurrences(of: "Bitwarden ", with: "")
                 .replacingOccurrences(of: "Neovide ", with: "")
+                .replacingOccurrences(of: "Editor ", with: "")
             return ProviderMember(id: id, title: name)
         }
     }

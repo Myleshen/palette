@@ -152,7 +152,10 @@ public struct PaletteConfig: Sendable, Equatable {
         appSort: AppSort = .alphabetical,
         ask: AskConfig = AskConfig(),
         typography: TypographyConfig = TypographyConfig(),
-        providerAliases: [String: [String]] = [:],
+        providerAliases: [String: [String]] = [
+            "neo": ["neo", "editor"],
+            "neof": ["neof", "folders"],
+        ],
         providerOrder: [String] = [],
         disabledProviders: [String] = [],
         terminalSession: TerminalSessionConfig = TerminalSessionConfig()
@@ -358,7 +361,7 @@ public enum ConfigLoader {
                 .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
                 .filter { !$0.isEmpty && $0 != "apps" }
             if let aliases = providers.table("aliases") {
-                var parsed: [String: [String]] = [:]
+                var parsed = config.providerAliases
                 for key in aliases.keys {
                     let values = aliases.strArray(key) ?? []
                     let cleaned = values

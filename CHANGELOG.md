@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The paths picker is now editor-agnostic: **Editor** and **Editor Folders**
+  use the configured `editor_open_with`, with `/edit` and `/editf` as the
+  canonical triggers. `/neo` and `/neof` remain aliases for existing muscle
+  memory.
+- Settings → General gained a **Defaults** section showing the current editor,
+  terminal, browser, theme, and Ask model, with installed-app detection and a
+  scoped reset for app/theme/Ask/terminal-session defaults.
+- First-run onboarding is now two steps: shortcuts/startup, then a lean
+  **Essentials / Developer / Everything** starting set. Essentials stays small;
+  editor and terminal choices appear only in the larger presets.
+
 ## 2.2.3 — 2026-11-06
 
 ### Changed

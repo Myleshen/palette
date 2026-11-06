@@ -5,10 +5,51 @@ import PalettePlatform
 import ServiceManagement
 
 struct OnboardingView: View {
+    enum Preset: String, CaseIterable, Identifiable {
+        case essentials
+        case developer
+        case everything
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .essentials: return "Essentials"
+            case .developer: return "Developer"
+            case .everything: return "Everything"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .essentials:
+                return "Apps, clipboard, snippets, recent items, and web search."
+            case .developer:
+                return "Essentials plus editor paths, projects, commands, Git, ports, and terminal."
+            case .everything:
+                return "Adds Ask, Bitwarden, Zellij, web apps, and keep-awake."
+            }
+        }
+
+        var providerIDs: Set<String> {
+            switch self {
+            case .essentials:
+                return ["clip", "snip", "recent", "calc", "system", "theme"]
+            case .developer:
+                return ["clip", "snip", "recent", "calc", "system", "theme",
+                        "neo", "neof", "proj", "cmd", "git", "port", "term"]
+            case .everything:
+                return ["clip", "snip", "recent", "calc", "system", "theme",
+                        "neo", "neof", "proj", "cmd", "git", "port", "term",
+                        "ask", "askh", "bw", "bwu", "bwt", "bwn", "bwo",
+                        "zj", "web", "awake"]
+            }
+        }
+    }
+
     @State private var config: PaletteConfig
-    @State private var disabled: [String]
     @State private var step = 0
-    @State private var askKey = ""
+    @State private var preset: Preset = .essentials
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     let providers: [ProviderSettingsInfo]
@@ -22,7 +63,6 @@ struct OnboardingView: View {
         onSkip: @escaping () -> Void
     ) {
         _config = State(initialValue: config)
-        _disabled = State(initialValue: config.disabledProviders)
         self.providers = providers
         self.onFinish = onFinish
         self.onSkip = onSkip
@@ -36,7 +76,7 @@ struct OnboardingView: View {
                 Text("Welcome to Palette")
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Text("Step \(step + 1) of 3")
+                Text("Step \(step + 1) of 2")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -45,11 +85,7 @@ struct OnboardingView: View {
             Divider()
 
             Group {
-                switch step {
-                case 0: shortcuts
-                case 1: providerStep
-                default: askStep
-                }
+                if step == 0 { shortcuts } else { startingSet }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(20)
@@ -59,11 +95,11 @@ struct OnboardingView: View {
             HStack {
                 Button("Skip setup") { onSkip() }
                 Spacer()
-                if step > 0 {
-                    Button("Back") { step -= 1 }
+                if step == 1 {
+                    Button("Back") { step = 0 }
                 }
-                if step < 2 {
-                    Button("Continue") { step += 1 }
+                if step == 0 {
+                    Button("Continue") { step = 1 }
                         .keyboardShortcut(.defaultAction)
                 } else {
                     Button("Finish") { finish() }
@@ -101,7 +137,7 @@ struct OnboardingView: View {
                     }
             }
             Section {
-                Text("You can change all of this later with ⌘, or /sys settings.")
+                Text("Everything else can wait. You can change any of this later with ⌘, or /sys settings.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -109,56 +145,58 @@ struct OnboardingView: View {
         .formStyle(.grouped)
     }
 
-    private var providerStep: some View {
+    private var startingSet: some View {
         Form {
-            Section("Show these in the tab bar") {
-                ForEach(providers.filter { $0.id != "apps" }) { provider in
-                    Toggle(provider.name, isOn: Binding(
-                        get: { !disabled.contains(provider.id) },
-                        set: { enabled in
-                            if enabled { disabled.removeAll { $0 == provider.id } }
-                            else if !disabled.contains(provider.id) { disabled.append(provider.id) }
-                        }
-                    ))
+            Section("Pick a starting set") {
+                Picker("Starting set", selection: $preset) {
+                    ForEach(Preset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
                 }
-            }
-            Section("Apps") {
-                TextField("Terminal", text: $config.terminalApp)
-                TextField("Editor", text: $config.editorOpenWith)
-                Text("Examples: kitty, Terminal, neovide.")
+                .pickerStyle(.segmented)
+                Text(preset.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        }
-        .formStyle(.grouped)
-    }
 
-    private var askStep: some View {
-        Form {
-            Section("Ask (optional)") {
-                Text("OpenCode Go powers /ask. Add a Go API key now or later in Settings → Ask.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                SecureField("OpenCode Go API key", text: $askKey)
-                if AskKeychain.hasStoredKey(for: .opencodeGo) {
-                    Text("A key is already saved.")
+            if preset != .essentials {
+                Section("Editor and terminal") {
+                    TextField("Editor", text: $config.editorOpenWith)
+                    TextField("Terminal", text: $config.terminalApp)
+                    if let detected = detectedEditor {
+                        Button("Use \(detected)") { config.editorOpenWith = detected }
+                            .controlSize(.small)
+                    }
+                    Text("Examples: neovide, Visual Studio Code, Cursor, Zed, kitty, Ghostty. Missing tools can be installed later.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            Section("Ready") {
-                Text("Palette will apply these choices immediately. Press ⌘, anytime to refine them.")
+
+            Section("You can add more later") {
+                Text("Everything is available in Settings → Providers. Essentials stays deliberately small.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            if detectedEditor != nil, config.editorOpenWith.isEmpty {
+                config.editorOpenWith = detectedEditor ?? ""
+            }
+        }
+    }
+
+    private var detectedEditor: String? {
+        ["neovide", "Visual Studio Code", "Cursor", "Zed", "Sublime Text"]
+            .first { ToolLocator.shared.appPath(named: $0) != nil }
     }
 
     private func finish() {
-        let key = askKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !key.isEmpty { _ = AskKeychain.save(key, for: .opencodeGo) }
-        config.disabledProviders = disabled.filter { $0 != "apps" }
+        let wanted = preset.providerIDs
+        config.disabledProviders = providers
+            .filter { $0.id != "apps" && $0.trigger != nil && !wanted.contains($0.id) }
+            .map(\.id)
         onFinish(config)
     }
 }
