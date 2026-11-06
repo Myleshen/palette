@@ -1,10 +1,10 @@
 id = "neo"
-name = "Neovide"
-trigger = "neo"
+name = "Editor"
+trigger = "edit"
 engine = "paths"
 kind = "any"
 scope = "home"
-open_with = "neovide"
+open_with = "editor"
 secondary = "reveal"
 max_results = 2000
 freeform = true

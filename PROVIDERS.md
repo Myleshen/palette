@@ -16,8 +16,8 @@ overrides the bundled one.
 
 ```toml
 id = "neof"                    # required, stable, [a-z0-9._-]
-name = "Neovide files"         # display name
-trigger = "neof"               # bare word; invoked as /neof
+name = "Editor folders"        # display name
+trigger = "editf"              # bare word; invoked as /editf
 global = false                 # also participate in unprefixed search
 icon = "symbol:doc.text"       # default icon for rows without one
 keywords = ["file", "neo"]     # extra match terms
@@ -32,7 +32,7 @@ idle_timeout_s = 300           # external providers only
 ```
 
 `trigger` is appended to the shared `provider_prefix` from `config.toml`
-(default `/`), so `trigger = "neo"` is `/neo`. Changing the prefix character
+(default `/`), so `trigger = "edit"` is `/edit`. Changing the prefix character
 moves every provider at once. Duplicate triggers produce a warning; the
 lexicographically first `id` wins.
 
@@ -43,8 +43,8 @@ about. `global = true` without a trigger is valid for ambient providers.
 
 ```toml
 id = "neo"
-name = "Neovide"
-trigger = "neo"
+name = "Editor"
+trigger = "edit"
 engine = "paths"
 
 kind = "any"                   # directories | files | any
@@ -55,7 +55,7 @@ max_results = 2000
 freeform = true                # accept typed absolute/~/relative paths
 ```
 
-`kind = "any"` is `/neo` (files and folders); `kind = "directories"` is `/neof`
+`kind = "any"` is `/edit` (files and folders); `kind = "directories"` is `/editf`. `/neo` and `/neof` remain aliases.
 (folders only). With `freeform = true`, an existing absolute path, `~/…`, or
 path containing `/` is offered directly even when it is outside the scope.
 
@@ -253,8 +253,8 @@ on the roadmap.
 | `apps` | — | native | applications, always global |
 | `calc` | `calc` | native | arithmetic, also inferred unprefixed |
 | `pins` | — | native | pinned items, global |
-| `neo` | `neo` | paths | files and folders across home, freeform paths, opens in Neovide |
-| `neof` | `neof` | paths | folders only, seeded user copy |
+| `neo` | `edit` | paths | files and folders across home, freeform, opens in the configured editor (`/neo` alias) |
+| `neof` | `editf` | paths | folders only, seeded user copy (`/neof` alias) |
 | `zj` | `zj` | native | global; running sessions globally, create rows only under `/zj` |
 | `search` | — | native | global web-search rows for configured engines |
 | `bw` | `bw` | native | Bitwarden passwords |

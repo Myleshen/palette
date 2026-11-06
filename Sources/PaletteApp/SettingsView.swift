@@ -41,6 +41,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
+    @State private var defaultsMessage: String?
 
     private let keepAwake: KeepAwakeService
     private let themesDirectory: URL
@@ -207,6 +208,34 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func detectDefaults() {
+        let editors = ["neovide", "Visual Studio Code", "Cursor", "Zed", "Sublime Text"]
+        if let editor = editors.first(where: {
+            ToolLocator.shared.appPath(named: $0) != nil
+        }) {
+            config.editorOpenWith = editor
+        }
+        if let browser = BrowserCatalog.chromiumChoices.first(where: {
+            ToolLocator.shared.appPath(named: $0) != nil
+        }) {
+            config.webAppBrowser = browser
+        }
+        defaultsMessage = "Detected installed editor and browser where available."
+    }
+
+    private func resetDefaults() {
+        config.editorOpenWith = "neovide"
+        config.terminal = "kitty"
+        config.terminalApp = "kitty"
+        config.webAppBrowser = "Helium"
+        config.theme = ThemeSelection()
+        config.ask = AskConfig()
+        config.terminalSession = TerminalSessionConfig()
+        config.appSort = .alphabetical
+        config.searchPosition = .top
+        defaultsMessage = "App, theme, Ask, and terminal defaults reset. Hotkeys and scopes were left alone."
+    }
+
     private var keepAwakeBinding: Binding<Bool> {
         Binding(
             get: { keepAwakeStatus.active },
@@ -364,6 +393,25 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                 }
                 Text("Clamshell uses the standard administrator prompt and keeps working with the lid shut only on AC power. Turning it off leaves an active keep-awake timer alone.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Defaults") {
+                LabeledContent("Editor", value: config.editorOpenWith)
+                LabeledContent("Terminal", value: config.terminalApp)
+                LabeledContent("Web app browser", value: config.webAppBrowser)
+                LabeledContent("Theme", value: config.theme.dark)
+                LabeledContent("Ask model", value: config.ask.model)
+                HStack {
+                    Button("Detect Installed Apps") { detectDefaults() }
+                    Button("Reset App and Theme Defaults") { resetDefaults() }
+                }
+                if let defaultsMessage {
+                    Text(defaultsMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("These are Palette's opinionated defaults. Change them here or in the sections below; reset only affects app, theme, Ask, and terminal-session settings.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

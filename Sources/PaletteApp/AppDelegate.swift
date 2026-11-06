@@ -120,8 +120,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let configResult = ConfigLoader.load(paths: paths)
         configuration = configResult.config
         startupDiagnostics = configResult.diagnostics
-        shouldShowOnboarding = configResult.createdDefault
-            && !UserDefaults.standard.bool(forKey: "onboardingCompleted")
+        let forceOnboarding = ProcessInfo.processInfo.environment["PALETTE_FORCE_ONBOARDING"] == "1"
+        shouldShowOnboarding = (configResult.createdDefault || forceOnboarding)
+            && (forceOnboarding || !UserDefaults.standard.bool(forKey: "onboardingCompleted"))
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
 
         do {
@@ -733,7 +734,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func seedUserProviders() {
         let neof = paths.providersDir.appendingPathComponent("neof", isDirectory: true)
         let manifest = neof.appendingPathComponent("provider.toml")
-        let oldContent = """
+        let oldFilesContent = """
         # Neovide file picker. This is a user-level copy of the bundled neo
         # provider, showing how to add your own provider manifest.
         id = "neof"
@@ -747,7 +748,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         max_results = 50
         priority = 60
         """
-        let content = """
+        let oldFoldersContent = """
         # Neovide folder picker: the same provider as the bundled neo, but
         # restricted to directories. Edit this file to make it yours.
         id = "neof"
@@ -762,12 +763,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         freeform = true
         priority = 60
         """
+        let content = """
+        # Editor folder picker: the same provider as the bundled edit
+        # provider, but restricted to directories. Edit this file to make it
+        # yours.
+        id = "neof"
+        name = "Editor Folders"
+        trigger = "editf"
+        engine = "paths"
+        kind = "directories"
+        scope = "home"
+        open_with = "editor"
+        secondary = "reveal"
+        max_results = 2000
+        freeform = true
+        priority = 60
+        """
 
         let manager = FileManager.default
         if manager.fileExists(atPath: manifest.path) {
             // Migrate only the seed we wrote earlier; never touch a user edit.
             guard let existing = try? String(contentsOf: manifest, encoding: .utf8),
-                  existing == oldContent else { return }
+                  existing == oldFilesContent || existing == oldFoldersContent else { return }
         } else {
             do {
                 try manager.createDirectory(at: neof, withIntermediateDirectories: true)

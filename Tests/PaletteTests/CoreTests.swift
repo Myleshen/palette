@@ -141,6 +141,8 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(diagnostics.isEmpty)
         XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))
         XCTAssertTrue(ThemeLoader.builtinNames.contains("aetheria-pink"))
+        XCTAssertEqual(parsed.providerAliases["neo"], ["neo", "editor"])
+        XCTAssertEqual(parsed.providerAliases["neof"], ["neof", "folders"])
 
         var disabled = config
         disabled.terminalHotkey = ""

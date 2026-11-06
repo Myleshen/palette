@@ -31,7 +31,7 @@ public enum ManifestProviderFactory {
                 priority: manifest.priority,
                 kind: paths.kind,
                 scopeName: paths.scope,
-                openWith: paths.openWith,
+                openWith: paths.openWith == "editor" ? configuration.editorOpenWith : paths.openWith,
                 secondary: paths.secondary,
                 maxResults: paths.maxResults,
                 terminalApp: configuration.terminalApp,

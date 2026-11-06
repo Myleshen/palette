@@ -7,7 +7,7 @@ extensible provider system. Press a hotkey, type, act. No window chrome, no
 Dock icon, no script layer holding the core together.
 
 ```
-⌥Space → /neo dotfiles → ⏎ opens the folder in Neovide
+⌥Space → /edit dotfiles → ⏎ opens the folder in your editor
 ```
 
 ## Status
@@ -20,7 +20,7 @@ your files and drive other apps.
 
 | Tool | Why | Install |
 |---|---|---|
-| `fd` | filesystem enumeration for `/neo` and `/neof` | `brew install fd` |
+| `fd` | filesystem enumeration for `/edit` and `/editf` | `brew install fd` |
 | `fzf` | ranking for path results | `brew install fzf` |
 | `zellij` | `/zj` sessions | `brew install zellij` |
 | `kitty` | terminal used by `/zj` | `brew install --cask kitty` |
@@ -79,7 +79,7 @@ Configuration lives in `~/.config/palette`:
   themes/                   # optional user themes
 ```
 
-The bundled `/neo` provider lives inside the app. On first run Palette writes a
+The bundled `/edit` provider lives inside the app. On first run Palette writes a
 commented `config.toml` and seeds `providers/neof` so both examples are ready to
 use without copying anything.
 
@@ -123,8 +123,8 @@ trigger word:
 
 | Prefix | Provider |
 |---|---|
-| `/neo <query>` | files and folders, opened in Neovide |
-| `/neof <query>` | folders only, opened in Neovide |
+| `/edit <query>` | files and folders, opened in the configured editor |
+| `/editf <query>` | folders only, opened in the configured editor |
 | `/zj <query>` | zellij sessions; `⏎` attaches or creates in kitty |
 | `/bw <query>` | Bitwarden passwords |
 | `/bwu <query>` | Bitwarden usernames |
@@ -149,7 +149,7 @@ trigger word:
 | `/theme <query>` | switch themes live |
 | `/calc <expr>` | calculator (also works unprefixed) |
 
-A trailing slash browses a directory breadth-first: `/neo ~/dev/` shows the
+A trailing slash browses a directory breadth-first: `/edit ~/dev/` shows the
 direct children of `~/dev` first, then the next level.
 
 Unprefixed queries search apps, web apps, zellij sessions, pinned items, web
@@ -165,7 +165,7 @@ fox**, `tst` finds a Bitwarden login named **Test**, and `drgn` finds **Dragon**
 This applies to apps, clipboard text and file names, web apps, providers,
 themes, and Bitwarden vault fields. Clipboard search scans the whole configured
 history instead of only doing a SQL prefix match, so non-contiguous searches
-work there too. `/neo` still delegates path ranking to the real `fzf` binary
+work there too. `/edit` still delegates path ranking to the real `fzf` binary
 with `--scheme=path`.
 
 The empty-query screen is deliberately the **app list**: apps in alphabetical
@@ -549,7 +549,7 @@ supported.
 Two kinds of provider:
 
 - **Paths providers** are declarative manifests backed by the built-in fd + fzf
-  engine. `/neof` is the reference copy: duplicate it, change `kind` and
+  engine. `/editf` is the reference copy: duplicate it, change `kind` and
   `open_with`.
 - **Command providers** are any executable that speaks newline-delimited JSON
   over stdin/stdout. Write one in shell, Python, Swift, or anything else. A
