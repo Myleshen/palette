@@ -12,6 +12,34 @@ struct ProviderSettingsInfo: Identifiable, Equatable {
     var trigger: String?
 }
 
+private enum SettingsTab: Int, CaseIterable, Identifiable {
+    case general, appearance, clipboard, search, ask, providers, advanced
+
+    var id: Int { rawValue }
+    var title: String {
+        switch self {
+        case .general: return "General"
+        case .appearance: return "Appearance"
+        case .clipboard: return "Clipboard"
+        case .search: return "Search"
+        case .ask: return "Ask"
+        case .providers: return "Providers"
+        case .advanced: return "Advanced"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .general: return "slider.horizontal.3"
+        case .appearance: return "paintpalette"
+        case .clipboard: return "doc.on.clipboard"
+        case .search: return "magnifyingglass"
+        case .ask: return "sparkles"
+        case .providers: return "square.stack.3d.up"
+        case .advanced: return "gearshape.2"
+        }
+    }
+}
+
 private struct SettingsDestination: Identifiable {
     var id: String { "\(tab)-\(title)" }
     var title: String
@@ -44,6 +72,7 @@ struct SettingsView: View {
     @State private var defaultsMessage: String?
 
     private let keepAwake: KeepAwakeService
+    private let theme: Theme
     private let themesDirectory: URL
     private let providerSummary: [String]
     private let providers: [ProviderSettingsInfo]
@@ -55,6 +84,7 @@ struct SettingsView: View {
     init(
         config: PaletteConfig,
         keepAwake: KeepAwakeService,
+        theme: Theme,
         themesDirectory: URL,
         accessibilityTrusted: Bool,
         providerSummary: [String],
@@ -84,6 +114,7 @@ struct SettingsView: View {
             ? "auto"
             : (["fish", "zsh"].contains(shellName) ? shellName : "custom"))
         self.keepAwake = keepAwake
+        self.theme = theme
         self.themesDirectory = themesDirectory
         self.providerSummary = providerSummary
         self.providers = providers
@@ -115,16 +146,9 @@ struct SettingsView: View {
             .padding(.bottom, 4)
 
             if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {
-                TabView(selection: $selectedTab) {
-                    general.tabItem { Label("General", systemImage: "slider.horizontal.3") }.tag(0)
-                    appearance.tabItem { Label("Appearance", systemImage: "paintpalette") }.tag(1)
-                    clipboard.tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }.tag(2)
-                    search.tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(3)
-                    ask.tabItem { Label("Ask", systemImage: "sparkles") }.tag(4)
-                    providerSettings.tabItem { Label("Providers", systemImage: "square.stack.3d.up") }.tag(5)
-                    advanced.tabItem { Label("Advanced", systemImage: "gearshape.2") }.tag(6)
-                }
-                .padding(20)
+                settingsTabs
+                selectedSettingsContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 settingsSearchResults
             }
@@ -140,7 +164,14 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .frame(width: 720, height: 640)
+        .frame(width: 780, height: 660)
+        .background(
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1)
+            }
+        )
+        .preferredColorScheme(theme.appearance == "light" ? .light : .dark)
         .task {
             keepAwakeStatus = await keepAwake.snapshot()
         }
@@ -151,6 +182,61 @@ struct SettingsView: View {
             Button("OK") { saveError = nil }
         } message: {
             Text(saveError ?? "")
+        }
+    }
+
+    private var settingsTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(SettingsTab.allCases) { tab in
+                    let selected = selectedTab == tab.rawValue
+                    Button {
+                        selectedTab = tab.rawValue
+                    } label: {
+                        Label(tab.title, systemImage: tab.icon)
+                            .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                            .foregroundColor(theme.color(selected ? theme.palette.accent : theme.palette.fgMuted))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(
+                                    selected
+                                        ? theme.color(theme.palette.accent).opacity(0.18)
+                                        : theme.color(theme.palette.elevated).opacity(0.35)
+                                )
+                            )
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    selected
+                                        ? theme.color(theme.palette.accent).opacity(0.55)
+                                        : theme.color(theme.palette.border).opacity(0.25),
+                                    lineWidth: 1
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tab.title)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(theme.color(theme.palette.separator)).frame(height: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var selectedSettingsContent: some View {
+        switch SettingsTab(rawValue: selectedTab) ?? .general {
+        case .general: general
+        case .appearance: appearance
+        case .clipboard: clipboard
+        case .search: search
+        case .ask: ask
+        case .providers: providerSettings
+        case .advanced: advanced
         }
     }
 

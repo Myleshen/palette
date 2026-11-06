@@ -96,6 +96,8 @@ public struct ThemeWindow: Equatable, Sendable {
     public var opacity: Double = 0.98
     public var borderWidth: Double = 1
     public var shadow = true
+    public var glass = true
+    public var glassOpacity: Double = 0.55
     public init() {}
 }
 
@@ -374,6 +376,10 @@ public enum ThemeLoader {
             theme.window.opacity = window.number("opacity") ?? theme.window.opacity
             theme.window.borderWidth = window.number("border_width") ?? theme.window.borderWidth
             theme.window.shadow = window.bool("shadow") ?? theme.window.shadow
+            theme.window.glass = window.bool("glass") ?? theme.window.glass
+            if let value = window.number("glass_opacity") {
+                theme.window.glassOpacity = min(1, max(0, value))
+            }
         }
 
         if let search = table.table("search") {
