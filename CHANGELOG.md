@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.2.3 — 2026-11-06
+
+### Changed
+
+- Releases run from a `v*` tag now. CI runs the tests, builds
+  `Palette-<version>.zip`, publishes the release with this entry as the notes,
+  and moves the Homebrew cask, instead of the local `make release` ritual.
+
+### Verified
+
+- `swift test`: 81 tests, 0 failures.
+- The `build` CI job is green on the release pull request.
+- `Resources/Info.plist` and the tag agree, or the release job refuses to run.
+
 ## 2.2.2 — 2026-11-06
 
 ### Added
