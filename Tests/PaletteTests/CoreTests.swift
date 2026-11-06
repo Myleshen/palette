@@ -208,8 +208,11 @@ final class CoreTests: XCTestCase {
     }
 
     func testWebAppBrowserValidation() {
-        XCTAssertNil(BrowserCatalog.validationError(for: "Helium"),
-                     "The default Helium browser should validate when installed")
+        // Helium is the maintainer's default browser; CI runners ship without it.
+        if FileManager.default.fileExists(atPath: "/Applications/Helium.app") {
+            XCTAssertNil(BrowserCatalog.validationError(for: "Helium"),
+                         "The default Helium browser should validate when installed")
+        }
         XCTAssertNotNil(BrowserCatalog.validationError(for: "Definitely Not A Browser"),
                         "Unknown browsers must fail validation instead of being saved")
         XCTAssertNotNil(BrowserCatalog.validationError(for: "Safari"),
