@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.3.0 — 2026-11-06
 
 ### Changed
 
@@ -14,6 +14,16 @@
 - First-run onboarding is now two steps: shortcuts/startup, then a lean
   **Essentials / Developer / Everything** starting set. Essentials stays small;
   editor and terminal choices appear only in the larger presets.
+
+### Verified
+
+- `swift test`: 81 tests, 0 failures.
+- `/edit` and the `/neo` alias both resolve a file in the Editor tab; the
+  Editor group shows Editor/Folders sub-tabs.
+- Settings → Defaults shows the editor, terminal, browser, theme, and Ask model,
+  with Detect Installed Apps and Reset App and Theme Defaults.
+- Onboarding Step 2 shows the Essentials/Developer/Everything presets, Back,
+  and Finish.
 
 ## 2.2.3 — 2026-11-06
 
