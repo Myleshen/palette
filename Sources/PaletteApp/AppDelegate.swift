@@ -1273,14 +1273,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let status = await self.keepAwake.snapshot()
+            let enabled = !status.clamshell
             do {
-                if status.active {
-                    try await self.keepAwake.setClamshell(!status.clamshell)
-                } else {
-                    try await self.keepAwake.start(duration: nil, clamshell: true)
-                }
+                try await self.keepAwake.setClamshell(enabled)
                 self.searchController.setStatus(
-                    status.clamshell ? "Clamshell mode off" : "Clamshell mode armed · AC power only",
+                    enabled ? "Clamshell mode on · AC power only" : "Clamshell mode off",
                     duration: 3
                 )
             } catch {
@@ -1312,7 +1309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let status = await keepAwake.snapshot()
         keepAwakeToggleItem?.title = status.active ? "Stop Keeping Awake" : "Keep Mac Awake (Indefinitely)"
         keepAwakeToggleItem?.state = status.active ? .on : .off
-        keepAwakeClamshellItem?.title = status.clamshell ? "Disable Clamshell (Lid Closed)" : "Clamshell (Lid Closed)"
+        keepAwakeClamshellItem?.title = "Clamshell (Lid Closed)"
         keepAwakeClamshellItem?.state = status.clamshell ? .on : .off
         keepAwakeStopItem?.isEnabled = status.active
     }

@@ -47,12 +47,18 @@ public struct KeepAwakeStatus: Sendable, Equatable {
     }
 }
 
+public protocol ClamshellControlling: Sendable {
+    func isEnabled() async -> Bool
+    func enable() async throws
+    func disable() async
+}
+
 /// Keeps the Mac awake with IOPM assertions. Clamshell mode additionally uses
 /// a short-lived root guard, because macOS treats a lid close as forced sleep
 /// and user-space assertions cannot override it.
 public actor KeepAwakeService {
     private let assertionsEnabled: Bool
-    private let clamshellGuard: ClamshellGuard
+    private let clamshellGuard: any ClamshellControlling
     private let timerInterval: TimeInterval
     private var systemAssertion: IOPMAssertionID = 0
     private var displayAssertion: IOPMAssertionID = 0
@@ -64,7 +70,7 @@ public actor KeepAwakeService {
 
     public init(
         assertionsEnabled: Bool = true,
-        clamshellGuard: ClamshellGuard = ClamshellGuard(),
+        clamshellGuard: any ClamshellControlling = ClamshellGuard(),
         timerInterval: TimeInterval = 30
     ) {
         self.assertionsEnabled = assertionsEnabled
@@ -86,63 +92,76 @@ public actor KeepAwakeService {
         preventDisplaySleep: Bool = true,
         clamshell: Bool = false
     ) async throws {
-        if status.active {
-            await stop()
-        }
+        let keepClamshell = clamshell || status.clamshell
+        stopActiveSession()
 
         status = KeepAwakeStatus(
             active: true,
             startedAt: Date(),
             endsAt: duration.map { Date().addingTimeInterval($0) },
             displaySleepPrevented: preventDisplaySleep,
-            clamshell: clamshell
+            clamshell: keepClamshell
         )
         createAssertions()
         installObservers()
         startTimer()
         scheduleExpiry()
 
-        if clamshell {
+        if keepClamshell {
             do {
-                try await clamshellGuard.enable()
+                try await ensureClamshell()
             } catch {
-                await stop()
+                stopActiveSession()
+                status.clamshell = false
                 throw error
             }
         }
     }
 
     public func stop() async {
-        timer?.cancel()
-        timer = nil
-        expiryTask?.cancel()
-        expiryTask = nil
-        removeObservers()
-        releaseAssertions()
-        status = KeepAwakeStatus()
+        stopActiveSession()
         await clamshellGuard.disable()
+        status = KeepAwakeStatus()
     }
 
+    /// Clamshell is its own toggle. It can be armed while idle keep-awake is
+    /// off, and starting a timer preserves it.
     public func setClamshell(_ enabled: Bool) async throws {
-        guard status.active else { return }
         if enabled {
-            try await clamshellGuard.enable()
+            try await ensureClamshell()
         } else {
             await clamshellGuard.disable()
+            status.clamshell = false
+            releaseClamshellAssertion()
         }
-        status.clamshell = enabled
+    }
+
+    private func ensureClamshell() async throws {
+        if !(await clamshellGuard.isEnabled()) {
+            try await clamshellGuard.enable()
+        }
+        status.clamshell = true
+        releaseClamshellAssertion()
+        createClamshellAssertion()
     }
 
     public func toggleDisplaySleep() {
         guard status.active else { return }
         status.displaySleepPrevented.toggle()
-        releaseAssertions()
-        createAssertions()
+        releaseKeepAwakeAssertions()
+        createKeepAwakeAssertions()
     }
 
     // MARK: - Assertions
 
     private func createAssertions() {
+        createKeepAwakeAssertions()
+        if status.clamshell {
+            createClamshellAssertion()
+        }
+    }
+
+    private func createKeepAwakeAssertions() {
         guard assertionsEnabled else { return }
         systemAssertion = Self.createAssertion(
             type: kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
@@ -154,21 +173,46 @@ public actor KeepAwakeService {
                 reason: "Palette is keeping your display awake"
             )
         }
-        if status.clamshell {
-            clamshellAssertion = Self.createAssertion(
-                type: kIOPMAssertionTypePreventSystemSleep as CFString,
-                reason: "Palette clamshell mode"
-            )
-        }
     }
 
-    private func releaseAssertions() {
-        for assertion in [systemAssertion, displayAssertion, clamshellAssertion] where assertion != 0 {
+    private func createClamshellAssertion() {
+        guard assertionsEnabled, status.clamshell else { return }
+        clamshellAssertion = Self.createAssertion(
+            type: kIOPMAssertionTypePreventSystemSleep as CFString,
+            reason: "Palette clamshell mode"
+        )
+    }
+
+    private func releaseKeepAwakeAssertions() {
+        for assertion in [systemAssertion, displayAssertion] where assertion != 0 {
             IOPMAssertionRelease(assertion)
         }
         systemAssertion = 0
         displayAssertion = 0
-        clamshellAssertion = 0
+    }
+
+    private func releaseClamshellAssertion() {
+        if clamshellAssertion != 0 {
+            IOPMAssertionRelease(clamshellAssertion)
+            clamshellAssertion = 0
+        }
+    }
+
+    private func releaseAssertions() {
+        releaseKeepAwakeAssertions()
+        releaseClamshellAssertion()
+    }
+
+    private func stopActiveSession() {
+        timer?.cancel()
+        timer = nil
+        expiryTask?.cancel()
+        expiryTask = nil
+        removeObservers()
+        releaseAssertions()
+        status.active = false
+        status.startedAt = nil
+        status.endsAt = nil
     }
 
     private static func createAssertion(type: CFString, reason: String) -> IOPMAssertionID {
@@ -246,7 +290,7 @@ public actor KeepAwakeService {
 /// switch that overrides lid-close sleep. It is enabled only while the flag
 /// exists, on AC power, and Palette is still running; it restores normal sleep
 /// when any of those stops being true.
-public actor ClamshellGuard {
+public actor ClamshellGuard: ClamshellControlling {
     public enum GuardError: LocalizedError {
         case cancelled
         case failed(String)
@@ -272,7 +316,7 @@ public actor ClamshellGuard {
         self.verifyEnabled = verifyEnabled
     }
 
-    public func isEnabled() -> Bool {
+    public func isEnabled() async -> Bool {
         FileManager.default.fileExists(atPath: flagURL.path)
     }
 

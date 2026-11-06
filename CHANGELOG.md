@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.2.1 — 2026-11-06
+
+### Changed
+
+- Clamshell mode is now a real ON/OFF toggle instead of a one-shot command.
+  Turning it on arms the root guard without starting an idle keep-awake timer;
+  turning it off leaves any active timer alone. Starting a timer preserves an
+  armed clamshell guard, and Stop clears both.
+- The `/awake` row and menu item both show the toggle state consistently.
+
+### Verified
+
+- `swift test`: 80 tests, 0 failures.
+- Clamshell toggle tests use a fake guard: arm while idle, start a timer while
+  armed, turn clamshell off without stopping the timer, then stop both.
+- Live `/awake` snapshot shows the clamshell row as **OFF**; cancelling the
+  admin prompt leaves it OFF and creates no keep-awake assertions.
+
 ## 2.2.0 — 2026-11-06
 
 ### Added

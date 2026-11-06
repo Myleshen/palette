@@ -18,6 +18,14 @@ private actor KeepAwakeBridge: HostBridge {
     func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {}
 }
 
+private actor FakeClamshell: ClamshellControlling {
+    private var enabled = false
+
+    func isEnabled() async -> Bool { enabled }
+    func enable() async throws { enabled = true }
+    func disable() async { enabled = false }
+}
+
 final class KeepAwakeTests: XCTestCase {
     private func makeGuard() -> ClamshellGuard {
         let flag = FileManager.default.temporaryDirectory
@@ -72,6 +80,61 @@ final class KeepAwakeTests: XCTestCase {
 
         await service.stop()
         status = await service.snapshot()
+        XCTAssertFalse(status.active)
+    }
+
+    func testClamshellToggleIsIndependentOfKeepAwake() async throws {
+        let fake = FakeClamshell()
+        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)
+
+        try await service.setClamshell(true)
+        var status = await service.snapshot()
+        XCTAssertTrue(status.clamshell)
+        XCTAssertFalse(status.active)
+        let armed = await fake.isEnabled()
+        XCTAssertTrue(armed)
+
+        try await service.start(duration: 60)
+        status = await service.snapshot()
+        XCTAssertTrue(status.active)
+        XCTAssertTrue(status.clamshell, "Starting a timer should preserve clamshell")
+
+        try await service.setClamshell(false)
+        status = await service.snapshot()
+        XCTAssertFalse(status.clamshell)
+        XCTAssertTrue(status.active, "Turning clamshell off should leave the timer alone")
+        let disarmed = await fake.isEnabled()
+        XCTAssertFalse(disarmed)
+
+        await service.stop()
+        status = await service.snapshot()
+        XCTAssertFalse(status.active)
+        XCTAssertFalse(status.clamshell)
+    }
+
+    func testProviderClamshellActionTogglesWithoutStartingTimer() async throws {
+        let fake = FakeClamshell()
+        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)
+        let bridge = KeepAwakeBridge()
+        let launcher = await MainActor.run { LauncherService() }
+        let provider = KeepAwakeProvider(service: service, bridge: bridge, launcher: launcher)
+
+        let rows = try await provider.search(SearchRequest(text: "", limit: 50, isBound: true))
+        let clamshell = try XCTUnwrap(rows.first { $0.id == "clamshell" })
+        let action = try XCTUnwrap(clamshell.actions.first)
+        try await provider.activate(clamshell, action: action)
+
+        var status = await service.snapshot()
+        XCTAssertTrue(status.clamshell)
+        XCTAssertFalse(status.active)
+
+        let refreshed = try await provider.search(SearchRequest(text: "", limit: 50, isBound: true))
+        XCTAssertEqual(refreshed.first { $0.id == "clamshell" }?.badge, "ON")
+        XCTAssertTrue(refreshed.contains { $0.id == "stop" })
+
+        try await provider.activate(clamshell, action: action)
+        status = await service.snapshot()
+        XCTAssertFalse(status.clamshell)
         XCTAssertFalse(status.active)
     }
 

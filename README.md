@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.2.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.2.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -397,7 +397,7 @@ template, or opens the expansion in the scratchpad. Supported placeholders:
 
 `/awake` (or the **Keep Awake** provider tab) keeps the Mac awake for 15
 minutes, 30 minutes, 1, 2, 4, or 8 hours, or until you stop it. It also has a
-**Clamshell Mode (Lid Closed)** row and a menu-bar **Keep Awake** submenu.
+**Clamshell Mode (Lid Closed)** toggle and a menu-bar **Keep Awake** submenu.
 
 Normal keep-awake uses native power assertions, so it needs no password. The
 assertions are recreated after wake and display changes, and a timer restores

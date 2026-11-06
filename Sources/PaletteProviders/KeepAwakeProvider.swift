@@ -35,7 +35,7 @@ public final class KeepAwakeProvider: PaletteProvider, @unchecked Sendable {
             items.append(durationRow(seconds: seconds, label: label, status: status))
         }
         items.append(clamshellRow(status))
-        if status.active {
+        if status.active || status.clamshell {
             items.append(stopRow(status))
         }
         items.append(settingsRow())
@@ -69,17 +69,13 @@ public final class KeepAwakeProvider: PaletteProvider, @unchecked Sendable {
                 await bridge.notify("Normal sleep is back")
             } else if raw == "clamshell" {
                 let status = await service.snapshot()
-                if status.active {
-                    try await service.setClamshell(!status.clamshell)
-                    await bridge.notify(
-                        status.clamshell
-                            ? "Clamshell mode off; lid close sleeps normally"
-                            : "Clamshell mode armed · requires AC power"
-                    )
-                } else {
-                    try await service.start(duration: nil, clamshell: true)
-                    await bridge.notify("Clamshell mode armed · requires AC power")
-                }
+                let enabled = !status.clamshell
+                try await service.setClamshell(enabled)
+                await bridge.notify(
+                    enabled
+                        ? "Clamshell mode on · AC power only"
+                        : "Clamshell mode off; lid close sleeps normally"
+                )
             } else if raw == "settings" {
                 await MainActor.run {
                     launcher.openURL("x-apple.systempreferences:com.apple.settings.Battery")
@@ -154,18 +150,18 @@ public final class KeepAwakeProvider: PaletteProvider, @unchecked Sendable {
     private func clamshellRow(_ status: KeepAwakeStatus) -> PaletteItem {
         PaletteItem(
             id: "clamshell",
-            title: status.clamshell ? "Disable Clamshell Mode" : "Clamshell Mode (Lid Closed)",
+            title: "Clamshell Mode (Lid Closed)",
             subtitle: status.clamshell
-                ? "Armed · root guard checks AC power"
-                : "Keeps running with the lid shut · AC power · admin prompt once",
+                ? "On · root guard checks AC power"
+                : "Off · keeps running with the lid shut · admin prompt once",
             icon: .symbol(status.clamshell ? "laptopcomputer.and.arrow.down" : "laptopcomputer"),
-            badge: status.clamshell ? "ON" : "ADMIN",
+            badge: status.clamshell ? "ON" : "OFF",
             group: "Clamshell",
             score: 8_000,
             actions: [
                 PaletteAction(
                     id: "clamshell",
-                    title: status.clamshell ? "Disable Clamshell" : "Enable Clamshell",
+                    title: status.clamshell ? "Turn Off Clamshell" : "Turn On Clamshell",
                     kind: .custom,
                     value: .text("clamshell")
                 ),
