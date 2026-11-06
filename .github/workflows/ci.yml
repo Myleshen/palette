@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        run: swift test
+
+      - name: Build the app bundle
+        run: make app
+
+      - name: Check the bundle
+        run: |
+          set -euo pipefail
+          test -x build/Palette.app/Contents/MacOS/Palette
+          lipo -archs build/Palette.app/Contents/MacOS/Palette

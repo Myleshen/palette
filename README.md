@@ -56,9 +56,11 @@ involved. Manual zip downloads may need System Settings > Privacy & Security >
 Open Anyway.
 
 To publish a new version: bump `CFBundleShortVersionString` and
-`CFBundleVersion`, run `make release`, upload `dist/Palette-<version>.zip` to a
-GitHub release, then copy `packaging/homebrew/Casks/palette.rb` into
-`Myleshen/homebrew-tap/Casks/`. See `packaging/homebrew/README.md`.
+`CFBundleVersion` in `Resources/Info.plist`, add a `CHANGELOG.md` entry, merge
+the PR, then push a `v<version>` tag. Tagging is the release: CI runs the tests,
+builds the zip, publishes it with the CHANGELOG entry as the notes, and updates
+the cask in `Myleshen/homebrew-tap`. See `CONTRIBUTING.md` and
+`packaging/homebrew/README.md`.
 
 ## First run
 
