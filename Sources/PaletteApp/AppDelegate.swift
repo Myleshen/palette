@@ -690,6 +690,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         window.title = "Set up Palette"
         window.appearance = NSAppearance(named: .darkAqua)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: view)
         window.center()

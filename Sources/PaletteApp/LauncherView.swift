@@ -475,7 +475,6 @@ struct LauncherRootView: View {
                     lineWidth: 1
                 )
         )
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
     }
 
     private var tabBar: some View {
@@ -695,11 +694,7 @@ struct LauncherRootView: View {
                     lineWidth: 1
                 )
         )
-        .shadow(
-            color: .black.opacity(isPill ? 0.12 : 0),
-            radius: isPill ? 6 : 0,
-            y: isPill ? 2 : 0
-        )
+
     }
 
     @ViewBuilder
@@ -953,7 +948,7 @@ struct PromptView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(theme.color(theme.palette.elevated))
+                    .background(.ultraThinMaterial)
                     .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
                 Button(prompt.kind == .confirm ? "Confirm" : "Continue") { controller.submitPrompt() }
                     .buttonStyle(.plain)
@@ -968,6 +963,17 @@ struct PromptView: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous).fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous)
+                    .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous)
+                .strokeBorder(theme.color(theme.palette.border).opacity(0.45), lineWidth: 1)
+        )
     }
 }
 
@@ -1036,9 +1042,23 @@ struct ClipboardPreviewPane: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
+            }
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(theme.color(theme.palette.accent).opacity(focused ? 0.55 : 0), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(theme.window.glass ? 0.18 : 0), theme.color(theme.palette.accent).opacity(focused ? 0.55 : 0.12)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
         .task(id: item?.stableID) { await load() }
     }
@@ -1333,7 +1353,7 @@ struct ScratchpadView: View {
                 .font(theme.monoFont(size: 12))
                 .foregroundColor(theme.color(theme.palette.fg))
                 .scrollContentBackground(.hidden)
-                .background(theme.color(theme.palette.bg))
+                .background(Color.clear)
                 .focused($focused)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -1349,6 +1369,17 @@ struct ScratchpadView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(theme.color(theme.palette.border).opacity(0.45), lineWidth: 1)
+        )
         .onAppear { focused = true }
         .onChange(of: controller.focusToken) { _, _ in focused = true }
     }

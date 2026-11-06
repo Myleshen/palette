@@ -12,7 +12,6 @@ public final class PalettePanel: NSPanel {
 @MainActor
 public final class PanelController: NSWindowController, NSWindowDelegate {
     public let panel: PalettePanel
-    public let effectView = NSVisualEffectView()
     public let contentContainer = NSView()
 
     /// Return true to consume the event.
@@ -65,27 +64,14 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         panel.titlebarAppearsTransparent = true
         panel.isReleasedWhenClosed = false
 
-        effectView.blendingMode = .behindWindow
-        effectView.state = .active
-        effectView.material = .hudWindow
-        effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = theme.window.cornerRadius
-        effectView.layer?.masksToBounds = true
-        effectView.translatesAutoresizingMaskIntoConstraints = false
-
         contentContainer.translatesAutoresizingMaskIntoConstraints = false
         contentContainer.wantsLayer = true
 
         let rootView = NSView()
         rootView.wantsLayer = true
         panel.contentView = rootView
-        rootView.addSubview(effectView)
         rootView.addSubview(contentContainer)
         NSLayoutConstraint.activate([
-            effectView.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
-            effectView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
-            effectView.topAnchor.constraint(equalTo: rootView.topAnchor),
-            effectView.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
             contentContainer.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
             contentContainer.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
             contentContainer.topAnchor.constraint(equalTo: rootView.topAnchor),
@@ -120,15 +106,8 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
 
     public func apply(theme: Theme) {
         self.theme = theme
-        effectView.material = Self.material(named: theme.window.material)
-        effectView.layer?.cornerRadius = theme.window.cornerRadius
-        effectView.layer?.borderWidth = 0
-        effectView.isHidden = !theme.window.glass
-        panel.hasShadow = theme.window.glass && theme.window.shadow
+        panel.hasShadow = false
         panel.appearance = NSAppearance(named: theme.appearance == "light" ? .aqua : .darkAqua)
-        effectView.alphaValue = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
-            ? 1
-            : (theme.window.glass ? theme.window.opacity : 1)
         if isShowing { position() }
     }
 
@@ -216,19 +195,6 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         if let keyMonitor {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
-        }
-    }
-
-    private static func material(named name: String) -> NSVisualEffectView.Material {
-        switch name.lowercased() {
-        case "popover": return .popover
-        case "menu": return .menu
-        case "sidebar": return .sidebar
-        case "underwindowbackground": return .underWindowBackground
-        case "windowbackground": return .windowBackground
-        case "contentbackground": return .contentBackground
-        case "titlebar": return .titlebar
-        default: return .hudWindow
         }
     }
 }

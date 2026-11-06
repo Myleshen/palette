@@ -4,8 +4,10 @@
 
 ### Changed
 
-- The launcher and Settings now use real behind-window liquid-glass materials instead of only SwiftUI color overlays. The panel blur is enabled again, Settings has a transparent window backdrop, and the launcher/Settings edges use theme-tinted specular highlights.
+- The launcher and Settings now use real behind-window liquid-glass materials instead of only SwiftUI color overlays. Glass is applied per surface, Settings has a transparent window backdrop, and the launcher/Settings edges use theme-tinted specular highlights.
+- Removed the full-panel blur view behind the launcher. It painted a tinted rounded rectangle in the inset around the cards, which read as a background halo, most visibly on light themes.
 - The launcher footer also sits on a glass strip.
+- Glass treatment now covers result-row and action-row selection, prompts, the clipboard preview pane, scratchpad chrome, and onboarding, not just the main cards.
 - Themes can control the effect with `[window] glass` and `glass_opacity`; `glass = false` keeps an opaque surface.
 
 ### Verified

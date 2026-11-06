@@ -484,11 +484,24 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Defaults") {
-                LabeledContent("Editor", value: config.editorOpenWith)
-                LabeledContent("Terminal", value: config.terminalApp)
-                LabeledContent("Web app browser", value: config.webAppBrowser)
-                LabeledContent("Theme", value: config.theme.dark)
-                LabeledContent("Ask model", value: config.ask.model)
+                TextField("Editor", text: $config.editorOpenWith)
+                TextField("Terminal", text: $config.terminalApp)
+                Picker("Web app browser", selection: $config.webAppBrowser) {
+                    ForEach(BrowserCatalog.chromiumChoices, id: \.self) { browser in
+                        Text(browser).tag(browser)
+                    }
+                }
+                Picker("Theme", selection: $config.theme.dark) {
+                    ForEach(themeNames, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                Picker("Ask model", selection: $config.ask.model) {
+                    ForEach(AskModel.models(for: config.ask.endpoint)) { model in
+                        Text(model.free ? "FREE · \(model.name)" : "\(model.name) · \(model.note)")
+                            .tag(model.id)
+                    }
+                }
                 HStack {
                     Button("Detect Installed Apps") { detectDefaults() }
                     Button("Reset App and Theme Defaults") { resetDefaults() }
