@@ -8,6 +8,9 @@
 - Removed the full-panel blur view behind the launcher. It painted a tinted rounded rectangle in the inset around the cards, which read as a background halo, most visibly on light themes.
 - The launcher footer also sits on a glass strip.
 - Glass treatment now covers result-row and action-row selection, prompts, the clipboard preview pane, scratchpad chrome, and onboarding, not just the main cards.
+- Glass is lighter by default (`glass_opacity` 0.25) so the desktop shows through instead of tinting to a flat brown.
+- Settings uses a full-size content view with a transparent titlebar, so the glass reaches the top of the window and the window drags from its background.
+- The launcher panel no longer grows past the screen: the SwiftUI host no longer resizes the window, height is clamped to the visible screen area, and long lists scroll inside it.
 - Themes can control the effect with `[window] glass` and `glass_opacity`; `glass = false` keeps an opaque surface.
 
 ### Verified

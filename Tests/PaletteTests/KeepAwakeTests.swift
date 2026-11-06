@@ -234,7 +234,8 @@ final class KeepAwakeTests: XCTestCase {
             (try? String(contentsOf: state, encoding: .utf8)) ?? ""
         }
 
-        try await Task.sleep(nanoseconds: 400_000_000)
+        // The helper polls every 50ms; give slow CI runners room for the first write.
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         XCTAssertEqual(stateValue(), "1", "AC power should arm lid-sleep prevention")
 
         try "Battery Power".write(to: ac, atomically: true, encoding: .utf8)

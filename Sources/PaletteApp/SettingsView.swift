@@ -142,7 +142,7 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 14)
+            .padding(.top, 30)
             .padding(.bottom, 4)
 
             if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {

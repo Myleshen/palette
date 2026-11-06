@@ -87,7 +87,7 @@ public struct ThemePalette: Equatable, Sendable {
 
 public struct ThemeWindow: Equatable, Sendable {
     public var width: Double = 680
-    public var maxHeight: Double = 480
+    public var maxHeight: Double = 720
     public var anchor = "top"
     public var offsetY: Double = 120
     public var offsetYPercent = false
@@ -97,7 +97,7 @@ public struct ThemeWindow: Equatable, Sendable {
     public var borderWidth: Double = 1
     public var shadow = true
     public var glass = true
-    public var glassOpacity: Double = 0.55
+    public var glassOpacity: Double = 0.25
     public init() {}
 }
 

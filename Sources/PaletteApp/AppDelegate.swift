@@ -442,6 +442,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let root = LauncherRootView(controller: searchController)
             .environmentObject(themeManager!)
         let hosting = NSHostingView(rootView: root)
+        // Without this the hosting view resizes the panel to its content height,
+        // which lets a long list grow the window past the bottom of the screen.
+        hosting.sizingOptions = []
         let controller = PanelController(theme: themeManager.theme, content: hosting)
         controller.onKeyDown = { [weak self] event in
             self?.searchController.handleKey(event) ?? false
@@ -1143,7 +1146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 780, height: 660),
-            styleMask: [.titled, .closable, .miniaturizable],
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -1152,6 +1155,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
+        window.isMovableByWindowBackground = true
+        window.appearance = NSAppearance(named: themeManager.theme.appearance == "light" ? .aqua : .darkAqua)
         window.contentViewController = NSHostingController(rootView: makeSettingsView())
         window.center()
         settingsWindow = window

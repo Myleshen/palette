@@ -158,7 +158,8 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         guard let screen else { return }
         let visible = screen.visibleFrame
         let width = widthOverride ?? CGFloat(theme.window.width)
-        let height = min(contentHeight, CGFloat(theme.window.maxHeight))
+        // Never grow past the usable screen area, whatever the theme asks for.
+        let height = max(92, min(contentHeight, CGFloat(theme.window.maxHeight), visible.height - 24))
         var x = visible.midX - width / 2
         var y: CGFloat
 
