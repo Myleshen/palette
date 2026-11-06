@@ -26,7 +26,7 @@ does not prove the provider works; the manual checks for that are in
 | `Sources/PaletteRuntime` | External provider process, NDJSON protocol |
 | `Tests/PaletteTests` | The test suite |
 | `Resources/` | Info.plist, app icon, bundled themes, providers, examples |
-| `Scripts/` | Icon generation and the local `release.sh` helper |
+| `Scripts/` | Icon generation |
 
 Deeper notes: `ARCHITECTURE.md`, `PROVIDERS.md`, `THEMING.md`, `TESTING.md`.
 

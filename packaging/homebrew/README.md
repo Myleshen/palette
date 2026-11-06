@@ -34,9 +34,10 @@ brew upgrade --cask palette
    the GitHub release (CHANGELOG entry as notes), and the `version` + `sha256`
    update in `Casks/palette.rb` in `Myleshen/homebrew-tap`.
 
-`Scripts/release.sh` still exists for a local unsigned build and to refresh
-`packaging/homebrew/Casks/palette.rb`, which is now a reference copy: the tap is
-what users install and CI keeps it current.
+The tap's `Casks/palette.rb` is the only cask: CI writes it, and
+`brew install --cask Myleshen/tap/palette` reads it. There is no in-repo copy to
+keep in step. For a local unsigned build use `make app`; the release zip is
+built in CI.
 
 ## Why a Cask instead of a Formula
 
