@@ -109,7 +109,13 @@ struct OnboardingView: View {
             .padding(16)
         }
         .frame(width: 640, height: 520)
-        .background(Color(red: 0.10, green: 0.11, blue: 0.13))
+        .background(
+            ZStack {
+                GlassBackdrop(material: .hudWindow)
+                Color(red: 0.10, green: 0.11, blue: 0.13).opacity(0.65)
+            }
+        )
+        .background(.ultraThinMaterial)
         .preferredColorScheme(.dark)
     }
 

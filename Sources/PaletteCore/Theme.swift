@@ -87,7 +87,7 @@ public struct ThemePalette: Equatable, Sendable {
 
 public struct ThemeWindow: Equatable, Sendable {
     public var width: Double = 680
-    public var maxHeight: Double = 480
+    public var maxHeight: Double = 720
     public var anchor = "top"
     public var offsetY: Double = 120
     public var offsetYPercent = false
@@ -97,7 +97,7 @@ public struct ThemeWindow: Equatable, Sendable {
     public var borderWidth: Double = 1
     public var shadow = true
     public var glass = true
-    public var glassOpacity: Double = 0.55
+    public var glassOpacity: Double = 0.7
     public init() {}
 }
 
@@ -119,6 +119,8 @@ public struct ThemeList: Equatable, Sendable {
     public var selection = "fill"
     public var columns = 1
     public var showScrollbar = true
+    /// Rows the panel shows before scrolling. Clamped to 5...10; drives panel height.
+    public var visibleRows = 7
     public init() {}
 }
 
@@ -399,6 +401,9 @@ public enum ThemeLoader {
             theme.list.selection = list.str("selection") ?? theme.list.selection
             theme.list.columns = max(1, list.int("columns") ?? theme.list.columns)
             theme.list.showScrollbar = list.bool("show_scrollbar") ?? theme.list.showScrollbar
+            if let rows = list.int("visible_rows") ?? list.number("visible_rows").map({ Int($0) }) {
+                theme.list.visibleRows = min(10, max(5, rows))
+            }
         }
 
         if let typography = table.table("typography") {

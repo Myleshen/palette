@@ -126,6 +126,8 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            settingsTabs
+
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
@@ -142,12 +144,11 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 14)
-            .padding(.bottom, 4)
+            .padding(.vertical, 8)
 
             if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {
-                settingsTabs
                 selectedSettingsContent
+                    .scrollContentBackground(.hidden)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 settingsSearchResults
@@ -167,7 +168,7 @@ struct SettingsView: View {
         .frame(width: 780, height: 660)
         .background(
             ZStack {
-                Rectangle().fill(.ultraThinMaterial)
+                GlassBackdrop(material: .hudWindow)
                 theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1)
             }
         )
@@ -183,6 +184,14 @@ struct SettingsView: View {
         } message: {
             Text(saveError ?? "")
         }
+    }
+
+    /// 0 in config means "inherit the theme's `[list] visible_rows`".
+    private var visibleRowsBinding: Binding<Int> {
+        Binding(
+            get: { config.visibleRows > 0 ? config.visibleRows : theme.list.visibleRows },
+            set: { config.visibleRows = min(10, max(5, $0)) }
+        )
     }
 
     private var settingsTabs: some View {
@@ -219,7 +228,8 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.top, 26)
+            .padding(.bottom, 8)
         }
         .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
@@ -483,11 +493,24 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Defaults") {
-                LabeledContent("Editor", value: config.editorOpenWith)
-                LabeledContent("Terminal", value: config.terminalApp)
-                LabeledContent("Web app browser", value: config.webAppBrowser)
-                LabeledContent("Theme", value: config.theme.dark)
-                LabeledContent("Ask model", value: config.ask.model)
+                TextField("Editor", text: $config.editorOpenWith)
+                TextField("Terminal", text: $config.terminalApp)
+                Picker("Web app browser", selection: $config.webAppBrowser) {
+                    ForEach(BrowserCatalog.chromiumChoices, id: \.self) { browser in
+                        Text(browser).tag(browser)
+                    }
+                }
+                Picker("Theme", selection: $config.theme.dark) {
+                    ForEach(themeNames, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                Picker("Ask model", selection: $config.ask.model) {
+                    ForEach(AskModel.models(for: config.ask.endpoint)) { model in
+                        Text(model.free ? "FREE · \(model.name)" : "\(model.name) · \(model.note)")
+                            .tag(model.id)
+                    }
+                }
                 HStack {
                     Button("Detect Installed Apps") { detectDefaults() }
                     Button("Reset App and Theme Defaults") { resetDefaults() }
@@ -583,6 +606,12 @@ struct SettingsView: View {
                     Text("Alphabetical").tag(AppSort.alphabetical)
                     Text("Most used").tag(AppSort.frequent)
                 }
+                Stepper(value: visibleRowsBinding, in: 5...10) {
+                    LabeledContent("Visible rows", value: "\(visibleRowsBinding.wrappedValue)")
+                }
+                Text("Rows shown before scrolling. This sets the panel height for every provider.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

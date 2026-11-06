@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.3.2 — 2026-11-06
+
+### Changed
+
+- The launcher and Settings now use real behind-window liquid-glass materials instead of only SwiftUI color overlays. Glass is applied per surface, Settings has a transparent window backdrop, and the launcher/Settings edges use theme-tinted specular highlights.
+- Removed the full-panel blur view behind the launcher. It painted a tinted rounded rectangle in the inset around the cards, which read as a background halo, most visibly on light themes.
+- The launcher footer also sits on a glass strip.
+- Glass treatment now covers result-row and action-row selection, prompts, the clipboard preview pane, scratchpad chrome, and onboarding, not just the main cards.
+- Only the outer card carries a glass layer. Prompts, the preview pane, the scratchpad, the footer, and the tab strip use plain theme tints, so they no longer stack into darker or lighter bands.
+- `glass_opacity` defaults to 0.7: enough theme colour to tell Catppuccin from Aetheria, still translucent over the desktop.
+- Settings uses a full-size content view with a transparent titlebar, so the glass reaches the top of the window and the window drags from its background.
+- The launcher panel no longer grows past the screen: the SwiftUI host no longer resizes the window, height is clamped to the visible screen area, and long lists scroll inside it.
+- Panel height is driven by a row count instead of per-view chrome: Settings → General → Launcher has a **Visible rows** stepper (5-10, default 7, also `visible_rows` in config.toml or `[list] visible_rows` in a theme). That count is the panel's fixed height, so it neither grows with a long list nor shrinks with a short one.
+- Settings shows the tab bar above the search field, so tabs stay visible while searching.
+- The Settings titlebar keeps AppKit's native window drag and is tinted with the theme background instead of a transparent, undraggable strip.
+- Themes can control the effect with `[window] glass` and `glass_opacity`; `glass = false` keeps an opaque surface.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
+### Verified
+
+- Settings and launcher full-screen screenshots show the desktop blurred behind the glass rather than an opaque card.
+- `swift test`: 81 tests, 0 failures.
+
 ## 2.3.1 — 2026-11-06
 
 ### Changed
@@ -7,6 +33,10 @@
 - Settings uses a custom horizontal, scrollable tab bar again, so every section is visible and directly clickable instead of collapsing into a hamburger menu.
 - Settings is wider (780 pt) to fit the tab bar and forms comfortably.
 - Added theme-driven liquid-glass surfaces to the launcher search field, result card, and Settings. Themes can set `[window] glass` and `glass_opacity`; setting `glass = false` keeps the opaque surface.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -28,6 +58,10 @@
   **Essentials / Developer / Everything** starting set. Essentials stays small;
   editor and terminal choices appear only in the larger presets.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 81 tests, 0 failures.
@@ -46,6 +80,10 @@
   `Palette-<version>.zip`, publishes the release with this entry as the notes,
   and moves the Homebrew cask, instead of the local `make release` ritual.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 81 tests, 0 failures.
@@ -59,6 +97,10 @@
 - **Keep Awake** controls in Settings → General, with ON/OFF toggles for
   **Keep Mac Awake** and **Clamshell Mode (Lid Closed)**. Both reflect the live
   service state and can be changed without leaving Settings.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -75,6 +117,10 @@
   turning it off leaves any active timer alone. Starting a timer preserves an
   armed clamshell guard, and Stop clears both.
 - The `/awake` row and menu item both show the toggle state consistently.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -131,6 +177,10 @@
 - `/term` now uses the detected Nerd Font instead of the system monospace font,
   so Zellij/fish icons and Powerline glyphs render correctly.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 70 tests, 0 failures.
@@ -150,6 +200,10 @@
   Zellij/tmux panes use fish instead of falling back to `sh`.
 - `auto` prefers Zellij, then tmux, then a plain shell.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 70 tests, 0 failures.
@@ -166,6 +220,10 @@
 - `/cmd` → **Run in Panel** waits for the Zellij session to be ready before
   sending the command.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `zellij list-sessions` shows one `Palette` session.
@@ -181,6 +239,10 @@
   cleanly to the Go default instead of keeping an invalid model id.
 - Onboarding uses an explicit dark background, so its header and footer remain
   readable.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -219,6 +281,10 @@
 - Ask model chooser lists every OpenAI-compatible Go model, cheapest first,
   with input/output prices.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 69 tests, 0 failures.
@@ -245,6 +311,10 @@
 - Summary subtitles say "local key file", not Keychain. You may need to re-enter
   an existing key once after this migration.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `/sys settings` shows the row; pressing Return opens the Settings window.
@@ -263,6 +333,10 @@
 - The launcher is pill-only. The classic layout and its `search_style` config
   key are removed; old configs with that key continue to load normally.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 69 tests, 0 failures.
@@ -275,6 +349,10 @@
 - Added per-provider enable/disable controls in Settings → Advanced. Disabled
   providers disappear from the tab bar, Tab cycling, and trigger parsing.
   `[providers] disabled = ["port"]` stores the same choice in config.toml.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -289,6 +367,10 @@
 - Finder-launched Palette now prepends Homebrew, `/usr/local`, and MacPorts
   paths to its child environment, so devx, Bitwarden, Zellij, and workspace
   tools resolve even though launchd starts apps with a minimal `PATH`.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -305,6 +387,10 @@
   `~/dev/<name>`.
 - `/web` accepts local development URLs such as `http://localhost:5173` and
   `http://127.0.0.1:8080`.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -339,6 +425,10 @@
 - **Provider aliases and order**: extra trigger words and persisted tab order,
   editable in Settings with duplicate validation.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 64 tests, 0 failures.
@@ -365,6 +455,10 @@
 - **`[ask]` config and Settings tab** for endpoint, model, answer tokens,
   fallback, retained Q&A count, and retention age.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 60 tests, 0 failures, including free-first ordering, model
@@ -383,6 +477,10 @@
 - Clearing `/clip` with `Esc` now closes the clipboard preview pane and
   restores the normal launcher width. Previously the empty app list kept the
   right-hand preview open, showing “No preview available.”
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -409,6 +507,10 @@
   the same AES-GCM cache and per-profile scoping are unchanged. **Refresh
   Bitwarden Cache** still forces a fresh read without logging out.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 51 tests, 0 failures.
@@ -431,6 +533,10 @@
 - Emoji search accepts abbreviations (`drgn` → Dragon) while still preferring
   literal names so `dragon` does not surface “Red Triangle”.
 - `/neo` and `/neof` keep the real `fzf` path ranker with `--scheme=path`.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 
@@ -804,6 +910,10 @@ working, and new defaults fill in the missing home scope and app grid.
 - `[scopes.home]` default scope, excluding Library, Movies, Music, Pictures,
   and Trash.
 
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
+
 ### Verified
 
 - `swift test`: 23 tests, 0 failures.
@@ -865,6 +975,10 @@ Polish and reliability release. No configuration changes are required.
   checksum, and prints tap/release steps. No App Store or paid account.
 - **Hammerspoon keybind table.** `keybinds.lua` maps mods + key to app, path,
   script, URL, shell, or window actions, Hyprland-style.
+
+### Fixed
+
+- Keep Awake → **Open Battery Settings** did nothing: the launcher's URL allowlist rejected the `x-apple.systempreferences` scheme, so the deep link was dropped with only a log line.
 
 ### Verified
 

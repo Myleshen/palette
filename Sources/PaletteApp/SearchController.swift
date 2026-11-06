@@ -974,20 +974,17 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         let row = CGFloat(theme.effectiveRowHeight)
         let spacing: CGFloat = 6
-        func rows(_ count: Int) -> CGFloat {
-            let maxVisible = 6
-            let visible = CGFloat(min(max(count, 1), maxVisible))
-            return visible * row + max(0, visible - 1) * spacing + 8
-        }
+        // The configured row count is the panel's fixed height: a short list
+        // does not shrink it and a long one does not grow it.
+        let visible = CGFloat(theme.list.visibleRows)
+        let listHeight = visible * row + (visible - 1) * spacing + 8
         var content: CGFloat
         if prompt != nil {
             content = 136
         } else if actionsMode {
-            content = 38 + rows(actionItems.count)
-        } else if items.isEmpty {
-            content = 58
+            content = 38 + listHeight
         } else {
-            content = rows(items.count)
+            content = listHeight
         }
         let footer = theme.footer.show ? CGFloat(28) : 0
         // Provider tab strip, plus the clipboard filter chips when previewing.
@@ -995,8 +992,6 @@ public final class SearchController: ObservableObject, HostBridge {
         // the clipboard/Ask sub-tab row.
         let tabs: CGFloat = (activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1) ? 110 : 82
         if previewEnabled {
-            // The preview pane sets the height; a few rows are always visible.
-            content = max(content, 360)
             panel.widthOverride = 880
         }
         // Pill floats the search capsule above the content card: 12 pt top and

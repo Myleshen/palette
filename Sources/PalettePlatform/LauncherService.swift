@@ -58,7 +58,7 @@ public final class LauncherService {
 
     public func openURL(_ string: String) {
         guard let url = URL(string: string), let scheme = url.scheme?.lowercased(),
-              ["http", "https", "mailto"].contains(scheme) else {
+              ["http", "https", "mailto", "x-apple.systempreferences"].contains(scheme) else {
             Log.shared.warn("Refusing to open URL: \(string)", source: "launcher")
             return
         }

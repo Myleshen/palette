@@ -154,6 +154,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hostProxy = HostBridgeProxy()
 
         themeManager = ThemeManager(paths: paths, selection: configuration.theme, store: store)
+        // Config overrides must apply on launch, not only after a reload.
+        themeManager.typography = configuration.typography
+        themeManager.visibleRows = configuration.visibleRows
+        themeManager.reload()
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
             self.panel?.apply(theme: theme)
@@ -442,6 +446,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let root = LauncherRootView(controller: searchController)
             .environmentObject(themeManager!)
         let hosting = NSHostingView(rootView: root)
+        // Without this the hosting view resizes the panel to its content height,
+        // which lets a long list grow the window past the bottom of the screen.
+        hosting.sizingOptions = []
         let controller = PanelController(theme: themeManager.theme, content: hosting)
         controller.onKeyDown = { [weak self] event in
             self?.searchController.handleKey(event) ?? false
@@ -690,6 +697,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         window.title = "Set up Palette"
         window.appearance = NSAppearance(named: .darkAqua)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: view)
         window.center()
@@ -1050,6 +1060,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startupDiagnostics = result.diagnostics
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
+        themeManager.visibleRows = configuration.visibleRows
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
         updatePositionMenu()
@@ -1130,7 +1141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // A closed window keeps its old SwiftUI state; rebuild it so the
             // values reflect config.toml after a reload or manual edit.
             if !settingsWindow.isVisible {
-                settingsWindow.contentViewController = NSHostingController(rootView: makeSettingsView())
+                settingsWindow.contentView = makeSettingsHostingView()
             }
             NSApp.activate(ignoringOtherApps: true)
             settingsWindow.makeKeyAndOrderFront(nil)
@@ -1140,18 +1151,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 780, height: 660),
-            styleMask: [.titled, .closable, .miniaturizable],
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Palette Settings"
         window.isReleasedWhenClosed = false
-        window.contentViewController = NSHostingController(rootView: makeSettingsView())
+        window.isOpaque = false
+        // A themed (not transparent) titlebar keeps AppKit's native window drag.
+        window.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
+        window.titlebarAppearsTransparent = false
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
+        window.appearance = NSAppearance(named: themeManager.theme.appearance == "light" ? .aqua : .darkAqua)
+        window.contentView = makeSettingsHostingView()
         window.center()
         settingsWindow = window
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+    }
+
+    private func makeSettingsHostingView() -> NSView {
+        let host = NSHostingView(rootView: makeSettingsView())
+        // Keep the window at its own size instead of the SwiftUI content height.
+        host.sizingOptions = []
+        return host
     }
 
     private func exportBackup() {
@@ -1225,7 +1250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Keep an open Settings window in sync when config.toml is reloaded.
     private func refreshSettingsWindow() {
         guard let settingsWindow, settingsWindow.isVisible else { return }
-        settingsWindow.contentViewController = NSHostingController(rootView: makeSettingsView())
+        settingsWindow.contentView = makeSettingsHostingView()
     }
 
     private func saveSettings(_ updated: PaletteConfig) {
