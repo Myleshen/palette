@@ -119,6 +119,8 @@ public struct ThemeList: Equatable, Sendable {
     public var selection = "fill"
     public var columns = 1
     public var showScrollbar = true
+    /// Rows the panel shows before scrolling. Clamped to 5...10; drives panel height.
+    public var visibleRows = 7
     public init() {}
 }
 
@@ -399,6 +401,9 @@ public enum ThemeLoader {
             theme.list.selection = list.str("selection") ?? theme.list.selection
             theme.list.columns = max(1, list.int("columns") ?? theme.list.columns)
             theme.list.showScrollbar = list.bool("show_scrollbar") ?? theme.list.showScrollbar
+            if let rows = list.int("visible_rows") ?? list.number("visible_rows").map({ Int($0) }) {
+                theme.list.visibleRows = min(10, max(5, rows))
+            }
         }
 
         if let typography = table.table("typography") {

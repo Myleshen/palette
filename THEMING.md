@@ -83,6 +83,7 @@ show_subtitles = true
 selection = "fill"                 # fill | bar | outline | none
 columns = 1                        # reserved for future grid layouts
 show_scrollbar = true
+visible_rows = 7                    # 5-10; rows before scrolling, sets panel height
 
 [typography]
 family = "SF Pro Text"
