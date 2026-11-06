@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.1 — 2026-11-06
+
+### Changed
+
+- Settings uses a custom horizontal, scrollable tab bar again, so every section is visible and directly clickable instead of collapsing into a hamburger menu.
+- Settings is wider (780 pt) to fit the tab bar and forms comfortably.
+- Added theme-driven liquid-glass surfaces to the launcher search field, result card, and Settings. Themes can set `[window] glass` and `glass_opacity`; setting `glass = false` keeps the opaque surface.
+
+### Verified
+
+- Settings screenshot shows General through Advanced as direct tab buttons.
+- Launcher and Settings screenshots show the translucent material with the active theme tint.
+- `swift test`: 81 tests, 0 failures.
 ## 2.3.0 — 2026-11-06
 
 ### Changed

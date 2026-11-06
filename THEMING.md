@@ -61,6 +61,8 @@ anchor = "top"                     # top | center
 offset_y = 120                     # points, or "18%" of screen height
 corner_radius = 14
 material = "hudWindow"             # hudWindow | popover | menu | sidebar | none
+glass = true                       # theme-tinted liquid-glass surfaces
+glass_opacity = 0.55               # 0 = clear, 1 = opaque theme surface
 opacity = 0.98
 border_width = 1
 shadow = true

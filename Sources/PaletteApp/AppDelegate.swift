@@ -1139,7 +1139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 780, height: 660),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -1196,6 +1196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         SettingsView(
             config: configuration,
             keepAwake: keepAwake,
+            theme: themeManager.theme,
             themesDirectory: paths.themesDir,
             accessibilityTrusted: pasteboard.isAccessibilityTrusted,
             providerSummary: registry.providers.map {

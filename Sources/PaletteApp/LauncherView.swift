@@ -433,8 +433,12 @@ struct LauncherRootView: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(theme.color(theme.palette.bg))
+            ZStack {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
+            }
         )
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
@@ -641,7 +645,11 @@ struct LauncherRootView: View {
         .frame(height: isPill ? CGFloat(theme.search.height) - 12 : CGFloat(theme.search.height))
         .background(
             Capsule()
-                .fill(theme.color(theme.palette.surface).opacity(isPill ? 1 : 0))
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .fill(theme.color(theme.palette.surface).opacity(isPill && theme.window.glass ? theme.window.glassOpacity : (isPill ? 1 : 0)))
+                )
         )
         .overlay(
             Capsule()
