@@ -6,7 +6,7 @@ INSTALL_DIR ?= /Applications
 BIN_PATH := $(shell swift build -c release --show-bin-path)
 BINARY := $(BIN_PATH)/$(APP_NAME)
 
-.PHONY: all build app install run test clean debug release
+.PHONY: all build app install run test clean debug
 
 all: app
 
@@ -42,9 +42,6 @@ debug:
 
 test:
 	swift test
-
-release:
-	./scripts/release.sh
 
 clean:
 	swift package clean
