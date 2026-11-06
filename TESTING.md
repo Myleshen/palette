@@ -126,7 +126,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 80 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 81 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,
@@ -138,7 +138,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   queries, and snippet placeholder expansion).
 - `make app` and `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
-  version 2.2.1). Launcher, clipboard, terminal, scratchpad, and Ask hotkeys
+  version 2.2.2). Launcher, clipboard, terminal, scratchpad, and Ask hotkeys
   registered without a conflict.
 - Real OS input: the physical `⌥Space` hotkey opened the panel; typing `safari`
   ranked Safari first; `Esc` hid the panel; typing `2+2*3` and pressing `⏎`
@@ -158,6 +158,11 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   expose **Open in Embedded Terminal**; clipboard file previews use QuickLook;
   app rows expose **Quit App** and **Move App to the Trash…**; physical
   `⌘⌥T`, `⌘⌥S`, and `⌘⌥A` opened terminal, scratchpad, and Ask respectively.
+- v2.2.2 checks: Settings → General shows **Keep Awake** with **Keep Mac
+  Awake** and **Clamshell Mode (Lid Closed)** ON/OFF toggles and live status.
+  Turning Keep Mac Awake off leaves clamshell armed; turning clamshell off
+  leaves an active timer alone. The clamshell toggle still opens the standard
+  admin prompt, and cancelling it reverts the toggle to OFF.
 - v2.2.1 checks: `/awake` shows Clamshell Mode as an **OFF** toggle with
   Turn On/Turn Off actions; cancelling the admin prompt leaves it OFF and
   creates no Palette power assertions. Tests prove clamshell can be armed while
@@ -188,7 +193,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   The no-key path showed the setup row, and Settings Ask displayed only
   “Key saved in the macOS Keychain” after saving. Real Zen free quota returned
   429 and the expired Go key returned 401; both were reported without a crash.
-  `swift test`: 80 tests, 0 failures.
+  `swift test`: 81 tests, 0 failures.
 - v1.7.13 checks: after opening the clipboard browser and pressing `Esc`, the
   snapshot showed the empty app list at normal width with no preview pane or
   “No preview available” placeholder.

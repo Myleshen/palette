@@ -1178,6 +1178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func makeSettingsView() -> SettingsView {
         SettingsView(
             config: configuration,
+            keepAwake: keepAwake,
             themesDirectory: paths.themesDir,
             accessibilityTrusted: pasteboard.isAccessibilityTrusted,
             providerSummary: registry.providers.map {

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.2.2 — 2026-11-06
+
+### Added
+
+- **Keep Awake** controls in Settings → General, with ON/OFF toggles for
+  **Keep Mac Awake** and **Clamshell Mode (Lid Closed)**. Both reflect the live
+  service state and can be changed without leaving Settings.
+
+### Verified
+
+- `swift test`: 81 tests, 0 failures.
+- Settings toggle tests prove keeping awake can be turned off while clamshell
+  remains armed, and clamshell can be turned off without stopping a timer.
+
 ## 2.2.1 — 2026-11-06
 
 ### Changed

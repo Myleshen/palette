@@ -39,7 +39,10 @@ struct SettingsView: View {
     @State private var disabledProviders: [String]
     @State private var terminalShellChoice: String
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var keepAwakeStatus = KeepAwakeStatus()
+    @State private var keepAwakeMessage: String?
 
+    private let keepAwake: KeepAwakeService
     private let themesDirectory: URL
     private let providerSummary: [String]
     private let providers: [ProviderSettingsInfo]
@@ -50,6 +53,7 @@ struct SettingsView: View {
 
     init(
         config: PaletteConfig,
+        keepAwake: KeepAwakeService,
         themesDirectory: URL,
         accessibilityTrusted: Bool,
         providerSummary: [String],
@@ -78,6 +82,7 @@ struct SettingsView: View {
         _terminalShellChoice = State(initialValue: configuredShell.isEmpty
             ? "auto"
             : (["fish", "zsh"].contains(shellName) ? shellName : "custom"))
+        self.keepAwake = keepAwake
         self.themesDirectory = themesDirectory
         self.providerSummary = providerSummary
         self.providers = providers
@@ -135,6 +140,9 @@ struct SettingsView: View {
             .padding(16)
         }
         .frame(width: 720, height: 640)
+        .task {
+            keepAwakeStatus = await keepAwake.snapshot()
+        }
         .alert("Cannot Save", isPresented: Binding(
             get: { saveError != nil },
             set: { if !$0 { saveError = nil } }
@@ -197,6 +205,53 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var keepAwakeBinding: Binding<Bool> {
+        Binding(
+            get: { keepAwakeStatus.active },
+            set: { enabled in
+                Task { @MainActor in
+                    do {
+                        try await keepAwake.setKeepAwake(enabled)
+                        keepAwakeMessage = nil
+                    } catch {
+                        keepAwakeMessage = error.localizedDescription
+                    }
+                    keepAwakeStatus = await keepAwake.snapshot()
+                }
+            }
+        )
+    }
+
+    private var clamshellBinding: Binding<Bool> {
+        Binding(
+            get: { keepAwakeStatus.clamshell },
+            set: { enabled in
+                Task { @MainActor in
+                    do {
+                        try await keepAwake.setClamshell(enabled)
+                        keepAwakeMessage = nil
+                    } catch {
+                        keepAwakeMessage = error.localizedDescription
+                    }
+                    keepAwakeStatus = await keepAwake.snapshot()
+                }
+            }
+        )
+    }
+
+    private var keepAwakeSummary: String {
+        if keepAwakeStatus.active {
+            let left = keepAwakeStatus.endsAt == nil
+                ? "indefinitely"
+                : "\(keepAwakeStatus.remainingLabel) left"
+            return "Keeping awake \(left) · Clamshell \(keepAwakeStatus.clamshell ? "on" : "off")."
+        }
+        if keepAwakeStatus.clamshell {
+            return "Clamshell armed · AC power only."
+        }
+        return "Off."
     }
 
     private var shortcutSummary: String {
@@ -296,6 +351,21 @@ struct SettingsView: View {
                 Text(shortcutSummary)
                     .font(.caption)
                     .foregroundStyle(hasShortcutConflict ? .red : .secondary)
+            }
+            Section("Keep Awake") {
+                Toggle("Keep Mac Awake", isOn: keepAwakeBinding)
+                Toggle("Clamshell Mode (Lid Closed)", isOn: clamshellBinding)
+                Text(keepAwakeSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let keepAwakeMessage {
+                    Text(keepAwakeMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                Text("Clamshell uses the standard administrator prompt and keeps working with the lid shut only on AC power. Turning it off leaves an active keep-awake timer alone.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Apps") {
                 TextField("Terminal", text: $config.terminalApp)

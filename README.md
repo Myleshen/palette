@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.2.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.2.2. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -209,8 +209,8 @@ local key file” and never displays the value again. Keys are never written to
 ### Settings
 
 `⌘,` (or the menu-bar icon) opens a native Settings window. **General** holds
-shortcuts, the terminal/editor used by providers, launcher position, and app
-order. **Appearance** holds themes and typography. **Clipboard**, **Search**, and
+shortcuts, the terminal/editor used by providers, launcher position, app order,
+and **Keep Awake** toggles for keeping the Mac awake and arming clamshell mode. **Appearance** holds themes and typography. **Clipboard**, **Search**, and
 **Ask** cover their own features. **Providers** controls which tabs are visible,
 their order, and optional aliases. **Advanced** has config/theme/log links,
 backup, diagnostics, and version information. The **Ask** tab selects the endpoint and model,

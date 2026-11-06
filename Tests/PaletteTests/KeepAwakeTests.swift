@@ -112,6 +112,30 @@ final class KeepAwakeTests: XCTestCase {
         XCTAssertFalse(status.clamshell)
     }
 
+    func testKeepAwakeToggleLeavesClamshellAlone() async throws {
+        let fake = FakeClamshell()
+        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)
+
+        try await service.setClamshell(true)
+        try await service.setKeepAwake(true)
+        var status = await service.snapshot()
+        XCTAssertTrue(status.active)
+        XCTAssertTrue(status.clamshell)
+
+        try await service.setKeepAwake(false)
+        status = await service.snapshot()
+        XCTAssertFalse(status.active)
+        XCTAssertTrue(status.clamshell)
+        let stillArmed = await fake.isEnabled()
+        XCTAssertTrue(stillArmed)
+
+        try await service.setClamshell(false)
+        status = await service.snapshot()
+        XCTAssertFalse(status.clamshell)
+        let disarmed = await fake.isEnabled()
+        XCTAssertFalse(disarmed)
+    }
+
     func testProviderClamshellActionTogglesWithoutStartingTimer() async throws {
         let fake = FakeClamshell()
         let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)

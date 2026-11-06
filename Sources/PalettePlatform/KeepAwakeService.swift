@@ -126,6 +126,18 @@ public actor KeepAwakeService {
 
     /// Clamshell is its own toggle. It can be armed while idle keep-awake is
     /// off, and starting a timer preserves it.
+    /// Toggles idle/display keep-awake without touching clamshell. Settings
+    /// uses this so its two switches are independent.
+    public func setKeepAwake(_ enabled: Bool) async throws {
+        if enabled {
+            if !status.active {
+                try await start(duration: nil)
+            }
+        } else {
+            stopActiveSession()
+        }
+    }
+
     public func setClamshell(_ enabled: Bool) async throws {
         if enabled {
             try await ensureClamshell()
