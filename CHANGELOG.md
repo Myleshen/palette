@@ -11,7 +11,7 @@
 - Glass is lighter by default (`glass_opacity` 0.25) so the desktop shows through instead of tinting to a flat brown.
 - Settings uses a full-size content view with a transparent titlebar, so the glass reaches the top of the window and the window drags from its background.
 - The launcher panel no longer grows past the screen: the SwiftUI host no longer resizes the window, height is clamped to the visible screen area, and long lists scroll inside it.
-- Panel height is driven by a row count instead of per-view chrome: `[list] visible_rows` (5-10, default 7) sets how many rows show before scrolling, so applications, clipboard, and the rest all align.
+- Panel height is driven by a row count instead of per-view chrome: Settings → General → Launcher has a **Visible rows** stepper (5-10, default 7, also `visible_rows` in config.toml or `[list] visible_rows` in a theme). That count is the panel's fixed height, so it neither grows with a long list nor shrinks with a short one.
 - The Settings titlebar keeps AppKit's native window drag and is tinted with the theme background instead of a transparent, undraggable strip.
 - Themes can control the effect with `[window] glass` and `glass_opacity`; `glass = false` keeps an opaque surface.
 

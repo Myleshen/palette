@@ -491,6 +491,7 @@ ask_hotkey = "cmd+option+a"          # empty disables
 search_position = "top"        # top | center
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent
+visible_rows = 7               # 5-10; panel height in rows (0 = theme default)
 
 [typography]
 ui_family = ""                 # empty inherits the theme

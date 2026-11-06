@@ -974,22 +974,17 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         let row = CGFloat(theme.effectiveRowHeight)
         let spacing: CGFloat = 6
-        // The panel is sized by a row count, so every provider shows the same
-        // amount of content regardless of its chrome.
-        let maxVisible = theme.list.visibleRows
-        func rows(_ count: Int) -> CGFloat {
-            let visible = CGFloat(min(max(count, 1), maxVisible))
-            return visible * row + max(0, visible - 1) * spacing + 8
-        }
+        // The configured row count is the panel's fixed height: a short list
+        // does not shrink it and a long one does not grow it.
+        let visible = CGFloat(theme.list.visibleRows)
+        let listHeight = visible * row + (visible - 1) * spacing + 8
         var content: CGFloat
         if prompt != nil {
             content = 136
         } else if actionsMode {
-            content = 38 + rows(actionItems.count)
-        } else if items.isEmpty {
-            content = 58
+            content = 38 + listHeight
         } else {
-            content = rows(items.count)
+            content = listHeight
         }
         let footer = theme.footer.show ? CGFloat(28) : 0
         // Provider tab strip, plus the clipboard filter chips when previewing.

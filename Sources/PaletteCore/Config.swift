@@ -123,6 +123,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var webSearchEngines: [WebSearchEngine]
     public var searchPosition: SearchPosition
     public var webAppBrowser: String
+    /// 0 inherits the theme's `[list] visible_rows`.
+    public var visibleRows: Int
     public var appSort: AppSort
     public var ask: AskConfig
     public var typography: TypographyConfig
@@ -149,6 +151,7 @@ public struct PaletteConfig: Sendable, Equatable {
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
         searchPosition: SearchPosition = .top,
         webAppBrowser: String = "Helium",
+        visibleRows: Int = 0,
         appSort: AppSort = .alphabetical,
         ask: AskConfig = AskConfig(),
         typography: TypographyConfig = TypographyConfig(),
@@ -177,6 +180,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.webSearchEngines = webSearchEngines
         self.searchPosition = searchPosition
         self.webAppBrowser = webAppBrowser
+        self.visibleRows = visibleRows
         self.appSort = appSort
         self.ask = ask
         self.typography = typography
@@ -338,6 +342,9 @@ public enum ConfigLoader {
         }
         if let sort = table.str("app_sort"), let parsed = AppSort(rawValue: sort.lowercased()) {
             config.appSort = parsed
+        }
+        if let rows = table.int("visible_rows"), rows > 0 {
+            config.visibleRows = min(10, max(5, rows))
         }
 
         if let typography = table.table("typography") {
@@ -644,6 +651,9 @@ public enum ConfigWriter {
         out.append("search_position = \(quote(config.searchPosition.rawValue))")
         out.append("web_app_browser = \(quote(config.webAppBrowser))")
         out.append("app_sort = \(quote(config.appSort.rawValue))")
+        if config.visibleRows > 0 {
+            out.append("visible_rows = \(config.visibleRows)")
+        }
         out.append("")
         out.append("[typography]")
         out.append("ui_family = \(quote(config.typography.uiFamily))")

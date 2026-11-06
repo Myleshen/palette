@@ -102,6 +102,27 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(result.config.scopes["projects"]?.roots.count, 2)
     }
 
+    func testVisibleRowsConfigClamps() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-rows-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config"),
+            stateDir: root.appendingPathComponent("state"),
+            cacheDir: root.appendingPathComponent("cache")
+        )
+        try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
+
+        try "visible_rows = 6\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.visibleRows, 6)
+
+        try "visible_rows = 99\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.visibleRows, 10)
+
+        try "visible_rows = 2\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.visibleRows, 5)
+    }
+
     func testThemeLoaderFallsBackAndValidates() {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("palette-themes-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

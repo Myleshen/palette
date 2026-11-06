@@ -186,6 +186,14 @@ struct SettingsView: View {
         }
     }
 
+    /// 0 in config means "inherit the theme's `[list] visible_rows`".
+    private var visibleRowsBinding: Binding<Int> {
+        Binding(
+            get: { config.visibleRows > 0 ? config.visibleRows : theme.list.visibleRows },
+            set: { config.visibleRows = min(10, max(5, $0)) }
+        )
+    }
+
     private var settingsTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -597,6 +605,12 @@ struct SettingsView: View {
                     Text("Alphabetical").tag(AppSort.alphabetical)
                     Text("Most used").tag(AppSort.frequent)
                 }
+                Stepper(value: visibleRowsBinding, in: 5...10) {
+                    LabeledContent("Visible rows", value: "\(visibleRowsBinding.wrappedValue)")
+                }
+                Text("Rows shown before scrolling. This sets the panel height for every provider.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
