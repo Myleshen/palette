@@ -126,6 +126,8 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            settingsTabs
+
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
@@ -142,11 +144,9 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 30)
-            .padding(.bottom, 4)
+            .padding(.vertical, 8)
 
             if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {
-                settingsTabs
                 selectedSettingsContent
                     .scrollContentBackground(.hidden)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -228,7 +228,8 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.top, 26)
+            .padding(.bottom, 8)
         }
         .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
