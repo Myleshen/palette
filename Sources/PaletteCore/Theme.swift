@@ -97,7 +97,7 @@ public struct ThemeWindow: Equatable, Sendable {
     public var borderWidth: Double = 1
     public var shadow = true
     public var glass = true
-    public var glassOpacity: Double = 0.25
+    public var glassOpacity: Double = 0.7
     public init() {}
 }
 

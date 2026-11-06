@@ -677,7 +677,7 @@ struct LauncherRootView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     Capsule()
-                        .fill(theme.color(theme.palette.surface).opacity(isPill && theme.window.glass ? theme.window.glassOpacity : (isPill ? 1 : 0)))
+                        .fill(theme.color(theme.palette.bg).opacity(isPill && theme.window.glass ? theme.window.glassOpacity : (isPill ? 1 : 0)))
                 )
         )
         .overlay(
@@ -851,7 +851,6 @@ struct LauncherRootView: View {
 
     private var footer: some View {
         footerContent
-            .background(.ultraThinMaterial)
     }
 
     private var footerContent: some View {
@@ -925,7 +924,7 @@ struct PromptView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .padding(8)
-                .background(theme.color(theme.palette.surface))
+                .background(theme.color(theme.palette.surface).opacity(0.9))
                 .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
                 .focused(focused)
                 .onSubmit { controller.submitPrompt() }
@@ -937,7 +936,7 @@ struct PromptView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .padding(8)
-                .background(theme.color(theme.palette.surface))
+                .background(theme.color(theme.palette.surface).opacity(0.9))
                 .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
                 .focused(focused)
                 .onSubmit { controller.submitPrompt() }
@@ -948,7 +947,7 @@ struct PromptView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(.ultraThinMaterial)
+                    .background(theme.color(theme.palette.elevated).opacity(0.8))
                     .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
                 Button(prompt.kind == .confirm ? "Confirm" : "Continue") { controller.submitPrompt() }
                     .buttonStyle(.plain)
@@ -964,11 +963,8 @@ struct PromptView: View {
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous).fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous)
-                    .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
-            }
+            RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous)
+                .fill(theme.color(theme.palette.elevated).opacity(0.55))
         )
         .overlay(
             RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous)
@@ -1043,11 +1039,8 @@ struct ClipboardPreviewPane: View {
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
-            }
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(theme.color(theme.palette.elevated).opacity(0.45))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -1370,11 +1363,8 @@ struct ScratchpadView: View {
             .padding(.vertical, 8)
         }
         .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
-            }
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(theme.color(theme.palette.elevated).opacity(0.55))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
