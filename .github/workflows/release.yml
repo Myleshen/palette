@@ -1,0 +1,108 @@
+name: release
+
+# Tags, not merges: the version lives in Resources/Info.plist next to a
+# hand-written CHANGELOG entry, so the maintainer decides the number and tags
+# the commit. The workflow refuses a tag that disagrees with the plist.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, matching Resources/Info.plist
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT}" ]; then
+            version="${INPUT#v}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          plist="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          if [ "$plist" != "$version" ]; then
+            echo "::error title=Version mismatch::Resources/Info.plist says $plist but the release is $version."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: swift test
+
+      - name: Build, zip
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          make app
+          mkdir -p dist
+          ditto -c -k --norsrc --keepParent build/Palette.app "dist/Palette-$VERSION.zip"
+          shasum -a 256 "dist/Palette-$VERSION.zip" | tee sha256.txt
+
+      - name: Publish
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          escaped="$(printf '%s' "$VERSION" | sed 's/\./\\./g')"
+          # The CHANGELOG entry is the release note, as it was written.
+          awk -v pat="^## ${escaped}([^0-9.]|\$)" '
+            $0 ~ pat { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ -s notes.md ]; then
+            gh release create "v$VERSION" --title "Palette $VERSION" \
+              --notes-file notes.md "dist/Palette-$VERSION.zip"
+          else
+            gh release create "v$VERSION" --title "Palette $VERSION" \
+              --generate-notes "dist/Palette-$VERSION.zip"
+          fi
+
+      - name: Update the Homebrew cask
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_DEPLOY_KEY:-}" ]; then
+            echo "::warning title=Homebrew cask not bumped::Set the TAP_DEPLOY_KEY secret (an SSH deploy key with write access to Myleshen/homebrew-tap) so a release moves the cask. v$VERSION is published either way."
+            exit 0
+          fi
+          sha="$(cut -d' ' -f1 sha256.txt)"
+          key="$RUNNER_TEMP/tap_deploy"
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone --depth 1 git@github.com:Myleshen/homebrew-tap.git tap
+          cask="tap/Casks/palette.rb"
+          sed -i '' -E "s/version \"[^\"]*\"/version \"$VERSION\"/" "$cask"
+          sed -i '' -E "s/sha256 \"[^\"]*\"/sha256 \"$sha\"/" "$cask"
+          git -C tap config user.name "github-actions[bot]"
+          git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git -C tap diff --quiet; then
+            echo "cask already at $VERSION"
+            exit 0
+          fi
+          git -C tap commit -qam "palette: $VERSION"
+          git -C tap push -q origin main

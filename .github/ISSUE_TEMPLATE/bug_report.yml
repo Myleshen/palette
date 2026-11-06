@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in Palette does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. A log line or the exact query and key you pressed
+        is worth more than a description of the vibes.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Palette version
+      description: Settings → General shows it, or `brew list --cask --versions palette`.
+      placeholder: "2.2.2 (40)"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.6 (23G80)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is Palette installed
+      options:
+        - Homebrew cask (Myleshen/tap)
+        - Downloaded the release zip
+        - Built from source
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: The last few lines of `~/.local/state/palette/palette.log` around the failure.
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Providers involved, config in `~/.config/palette`, screenshots.

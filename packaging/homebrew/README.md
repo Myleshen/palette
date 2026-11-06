@@ -22,13 +22,21 @@ brew upgrade --cask palette
 
 1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in
    `Resources/Info.plist`.
-2. Run `./Scripts/release.sh`. It builds the bundle, writes
-   `dist/Palette-<version>.zip`, and updates the version and checksum in
-   `packaging/homebrew/Casks/palette.rb`.
-3. Create the GitHub release and upload the zip:
-   `gh release create v<version> dist/Palette-<version>.zip`.
-4. Copy the updated cask into `Myleshen/homebrew-tap/Casks/palette.rb`, commit,
-   and push.
+2. Add the release to `CHANGELOG.md`.
+3. Merge the PR, then push a tag:
+
+   ```sh
+   git tag v<version>
+   git push origin v<version>
+   ```
+
+4. CI does the rest: `swift test`, `make app`, `dist/Palette-<version>.zip`,
+   the GitHub release (CHANGELOG entry as notes), and the `version` + `sha256`
+   update in `Casks/palette.rb` in `Myleshen/homebrew-tap`.
+
+`Scripts/release.sh` still exists for a local unsigned build and to refresh
+`packaging/homebrew/Casks/palette.rb`, which is now a reference copy: the tap is
+what users install and CI keeps it current.
 
 ## Why a Cask instead of a Formula
 
