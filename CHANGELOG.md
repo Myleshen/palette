@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.2 — 2026-11-06
+
+### Changed
+
+- The launcher and Settings now use real behind-window liquid-glass materials instead of only SwiftUI color overlays. The panel blur is enabled again, Settings has a transparent window backdrop, and the launcher/Settings edges use theme-tinted specular highlights.
+- The launcher footer also sits on a glass strip.
+- Themes can control the effect with `[window] glass` and `glass_opacity`; `glass = false` keeps an opaque surface.
+
+### Verified
+
+- Settings and launcher full-screen screenshots show the desktop blurred behind the glass rather than an opaque card.
+- `swift test`: 81 tests, 0 failures.
+
 ## 2.3.1 — 2026-11-06
 
 ### Changed

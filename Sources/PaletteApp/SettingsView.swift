@@ -148,6 +148,7 @@ struct SettingsView: View {
             if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {
                 settingsTabs
                 selectedSettingsContent
+                    .scrollContentBackground(.hidden)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 settingsSearchResults
@@ -167,7 +168,7 @@ struct SettingsView: View {
         .frame(width: 780, height: 660)
         .background(
             ZStack {
-                Rectangle().fill(.ultraThinMaterial)
+                GlassBackdrop(material: .hudWindow)
                 theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1)
             }
         )

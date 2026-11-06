@@ -68,6 +68,25 @@ extension Theme {
     }
 }
 
+struct GlassBackdrop: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .hudWindow
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.isEmphasized = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = .behindWindow
+        nsView.state = .active
+    }
+}
+
 struct HighlightedText: View {
     var text: String
     var terms: [String]
@@ -443,7 +462,18 @@ struct LauncherRootView: View {
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(theme.color(theme.palette.border).opacity(0.5), lineWidth: 1)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(theme.window.glass ? 0.22 : 0.08),
+                            theme.color(theme.palette.border).opacity(0.45),
+                            theme.color(theme.palette.accent).opacity(theme.window.glass ? 0.18 : 0.08),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
         .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
     }
@@ -654,7 +684,14 @@ struct LauncherRootView: View {
         .overlay(
             Capsule()
                 .strokeBorder(
-                    theme.color(theme.palette.accent).opacity(isPill ? 0.30 : 0),
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(isPill && theme.window.glass ? 0.26 : 0),
+                            theme.color(theme.palette.accent).opacity(isPill ? 0.30 : 0),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
                     lineWidth: 1
                 )
         )
@@ -818,6 +855,11 @@ struct LauncherRootView: View {
     }
 
     private var footer: some View {
+        footerContent
+            .background(.ultraThinMaterial)
+    }
+
+    private var footerContent: some View {
         HStack(spacing: 10) {
             if let status = controller.statusMessage {
                 Image(systemName: "info.circle")

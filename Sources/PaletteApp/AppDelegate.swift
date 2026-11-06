@@ -1146,6 +1146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         window.title = "Palette Settings"
         window.isReleasedWhenClosed = false
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.titlebarAppearsTransparent = true
         window.contentViewController = NSHostingController(rootView: makeSettingsView())
         window.center()
         settingsWindow = window

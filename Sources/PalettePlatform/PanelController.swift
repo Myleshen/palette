@@ -123,10 +123,12 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         effectView.material = Self.material(named: theme.window.material)
         effectView.layer?.cornerRadius = theme.window.cornerRadius
         effectView.layer?.borderWidth = 0
-        effectView.isHidden = true
-        panel.hasShadow = false
+        effectView.isHidden = !theme.window.glass
+        panel.hasShadow = theme.window.glass && theme.window.shadow
         panel.appearance = NSAppearance(named: theme.appearance == "light" ? .aqua : .darkAqua)
-        effectView.alphaValue = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? 1 : theme.window.opacity
+        effectView.alphaValue = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+            ? 1
+            : (theme.window.glass ? theme.window.opacity : 1)
         if isShowing { position() }
     }
 
