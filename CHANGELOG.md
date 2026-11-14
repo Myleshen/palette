@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Timers** provider (`/timer`): `25m`, `1h30m`, `1:30`, presets from `[timer] presets`, one timer at a time, a live countdown in the row, a chime and a notification when it finishes. Toggle sound/notification in Settings → Providers → Timers.
+
+### Fixed
+
+- Clamshell mode could report "on" while nothing kept the lid awake: a leftover flag made the guard look armed, and the root guard was a background shell that died with the authorisation session. It now runs as a launchd daemon, verifies `pmset` really reports `SleepDisabled 1`, re-checks after arming, and warns if it stops.
+
 ## 2.3.3 — 2026-11-14
 
 ### Changed

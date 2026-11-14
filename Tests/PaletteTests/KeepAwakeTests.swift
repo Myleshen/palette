@@ -19,11 +19,15 @@ private actor KeepAwakeBridge: HostBridge {
 }
 
 private actor FakeClamshell: ClamshellControlling {
-    private var enabled = false
+    private var armed = false
+    private var staleFlag = false
+    private(set) var enableCount = 0
 
-    func isEnabled() async -> Bool { enabled }
-    func enable() async throws { enabled = true }
-    func disable() async { enabled = false }
+    func setStaleFlag() { staleFlag = true }
+    func isEnabled() async -> Bool { armed || staleFlag }
+    func isArmed() async -> Bool { armed }
+    func enable() async throws { armed = true; staleFlag = false; enableCount += 1 }
+    func disable() async { armed = false; staleFlag = false }
 }
 
 final class KeepAwakeTests: XCTestCase {
@@ -81,6 +85,41 @@ final class KeepAwakeTests: XCTestCase {
         await service.stop()
         status = await service.snapshot()
         XCTAssertFalse(status.active)
+    }
+
+    func testClamshellDaemonInstallCommand() throws {
+        let command = ClamshellGuard.installCommand(pid: 4242, flagPath: "/tmp/clamshell flag.active")
+        XCTAssertTrue(command.contains(ClamshellGuard.daemonLabel))
+        XCTAssertTrue(command.contains("/bin/launchctl bootstrap system"))
+        XCTAssertTrue(command.contains(ClamshellGuard.daemonPlistPath))
+        XCTAssertFalse(command.contains("\\("), "no unexpanded interpolation should survive")
+
+        let plist = ClamshellGuard.daemonPlist()
+        XCTAssertTrue(plist.contains("<key>RunAtLoad</key><true/>"))
+        XCTAssertTrue(plist.contains(ClamshellGuard.daemonLabel))
+        // The plist must be valid property list data, or launchd rejects it.
+        let data = try XCTUnwrap(plist.data(using: .utf8))
+        let parsed = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        XCTAssertEqual(parsed?["Label"] as? String, ClamshellGuard.daemonLabel)
+        XCTAssertEqual((parsed?["ProgramArguments"] as? [String])?.first, "/bin/sh")
+
+        // The guard body must watch this process and this flag.
+        let script = ClamshellGuard.helperScript(pid: 4242, flagPath: "/tmp/clamshell flag.active", cleanUpPlist: true)
+        XCTAssertTrue(script.contains("/bin/kill -0 4242"))
+        XCTAssertTrue(script.contains("/tmp/clamshell flag.active"))
+        XCTAssertTrue(script.contains(ClamshellGuard.daemonLabel), "the guard removes its own plist on exit")
+    }
+
+    func testStaleClamshellFlagRearmsTheGuard() async throws {
+        let fake = FakeClamshell()
+        await fake.setStaleFlag()
+        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)
+
+        // The flag exists from an earlier run but nothing is armed, so the
+        // guard must be started again rather than trusted.
+        try await service.setClamshell(true)
+        let count = await fake.enableCount
+        XCTAssertEqual(count, 1, "a stale flag must not be trusted")
     }
 
     func testClamshellToggleIsIndependentOfKeepAwake() async throws {

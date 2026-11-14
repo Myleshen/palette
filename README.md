@@ -506,6 +506,11 @@ terminal_width = 0             # 0 = 1000 * scale
 scratchpad_width = 0
 preview_layout = "below"       # below | beside
 
+[timer]
+presets = [5, 10, 15, 25, 30, 45, 60]   # minutes, shown in /timer
+sound = true                   # chime when a timer finishes
+notify = true                  # system notification when a timer finishes
+
 [typography]
 ui_family = ""                 # empty inherits the theme
 mono_family = ""

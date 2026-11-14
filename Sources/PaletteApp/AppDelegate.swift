@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let bitwardenVault = BitwardenVault()
     private let keepAwake = KeepAwakeService()
     private let timerService = TimerService()
+    private var clamshellObserver: NSObjectProtocol?
     private var searchController: SearchController!
     private var panel: PanelController!
     private var hotkey: HotKeyManager!
@@ -180,6 +181,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         hostProxy.setTarget(searchController)
         searchController.observeTimerTicks()
+        clamshellObserver = NotificationCenter.default.addObserver(
+            forName: .paletteClamshellDropped,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.searchController.setStatus("Clamshell mode stopped; lid sleep is back on", duration: 6)
+                self.searchController.refreshResults()
+                await self.refreshKeepAwakeMenu()
+            }
+        }
         wireControllerCallbacks()
         buildPanel()
         buildMainMenu()

@@ -3,6 +3,11 @@ import Foundation
 import IOKit.pwr_mgt
 import PaletteCore
 
+extension Notification.Name {
+    /// Posted when the root clamshell guard stops being armed.
+    public static let paletteClamshellDropped = Notification.Name("palette.clamshell.dropped")
+}
+
 public struct KeepAwakeStatus: Sendable, Equatable {
     public var active: Bool
     public var startedAt: Date?
@@ -49,6 +54,9 @@ public struct KeepAwakeStatus: Sendable, Equatable {
 
 public protocol ClamshellControlling: Sendable {
     func isEnabled() async -> Bool
+    /// True only when the flag exists *and* the system reports sleep disabled
+    /// (or the Mac is on battery, where the guard arms on AC).
+    func isArmed() async -> Bool
     func enable() async throws
     func disable() async
 }
@@ -149,12 +157,18 @@ public actor KeepAwakeService {
     }
 
     private func ensureClamshell() async throws {
-        if !(await clamshellGuard.isEnabled()) {
+        // A leftover flag from a crashed run must not pass as "already on":
+        // without a live guard the lid still sleeps.
+        if !(await clamshellGuard.isArmed()) {
             try await clamshellGuard.enable()
         }
         status.clamshell = true
         releaseClamshellAssertion()
         createClamshellAssertion()
+        // Keep checking while clamshell is on, even without a keep-awake timer.
+        if timer == nil {
+            startTimer()
+        }
     }
 
     public func toggleDisplaySleep() {
@@ -252,6 +266,14 @@ public actor KeepAwakeService {
     }
 
     private func tick() async {
+        if status.clamshell, !(await clamshellGuard.isArmed()) {
+            // The guard died, so the lid sleeps again. Say so instead of
+            // leaving the UI claiming clamshell mode is on.
+            Log.shared.error("Clamshell: guard is no longer armed; lid sleep is back on", source: "awake")
+            status.clamshell = false
+            releaseClamshellAssertion()
+            NotificationCenter.default.post(name: .paletteClamshellDropped, object: nil)
+        }
         guard status.active else { return }
         if let endsAt = status.endsAt, Date() >= endsAt {
             await stop()
@@ -307,6 +329,7 @@ public actor ClamshellGuard: ClamshellControlling {
         case cancelled
         case failed(String)
         case notEnabled
+        case guardStopped
 
         public var errorDescription: String? {
             switch self {
@@ -315,7 +338,9 @@ public actor ClamshellGuard: ClamshellControlling {
             case .failed(let message):
                 return message.isEmpty ? "Could not enable clamshell mode." : message
             case .notEnabled:
-                return "Clamshell mode did not turn on. Check the log and try again."
+                return "Clamshell mode did not turn on. The log has the pmset output; try again."
+            case .guardStopped:
+                return "Clamshell mode turned on but stopped immediately, so the lid will still sleep. Try again from Settings."
             }
         }
     }
@@ -332,6 +357,12 @@ public actor ClamshellGuard: ClamshellControlling {
         FileManager.default.fileExists(atPath: flagURL.path)
     }
 
+    public func isArmed() async -> Bool {
+        guard FileManager.default.fileExists(atPath: flagURL.path) else { return false }
+        guard (try? await onACPower()) == true else { return true }
+        return (try? await sleepIsDisabled()) == true
+    }
+
     public func enable() async throws {
         try FileManager.default.createDirectory(
             at: flagURL.deletingLastPathComponent(),
@@ -340,15 +371,19 @@ public actor ClamshellGuard: ClamshellControlling {
         try Data().write(to: flagURL, options: .atomic)
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: flagURL.path)
 
-        let pid = getpid()
-        let script = Self.helperScript(pid: pid, flagPath: flagURL.path)
-        let command = "nohup /bin/sh -c \(Self.shellQuote(script)) </dev/null >/dev/null 2>&1 &"
-        let appleScript = "do shell script \(Self.appleScriptQuote(command)) with administrator privileges"
+        // The guard has to outlive the authorisation prompt, so a root
+        // LaunchDaemon owns it. A backgrounded shell from `do shell script`
+        // is torn down with the session, which is why the old approach armed
+        // nothing once the password dialog closed.
+        let install = Self.installCommand(pid: getpid(), flagPath: flagURL.path)
+        let appleScript = "do shell script \(Self.appleScriptQuote(install)) with administrator privileges"
 
+        Log.shared.info("Clamshell: installing the root guard daemon", source: "awake")
         let result = try await ProcessRunner.run(
             ["/usr/bin/osascript", "-e", appleScript],
             timeout: 120
         )
+        Log.shared.info("Clamshell: authorisation finished with status \(result.status)", source: "awake")
         guard result.status == 0 else {
             try? FileManager.default.removeItem(at: flagURL)
             let message = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -359,18 +394,75 @@ public actor ClamshellGuard: ClamshellControlling {
         }
 
         guard verifyEnabled else { return }
-        for _ in 0..<12 {
-            if try await sleepIsDisabled() { return }
+        var armed = false
+        for _ in 0..<40 {
+            if try await sleepIsDisabled() { armed = true; break }
             try await Task.sleep(nanoseconds: 250_000_000)
         }
         // Battery power intentionally leaves SleepDisabled off. The guard is
         // still armed and will enable it as soon as AC returns.
-        if !(try await onACPower()) { return }
-        try? FileManager.default.removeItem(at: flagURL)
-        throw GuardError.notEnabled
+        if !armed {
+            if !(try await onACPower()) { return }
+            let state = (try? await ProcessRunner.run(["/usr/bin/pmset", "-g"], timeout: 10))?.stdoutString ?? ""
+            Log.shared.error("Clamshell: SleepDisabled did not turn on. pmset said: \(state)", source: "awake")
+            try? FileManager.default.removeItem(at: flagURL)
+            throw GuardError.notEnabled
+        }
+        // A guard that dies right after arming leaves the flag behind but lets
+        // the lid sleep again, so check it is still armed a few seconds later.
+        try await Task.sleep(nanoseconds: 4_000_000_000)
+        if try await onACPower(), !(try await sleepIsDisabled()) {
+            Log.shared.error("Clamshell: the guard stopped after arming; lid sleep is back on", source: "awake")
+            try? FileManager.default.removeItem(at: flagURL)
+            throw GuardError.guardStopped
+        }
+    }
+
+    /// Idempotent root install: writes the guard and its LaunchDaemon, then
+    /// loads it. Payloads are base64 so quoting survives every layer.
+    public static func installCommand(pid: Int32, flagPath: String) -> String {
+        let script = helperScript(pid: pid, flagPath: flagPath, cleanUpPlist: true)
+        let plist = daemonPlist()
+        let scriptB64 = Data(script.utf8).base64EncodedString()
+        let plistB64 = Data(plist.utf8).base64EncodedString()
+        let scriptPath = shellQuote(daemonScriptPath)
+        let plistPath = shellQuote(daemonPlistPath)
+        let label = daemonLabel
+        return """
+        /bin/mkdir -p /Library/LaunchDaemons \(shellQuote(daemonDirectory)) && \
+        /usr/bin/printf '%s' \(shellQuote(scriptB64)) | /usr/bin/base64 -D > \(scriptPath) && \
+        /usr/bin/printf '%s' \(shellQuote(plistB64)) | /usr/bin/base64 -D > \(plistPath) && \
+        /bin/chmod 755 \(scriptPath) && /bin/chmod 644 \(plistPath) && \
+        /bin/chown root:wheel \(scriptPath) \(plistPath) && \
+        (/bin/launchctl bootout system/\(label) 2>/dev/null || true) && \
+        /bin/launchctl bootstrap system \(plistPath)
+        """
+    }
+
+    public static let daemonLabel = "dev.myleshen.palette.clamshell"
+    static let daemonDirectory = "/Library/Application Support/Palette"
+    static let daemonScriptPath = daemonDirectory + "/clamshell-guard.sh"
+    public static let daemonPlistPath = "/Library/LaunchDaemons/" + daemonLabel + ".plist"
+
+    public static func daemonPlist() -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+        <key>Label</key><string>\(daemonLabel)</string>
+        <key>ProgramArguments</key>
+        <array><string>/bin/sh</string><string>\(daemonScriptPath)</string></array>
+        <key>RunAtLoad</key><true/>
+        <key>KeepAlive</key><false/>
+        <key>ProcessType</key><string>Background</string>
+        </dict>
+        </plist>
+        """
     }
 
     public func disable() async {
+        Log.shared.info("Clamshell: disarming the root guard", source: "awake")
         try? FileManager.default.removeItem(at: flagURL)
         // The root loop notices the missing flag within three seconds and
         // restores normal sleep. Wait briefly so "off" is not just cosmetic.
@@ -398,22 +490,35 @@ public actor ClamshellGuard: ClamshellControlling {
         flagPath: String,
         pmset: String = "/usr/bin/pmset",
         sleepBinary: String = "/bin/sleep",
-        interval: Int = 3
+        interval: Int = 3,
+        cleanUpPlist: Bool = false
     ) -> String {
         let flag = shellQuote(flagPath)
         let tool = shellQuote(pmset)
         let sleeper = shellQuote(sleepBinary)
+        // Written by root so a guard that dies right after arming is visible
+        // instead of looking like a silent success.
+        let log = shellQuote("/tmp/palette-clamshell-guard.log")
         return """
-        trap '\(tool) -a disablesleep 0 >/dev/null 2>&1' EXIT INT TERM HUP
+        exec >>\(log) 2>&1
+        note() { echo "$(date '+%F %T') [\(pid)] $1"; }
+        note "guard started"
+        trap '\(tool) -a disablesleep 0 >/dev/null 2>&1; note "guard stopped (trap)"' EXIT INT TERM HUP
+        was=""
         while /bin/kill -0 \(pid) 2>/dev/null && [ -f \(flag) ]; do
           if \(tool) -g ps | /usr/bin/grep -q "AC Power"; then
             \(tool) -a disablesleep 1 >/dev/null 2>&1
+            now="armed"
           else
             \(tool) -a disablesleep 0 >/dev/null 2>&1
+            now="battery"
           fi
+          if [ "$now" != "$was" ]; then note "state $now"; was="$now"; fi
           \(sleeper) \(interval)
         done
+        note "guard exiting (palette gone or flag removed)"
         \(tool) -a disablesleep 0 >/dev/null 2>&1
+        \(cleanUpPlist ? "/bin/rm -f /Library/LaunchDaemons/\(ClamshellGuard.daemonLabel).plist" : "")
         """
     }
 
