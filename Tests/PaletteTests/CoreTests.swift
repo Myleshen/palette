@@ -124,6 +124,28 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 5)
     }
 
+    func testTimerDurationParsing() {
+        XCTAssertEqual(TimerDuration.parse("25m"), 1500)
+        XCTAssertEqual(TimerDuration.parse("90s"), 90)
+        XCTAssertEqual(TimerDuration.parse("1h30m"), 5400)
+        XCTAssertEqual(TimerDuration.parse("1h 30m"), 5400)
+        XCTAssertEqual(TimerDuration.parse("1:30"), 90)
+        XCTAssertEqual(TimerDuration.parse("1:05:00"), 3900)
+        XCTAssertEqual(TimerDuration.parse("2"), 120, "a bare number means minutes")
+        XCTAssertNil(TimerDuration.parse(""))
+        XCTAssertNil(TimerDuration.parse("abc"))
+        XCTAssertNil(TimerDuration.parse("0"))
+        XCTAssertNil(TimerDuration.parse("1:75"), "seconds must be below 60")
+
+        XCTAssertEqual(TimerDuration.format(1500), "25:00")
+        XCTAssertEqual(TimerDuration.format(0), "0:00")
+        XCTAssertEqual(TimerDuration.format(3900), "1:05:00")
+        XCTAssertEqual(TimerDuration.format(59.2), "1:00", "rounds up so the last second is visible")
+
+        XCTAssertEqual(TimerDuration.label(1500), "25 minutes")
+        XCTAssertEqual(TimerDuration.label(5400), "1 hour 30 minutes")
+    }
+
     func testWindowConfigScaleAndOverrides() {
         var window = WindowConfig()
         XCTAssertEqual(window.launcherWidth, 680)

@@ -865,6 +865,13 @@ struct SettingsView: View {
 
     private var providerSettings: some View {
         Form {
+            Section("Timers") {
+                Toggle("Play a sound when a timer finishes", isOn: $config.timer.sound)
+                Toggle("Show a notification when a timer finishes", isOn: $config.timer.notify)
+                Text("Presets (minutes) are set with [timer] presets in config.toml. Use /timer 25m, /timer 1h30m or /timer 1:30 to start any duration.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("Visible tabs") {
                 Text("Turn off providers you do not use. Hidden providers disappear from the tab bar and Tab cycling; apps always stay visible.")
                     .font(.caption)

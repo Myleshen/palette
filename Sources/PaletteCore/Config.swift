@@ -212,6 +212,15 @@ public struct WindowConfig: Sendable, Equatable {
     public var scratchpadPanelWidth: Double { size(scratchpadWidth, Self.defaultPanelWidth) }
 }
 
+public struct TimerConfig: Sendable, Equatable {
+    /// Preset durations in minutes, shown as rows in /timer.
+    public var presets: [Int] = [5, 10, 15, 25, 30, 45, 60]
+    public var sound = true
+    public var notify = true
+
+    public init() {}
+}
+
 public struct PaletteConfig: Sendable, Equatable {
     public var hotkey: String
     public var clipboardHotkey: String
@@ -238,6 +247,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var providerOrder: [String]
     public var disabledProviders: [String]
     public var terminalSession: TerminalSessionConfig
+    public var timer: TimerConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -267,7 +277,8 @@ public struct PaletteConfig: Sendable, Equatable {
         ],
         providerOrder: [String] = [],
         disabledProviders: [String] = [],
-        terminalSession: TerminalSessionConfig = TerminalSessionConfig()
+        terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
+        timer: TimerConfig = TimerConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -294,6 +305,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.providerOrder = providerOrder
         self.disabledProviders = disabledProviders
         self.terminalSession = terminalSession
+        self.timer = timer
     }
 }
 
@@ -484,6 +496,15 @@ public enum ConfigLoader {
             if let value = typography.number("mono_size"), value > 0 {
                 config.typography.monoSize = min(48, max(9, value))
             }
+        }
+
+        if let timer = table.table("timer") {
+            if let presets = timer["presets"]?.array {
+                let values = presets.compactMap { $0.int }.filter { $0 > 0 && $0 <= 24 * 60 }
+                if !values.isEmpty { config.timer.presets = values }
+            }
+            config.timer.sound = timer.bool("sound") ?? config.timer.sound
+            config.timer.notify = timer.bool("notify") ?? config.timer.notify
         }
 
         if let providers = table.table("providers") {
@@ -679,6 +700,12 @@ public enum ConfigLoader {
         scratchpad_width = 0
         preview_layout = "beside"      # beside | below
 
+        # Timer presets (minutes), and what happens when one finishes.
+        [timer]
+        presets = [5, 10, 15, 25, 30, 45, 60]
+        sound = true
+        notify = true
+
         # Font overrides. Empty family or 0 size inherits the active theme.
         [typography]
         ui_family = ""
@@ -803,6 +830,11 @@ public enum ConfigWriter {
         if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
         if config.window.scratchpadWidth > 0 { out.append("scratchpad_width = \(config.window.scratchpadWidth)") }
         out.append("preview_layout = \"\(config.window.previewLayout.rawValue)\"")
+        out.append("")
+        out.append("[timer]")
+        out.append("presets = [\(config.timer.presets.map(String.init).joined(separator: ", "))]")
+        out.append("sound = \(config.timer.sound)")
+        out.append("notify = \(config.timer.notify)")
         out.append("")
         out.append("[typography]")
         out.append("ui_family = \(quote(config.typography.uiFamily))")

@@ -112,6 +112,8 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public var previewLayout: PreviewPlacement { configuration.window.previewLayout }
 
+    private var timerObserver: NSObjectProtocol?
+
     private var screenSize: CGSize {
         (PanelController.screenUnderPointer() ?? panel?.panel.screen)?.visibleFrame.size
             ?? CGSize(width: 1440, height: 900)
@@ -990,6 +992,21 @@ public final class SearchController: ObservableObject, HostBridge {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 if self?.statusMessage == message { self?.statusMessage = nil }
+            }
+        }
+    }
+
+    /// Re-render the timer tab once a second so the countdown moves.
+    public func observeTimerTicks() {
+        guard timerObserver == nil else { return }
+        timerObserver = NotificationCenter.default.addObserver(
+            forName: TimerService.tickNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.activeTabID == "timer" else { return }
+                self.scheduleSearch(debounce: true)
             }
         }
     }

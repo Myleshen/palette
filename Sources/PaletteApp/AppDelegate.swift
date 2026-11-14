@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var registry: ProviderRegistry!
     private let bitwardenVault = BitwardenVault()
     private let keepAwake = KeepAwakeService()
+    private let timerService = TimerService()
     private var searchController: SearchController!
     private var panel: PanelController!
     private var hotkey: HotKeyManager!
@@ -157,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
+        timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         themeManager.reload()
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
@@ -177,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             clipboardMonitor: nil
         )
         hostProxy.setTarget(searchController)
+        searchController.observeTimerTicks()
         wireControllerCallbacks()
         buildPanel()
         buildMainMenu()
@@ -363,6 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ScratchpadProvider(store: store))
         providers.append(TerminalProvider())
         providers.append(KeepAwakeProvider(service: keepAwake, bridge: hostProxy, launcher: launcher))
+        providers.append(TimerProvider(service: timerService, presetMinutes: configuration.timer.presets))
         providers.append(WebSearchProvider(
             engines: configuration.webSearchEngines,
             enabled: configuration.webSearchEnabled,
@@ -1062,6 +1066,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
+        timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.windowConfig = configuration.window
