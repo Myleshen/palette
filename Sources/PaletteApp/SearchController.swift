@@ -107,10 +107,15 @@ public final class SearchController: ObservableObject, HostBridge {
     /// wide preview layout and no typing required.
     private var windowConfig: WindowConfig { configuration.window }
 
+    private var screenSize: CGSize {
+        (PanelController.screenUnderPointer() ?? panel?.panel.screen)?.visibleFrame.size
+            ?? CGSize(width: 1440, height: 900)
+    }
+
     public func openClipboard() {
         previewEnabled = true
         clipboardFilter = nil
-        panel?.widthOverride = CGFloat(windowConfig.clipboardPanelWidth)
+        panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)clip "
@@ -119,7 +124,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openAsk() {
         previewEnabled = true
-        panel?.widthOverride = CGFloat(windowConfig.clipboardPanelWidth)
+        panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)ask "
@@ -180,7 +185,7 @@ public final class SearchController: ObservableObject, HostBridge {
         if previewProvider {
             if !previewEnabled {
                 previewEnabled = true
-                panel?.widthOverride = CGFloat(windowConfig.clipboardPanelWidth)
+                panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
             }
         } else if previewEnabled {
             previewEnabled = false
@@ -978,7 +983,7 @@ public final class SearchController: ObservableObject, HostBridge {
         let spacing: CGFloat = 6
         // The configured row count is the panel's fixed height: a short list
         // does not shrink it and a long one does not grow it.
-        let visible = CGFloat(theme.list.visibleRows)
+        let visible = CGFloat(panel.effectiveRows())
         let listHeight = visible * row + (visible - 1) * spacing + 8
         var content: CGFloat
         if prompt != nil {
@@ -994,7 +999,7 @@ public final class SearchController: ObservableObject, HostBridge {
         // the clipboard/Ask sub-tab row.
         let tabs: CGFloat = (activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1) ? 110 : 82
         if previewEnabled {
-            panel.widthOverride = CGFloat(windowConfig.previewPanelWidth)
+            panel.widthOverride = CGFloat(windowConfig.previewWidth(for: screenSize))
         }
         // Pill floats the search capsule above the content card: 12 pt top and
         // bottom margins plus a 10 pt gap replace the old inline spacing.
@@ -1008,7 +1013,7 @@ public final class SearchController: ObservableObject, HostBridge {
         scratchpadActive = false
         previewEnabled = false
         previewFocused = false
-        panel?.widthOverride = CGFloat(windowConfig.terminalPanelWidth)
+        panel?.widthOverride = CGFloat(windowConfig.terminalWidth(for: screenSize))
         panel?.show()
         updatePanelHeight()
         requestFocus()
@@ -1028,7 +1033,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
         panel?.show()
-        panel?.widthOverride = CGFloat(windowConfig.clipboardPanelWidth)
+        panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
         scratchpadActive = true
         scratchpadNoteID = noteID
         scratchpadTitle = ""

@@ -186,16 +186,21 @@ struct SettingsView: View {
         }
     }
 
+    private var screenSize: CGSize {
+        (PanelController.screenUnderPointer() ?? NSScreen.main)?.visibleFrame.size
+            ?? CGSize(width: 1440, height: 900)
+    }
+
     private var visibleRowsBinding: Binding<Int> {
         Binding(
-            get: { config.window.launcherRows },
+            get: { config.window.launcherRows(for: screenSize) },
             set: { config.window.visibleRows = min(10, max(5, $0)) }
         )
     }
 
     private var widthBinding: Binding<Double> {
         Binding(
-            get: { config.window.launcherWidth },
+            get: { config.window.launcherWidth(for: screenSize) },
             set: { config.window.width = min(1_400, max(560, $0)) }
         )
     }
@@ -619,6 +624,7 @@ struct SettingsView: View {
                     Text("Alphabetical").tag(AppSort.alphabetical)
                     Text("Most used").tag(AppSort.frequent)
                 }
+                Toggle("Fit to the active screen", isOn: $config.window.autoSize)
                 Stepper(value: widthBinding, in: 560...1_400, step: 20) {
                     LabeledContent("Width", value: "\(Int(widthBinding.wrappedValue)) pt")
                 }

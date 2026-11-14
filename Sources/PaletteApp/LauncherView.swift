@@ -708,14 +708,17 @@ struct LauncherRootView: View {
         } else if controller.actionsMode {
             actionsView
         } else if controller.previewEnabled {
-            HStack(spacing: 0) {
+            HStack(spacing: 10) {
                 resultsView
                 Rectangle()
                     .fill(theme.color(theme.palette.separator))
                     .frame(width: 1)
+                    .padding(.vertical, 10)
                 ClipboardPreviewPane(item: controller.selectedItem, theme: theme, focused: controller.previewFocused)
-                    .frame(width: 320)
+                    .frame(width: 300)
             }
+            .padding(.horizontal, isPill ? 10 : 6)
+            .padding(.bottom, isPill ? 8 : 4)
         } else {
             resultsView
         }

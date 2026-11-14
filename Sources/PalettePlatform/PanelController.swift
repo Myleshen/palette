@@ -29,6 +29,12 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         didSet { if isShowing { position() } }
     }
 
+    /// Sizing from config.toml. Auto mode re-measures on the screen under the
+    /// cursor every time the panel is positioned.
+    public var windowConfig = WindowConfig() {
+        didSet { if isShowing { position() } }
+    }
+
     /// Config `search_position` wins over the theme's window anchor.
     public var anchorOverride: String? {
         didSet { if isShowing { position() } }
@@ -150,14 +156,26 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    private func position() {
+    /// The screen the cursor is on: that is the one the panel opens on.
+    public static func screenUnderPointer() -> NSScreen? {
         let pointer = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) })
+        return NSScreen.screens.first(where: { $0.frame.contains(pointer) })
             ?? NSScreen.main
             ?? NSScreen.screens.first
+    }
+
+    /// Rows that fit on the screen the cursor is on.
+    public func effectiveRows() -> Int {
+        let visible = (Self.screenUnderPointer() ?? panel.screen)?.visibleFrame.size
+            ?? CGSize(width: 1440, height: 900)
+        return windowConfig.launcherRows(for: visible)
+    }
+
+    private func position() {
+        let screen = Self.screenUnderPointer()
         guard let screen else { return }
         let visible = screen.visibleFrame
-        let width = widthOverride ?? CGFloat(theme.window.width)
+        let width = widthOverride ?? CGFloat(windowConfig.launcherWidth(for: visible.size))
         // Never grow past the usable screen area, whatever the theme asks for.
         let height = max(92, min(contentHeight, CGFloat(theme.window.maxHeight), visible.height - 24))
         var x = visible.midX - width / 2

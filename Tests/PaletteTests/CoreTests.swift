@@ -146,6 +146,33 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(window.launcherRows, 10, "rows clamp to 10")
     }
 
+    func testAutoSizeFollowsTheScreen() {
+        var window = WindowConfig()
+        window.autoSize = true
+
+        // MacBook 13" (landscape 1470 x 830 usable)
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 662)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1470, height: 830)), 6)
+
+        // 1440p ultrawide
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 5120, height: 1400)), 980)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 5120, height: 1400)), 9)
+
+        // Portrait 1080 x 1920: most of the width, fewer rows than it could fit
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1080, height: 1880)), 886)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1080, height: 1880)), 10)
+
+        // An explicit width still wins over auto
+        window.width = 900
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 900)
+
+        // Turning auto off falls back to the fixed default
+        window.width = 0
+        window.autoSize = false
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 680)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1470, height: 830)), 7)
+    }
+
     func testWindowConfigParsesFromTOML() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-window-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }

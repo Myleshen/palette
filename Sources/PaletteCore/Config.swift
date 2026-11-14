@@ -110,6 +110,8 @@ public struct TypographyConfig: Sendable, Equatable {
 public struct WindowConfig: Sendable, Equatable {
     /// Multiplier applied to every size below, like `rem`. 0.8...1.6.
     public var scale: Double = 1
+    /// Size to the screen under the cursor instead of one fixed size.
+    public var autoSize: Bool = true
     /// Points. 0 means "use the default times scale".
     public var width: Double = 0
     public var maxHeight: Double = 0
@@ -137,12 +139,63 @@ public struct WindowConfig: Sendable, Equatable {
         explicit > 0 ? explicit : (fallback * effectiveScale).rounded()
     }
 
+    /// Landscape gets a centered column; portrait and near-square screens get
+    /// most of the width, since there is little of it.
+    public func autoWidth(for visible: CGSize) -> Double {
+        guard visible.width > 0, visible.height > 0 else { return Self.defaultWidth * effectiveScale }
+        let aspect = visible.width / visible.height
+        let fraction = aspect < 1.2 ? 0.82 : 0.45
+        let raw = Double(visible.width) * fraction
+        return (min(980, max(620, raw)) * effectiveScale).rounded()
+    }
+
+    /// ~6 rows per 900 points of screen height: a laptop gets 6, a 1440p
+    /// display 10. Clamped to the same 5...10 the manual setting uses.
+    public func autoRows(for visible: CGSize) -> Int {
+        guard visible.height > 0 else { return Self.defaultRows }
+        let fit = Int((Double(visible.height) / 150).rounded())
+        return min(10, max(5, fit))
+    }
+
+    public func launcherWidth(for visible: CGSize) -> Double {
+        if width > 0 { return width }
+        return autoSize ? autoWidth(for: visible) : size(0, Self.defaultWidth)
+    }
+
+    public func launcherRows(for visible: CGSize) -> Int {
+        if visibleRows > 0 { return min(10, max(5, visibleRows)) }
+        return autoSize ? autoRows(for: visible) : launcherRows
+    }
+
+    /// Per-view widths keep the same proportions as the main panel.
+    public func panelWidth(_ explicit: Double, _ fallback: Double, for visible: CGSize) -> Double {
+        if explicit > 0 { return explicit }
+        guard autoSize else { return (fallback * effectiveScale).rounded() }
+        return (autoWidth(for: visible) * (fallback / Self.defaultWidth)).rounded()
+    }
+
     public var launcherWidth: Double { size(width, Self.defaultWidth) }
     public var launcherMaxHeight: Double { size(maxHeight, Self.defaultMaxHeight) }
 
     public var launcherRows: Int {
         if visibleRows > 0 { return min(10, max(5, visibleRows)) }
         return min(10, max(5, Int((Double(Self.defaultRows) * effectiveScale).rounded())))
+    }
+
+    public func clipboardWidth(for visible: CGSize) -> Double {
+        panelWidth(clipboardWidth, Self.defaultPanelWidth, for: visible)
+    }
+    public func askWidth(for visible: CGSize) -> Double {
+        panelWidth(askWidth, Self.defaultPanelWidth, for: visible)
+    }
+    public func previewWidth(for visible: CGSize) -> Double {
+        panelWidth(previewWidth, Self.defaultPanelWidth, for: visible)
+    }
+    public func terminalWidth(for visible: CGSize) -> Double {
+        panelWidth(terminalWidth, Self.defaultTerminalWidth, for: visible)
+    }
+    public func scratchpadWidth(for visible: CGSize) -> Double {
+        panelWidth(scratchpadWidth, Self.defaultPanelWidth, for: visible)
     }
 
     public var clipboardPanelWidth: Double { size(clipboardWidth, Self.defaultPanelWidth) }
@@ -390,6 +443,7 @@ public enum ConfigLoader {
             config.appSort = parsed
         }
         if let window = table.table("window") {
+            config.window.autoSize = window.bool("auto_size") ?? config.window.autoSize
             if let value = window.number("scale"), value > 0 { config.window.scale = value }
             if let value = window.number("width"), value > 0 { config.window.width = value }
             if let value = window.number("max_height"), value > 0 { config.window.maxHeight = value }
@@ -603,6 +657,7 @@ public enum ConfigLoader {
         # Launcher size. scale multiplies every size below, like rem.
         # 0 means "use the default times scale".
         [window]
+        auto_size = true               # size to the screen under the cursor
         scale = 1.0                    # 0.8 - 1.6
         width = 0                      # points, 0 = 680 * scale
         max_height = 0                 # points, 0 = 720 * scale
@@ -726,6 +781,7 @@ public enum ConfigWriter {
         out.append("app_sort = \(quote(config.appSort.rawValue))")
         out.append("")
         out.append("[window]")
+        out.append("auto_size = \(config.window.autoSize)")
         out.append("scale = \(config.window.scale)")
         if config.window.width > 0 { out.append("width = \(config.window.width)") }
         if config.window.maxHeight > 0 { out.append("max_height = \(config.window.maxHeight)") }

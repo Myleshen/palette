@@ -494,11 +494,12 @@ app_sort = "alphabetical"      # alphabetical | frequent
 
 
 [window]
+auto_size = true               # size to the screen under the cursor
 scale = 1.0                    # 0.8-1.6; multiplies every size below, like rem
 width = 0                      # points; 0 = 680 * scale
 max_height = 0                 # points; 0 = 720 * scale
 visible_rows = 0               # 5-10; 0 = 7 * scale, sets the panel height
-clipboard_width = 0            # 0 = 880 * scale
+clipboard_width = 0            # 0 = follow the panel width
 ask_width = 0
 preview_width = 0
 terminal_width = 0             # 0 = 1000 * scale
