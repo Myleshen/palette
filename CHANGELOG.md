@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.3.3 — 2026-11-14
 
 ### Changed
 
@@ -14,7 +14,7 @@
 
 ### Added
 
-- Clipboard/Ask preview can sit **below** the list instead of beside it: `[window] preview_layout = "below" | "beside"`, also a picker in Settings. Default is below, which suits narrow and portrait screens.
+- Clipboard/Ask preview can sit **below** the list instead of beside it: `[window] preview_layout = "beside" | "below"`, also a picker in Settings. Beside stays the default; below suits narrow and portrait screens.
 
 ### Fixed
 

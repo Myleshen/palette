@@ -128,7 +128,7 @@ public struct WindowConfig: Sendable, Equatable {
     public var previewWidth: Double = 0
     public var terminalWidth: Double = 0
     public var scratchpadWidth: Double = 0
-    public var previewLayout: PreviewPlacement = .below
+    public var previewLayout: PreviewPlacement = .beside
 
     public init() {}
 
@@ -677,7 +677,7 @@ public enum ConfigLoader {
         preview_width = 0
         terminal_width = 0             # 0 = 1000 * scale
         scratchpad_width = 0
-        preview_layout = "below"       # below | beside
+        preview_layout = "beside"      # beside | below
 
         # Font overrides. Empty family or 0 size inherits the active theme.
         [typography]
