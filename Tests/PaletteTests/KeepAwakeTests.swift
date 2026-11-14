@@ -110,6 +110,14 @@ final class KeepAwakeTests: XCTestCase {
         XCTAssertTrue(script.contains(ClamshellGuard.daemonLabel), "the guard removes its own plist on exit")
     }
 
+    func testClamshellInstallCommandParsesAsShell() async throws {
+        let command = ClamshellGuard.installCommand(pid: 42, flagPath: "/tmp/clamshell.active")
+        // `sh -n` parses without executing, so this catches quoting breaks in
+        // the root command before it ever reaches the password prompt.
+        let result = try await ProcessRunner.run(["/bin/sh", "-n", "-c", command], timeout: 10)
+        XCTAssertEqual(result.status, 0, "install command must parse: \(result.stderrString)")
+    }
+
     func testStaleClamshellFlagRearmsTheGuard() async throws {
         let fake = FakeClamshell()
         await fake.setStaleFlag()
