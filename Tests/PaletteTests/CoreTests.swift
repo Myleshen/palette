@@ -102,7 +102,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(result.config.scopes["projects"]?.roots.count, 2)
     }
 
-    func testVisibleRowsConfigClamps() throws {
+    func testLegacyRootVisibleRowsStillClamps() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-rows-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let paths = PalettePaths(
@@ -113,14 +113,103 @@ final class CoreTests: XCTestCase {
         )
         try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
 
+        // 2.3.2 wrote this key at the root; it still maps into [window].
         try "visible_rows = 6\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.visibleRows, 6)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 6)
 
         try "visible_rows = 99\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.visibleRows, 10)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 10)
 
         try "visible_rows = 2\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.visibleRows, 5)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 5)
+    }
+
+    func testWindowConfigScaleAndOverrides() {
+        var window = WindowConfig()
+        XCTAssertEqual(window.launcherWidth, 680)
+        XCTAssertEqual(window.launcherMaxHeight, 720)
+        XCTAssertEqual(window.launcherRows, 7)
+        XCTAssertEqual(window.terminalPanelWidth, 1000)
+
+        window.scale = 1.25
+        XCTAssertEqual(window.launcherWidth, 850)
+        XCTAssertEqual(window.launcherMaxHeight, 900)
+        XCTAssertEqual(window.launcherRows, 9)
+        XCTAssertEqual(window.clipboardPanelWidth, 1100)
+
+        window.width = 900
+        XCTAssertEqual(window.launcherWidth, 900, "explicit width wins over scale")
+
+        window.scale = 3
+        XCTAssertEqual(window.effectiveScale, 1.6, "scale clamps to 1.6")
+        window.visibleRows = 20
+        XCTAssertEqual(window.launcherRows, 10, "rows clamp to 10")
+    }
+
+    func testAutoSizeFollowsTheScreen() {
+        var window = WindowConfig()
+        window.autoSize = true
+
+        // MacBook 13" (landscape 1470 x 830 usable)
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 662)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1470, height: 830)), 6)
+
+        // 1440p ultrawide
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 5120, height: 1400)), 980)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 5120, height: 1400)), 9)
+
+        // Portrait 1080 x 1920: most of the width, fewer rows than it could fit
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1080, height: 1880)), 886)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1080, height: 1880)), 10)
+
+        // An explicit width still wins over auto
+        window.width = 900
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 900)
+
+        // Turning auto off falls back to the fixed default
+        window.width = 0
+        window.autoSize = false
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 680)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1470, height: 830)), 7)
+    }
+
+    func testWindowConfigParsesFromTOML() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-window-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config"),
+            stateDir: root.appendingPathComponent("state"),
+            cacheDir: root.appendingPathComponent("cache")
+        )
+        try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
+        try """
+        [window]
+        scale = 1.2
+        width = 900
+        visible_rows = 9
+        terminal_width = 1200
+        preview_layout = "beside"
+        """.write(to: paths.configFile, atomically: true, encoding: .utf8)
+
+        var loaded = ConfigLoader.load(paths: paths).config
+        XCTAssertEqual(loaded.window.scale, 1.2)
+        XCTAssertEqual(loaded.window.width, 900)
+        XCTAssertEqual(loaded.window.visibleRows, 9)
+        XCTAssertEqual(loaded.window.terminalWidth, 1200)
+        XCTAssertEqual(loaded.window.launcherWidth, 900)
+        XCTAssertEqual(loaded.window.launcherRows, 9)
+        XCTAssertEqual(loaded.window.previewLayout, .beside)
+
+        // A settings save must round-trip the [window] table.
+        loaded.window.scale = 1.1
+        loaded.window.askWidth = 1_000
+        try ConfigWriter.render(loaded).write(to: paths.configFile, atomically: true, encoding: .utf8)
+        let reloaded = ConfigLoader.load(paths: paths).config.window
+        XCTAssertEqual(reloaded.scale, 1.1)
+        XCTAssertEqual(reloaded.width, 900)
+        XCTAssertEqual(reloaded.askWidth, 1_000)
+        XCTAssertEqual(reloaded.previewLayout, .beside)
     }
 
     func testThemeLoaderFallsBackAndValidates() {
@@ -338,8 +427,9 @@ final class CoreTests: XCTestCase {
         """.write(to: file, atomically: true, encoding: .utf8)
 
         let result = ThemeLoader.load(name: "test", themesDirectory: directory)
-        XCTAssertEqual(result.theme.window.width, 720)
-        XCTAssertEqual(result.theme.window.maxHeight, 520)
+        // Sizing is config-owned: a theme's width/max_height are ignored.
+        XCTAssertEqual(result.theme.window.width, 680)
+        XCTAssertEqual(result.theme.window.maxHeight, 720)
         XCTAssertEqual(result.theme.list.rowHeight, 40)
         XCTAssertEqual(result.theme.motion.durationMs, 60)
         XCTAssertEqual(result.theme.effectiveRowHeight, 38, accuracy: 0.01)

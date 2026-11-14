@@ -156,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager = ThemeManager(paths: paths, selection: configuration.theme, store: store)
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
-        themeManager.visibleRows = configuration.visibleRows
+        themeManager.window = configuration.window
         themeManager.reload()
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
@@ -450,6 +450,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // which lets a long list grow the window past the bottom of the screen.
         hosting.sizingOptions = []
         let controller = PanelController(theme: themeManager.theme, content: hosting)
+        controller.windowConfig = configuration.window
         controller.onKeyDown = { [weak self] event in
             self?.searchController.handleKey(event) ?? false
         }
@@ -1060,9 +1061,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startupDiagnostics = result.diagnostics
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
-        themeManager.visibleRows = configuration.visibleRows
+        themeManager.window = configuration.window
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
+        panel?.windowConfig = configuration.window
         updatePositionMenu()
 
         let oldRegistry = registry

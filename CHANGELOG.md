@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.3.3 — 2026-11-14
+
+### Changed
+
+- Panel sizing moved out of themes and into `config.toml` under `[window]`: `scale`, `width`, `max_height`, `visible_rows`, and per-view widths for clipboard, Ask, preview, terminal, and scratchpad. Themes now cover colours, fonts, and typography only.
+- `scale` is a rem-style multiplier (0.8-1.6) over every default size. Explicit `width` / `visible_rows` / per-view widths win over it, and `0` means "default times scale".
+- Settings → General → Launcher gained **Width** and **Scale** steppers next to **Visible rows**.
+
+### Added
+
+- The launcher sizes itself to the screen under the cursor. Landscape screens get a 45% column (620-980 pt), portrait screens get most of the width, and the row count follows screen height (5-10). Explicit `width` / `visible_rows` still win; set `[window] auto_size = false` to pin one size. Clipboard, Ask, preview, terminal, and scratchpad widths keep the panel's proportions.
+
+### Added
+
+- Clipboard/Ask preview can sit **below** the list instead of beside it: `[window] preview_layout = "beside" | "below"`, also a picker in Settings. Beside stays the default; below suits narrow and portrait screens.
+
+### Fixed
+
+- Typing while the action list is open (⌘K) now filters the actions instead of re-running the search; the owning item is remembered so Enter still runs the action, and the original query is restored when you leave the list.
+
+- The clipboard preview pane and its divider now have real padding: scrollbars no longer sit flush on the divider or the card edge.
+
+- Theme files that set `[window] width` or `max_height` no longer resize the panel; sizing is config-only. `visible_rows` at the config root (2.3.2) still maps into `[window]`.
+
 ## 2.3.2 — 2026-11-06
 
 ### Changed
