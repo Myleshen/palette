@@ -4,6 +4,7 @@
 
 ### Added
 
+- Global shortcuts for **Screenshot** (`⌘⌥⇧S`) and **Recording** (`⌘⌥⇧R`), configurable in Settings → Shortcuts. While recording, the menu bar shows a live **Stop recording · m:ss** item.
 - **Screenshot** (`/shot`) and **Recording** (`/rec`) through the system capture engine: full screen, region, or window; configurable directory, format, action (save/copy/save-and-copy/preview), delay, cursor and click indicators. Failures report the capture error instead of returning nothing.
 - **Window switcher** (`/win`): every open window, keyboard-first, raises the selected window through the accessibility API.
 - **Colour picker** (`/color`): system sampler, copies the hex value, keeps recent picks.

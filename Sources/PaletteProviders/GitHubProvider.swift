@@ -37,7 +37,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         }
 
         let cwd = FileManager.default.currentDirectoryPath
-        guard let pullRequests = await json(gh, ["pr", "list", "--limit", "20", "--json", "number,title,state,isDraft,url"], cwd: cwd) else {
+        guard let pullRequests = await json(gh, ["pr", "list", "--state", "all", "--limit", "20", "--json", "number,title,state,isDraft,url"], cwd: cwd) else {
             return [infoRow(
                 id: "gh-error",
                 title: "GitHub is not available here",
@@ -70,7 +70,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             )
         }
 
-        if let issues = await json(gh, ["issue", "list", "--limit", "20", "--json", "number,title,state,url"], cwd: cwd) {
+        if let issues = await json(gh, ["issue", "list", "--state", "all", "--limit", "20", "--json", "number,title,state,url"], cwd: cwd) {
             items += issues.compactMap { entry in
                 guard let number = entry["number"] as? Int,
                       let title = entry["title"] as? String,

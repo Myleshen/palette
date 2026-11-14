@@ -123,9 +123,9 @@ public final class CaptureService {
         if config.showClicks { arguments.append("-k") }
         arguments.append(target.path)
         process.arguments = arguments
-        process.standardError = Pipe()
         try process.run()
         recorder = process
+        Log.shared.info("Recording started to \(target.lastPathComponent) (pid \(process.processIdentifier))", source: "capture")
         recordingURL = target
         recordingStartedAt = Date()
         onStatus?("Recording to \(target.lastPathComponent)")
@@ -134,18 +134,30 @@ public final class CaptureService {
     public func stopRecording() async throws -> URL {
         guard let process = recorder, process.isRunning else { throw CaptureError.recordingNotRunning }
         process.interrupt()
-        let deadline = Date().addingTimeInterval(10)
+        let deadline = Date().addingTimeInterval(5)
         while process.isRunning && Date() < deadline {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         if process.isRunning { process.terminate() }
+        let graceDeadline = Date().addingTimeInterval(3)
+        while process.isRunning && Date() < graceDeadline {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        if process.isRunning {
+            // Never block on terminationStatus: it waits for the process.
+            kill(process.processIdentifier, SIGKILL)
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+        let stderr = ""
+        let status = process.isRunning ? -1 : process.terminationStatus
+        Log.shared.info("Recording stopped with status \(status)\(stderr.isEmpty ? "" : ": \(stderr)")", source: "capture")
         recorder = nil
         recordingStartedAt = nil
 
         guard let url = recordingURL else { throw CaptureError.recordingNotRunning }
         recordingURL = nil
         guard FileManager.default.fileExists(atPath: url.path) else {
-            throw CaptureError.recordingFailed("The recording produced no file")
+            throw CaptureError.recordingFailed(stderr.isEmpty ? "The recording produced no file" : stderr)
         }
 
         var final = url

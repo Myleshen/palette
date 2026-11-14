@@ -57,6 +57,8 @@ struct SettingsView: View {
     @State private var terminalRecordToken = 0
     @State private var scratchpadRecordToken = 0
     @State private var askRecordToken = 0
+    @State private var screenshotRecordToken = 0
+    @State private var recordingRecordToken = 0
     @State private var settingsSearch = ""
     @State private var accessibilityTrusted: Bool
     @State private var askKeyInput = ""
@@ -486,6 +488,32 @@ struct SettingsView: View {
                         Button("Record") { askRecordToken += 1 }
                             .controlSize(.small)
                             .accessibilityLabel("Record Ask hotkey")
+                    }
+                }
+                LabeledContent("Screenshot shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.screenshotHotkey,
+                            label: "Screenshot hotkey",
+                            recordToken: screenshotRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { screenshotRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record screenshot hotkey")
+                    }
+                }
+                LabeledContent("Recording shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.recordingHotkey,
+                            label: "Recording hotkey",
+                            recordToken: recordingRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { recordingRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record recording hotkey")
                     }
                 }
                 Text("Click Record, then press the shortcut you want. Save applies it immediately; clear an optional shortcut to disable it.")

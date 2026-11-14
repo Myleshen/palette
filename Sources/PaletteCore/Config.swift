@@ -251,6 +251,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var terminalHotkey: String
     public var scratchpadHotkey: String
     public var askHotkey: String
+    public var screenshotHotkey: String
+    public var recordingHotkey: String
     public var providerPrefix: String
     public var toolsPath: [String]
     public var terminal: String
@@ -280,6 +282,8 @@ public struct PaletteConfig: Sendable, Equatable {
         terminalHotkey: String = "cmd+option+t",
         scratchpadHotkey: String = "cmd+option+s",
         askHotkey: String = "cmd+option+a",
+        screenshotHotkey: String = "cmd+option+shift+s",
+        recordingHotkey: String = "cmd+option+shift+r",
         providerPrefix: String = "/",
         toolsPath: [String] = [],
         terminal: String = "kitty",
@@ -311,6 +315,8 @@ public struct PaletteConfig: Sendable, Equatable {
         self.terminalHotkey = terminalHotkey
         self.scratchpadHotkey = scratchpadHotkey
         self.askHotkey = askHotkey
+        self.screenshotHotkey = screenshotHotkey
+        self.recordingHotkey = recordingHotkey
         self.providerPrefix = providerPrefix
         self.toolsPath = toolsPath
         self.terminal = terminal
@@ -456,6 +462,12 @@ public enum ConfigLoader {
         }
         if let hotkey = table.str("ask_hotkey") {
             config.askHotkey = hotkey
+        }
+        if let hotkey = table.str("screenshot_hotkey") {
+            config.screenshotHotkey = hotkey
+        }
+        if let hotkey = table.str("recording_hotkey") {
+            config.recordingHotkey = hotkey
         }
         if let prefix = table.str("provider_prefix"), !prefix.isEmpty {
             config.providerPrefix = prefix
@@ -870,6 +882,8 @@ public enum ConfigWriter {
         out.append("terminal_hotkey = \(quote(config.terminalHotkey))")
         out.append("scratchpad_hotkey = \(quote(config.scratchpadHotkey))")
         out.append("ask_hotkey = \(quote(config.askHotkey))")
+        out.append("screenshot_hotkey = \(quote(config.screenshotHotkey))")
+        out.append("recording_hotkey = \(quote(config.recordingHotkey))")
         out.append("provider_prefix = \(quote(config.providerPrefix))")
         out.append("tools_path = [\(config.toolsPath.map(quote).joined(separator: ", "))]")
         out.append("terminal = \(quote(config.terminal))")
