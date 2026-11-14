@@ -634,6 +634,10 @@ struct SettingsView: View {
                 Stepper(value: scaleBinding, in: 0.8...1.6, step: 0.05) {
                     LabeledContent("Scale", value: String(format: "%.0f%%", scaleBinding.wrappedValue * 100))
                 }
+                Picker("Preview", selection: $config.window.previewLayout) {
+                    Text("Below the list").tag(PreviewPlacement.below)
+                    Text("Beside the list").tag(PreviewPlacement.beside)
+                }
                 Text("Scale multiplies every launcher size, like rem; width and rows override it. Clipboard, Ask, preview, terminal, and scratchpad widths are in config.toml under [window].")
                     .font(.caption)
                     .foregroundStyle(.secondary)

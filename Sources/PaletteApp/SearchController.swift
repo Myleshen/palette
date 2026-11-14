@@ -26,6 +26,9 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public private(set) var actionsMode = false
     @Published public private(set) var actionItems: [PaletteAction] = []
     private var actionsOwnerID: String?
+    private var actionsOwner: PaletteItem?
+    private var allActions: [PaletteAction] = []
+    private var queryBeforeActions = ""
     @Published public var actionIndex = 0
     @Published public private(set) var prompt: PromptState?
     @Published public var promptValue = ""
@@ -107,6 +110,8 @@ public final class SearchController: ObservableObject, HostBridge {
     /// wide preview layout and no typing required.
     private var windowConfig: WindowConfig { configuration.window }
 
+    public var previewLayout: PreviewPlacement { configuration.window.previewLayout }
+
     private var screenSize: CGSize {
         (PanelController.screenUnderPointer() ?? panel?.panel.screen)?.visibleFrame.size
             ?? CGSize(width: 1440, height: 900)
@@ -171,8 +176,8 @@ public final class SearchController: ObservableObject, HostBridge {
     private func queryDidChange() {
         guard !resetting, !scratchpadActive else { return }
         if actionsMode {
-            actionsMode = false
-            actionItems = []
+            applyActionFilter()
+            return
         }
 
         // Bound searches can take a moment (Bitwarden, external processes).
@@ -185,7 +190,9 @@ public final class SearchController: ObservableObject, HostBridge {
         if previewProvider {
             if !previewEnabled {
                 previewEnabled = true
-                panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
+                panel?.widthOverride = previewLayout == .beside
+                    ? CGFloat(windowConfig.clipboardWidth(for: screenSize))
+                    : nil
             }
         } else if previewEnabled {
             previewEnabled = false
@@ -446,9 +453,7 @@ public final class SearchController: ObservableObject, HostBridge {
             return true
         case 53:
             if actionsMode {
-                actionsMode = false
-                actionItems = []
-                updatePanelHeight()
+                closeActions()
             } else if !query.isEmpty {
                 resetting = true
                 query = ""
@@ -647,9 +652,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func toggleActions() {
         if actionsMode {
-            actionsMode = false
-            actionItems = []
-            updatePanelHeight()
+            closeActions()
             return
         }
         guard let item = selectedItem else { return }
@@ -664,18 +667,41 @@ public final class SearchController: ObservableObject, HostBridge {
             ))
         }
         actionsMode = true
-        actionItems = actions
+        actionsOwner = item
         actionsOwnerID = item.stableID
+        allActions = actions
+        queryBeforeActions = query
+        query = ""
+        applyActionFilter()
+    }
+
+    /// Typing while the action list is open narrows that list.
+    private func applyActionFilter() {
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        actionItems = needle.isEmpty
+            ? allActions
+            : allActions.filter { $0.title.lowercased().contains(needle) }
         actionIndex = 0
         updatePanelHeight()
     }
 
-    public func executeAction() {
-        guard actionsMode, actionItems.indices.contains(actionIndex), let item = selectedItem,
-              actionsOwnerID == item.stableID else { return }
-        let action = actionItems[actionIndex]
+    private func closeActions() {
         actionsMode = false
         actionItems = []
+        allActions = []
+        actionsOwner = nil
+        actionsOwnerID = nil
+        actionIndex = 0
+        let restored = queryBeforeActions
+        queryBeforeActions = ""
+        query = restored
+        updatePanelHeight()
+    }
+
+    public func executeAction() {
+        guard actionsMode, actionItems.indices.contains(actionIndex), let item = actionsOwner else { return }
+        let action = actionItems[actionIndex]
+        closeActions()
         execute(item: item, action: action)
     }
 
@@ -999,7 +1025,12 @@ public final class SearchController: ObservableObject, HostBridge {
         // the clipboard/Ask sub-tab row.
         let tabs: CGFloat = (activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1) ? 110 : 82
         if previewEnabled {
-            panel.widthOverride = CGFloat(windowConfig.previewWidth(for: screenSize))
+            if previewLayout == .beside {
+                panel.widthOverride = CGFloat(windowConfig.previewWidth(for: screenSize))
+            } else {
+                panel.widthOverride = nil
+                content += 240
+            }
         }
         // Pill floats the search capsule above the content card: 12 pt top and
         // bottom margins plus a 10 pt gap replace the old inline spacing.

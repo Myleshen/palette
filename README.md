@@ -504,6 +504,7 @@ ask_width = 0
 preview_width = 0
 terminal_width = 0             # 0 = 1000 * scale
 scratchpad_width = 0
+preview_layout = "below"       # below | beside
 
 [typography]
 ui_family = ""                 # empty inherits the theme

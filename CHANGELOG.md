@@ -12,7 +12,13 @@
 
 - The launcher sizes itself to the screen under the cursor. Landscape screens get a 45% column (620-980 pt), portrait screens get most of the width, and the row count follows screen height (5-10). Explicit `width` / `visible_rows` still win; set `[window] auto_size = false` to pin one size. Clipboard, Ask, preview, terminal, and scratchpad widths keep the panel's proportions.
 
+### Added
+
+- Clipboard/Ask preview can sit **below** the list instead of beside it: `[window] preview_layout = "below" | "beside"`, also a picker in Settings. Default is below, which suits narrow and portrait screens.
+
 ### Fixed
+
+- Typing while the action list is open (⌘K) now filters the actions instead of re-running the search; the owning item is remembered so Enter still runs the action, and the original query is restored when you leave the list.
 
 - The clipboard preview pane and its divider now have real padding: scrollbars no longer sit flush on the divider or the card edge.
 

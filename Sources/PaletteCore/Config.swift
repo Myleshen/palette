@@ -105,6 +105,12 @@ public struct TypographyConfig: Sendable, Equatable {
     }
 }
 
+/// Where the clipboards/Ask preview sits relative to the list.
+public enum PreviewPlacement: String, Sendable, Equatable {
+    case beside
+    case below
+}
+
 /// Launcher geometry lives in config.toml, not the theme: themes describe how
 /// things look, this describes how big they are.
 public struct WindowConfig: Sendable, Equatable {
@@ -122,6 +128,7 @@ public struct WindowConfig: Sendable, Equatable {
     public var previewWidth: Double = 0
     public var terminalWidth: Double = 0
     public var scratchpadWidth: Double = 0
+    public var previewLayout: PreviewPlacement = .below
 
     public init() {}
 
@@ -455,6 +462,9 @@ public enum ConfigLoader {
             if let value = window.number("preview_width"), value > 0 { config.window.previewWidth = value }
             if let value = window.number("terminal_width"), value > 0 { config.window.terminalWidth = value }
             if let value = window.number("scratchpad_width"), value > 0 { config.window.scratchpadWidth = value }
+            if let raw = window.str("preview_layout"), let layout = PreviewPlacement(rawValue: raw.lowercased()) {
+                config.window.previewLayout = layout
+            }
         }
         // 2.3.2 wrote a root-level key; keep reading it for one release.
         if let rows = table.int("visible_rows"), rows > 0, config.window.visibleRows == 0 {
@@ -667,6 +677,7 @@ public enum ConfigLoader {
         preview_width = 0
         terminal_width = 0             # 0 = 1000 * scale
         scratchpad_width = 0
+        preview_layout = "below"       # below | beside
 
         # Font overrides. Empty family or 0 size inherits the active theme.
         [typography]
@@ -791,6 +802,7 @@ public enum ConfigWriter {
         if config.window.previewWidth > 0 { out.append("preview_width = \(config.window.previewWidth)") }
         if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
         if config.window.scratchpadWidth > 0 { out.append("scratchpad_width = \(config.window.scratchpadWidth)") }
+        out.append("preview_layout = \"\(config.window.previewLayout.rawValue)\"")
         out.append("")
         out.append("[typography]")
         out.append("ui_family = \(quote(config.typography.uiFamily))")

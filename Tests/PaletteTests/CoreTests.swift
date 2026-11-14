@@ -189,6 +189,7 @@ final class CoreTests: XCTestCase {
         width = 900
         visible_rows = 9
         terminal_width = 1200
+        preview_layout = "beside"
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         var loaded = ConfigLoader.load(paths: paths).config
@@ -198,6 +199,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(loaded.window.terminalWidth, 1200)
         XCTAssertEqual(loaded.window.launcherWidth, 900)
         XCTAssertEqual(loaded.window.launcherRows, 9)
+        XCTAssertEqual(loaded.window.previewLayout, .beside)
 
         // A settings save must round-trip the [window] table.
         loaded.window.scale = 1.1
@@ -207,6 +209,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(reloaded.scale, 1.1)
         XCTAssertEqual(reloaded.width, 900)
         XCTAssertEqual(reloaded.askWidth, 1_000)
+        XCTAssertEqual(reloaded.previewLayout, .beside)
     }
 
     func testThemeLoaderFallsBackAndValidates() {
