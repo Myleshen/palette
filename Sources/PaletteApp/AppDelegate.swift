@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let bitwardenVault = BitwardenVault()
     private let keepAwake = KeepAwakeService()
     private let timerService = TimerService()
+    private let captureService = CaptureService()
     private var clamshellObserver: NSObjectProtocol?
     private var searchController: SearchController!
     private var panel: PanelController!
@@ -160,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
+        captureService.config = configuration.capture
         themeManager.reload()
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
@@ -181,6 +183,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         hostProxy.setTarget(searchController)
         searchController.observeTimerTicks()
+        captureService.onStatus = { [weak self] message in
+            self?.searchController.setStatus(message, duration: 4)
+        }
         clamshellObserver = NotificationCenter.default.addObserver(
             forName: .paletteClamshellDropped,
             object: nil,
@@ -308,7 +313,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "left": (123, "\u{F702}"), "right": (124, "\u{F703}"),
             "enter": (36, "\r"), "esc": (53, "\u{1B}"), "tab": (48, "\t"),
             "space": (49, " "), "comma": (43, ","), "k": (40, "k"),
-            "r": (15, "r"), "w": (13, "w"),
+            "r": (15, "r"), "w": (13, "w"), "s": (1, "s"), "o": (31, "o"), "c": (8, "c"),
             "1": (18, "1"), "2": (19, "2"), "3": (20, "3"),
             "4": (21, "4"), "5": (23, "5"), "6": (22, "6"),
             "7": (26, "7"), "8": (28, "8"), "9": (25, "9"),
@@ -380,6 +385,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(TerminalProvider())
         providers.append(KeepAwakeProvider(service: keepAwake, bridge: hostProxy, launcher: launcher))
         providers.append(TimerProvider(service: timerService, presetMinutes: configuration.timer.presets))
+        providers.append(ColorProvider())
+        providers.append(StatsProvider())
+        providers.append(SSHProvider(launcher: launcher, terminalApp: configuration.terminalApp))
+        providers.append(DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp))
+        providers.append(GitHubProvider(launcher: launcher, terminalApp: configuration.terminalApp))
+        providers.append(UnitsProvider())
+        let hideForCapture: @MainActor () -> Void = { [weak self] in
+            self?.panel?.hide(activatePrevious: false)
+        }
+        providers.append(ShotProvider(service: captureService, beforeCapture: hideForCapture))
+        providers.append(RecProvider(service: captureService, beforeStart: hideForCapture))
         providers.append(WebSearchProvider(
             engines: configuration.webSearchEngines,
             enabled: configuration.webSearchEnabled,
@@ -1080,6 +1096,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
+        captureService.config = configuration.capture
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.windowConfig = configuration.window

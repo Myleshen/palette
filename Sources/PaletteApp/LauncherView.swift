@@ -515,25 +515,30 @@ struct LauncherRootView: View {
                 .padding(.horizontal, isPill ? 14 : 12)
                 .padding(.top, isPill ? 8 : 6)
             }
-            if isPill {
-                FlowLayout(spacing: 3) {
+            // One scrollable row: with many providers a wrapping grid ate the
+            // panel and clipped chips at the card edges.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
                     ForEach(controller.providerTabs) { tab in
                         tabChip(tab)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(controller.providerTabs) { tab in
-                            tabChip(tab)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
             }
+            .scrollIndicators(.never)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.03),
+                        .init(color: .black, location: 0.94),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
             Rectangle()
                 .fill(theme.color(theme.palette.separator).opacity(isPill ? 0.35 : 0.6))
                 .frame(height: 1)
@@ -701,8 +706,12 @@ struct LauncherRootView: View {
     private var content: some View {
         if controller.terminalActive {
             TerminalPane(theme: theme, initialCommand: controller.terminalInitialCommand, session: controller.terminalSession)
+                .padding(.horizontal, isPill ? 8 : 4)
+                .padding(.bottom, isPill ? 6 : 3)
         } else if controller.scratchpadActive {
             ScratchpadView(controller: controller, theme: theme)
+                .padding(.horizontal, isPill ? 8 : 4)
+                .padding(.bottom, isPill ? 6 : 3)
         } else if let prompt = controller.prompt {
             PromptView(prompt: prompt, controller: controller, theme: theme, focused: $promptFocused, pill: isPill)
         } else if controller.actionsMode {

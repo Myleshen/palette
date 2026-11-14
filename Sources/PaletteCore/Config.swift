@@ -212,6 +212,30 @@ public struct WindowConfig: Sendable, Equatable {
     public var scratchpadPanelWidth: Double { size(scratchpadWidth, Self.defaultPanelWidth) }
 }
 
+public enum CaptureAction: String, Sendable, Equatable {
+    case save
+    case copy
+    case saveCopy = "save-copy"
+    case preview
+
+    public var savesFile: Bool { self == .save || self == .saveCopy || self == .preview }
+    public var copiesToClipboard: Bool { self == .copy || self == .saveCopy }
+}
+
+public struct CaptureConfig: Sendable, Equatable {
+    public var directory = "~/Pictures/Palette"
+    public var screenshotFormat = "png"          // png | jpg
+    public var screenshotAction: CaptureAction = .saveCopy
+    public var recordingFormat = "mov"           // mov | mp4
+    public var recordingAction: CaptureAction = .save
+    public var delay: Double = 0                 // seconds before a screenshot
+    public var hidePalette = true
+    public var captureCursor = false
+    public var showClicks = false
+
+    public init() {}
+}
+
 public struct TimerConfig: Sendable, Equatable {
     /// Preset durations in minutes, shown as rows in /timer.
     public var presets: [Int] = [5, 10, 15, 25, 30, 45, 60]
@@ -248,6 +272,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var disabledProviders: [String]
     public var terminalSession: TerminalSessionConfig
     public var timer: TimerConfig
+    public var capture: CaptureConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -278,7 +303,8 @@ public struct PaletteConfig: Sendable, Equatable {
         providerOrder: [String] = [],
         disabledProviders: [String] = [],
         terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
-        timer: TimerConfig = TimerConfig()
+        timer: TimerConfig = TimerConfig(),
+        capture: CaptureConfig = CaptureConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -306,6 +332,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.disabledProviders = disabledProviders
         self.terminalSession = terminalSession
         self.timer = timer
+        self.capture = capture
     }
 }
 
@@ -496,6 +523,28 @@ public enum ConfigLoader {
             if let value = typography.number("mono_size"), value > 0 {
                 config.typography.monoSize = min(48, max(9, value))
             }
+        }
+
+        if let capture = table.table("capture") {
+            if let value = capture.str("directory"), !value.isEmpty {
+                config.capture.directory = (value as NSString).expandingTildeInPath
+            }
+            if let value = capture.str("screenshot_format"), ["png", "jpg"].contains(value.lowercased()) {
+                config.capture.screenshotFormat = value.lowercased()
+            }
+            if let value = capture.str("screenshot_action"), let action = CaptureAction(rawValue: value.lowercased()) {
+                config.capture.screenshotAction = action
+            }
+            if let value = capture.str("recording_format"), ["mov", "mp4"].contains(value.lowercased()) {
+                config.capture.recordingFormat = value.lowercased()
+            }
+            if let value = capture.str("recording_action"), let action = CaptureAction(rawValue: value.lowercased()) {
+                config.capture.recordingAction = action
+            }
+            if let value = capture.number("delay"), value >= 0 { config.capture.delay = value }
+            config.capture.hidePalette = capture.bool("hide_palette") ?? config.capture.hidePalette
+            config.capture.captureCursor = capture.bool("capture_cursor") ?? config.capture.captureCursor
+            config.capture.showClicks = capture.bool("show_clicks") ?? config.capture.showClicks
         }
 
         if let timer = table.table("timer") {
@@ -700,6 +749,18 @@ public enum ConfigLoader {
         scratchpad_width = 0
         preview_layout = "beside"      # beside | below
 
+        # Screenshots and recordings.
+        [capture]
+        directory = "~/Pictures/Palette"
+        screenshot_format = "png"          # png | jpg
+        screenshot_action = "save-copy"    # save | copy | save-copy | preview
+        recording_format = "mov"           # mov | mp4
+        recording_action = "save"          # save | copy | save-copy | preview
+        delay = 0                          # seconds before a screenshot
+        hide_palette = true
+        capture_cursor = false
+        show_clicks = false
+
         # Timer presets (minutes), and what happens when one finishes.
         [timer]
         presets = [5, 10, 15, 25, 30, 45, 60]
@@ -830,6 +891,17 @@ public enum ConfigWriter {
         if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
         if config.window.scratchpadWidth > 0 { out.append("scratchpad_width = \(config.window.scratchpadWidth)") }
         out.append("preview_layout = \"\(config.window.previewLayout.rawValue)\"")
+        out.append("")
+        out.append("[capture]")
+        out.append("directory = \(quote(config.capture.directory))")
+        out.append("screenshot_format = \(quote(config.capture.screenshotFormat))")
+        out.append("screenshot_action = \(quote(config.capture.screenshotAction.rawValue))")
+        out.append("recording_format = \(quote(config.capture.recordingFormat))")
+        out.append("recording_action = \(quote(config.capture.recordingAction.rawValue))")
+        out.append("delay = \(config.capture.delay)")
+        out.append("hide_palette = \(config.capture.hidePalette)")
+        out.append("capture_cursor = \(config.capture.captureCursor)")
+        out.append("show_clicks = \(config.capture.showClicks)")
         out.append("")
         out.append("[timer]")
         out.append("presets = [\(config.timer.presets.map(String.init).joined(separator: ", "))]")

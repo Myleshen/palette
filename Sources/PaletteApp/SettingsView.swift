@@ -865,6 +865,36 @@ struct SettingsView: View {
 
     private var providerSettings: some View {
         Form {
+            Section("Screenshots and recording") {
+                TextField("Save to", text: $config.capture.directory)
+                Picker("Screenshots", selection: $config.capture.screenshotAction) {
+                    Text("Save").tag(CaptureAction.save)
+                    Text("Copy").tag(CaptureAction.copy)
+                    Text("Save and copy").tag(CaptureAction.saveCopy)
+                    Text("Save and preview").tag(CaptureAction.preview)
+                }
+                Picker("Format", selection: $config.capture.screenshotFormat) {
+                    Text("PNG").tag("png")
+                    Text("JPG").tag("jpg")
+                }
+                Picker("Recordings", selection: $config.capture.recordingAction) {
+                    Text("Save").tag(CaptureAction.save)
+                    Text("Save and copy").tag(CaptureAction.saveCopy)
+                }
+                Picker("Recording format", selection: $config.capture.recordingFormat) {
+                    Text("MOV").tag("mov")
+                    Text("MP4").tag("mp4")
+                }
+                Stepper(value: $config.capture.delay, in: 0...10, step: 1) {
+                    LabeledContent("Screenshot delay", value: "\(Int(config.capture.delay)) s")
+                }
+                Toggle("Hide Palette before capturing", isOn: $config.capture.hidePalette)
+                Toggle("Include the cursor", isOn: $config.capture.captureCursor)
+                Toggle("Show clicks while recording", isOn: $config.capture.showClicks)
+                Text("Use /shot for screenshots and /rec to start or stop a recording. Recordings are saved with the system capture engine.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("Timers") {
                 Toggle("Play a sound when a timer finishes", isOn: $config.timer.sound)
                 Toggle("Show a notification when a timer finishes", isOn: $config.timer.notify)
