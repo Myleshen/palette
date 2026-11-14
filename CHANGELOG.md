@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Screenshot** (`/shot`) and **Recording** (`/rec`) through the system capture engine: full screen, region, or window; configurable directory, format, action (save/copy/save-and-copy/preview), delay, cursor and click indicators. Failures report the capture error instead of returning nothing.
+- **Window switcher** (`/win`): every open window, keyboard-first, raises the selected window through the accessibility API.
+- **Colour picker** (`/color`): system sampler, copies the hex value, keeps recent picks.
+- **Convert** (`/unit`): length, mass, volume, data and temperature offline; currency through a one-hour cached rate table.
+- **System stats** (`/stats`): disk, memory, load, battery and uptime.
+- **SSH** (`/ssh`): hosts from `~/.ssh/config`, opened in the configured terminal.
+- **Docker** (`/docker`): containers with start/stop/restart and following logs.
+- **GitHub** (`/gh`): pull requests and issues via the `gh` CLI, with a clear prompt when auth is missing.
 - **Timers** provider (`/timer`): `25m`, `1h30m`, `1:30`, presets from `[timer] presets`, one timer at a time, a live countdown in the row, a chime and a notification when it finishes. Toggle sound/notification in Settings → Providers → Timers.
 
 ### Fixed

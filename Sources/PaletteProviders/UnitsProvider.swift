@@ -8,7 +8,7 @@ public final class UnitsProvider: PaletteProvider, @unchecked Sendable {
     public let descriptor = ProviderDescriptor(
         id: "unit",
         name: "Convert",
-        trigger: "convert",
+        trigger: "unit",
         isGlobal: true,
         priority: 42,
         icon: "symbol:arrow.left.arrow.right",

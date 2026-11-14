@@ -391,6 +391,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp))
         providers.append(GitHubProvider(launcher: launcher, terminalApp: configuration.terminalApp))
         providers.append(UnitsProvider())
+        providers.append(WindowProvider(launcher: launcher))
         let hideForCapture: @MainActor () -> Void = { [weak self] in
             self?.panel?.hide(activatePrevious: false)
         }
