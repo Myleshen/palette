@@ -363,8 +363,6 @@ public enum ThemeLoader {
         }
 
         if let window = table.table("window") {
-            theme.window.width = window.number("width") ?? theme.window.width
-            theme.window.maxHeight = window.number("max_height") ?? theme.window.maxHeight
             theme.window.anchor = window.str("anchor") ?? theme.window.anchor
             if let offset = window.str("offset_y"), offset.hasSuffix("%") {
                 theme.window.offsetY = Double(offset.dropLast()) ?? theme.window.offsetY
@@ -401,9 +399,6 @@ public enum ThemeLoader {
             theme.list.selection = list.str("selection") ?? theme.list.selection
             theme.list.columns = max(1, list.int("columns") ?? theme.list.columns)
             theme.list.showScrollbar = list.bool("show_scrollbar") ?? theme.list.showScrollbar
-            if let rows = list.int("visible_rows") ?? list.number("visible_rows").map({ Int($0) }) {
-                theme.list.visibleRows = min(10, max(5, rows))
-            }
         }
 
         if let typography = table.table("typography") {

@@ -105,6 +105,53 @@ public struct TypographyConfig: Sendable, Equatable {
     }
 }
 
+/// Launcher geometry lives in config.toml, not the theme: themes describe how
+/// things look, this describes how big they are.
+public struct WindowConfig: Sendable, Equatable {
+    /// Multiplier applied to every size below, like `rem`. 0.8...1.6.
+    public var scale: Double = 1
+    /// Points. 0 means "use the default times scale".
+    public var width: Double = 0
+    public var maxHeight: Double = 0
+    /// Rows before scrolling. 0 means "use the default times scale".
+    public var visibleRows: Int = 0
+    public var clipboardWidth: Double = 0
+    public var askWidth: Double = 0
+    public var previewWidth: Double = 0
+    public var terminalWidth: Double = 0
+    public var scratchpadWidth: Double = 0
+
+    public init() {}
+
+    public static let defaultWidth: Double = 680
+    public static let defaultMaxHeight: Double = 720
+    public static let defaultRows: Int = 7
+    public static let defaultPanelWidth: Double = 880
+    public static let defaultTerminalWidth: Double = 1000
+
+    public var effectiveScale: Double {
+        scale <= 0 ? 1 : min(1.6, max(0.8, scale))
+    }
+
+    private func size(_ explicit: Double, _ fallback: Double) -> Double {
+        explicit > 0 ? explicit : (fallback * effectiveScale).rounded()
+    }
+
+    public var launcherWidth: Double { size(width, Self.defaultWidth) }
+    public var launcherMaxHeight: Double { size(maxHeight, Self.defaultMaxHeight) }
+
+    public var launcherRows: Int {
+        if visibleRows > 0 { return min(10, max(5, visibleRows)) }
+        return min(10, max(5, Int((Double(Self.defaultRows) * effectiveScale).rounded())))
+    }
+
+    public var clipboardPanelWidth: Double { size(clipboardWidth, Self.defaultPanelWidth) }
+    public var askPanelWidth: Double { size(askWidth, Self.defaultPanelWidth) }
+    public var previewPanelWidth: Double { size(previewWidth, Self.defaultPanelWidth) }
+    public var terminalPanelWidth: Double { size(terminalWidth, Self.defaultTerminalWidth) }
+    public var scratchpadPanelWidth: Double { size(scratchpadWidth, Self.defaultPanelWidth) }
+}
+
 public struct PaletteConfig: Sendable, Equatable {
     public var hotkey: String
     public var clipboardHotkey: String
@@ -123,8 +170,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var webSearchEngines: [WebSearchEngine]
     public var searchPosition: SearchPosition
     public var webAppBrowser: String
-    /// 0 inherits the theme's `[list] visible_rows`.
-    public var visibleRows: Int
+    public var window: WindowConfig
     public var appSort: AppSort
     public var ask: AskConfig
     public var typography: TypographyConfig
@@ -151,7 +197,7 @@ public struct PaletteConfig: Sendable, Equatable {
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
         searchPosition: SearchPosition = .top,
         webAppBrowser: String = "Helium",
-        visibleRows: Int = 0,
+        window: WindowConfig = WindowConfig(),
         appSort: AppSort = .alphabetical,
         ask: AskConfig = AskConfig(),
         typography: TypographyConfig = TypographyConfig(),
@@ -180,7 +226,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.webSearchEngines = webSearchEngines
         self.searchPosition = searchPosition
         self.webAppBrowser = webAppBrowser
-        self.visibleRows = visibleRows
+        self.window = window
         self.appSort = appSort
         self.ask = ask
         self.typography = typography
@@ -343,8 +389,22 @@ public enum ConfigLoader {
         if let sort = table.str("app_sort"), let parsed = AppSort(rawValue: sort.lowercased()) {
             config.appSort = parsed
         }
-        if let rows = table.int("visible_rows"), rows > 0 {
-            config.visibleRows = min(10, max(5, rows))
+        if let window = table.table("window") {
+            if let value = window.number("scale"), value > 0 { config.window.scale = value }
+            if let value = window.number("width"), value > 0 { config.window.width = value }
+            if let value = window.number("max_height"), value > 0 { config.window.maxHeight = value }
+            if let value = window.int("visible_rows"), value > 0 {
+                config.window.visibleRows = min(10, max(5, value))
+            }
+            if let value = window.number("clipboard_width"), value > 0 { config.window.clipboardWidth = value }
+            if let value = window.number("ask_width"), value > 0 { config.window.askWidth = value }
+            if let value = window.number("preview_width"), value > 0 { config.window.previewWidth = value }
+            if let value = window.number("terminal_width"), value > 0 { config.window.terminalWidth = value }
+            if let value = window.number("scratchpad_width"), value > 0 { config.window.scratchpadWidth = value }
+        }
+        // 2.3.2 wrote a root-level key; keep reading it for one release.
+        if let rows = table.int("visible_rows"), rows > 0, config.window.visibleRows == 0 {
+            config.window.visibleRows = min(10, max(5, rows))
         }
 
         if let typography = table.table("typography") {
@@ -540,6 +600,19 @@ public enum ConfigLoader {
         web_app_browser = "Helium"
         app_sort = "alphabetical"      # alphabetical | frequent
 
+        # Launcher size. scale multiplies every size below, like rem.
+        # 0 means "use the default times scale".
+        [window]
+        scale = 1.0                    # 0.8 - 1.6
+        width = 0                      # points, 0 = 680 * scale
+        max_height = 0                 # points, 0 = 720 * scale
+        visible_rows = 0               # 5-10, 0 = 7 * scale
+        clipboard_width = 0            # 0 = 880 * scale
+        ask_width = 0
+        preview_width = 0
+        terminal_width = 0             # 0 = 1000 * scale
+        scratchpad_width = 0
+
         # Font overrides. Empty family or 0 size inherits the active theme.
         [typography]
         ui_family = ""
@@ -651,9 +724,17 @@ public enum ConfigWriter {
         out.append("search_position = \(quote(config.searchPosition.rawValue))")
         out.append("web_app_browser = \(quote(config.webAppBrowser))")
         out.append("app_sort = \(quote(config.appSort.rawValue))")
-        if config.visibleRows > 0 {
-            out.append("visible_rows = \(config.visibleRows)")
-        }
+        out.append("")
+        out.append("[window]")
+        out.append("scale = \(config.window.scale)")
+        if config.window.width > 0 { out.append("width = \(config.window.width)") }
+        if config.window.maxHeight > 0 { out.append("max_height = \(config.window.maxHeight)") }
+        if config.window.visibleRows > 0 { out.append("visible_rows = \(config.window.visibleRows)") }
+        if config.window.clipboardWidth > 0 { out.append("clipboard_width = \(config.window.clipboardWidth)") }
+        if config.window.askWidth > 0 { out.append("ask_width = \(config.window.askWidth)") }
+        if config.window.previewWidth > 0 { out.append("preview_width = \(config.window.previewWidth)") }
+        if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
+        if config.window.scratchpadWidth > 0 { out.append("scratchpad_width = \(config.window.scratchpadWidth)") }
         out.append("")
         out.append("[typography]")
         out.append("ui_family = \(quote(config.typography.uiFamily))")

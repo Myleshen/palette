@@ -186,11 +186,24 @@ struct SettingsView: View {
         }
     }
 
-    /// 0 in config means "inherit the theme's `[list] visible_rows`".
     private var visibleRowsBinding: Binding<Int> {
         Binding(
-            get: { config.visibleRows > 0 ? config.visibleRows : theme.list.visibleRows },
-            set: { config.visibleRows = min(10, max(5, $0)) }
+            get: { config.window.launcherRows },
+            set: { config.window.visibleRows = min(10, max(5, $0)) }
+        )
+    }
+
+    private var widthBinding: Binding<Double> {
+        Binding(
+            get: { config.window.launcherWidth },
+            set: { config.window.width = min(1_400, max(560, $0)) }
+        )
+    }
+
+    private var scaleBinding: Binding<Double> {
+        Binding(
+            get: { config.window.effectiveScale },
+            set: { config.window.scale = min(1.6, max(0.8, $0)) }
         )
     }
 
@@ -606,10 +619,16 @@ struct SettingsView: View {
                     Text("Alphabetical").tag(AppSort.alphabetical)
                     Text("Most used").tag(AppSort.frequent)
                 }
+                Stepper(value: widthBinding, in: 560...1_400, step: 20) {
+                    LabeledContent("Width", value: "\(Int(widthBinding.wrappedValue)) pt")
+                }
                 Stepper(value: visibleRowsBinding, in: 5...10) {
                     LabeledContent("Visible rows", value: "\(visibleRowsBinding.wrappedValue)")
                 }
-                Text("Rows shown before scrolling. This sets the panel height for every provider.")
+                Stepper(value: scaleBinding, in: 0.8...1.6, step: 0.05) {
+                    LabeledContent("Scale", value: String(format: "%.0f%%", scaleBinding.wrappedValue * 100))
+                }
+                Text("Scale multiplies every launcher size, like rem; width and rows override it. Clipboard, Ask, preview, terminal, and scratchpad widths are in config.toml under [window].")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

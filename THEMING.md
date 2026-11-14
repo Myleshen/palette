@@ -54,15 +54,15 @@ info = "#89b4fa"
 badge_bg = "#45475a"
 badge_fg = "#cdd6f4"
 
+# Panel size, position, and per-view widths live in config.toml under [window],
+# not here: a theme describes how Palette looks, config describes how big it is.
 [window]
-width = 680
-max_height = 480
 anchor = "top"                     # top | center
 offset_y = 120                     # points, or "18%" of screen height
 corner_radius = 14
 material = "hudWindow"             # hudWindow | popover | menu | sidebar | none
 glass = true                       # theme-tinted liquid-glass surfaces
-glass_opacity = 0.55               # 0 = clear, 1 = opaque theme surface
+glass_opacity = 0.7                # 0 = clear, 1 = opaque theme surface
 opacity = 0.98
 border_width = 1
 shadow = true
@@ -83,7 +83,6 @@ show_subtitles = true
 selection = "fill"                 # fill | bar | outline | none
 columns = 1                        # reserved for future grid layouts
 show_scrollbar = true
-visible_rows = 7                    # 5-10; rows before scrolling, sets panel height
 
 [typography]
 family = "SF Pro Text"
@@ -140,9 +139,12 @@ for body text emits a warning.
 
 ### Metrics
 
-`window.width`, `window.max_height`, `window.offset_y`, `window.corner_radius`,
-`search.height`, `list.row_height`, `list.spacing`, `list.icon_size`,
-`motion.duration_ms`.
+`window.offset_y`, `window.corner_radius`, `search.height`, `list.row_height`,
+`list.spacing`, `list.icon_size`, `motion.duration_ms`.
+
+Panel width, height, row count, and the per-view widths are not theme keys.
+They live in `config.toml` under `[window]` (see README), so a theme stays
+portable across screen sizes.
 
 `anchor = "top"` centers horizontally and places the panel `offset_y` from the
 top of the active screen. `center` ignores `offset_y`.
@@ -166,10 +168,14 @@ This is the rofi `@theme` idea without arbitrary widget trees: a theme can be a
 
 ## 5. What themes control, and what they do not
 
-Controlled: colors, material, opacity, border, shadow, corner radius, width,
-height, offset, anchor, row height, spacing, density, icons, subtitles, selection
-style, typography, match emphasis, motion, footer hints. Grid `columns` is
-reserved for a later release.
+Controlled: colors, material, opacity, border, shadow, corner radius, offset,
+anchor, row height, spacing, density, icons, subtitles, selection style,
+typography, match emphasis, motion, footer hints. Grid `columns` is reserved for
+a later release.
+
+Not controlled by themes: panel width, panel height, visible rows, and the
+clipboard/Ask/preview/terminal/scratchpad widths. Those are in `config.toml`
+under `[window]`.
 
 Not controlled: the order of results, provider behavior, arbitrary views, custom
 CSS, per-item layout. Extensions can attach an icon, subtitle, badge, group, and

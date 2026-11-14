@@ -105,10 +105,12 @@ public final class SearchController: ObservableObject, HostBridge {
 
     /// The dedicated clipboard hotkey opens straight into `/clip`, with the
     /// wide preview layout and no typing required.
+    private var windowConfig: WindowConfig { configuration.window }
+
     public func openClipboard() {
         previewEnabled = true
         clipboardFilter = nil
-        panel?.widthOverride = 880
+        panel?.widthOverride = CGFloat(windowConfig.clipboardPanelWidth)
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)clip "
@@ -117,7 +119,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openAsk() {
         previewEnabled = true
-        panel?.widthOverride = 880
+        panel?.widthOverride = CGFloat(windowConfig.clipboardPanelWidth)
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)ask "
@@ -178,7 +180,7 @@ public final class SearchController: ObservableObject, HostBridge {
         if previewProvider {
             if !previewEnabled {
                 previewEnabled = true
-                panel?.widthOverride = 880
+                panel?.widthOverride = CGFloat(windowConfig.clipboardPanelWidth)
             }
         } else if previewEnabled {
             previewEnabled = false
@@ -992,7 +994,7 @@ public final class SearchController: ObservableObject, HostBridge {
         // the clipboard/Ask sub-tab row.
         let tabs: CGFloat = (activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1) ? 110 : 82
         if previewEnabled {
-            panel.widthOverride = 880
+            panel.widthOverride = CGFloat(windowConfig.previewPanelWidth)
         }
         // Pill floats the search capsule above the content card: 12 pt top and
         // bottom margins plus a 10 pt gap replace the old inline spacing.
@@ -1006,7 +1008,7 @@ public final class SearchController: ObservableObject, HostBridge {
         scratchpadActive = false
         previewEnabled = false
         previewFocused = false
-        panel?.widthOverride = 1000
+        panel?.widthOverride = CGFloat(windowConfig.terminalPanelWidth)
         panel?.show()
         updatePanelHeight()
         requestFocus()
@@ -1026,7 +1028,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
         panel?.show()
-        panel?.widthOverride = 880
+        panel?.widthOverride = CGFloat(windowConfig.clipboardPanelWidth)
         scratchpadActive = true
         scratchpadNoteID = noteID
         scratchpadTitle = ""

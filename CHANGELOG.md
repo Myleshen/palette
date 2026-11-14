@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Panel sizing moved out of themes and into `config.toml` under `[window]`: `scale`, `width`, `max_height`, `visible_rows`, and per-view widths for clipboard, Ask, preview, terminal, and scratchpad. Themes now cover colours, fonts, and typography only.
+- `scale` is a rem-style multiplier (0.8-1.6) over every default size. Explicit `width` / `visible_rows` / per-view widths win over it, and `0` means "default times scale".
+- Settings → General → Launcher gained **Width** and **Scale** steppers next to **Visible rows**.
+
+### Fixed
+
+- Theme files that set `[window] width` or `max_height` no longer resize the panel; sizing is config-only. `visible_rows` at the config root (2.3.2) still maps into `[window]`.
+
 ## 2.3.2 — 2026-11-06
 
 ### Changed

@@ -491,7 +491,18 @@ ask_hotkey = "cmd+option+a"          # empty disables
 search_position = "top"        # top | center
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent
-visible_rows = 7               # 5-10; panel height in rows (0 = theme default)
+
+
+[window]
+scale = 1.0                    # 0.8-1.6; multiplies every size below, like rem
+width = 0                      # points; 0 = 680 * scale
+max_height = 0                 # points; 0 = 720 * scale
+visible_rows = 0               # 5-10; 0 = 7 * scale, sets the panel height
+clipboard_width = 0            # 0 = 880 * scale
+ask_width = 0
+preview_width = 0
+terminal_width = 0             # 0 = 1000 * scale
+scratchpad_width = 0
 
 [typography]
 ui_family = ""                 # empty inherits the theme

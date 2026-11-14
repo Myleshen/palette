@@ -156,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager = ThemeManager(paths: paths, selection: configuration.theme, store: store)
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
-        themeManager.visibleRows = configuration.visibleRows
+        themeManager.window = configuration.window
         themeManager.reload()
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
@@ -1060,7 +1060,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startupDiagnostics = result.diagnostics
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
-        themeManager.visibleRows = configuration.visibleRows
+        themeManager.window = configuration.window
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
         updatePositionMenu()

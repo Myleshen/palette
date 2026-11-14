@@ -13,8 +13,7 @@ public final class ThemeManager: ObservableObject {
     public let paths: PalettePaths
     public var selection: ThemeSelection
     public var typography = TypographyConfig()
-    /// 0 inherits the theme's `[list] visible_rows`.
-    public var visibleRows = 0
+    public var window = WindowConfig()
     public var onChange: ((Theme) -> Void)?
 
     private let store: PaletteStore?
@@ -124,9 +123,9 @@ public final class ThemeManager: ObservableObject {
         if typography.monoSize > 0 {
             resolved.typography.monoSize = typography.monoSize
         }
-        if visibleRows > 0 {
-            resolved.list.visibleRows = min(10, max(5, visibleRows))
-        }
+        resolved.window.width = window.launcherWidth
+        resolved.window.maxHeight = window.launcherMaxHeight
+        resolved.list.visibleRows = window.launcherRows
         theme = resolved
         self.diagnostics = diagnostics
         for diagnostic in diagnostics where diagnostic.level != .info {
