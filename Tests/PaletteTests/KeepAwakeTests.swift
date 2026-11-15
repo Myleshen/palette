@@ -118,6 +118,24 @@ final class KeepAwakeTests: XCTestCase {
         XCTAssertEqual(result.status, 0, "install command must parse: \(result.stderrString)")
     }
 
+    /// Every tool the root command calls must exist at the path it names.
+    /// `sh -n` cannot catch this: `/bin/chown` parses fine and fails at run
+    /// time with status 127, after the user has already typed a password.
+    func testClamshellToolsExistAtTheirPaths() throws {
+        let sources = [
+            ClamshellGuard.installCommand(pid: 42, flagPath: "/tmp/clamshell.active"),
+            ClamshellGuard.helperScript(pid: 42, flagPath: "/tmp/clamshell.active"),
+        ]
+        let pattern = try NSRegularExpression(pattern: "/(?:usr/)?s?bin/[A-Za-z0-9_.-]+")
+        for source in sources {
+            let text = source as NSString
+            for match in pattern.matches(in: source, range: NSRange(location: 0, length: text.length)) {
+                let path = text.substring(with: match.range)
+                XCTAssertTrue(FileManager.default.fileExists(atPath: path), "missing tool: \(path)")
+            }
+        }
+    }
+
     func testStaleClamshellFlagRearmsTheGuard() async throws {
         let fake = FakeClamshell()
         await fake.setStaleFlag()

@@ -39,10 +39,14 @@ public struct CaptureResult: Sendable {
 public final class CaptureService {
     public var config: CaptureConfig
     public var onStatus: ((String) -> Void)?
+    /// Failures the user is not looking at: the panel is hidden while
+    /// recording, so a dead recorder has to be reported, not just dropped.
+    public var onFailure: ((String) -> Void)?
 
     private var recorder: Process?
     private var recordingURL: URL?
     private var recordingStartedAt: Date?
+    private var stopRequested = false
 
     public init(config: CaptureConfig = CaptureConfig()) {
         self.config = config
@@ -123,8 +127,22 @@ public final class CaptureService {
         if config.showClicks { arguments.append("-k") }
         arguments.append(target.path)
         process.arguments = arguments
+        // screencapture exits at once when Screen Recording is not granted;
+        // without this the indicator just vanishes mid-recording.
+        process.terminationHandler = { [weak self] finished in
+            Task { @MainActor in
+                guard let self, self.recorder === finished, !self.stopRequested else { return }
+                self.recorder = nil
+                self.recordingStartedAt = nil
+                self.recordingURL = nil
+                let message = "Recording failed: screencapture exited with status \(finished.terminationStatus). Grant Screen Recording in System Settings → Privacy & Security."
+                Log.shared.error(message, source: "capture")
+                self.onFailure?(message)
+            }
+        }
         try process.run()
         recorder = process
+        stopRequested = false
         Log.shared.info("Recording started to \(target.lastPathComponent) (pid \(process.processIdentifier))", source: "capture")
         recordingURL = target
         recordingStartedAt = Date()
@@ -133,6 +151,7 @@ public final class CaptureService {
 
     public func stopRecording() async throws -> URL {
         guard let process = recorder, process.isRunning else { throw CaptureError.recordingNotRunning }
+        stopRequested = true
         process.interrupt()
         let deadline = Date().addingTimeInterval(5)
         while process.isRunning && Date() < deadline {
@@ -153,6 +172,7 @@ public final class CaptureService {
         Log.shared.info("Recording stopped with status \(status)\(stderr.isEmpty ? "" : ": \(stderr)")", source: "capture")
         recorder = nil
         recordingStartedAt = nil
+        stopRequested = false
 
         guard let url = recordingURL else { throw CaptureError.recordingNotRunning }
         recordingURL = nil

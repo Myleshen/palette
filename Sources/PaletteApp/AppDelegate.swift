@@ -192,6 +192,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         captureService.onStatus = { [weak self] message in
             self?.searchController.setStatus(message, duration: 4)
         }
+        captureService.onFailure = { [weak self] message in
+            Task { await self?.searchController.notify(message) }
+        }
         clamshellObserver = NotificationCenter.default.addObserver(
             forName: .paletteClamshellDropped,
             object: nil,
@@ -256,6 +259,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.captureScreenshot()
                 } else if step == "rec" {
                     self.toggleRecording()
+                } else if step == "clamshell" {
+                    try? await self.keepAwake.setClamshell(true)
                 } else if step == "settings" {
                     self.showSettings()
                 } else if step == "clipboard" {
@@ -625,7 +630,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch CaptureError.cancelled {
                 self.searchController.setStatus("Screenshot cancelled", duration: 3)
             } catch {
-                self.searchController.setStatus(error.localizedDescription, duration: 6)
+                // The panel is hidden during a capture, so a plain status
+                // message would never be seen.
+                Log.shared.error("Screenshot failed: \(error.localizedDescription)", source: "capture")
+                await self.searchController.notify("Screenshot failed: \(error.localizedDescription)")
             }
         }
     }
@@ -638,7 +646,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     let url = try await self.captureService.stopRecording()
                     self.searchController.setStatus("Saved \(url.lastPathComponent)", duration: 4)
                 } catch {
-                    self.searchController.setStatus(error.localizedDescription, duration: 6)
+                    await self.searchController.notify("Recording failed: \(error.localizedDescription)")
                 }
                 self.recordingTicker?.invalidate()
                 self.recordingTicker = nil
@@ -651,7 +659,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     try self.captureService.startRecording()
                     self.searchController.setStatus("Recording started", duration: 3)
                 } catch {
-                    self.searchController.setStatus(error.localizedDescription, duration: 6)
+                    await self.searchController.notify("Recording failed: \(error.localizedDescription)")
                 }
                 self.updateRecordingMenuItem()
                 self.recordingTicker?.invalidate()

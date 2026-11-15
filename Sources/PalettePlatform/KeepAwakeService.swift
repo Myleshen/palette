@@ -387,6 +387,12 @@ public actor ClamshellGuard: ClamshellControlling {
         guard result.status == 0 else {
             try? FileManager.default.removeItem(at: flagURL)
             let message = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
+            // The dialog only says "cancelled"; a non-zero status after the
+            // user authenticated is a launchctl failure, so keep its words.
+            Log.shared.error(
+                "Clamshell: the daemon install failed\(message.isEmpty ? "" : ": \(message)")",
+                source: "awake"
+            )
             if message.localizedCaseInsensitiveContains("cancel") || message.localizedCaseInsensitiveContains("user canceled") {
                 throw GuardError.cancelled
             }
@@ -433,7 +439,7 @@ public actor ClamshellGuard: ClamshellControlling {
         /usr/bin/printf '%s' \(shellQuote(scriptB64)) | /usr/bin/base64 -D > \(scriptPath) && \
         /usr/bin/printf '%s' \(shellQuote(plistB64)) | /usr/bin/base64 -D > \(plistPath) && \
         /bin/chmod 755 \(scriptPath) && /bin/chmod 644 \(plistPath) && \
-        /bin/chown root:wheel \(scriptPath) \(plistPath) && \
+        /usr/sbin/chown root:wheel \(scriptPath) \(plistPath) && \
         (/bin/launchctl bootout system/\(label) 2>/dev/null || true) && \
         /bin/launchctl bootstrap system \(plistPath)
         """
