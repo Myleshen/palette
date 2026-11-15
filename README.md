@@ -150,6 +150,7 @@ trigger word:
 | `/calc <expr>` | calculator (also works unprefixed) |
 | `/timer <duration>` | countdown timer: `25m`, `1h30m`, `1:30`, or stop |
 | `/shot` | screenshot the screen, a region, or a window |
+| `/shots` | browse screenshots and recordings from the capture directory |
 | `/rec` | start or stop a screen recording |
 | `/color` | pick a colour and copy its hex |
 | `/win <query>` | switch to any open window |
@@ -293,6 +294,13 @@ capture directory. `⌘⇧3`, `⌘⇧4` and `⌘⇧6` capture the screen, a regi
 window from anywhere (they replace the macOS keys), `⌘⇧5` records, and a
 menu-bar **Stop recording · m:ss** item shows while a recording runs. All four
 live in Settings → **Shortcuts** and can be cleared or rebound.
+
+A capture plays a shutter sound and shows a thumbnail for a couple of seconds
+(both toggles in Settings → Capture), so it is obvious that it worked. `/shots`
+lists everything in the capture directory, newest first and grouped by day —
+screenshots and recordings together — with a thumbnail (a poster frame for
+videos) in the preview pane, plus open, annotate, copy image and reveal. Thumbnails
+are generated once per file and cached by path and modification date.
 
 Recordings can target the whole screen, a single display, or a fixed region, and
 optionally include the default audio input — set under Settings → Capture or per

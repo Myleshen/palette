@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.1 — 2026-11-15
+
+### Added
+
+- **Captures** provider (`/shots`): every screenshot and recording in the capture directory, newest first, grouped by day, with a thumbnail preview (a poster frame for videos), open, annotate, copy image and reveal in Finder.
+- A shutter sound and a brief thumbnail after every capture, so a screenshot never looks like nothing happened. Both toggle in Settings → Capture.
+
 ## 2.4.0 — 2026-11-15
 
 ### Added
