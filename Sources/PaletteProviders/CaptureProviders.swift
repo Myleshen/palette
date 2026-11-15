@@ -29,13 +29,19 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
             row(id: "screen", title: "Capture the screen", subtitle: delay > 0 ? "After \(Int(delay)) seconds" : "All displays", value: "screen", score: 9_000),
             row(id: "region", title: "Capture a region", subtitle: "Drag to select", value: "region", score: 8_900),
             row(id: "window", title: "Capture a window", subtitle: "Click a window", value: "window", score: 8_800),
+            row(id: "annotate-region", title: "Capture a region and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:region", score: 8_700),
+            row(id: "annotate-screen", title: "Capture the screen and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:screen", score: 8_600),
         ]
         guard !query.isEmpty else { return items }
         return items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        guard let raw = action.value.text, let mode = CaptureMode(rawValue: raw) else { return }
+        guard let raw = action.value.text else { return }
+        let annotate = raw.hasPrefix("annotate:")
+        let name = annotate ? String(raw.dropFirst("annotate:".count)) : raw
+        guard let mode = CaptureMode(rawValue: name) else { return }
+        await MainActor.run { service.annotateNextCapture = annotate }
         let hide = await service.config.hidePalette
         if hide { await beforeCapture() }
         // Give the panel a beat to leave the screen before capturing.
@@ -52,7 +58,7 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
             group: "Screenshot",
             score: score,
             actions: [PaletteAction(id: id, title: title, kind: .custom, value: .text(value))],
-            preview: .text("Saves to the configured capture directory and copies to the clipboard, depending on [capture] settings.\n\nRegion and window use the system selection UI; press Escape to cancel."),
+            preview: .text("Saves to the configured capture directory and copies to the clipboard, depending on [capture] settings.\n\nAnnotate opens the editor with arrow, rectangle, text and crop tools. Region and window use the system selection UI; press Escape to cancel."),
             providerID: descriptor.id,
             providerName: descriptor.name
         )
@@ -100,26 +106,72 @@ public final class RecProvider: PaletteProvider, @unchecked Sendable {
                 providerName: descriptor.name
             )
         } else {
-            item = PaletteItem(
-                id: "rec:start",
-                title: "Start recording the screen",
-                subtitle: "Run /rec again to stop",
-                icon: .symbol("record.circle"),
-                group: "Recording",
-                score: 10_000,
-                actions: [PaletteAction(id: "start", title: "Start recording", kind: .custom, value: .text("start"))],
-                preview: .text("Records the screen with the system capture engine.\n\nStop with /rec or the menu bar. The file lands in the capture directory."),
-                providerID: descriptor.id,
-                providerName: descriptor.name
-            )
+            var rows = [
+                startRow(
+                    id: "screen",
+                    title: "Record the whole screen",
+                    subtitle: "Run /rec again to stop",
+                    value: "start",
+                    score: 10_000
+                )
+            ]
+            for display in CaptureDisplays.active() {
+                rows.append(startRow(
+                    id: "display-\(display.index)",
+                    title: "Record \(display.name)",
+                    subtitle: "\(display.width)×\(display.height) · display \(display.index)",
+                    value: "start:display:\(display.index)",
+                    score: 9_900
+                ))
+            }
+            let region = await service.config.recordingRegion.trimmingCharacters(in: .whitespaces)
+            if !region.isEmpty {
+                rows.append(startRow(
+                    id: "region",
+                    title: "Record the region \(region)",
+                    subtitle: "Set in Settings → Capture",
+                    value: "start:region",
+                    score: 9_800
+                ))
+            }
+            let filtered = query.isEmpty
+                ? rows
+                : rows.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
+            return filtered
         }
         guard !query.isEmpty else { return [item] }
         return "\(item.title) \(item.subtitle ?? "")".lowercased().contains(query.lowercased()) ? [item] : []
     }
 
+    private func startRow(id: String, title: String, subtitle: String, value: String, score: Double) -> PaletteItem {
+        PaletteItem(
+            id: "rec:\(id)",
+            title: title,
+            subtitle: subtitle,
+            icon: .symbol("record.circle"),
+            group: "Recording",
+            score: score,
+            actions: [PaletteAction(id: id, title: title, kind: .custom, value: .text(value))],
+            preview: .text("Records with the system capture engine.\n\nChoose a display, the whole screen, or the region from Settings → Capture. Stop with /rec or the menu bar."),
+            providerID: descriptor.id,
+            providerName: descriptor.name
+        )
+    }
+
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         switch action.value.text {
-        case "start":
+        case let value? where value.hasPrefix("start"):
+            let parts = value.split(separator: ":").map(String.init)
+            await MainActor.run {
+                if parts.count == 3, parts[1] == "display", let index = Int(parts[2]) {
+                    service.config.recordingTarget = "display"
+                    service.config.recordingDisplay = index
+                } else if parts.count == 2, parts[1] == "region" {
+                    service.config.recordingTarget = "region"
+                } else {
+                    service.config.recordingTarget = "screen"
+                }
+            }
             if await service.config.hidePalette { await beforeStart() }
             try await service.startRecording()
         case "stop":

@@ -39,6 +39,12 @@ public struct CaptureResult: Sendable {
 public final class CaptureService {
     public var config: CaptureConfig
     public var onStatus: ((String) -> Void)?
+    /// Called with the saved file after a screenshot, and after a recording
+    /// stops, so the app can show the annotator or the player.
+    public var onScreenshot: ((URL) -> Void)?
+    public var onRecordingStopped: ((URL) -> Void)?
+    /// Set by the "capture and annotate" rows.
+    public var annotateNextCapture = false
     /// Failures the user is not looking at: the panel is hidden while
     /// recording, so a dead recorder has to be reported, not just dropped.
     public var onFailure: ((String) -> Void)?
@@ -92,7 +98,9 @@ public final class CaptureService {
         }
 
         var saved: URL?
-        if config.screenshotAction.savesFile {
+        // The annotator can only save over a real file, so a copy-only action
+        // still writes one when this capture is going to the editor.
+        if config.screenshotAction.savesFile || annotateNextCapture {
             let target = directory.appendingPathComponent(fileName(kind: "shot", extension: config.screenshotFormat))
             try? FileManager.default.removeItem(at: target)
             try FileManager.default.moveItem(at: temp, to: target)
@@ -108,10 +116,12 @@ public final class CaptureService {
         if saved == nil { try? FileManager.default.removeItem(at: temp) }
 
         guard let final = saved else {
+            onScreenshot?(temp)
             return CaptureResult(url: temp, copied: copied)
         }
         let message = copied ? "Saved and copied \(final.lastPathComponent)" : "Saved \(final.lastPathComponent)"
         onStatus?(message)
+        onScreenshot?(final)
         return CaptureResult(url: final, copied: copied)
     }
 
@@ -134,10 +144,7 @@ public final class CaptureService {
         let target = directory.appendingPathComponent(fileName(kind: "rec", extension: "mov"))
         let process = Process()
         process.executableURL = URL(fileURLWithPath: Self.tool)
-        var arguments = ["-v"]
-        if config.captureCursor { arguments.append("-C") }
-        if config.showClicks { arguments.append("-k") }
-        arguments.append(target.path)
+        let arguments = Self.recordingArguments(config: config, path: target.path)
         process.arguments = arguments
         // screencapture exits at once when Screen Recording is not granted;
         // without this the indicator just vanishes mid-recording.
@@ -155,10 +162,34 @@ public final class CaptureService {
         try process.run()
         recorder = process
         stopRequested = false
-        Log.shared.info("Recording started to \(target.lastPathComponent) (pid \(process.processIdentifier))", source: "capture")
+        Log.shared.info(
+            "Recording started to \(target.lastPathComponent) (pid \(process.processIdentifier), args: \(arguments.joined(separator: " ")))",
+            source: "capture"
+        )
         recordingURL = target
         recordingStartedAt = Date()
         onStatus?("Recording to \(target.lastPathComponent)")
+    }
+
+    /// The exact `screencapture -v` arguments for a config. Kept separate so
+    /// the target, display, region and audio options are testable without
+    /// running a capture.
+    public nonisolated static func recordingArguments(config: CaptureConfig, path: String) -> [String] {
+        var arguments = ["-v"]
+        switch config.recordingTarget {
+        case "display":
+            arguments.append(contentsOf: ["-D", String(max(1, config.recordingDisplay))])
+        case "region":
+            let region = config.recordingRegion.trimmingCharacters(in: .whitespaces)
+            if !region.isEmpty { arguments.append(contentsOf: ["-R", region]) }
+        default:
+            break
+        }
+        if config.recordingAudio { arguments.append("-g") }
+        if config.captureCursor { arguments.append("-C") }
+        if config.showClicks { arguments.append("-k") }
+        arguments.append(path)
+        return arguments
     }
 
     public func stopRecording() async throws -> URL {
@@ -204,6 +235,7 @@ public final class CaptureService {
             copyFileToPasteboard(final)
         }
         onStatus?("Saved \(final.lastPathComponent)")
+        onRecordingStopped?(final)
         return final
     }
 

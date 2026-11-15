@@ -232,6 +232,17 @@ public struct CaptureConfig: Sendable, Equatable {
     public var hidePalette = true
     public var captureCursor = false
     public var showClicks = false
+    /// What a recording captures: screen | display | region.
+    public var recordingTarget = "screen"
+    /// 1-based display index, as `screencapture -D` expects.
+    public var recordingDisplay = 1
+    /// "x,y,w,h" in screen points, used when recordingTarget is region.
+    public var recordingRegion = ""
+    public var recordingAudio = false
+    /// Open the annotate window after a screenshot.
+    public var editAfterCapture = false
+    /// Open a player after a recording stops.
+    public var previewRecording = true
 
     public init() {}
 }
@@ -252,6 +263,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var scratchpadHotkey: String
     public var askHotkey: String
     public var screenshotHotkey: String
+    public var regionScreenshotHotkey: String
+    public var windowScreenshotHotkey: String
     public var recordingHotkey: String
     public var providerPrefix: String
     public var toolsPath: [String]
@@ -282,8 +295,11 @@ public struct PaletteConfig: Sendable, Equatable {
         terminalHotkey: String = "cmd+option+t",
         scratchpadHotkey: String = "cmd+option+s",
         askHotkey: String = "cmd+option+a",
-        screenshotHotkey: String = "cmd+option+shift+s",
-        recordingHotkey: String = "cmd+option+shift+r",
+        // Same family as the system screenshot keys, which the app takes over.
+        screenshotHotkey: String = "cmd+shift+3",
+        regionScreenshotHotkey: String = "cmd+shift+4",
+        windowScreenshotHotkey: String = "cmd+shift+6",
+        recordingHotkey: String = "cmd+shift+5",
         providerPrefix: String = "/",
         toolsPath: [String] = [],
         terminal: String = "kitty",
@@ -316,6 +332,8 @@ public struct PaletteConfig: Sendable, Equatable {
         self.scratchpadHotkey = scratchpadHotkey
         self.askHotkey = askHotkey
         self.screenshotHotkey = screenshotHotkey
+        self.regionScreenshotHotkey = regionScreenshotHotkey
+        self.windowScreenshotHotkey = windowScreenshotHotkey
         self.recordingHotkey = recordingHotkey
         self.providerPrefix = providerPrefix
         self.toolsPath = toolsPath
@@ -466,8 +484,22 @@ public enum ConfigLoader {
         if let hotkey = table.str("screenshot_hotkey") {
             config.screenshotHotkey = hotkey
         }
+        if let hotkey = table.str("region_screenshot_hotkey") {
+            config.regionScreenshotHotkey = hotkey
+        }
+        if let hotkey = table.str("window_screenshot_hotkey") {
+            config.windowScreenshotHotkey = hotkey
+        }
         if let hotkey = table.str("recording_hotkey") {
             config.recordingHotkey = hotkey
+        }
+        // 2.4 moved the capture keys onto the number row. A config that still
+        // carries the old defaults was never customised, so it moves with it.
+        if config.screenshotHotkey == "cmd+option+shift+s" {
+            config.screenshotHotkey = "cmd+shift+3"
+        }
+        if config.recordingHotkey == "cmd+option+shift+r" {
+            config.recordingHotkey = "cmd+shift+5"
         }
         if let prefix = table.str("provider_prefix"), !prefix.isEmpty {
             config.providerPrefix = prefix
@@ -557,6 +589,14 @@ public enum ConfigLoader {
             config.capture.hidePalette = capture.bool("hide_palette") ?? config.capture.hidePalette
             config.capture.captureCursor = capture.bool("capture_cursor") ?? config.capture.captureCursor
             config.capture.showClicks = capture.bool("show_clicks") ?? config.capture.showClicks
+            config.capture.editAfterCapture = capture.bool("edit_after_capture") ?? config.capture.editAfterCapture
+            config.capture.previewRecording = capture.bool("preview_recording") ?? config.capture.previewRecording
+            if let value = capture.str("recording_target"), ["screen", "display", "region"].contains(value.lowercased()) {
+                config.capture.recordingTarget = value.lowercased()
+            }
+            if let value = capture.int("recording_display"), value >= 1 { config.capture.recordingDisplay = value }
+            if let value = capture.str("recording_region") { config.capture.recordingRegion = value }
+            config.capture.recordingAudio = capture.bool("recording_audio") ?? config.capture.recordingAudio
         }
 
         if let timer = table.table("timer") {
@@ -772,6 +812,12 @@ public enum ConfigLoader {
         hide_palette = true
         capture_cursor = false
         show_clicks = false
+        recording_target = "screen"        # screen | display | region
+        recording_display = 1
+        recording_region = ""
+        recording_audio = false
+        edit_after_capture = false         # open the annotate window
+        preview_recording = true           # player after a recording stops
 
         # Timer presets (minutes), and what happens when one finishes.
         [timer]
@@ -883,6 +929,8 @@ public enum ConfigWriter {
         out.append("scratchpad_hotkey = \(quote(config.scratchpadHotkey))")
         out.append("ask_hotkey = \(quote(config.askHotkey))")
         out.append("screenshot_hotkey = \(quote(config.screenshotHotkey))")
+        out.append("region_screenshot_hotkey = \(quote(config.regionScreenshotHotkey))")
+        out.append("window_screenshot_hotkey = \(quote(config.windowScreenshotHotkey))")
         out.append("recording_hotkey = \(quote(config.recordingHotkey))")
         out.append("provider_prefix = \(quote(config.providerPrefix))")
         out.append("tools_path = [\(config.toolsPath.map(quote).joined(separator: ", "))]")
@@ -916,6 +964,12 @@ public enum ConfigWriter {
         out.append("hide_palette = \(config.capture.hidePalette)")
         out.append("capture_cursor = \(config.capture.captureCursor)")
         out.append("show_clicks = \(config.capture.showClicks)")
+        out.append("edit_after_capture = \(config.capture.editAfterCapture)")
+        out.append("preview_recording = \(config.capture.previewRecording)")
+        out.append("recording_target = \(quote(config.capture.recordingTarget))")
+        out.append("recording_display = \(config.capture.recordingDisplay)")
+        out.append("recording_region = \(quote(config.capture.recordingRegion))")
+        out.append("recording_audio = \(config.capture.recordingAudio)")
         out.append("")
         out.append("[timer]")
         out.append("presets = [\(config.timer.presets.map(String.init).joined(separator: ", "))]")

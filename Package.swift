@@ -44,7 +44,10 @@ let package = Package(
             dependencies: [
                 "PaletteCore", "PalettePlatform", "PaletteProviders", "PaletteRuntime",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
-            ]
+            ],
+            // SwiftUI's VideoPlayer fails to demangle AVPlayerView unless the
+            // framework is linked explicitly.
+            linkerSettings: [.linkedFramework("AVKit")]
         ),
         .testTarget(
             name: "PaletteTests",

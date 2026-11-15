@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.4.0 — 2026-11-15
+
+### Added
+
+- **Universal capture shortcuts** that replace the system ones: `⌘⇧3` full screen, `⌘⇧4` region, `⌘⇧6` window, `⌘⇧5` recording. All four are rebindable in the new **Shortcuts** tab in Settings.
+- **Recording targets**: record the whole screen, one display, or a fixed region, with optional audio (`-g`). `/rec` lists every active display by name and size.
+- **Annotate** window for screenshots: arrow, rectangle, text and crop, six colours, a line-width slider, undo, copy, and save over the original. `/shot` gains "capture and annotate" rows, and `[capture] edit_after_capture` opens the editor after every screenshot.
+- **Recording preview**: a player window with scrub, reveal and copy path when a recording stops (`[capture] preview_recording`, on by default).
+
+### Fixed
+
+- The editor drew a light border and title bar around the image, and Done closed the window without saving; the window is now a dark floating card that saves on Done and closes after Save/Copy with a confirmation toast.
+- The editor and the recording player are floating panels excluded from tiling window managers, so Amethyst no longer stretches them across the screen.
+- Capture shortcuts that are already owned by another app (Shottr, Raycast) now say so instead of failing silently; every capture shortcut can be rebound or cleared in Settings → Shortcuts.
+- Provider tabs, clipboard filter chips, mode chips and footer hints ignored the theme's `typography.ui_family`; they now use it like the rest of the UI.
+
 ## 2.3.4 — 2026-11-15
 
 ### Added
