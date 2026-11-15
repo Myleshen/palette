@@ -631,6 +631,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             currentScreenshotHotKey = nil
             Log.shared.warn("Screenshot hotkey '\(configuration.screenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
+            searchController?.setStatus(hotkeyTaken("\u{2318}\u{21E7}3"), duration: 8)
         }
     }
 
@@ -650,7 +651,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             currentRegionHotKey = nil
             Log.shared.warn("Region hotkey '\(configuration.regionScreenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
-            searchController?.setStatus("⌘⇧4 is taken by another app; set a region shortcut in Settings", duration: 6)
+            searchController?.setStatus(hotkeyTaken(configuration.regionScreenshotHotkey), duration: 8)
         }
     }
 
@@ -670,6 +671,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             currentWindowHotKey = nil
             Log.shared.warn("Window hotkey '\(configuration.windowScreenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
+            searchController?.setStatus(hotkeyTaken(configuration.windowScreenshotHotkey), duration: 8)
         }
     }
 
@@ -689,7 +691,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             currentRecordingHotKey = nil
             Log.shared.warn("Recording hotkey '\(configuration.recordingHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
+            searchController?.setStatus(hotkeyTaken(configuration.recordingHotkey), duration: 8)
         }
+    }
+
+    /// A taken shortcut is not an error the user can fix silently: say which key
+    /// and where to change it.
+    private func hotkeyTaken(_ key: String) -> String {
+        "\(key) is already used by another app (Shottr, Raycast…). Pick another in Settings → Shortcuts."
     }
 
     // MARK: - Capture actions
