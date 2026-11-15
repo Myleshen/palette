@@ -39,6 +39,12 @@ public struct CaptureResult: Sendable {
 public final class CaptureService {
     public var config: CaptureConfig
     public var onStatus: ((String) -> Void)?
+    /// Called with the saved file after a screenshot, and after a recording
+    /// stops, so the app can show the annotator or the player.
+    public var onScreenshot: ((URL) -> Void)?
+    public var onRecordingStopped: ((URL) -> Void)?
+    /// Set by the "capture and annotate" rows.
+    public var annotateNextCapture = false
     /// Failures the user is not looking at: the panel is hidden while
     /// recording, so a dead recorder has to be reported, not just dropped.
     public var onFailure: ((String) -> Void)?
@@ -108,10 +114,12 @@ public final class CaptureService {
         if saved == nil { try? FileManager.default.removeItem(at: temp) }
 
         guard let final = saved else {
+            onScreenshot?(temp)
             return CaptureResult(url: temp, copied: copied)
         }
         let message = copied ? "Saved and copied \(final.lastPathComponent)" : "Saved \(final.lastPathComponent)"
         onStatus?(message)
+        onScreenshot?(final)
         return CaptureResult(url: final, copied: copied)
     }
 
@@ -204,6 +212,7 @@ public final class CaptureService {
             copyFileToPasteboard(final)
         }
         onStatus?("Saved \(final.lastPathComponent)")
+        onRecordingStopped?(final)
         return final
     }
 

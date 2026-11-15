@@ -76,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentAskHotKey: HotKeySpec?
     private var recordingMenuItem: NSMenuItem?
     private var recordingTicker: Timer?
+    private var annotateWindows: [AnnotateWindowController] = []
+    private var mediaPreviews: [MediaPreviewWindowController] = []
     private var startupDiagnostics: [Diagnostic] = []
     private var themeObserver: NSObjectProtocol?
     private var watcherTimer: Timer?
@@ -195,6 +197,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         captureService.onFailure = { [weak self] message in
             Task { await self?.searchController.notify(message) }
         }
+        captureService.onScreenshot = { [weak self] url in
+            guard let self else { return }
+            let forced = self.captureService.annotateNextCapture
+            self.captureService.annotateNextCapture = false
+            guard forced || self.configuration.capture.editAfterCapture else { return }
+            self.openAnnotator(url)
+        }
+        captureService.onRecordingStopped = { [weak self] url in
+            guard let self, self.configuration.capture.previewRecording else { return }
+            self.openMediaPreview(url)
+        }
         clamshellObserver = NotificationCenter.default.addObserver(
             forName: .paletteClamshellDropped,
             object: nil,
@@ -261,6 +274,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.toggleRecording()
                 } else if step == "clamshell" {
                     try? await self.keepAwake.setClamshell(true)
+                } else if let value = step.dropPrefix("annotate=") {
+                    self.openAnnotator(URL(fileURLWithPath: value))
+                } else if let value = step.dropPrefix("annotate_export=") {
+                    self.annotateExport(value)
+                } else if let value = step.dropPrefix("preview=") {
+                    self.openMediaPreview(URL(fileURLWithPath: value))
                 } else if step == "settings" {
                     self.showSettings()
                 } else if step == "clipboard" {
@@ -272,6 +291,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.searchController.query = value
                 } else if let value = step.dropPrefix("snapshot=") {
                     self.writeSnapshot(to: value)
+                } else if let value = step.dropPrefix("window_snapshot=") {
+                    let target = self.annotateWindows.last?.window
+                        ?? self.mediaPreviews.last?.window
+                        ?? NSApp.keyWindow
+                        ?? NSApp.windows.last(where: { $0.isVisible })
+                    if let view = target?.contentView {
+                        self.write(view: view, to: value)
+                    }
                 } else if let value = step.dropPrefix("settings_snapshot=") {
                     self.writeSettingsSnapshot(to: value)
                 } else if let value = step.dropPrefix("onboarding_snapshot=") {
@@ -668,6 +695,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
+    }
+
+    // MARK: - Annotate and preview
+
+    private func openAnnotator(_ url: URL) {
+        Log.shared.info("Annotator: opening \(url.path)", source: "capture")
+        guard let image = NSImage(contentsOf: url) else {
+            Log.shared.error("Annotator: could not read \(url.path)", source: "capture")
+            Task { await searchController.notify("Could not open \(url.lastPathComponent) for editing") }
+            return
+        }
+        var controller: AnnotateWindowController!
+        controller = AnnotateWindowController(image: image, url: url) { [weak self] in
+            self?.annotateWindows.removeAll { $0 === controller }
+        }
+        annotateWindows.append(controller)
+        Log.shared.info("Annotator: window \(annotateWindows.count) open", source: "capture")
+        controller.show()
+    }
+
+    /// Headless check of the annotator: draws every shape, crops, and writes
+    /// the result. Used by the script runner, not by the UI.
+    private func annotateExport(_ spec: String) {
+        let parts = spec.split(separator: "|").map(String.init)
+        guard parts.count == 2, let image = NSImage(contentsOfFile: parts[0]) else {
+            Log.shared.error("annotate_export needs source|destination", source: "capture")
+            return
+        }
+        let editor = AnnotationEditor(image: image, url: nil)
+        editor.add(.arrow(
+            from: CGPoint(x: 0.1, y: 0.1),
+            to: CGPoint(x: 0.4, y: 0.35),
+            color: .systemRed,
+            width: 0.004
+        ))
+        editor.add(.rectangle(
+            rect: CGRect(x: 0.5, y: 0.1, width: 0.3, height: 0.2),
+            color: .systemBlue,
+            width: 0.004
+        ))
+        editor.add(.text(at: CGPoint(x: 0.1, y: 0.6), text: "Palette", size: 0.06, color: .systemYellow))
+        editor.crop(to: CGRect(x: 0.05, y: 0.05, width: 0.8, height: 0.8))
+        guard let data = editor.renderedPNG() else {
+            Log.shared.error("annotate_export could not encode", source: "capture")
+            return
+        }
+        do {
+            try data.write(to: URL(fileURLWithPath: parts[1]))
+            Log.shared.info("Annotated sample written to \(parts[1])", source: "capture")
+        } catch {
+            Log.shared.error("annotate_export failed: \(error.localizedDescription)", source: "capture")
+        }
+    }
+
+    private func openMediaPreview(_ url: URL) {
+        let controller = MediaPreviewWindowController(url: url)
+        mediaPreviews.append(controller)
+        controller.show()
+        // Keep only the most recent preview alive.
+        if mediaPreviews.count > 3 { mediaPreviews.removeFirst() }
     }
 
     @objc private func stopRecordingFromMenu() {

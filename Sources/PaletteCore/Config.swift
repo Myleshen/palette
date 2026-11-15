@@ -232,6 +232,10 @@ public struct CaptureConfig: Sendable, Equatable {
     public var hidePalette = true
     public var captureCursor = false
     public var showClicks = false
+    /// Open the annotate window after a screenshot.
+    public var editAfterCapture = false
+    /// Open a player after a recording stops.
+    public var previewRecording = true
 
     public init() {}
 }
@@ -557,6 +561,8 @@ public enum ConfigLoader {
             config.capture.hidePalette = capture.bool("hide_palette") ?? config.capture.hidePalette
             config.capture.captureCursor = capture.bool("capture_cursor") ?? config.capture.captureCursor
             config.capture.showClicks = capture.bool("show_clicks") ?? config.capture.showClicks
+            config.capture.editAfterCapture = capture.bool("edit_after_capture") ?? config.capture.editAfterCapture
+            config.capture.previewRecording = capture.bool("preview_recording") ?? config.capture.previewRecording
         }
 
         if let timer = table.table("timer") {
@@ -772,6 +778,8 @@ public enum ConfigLoader {
         hide_palette = true
         capture_cursor = false
         show_clicks = false
+        edit_after_capture = false         # open the annotate window
+        preview_recording = true           # player after a recording stops
 
         # Timer presets (minutes), and what happens when one finishes.
         [timer]
@@ -916,6 +924,8 @@ public enum ConfigWriter {
         out.append("hide_palette = \(config.capture.hidePalette)")
         out.append("capture_cursor = \(config.capture.captureCursor)")
         out.append("show_clicks = \(config.capture.showClicks)")
+        out.append("edit_after_capture = \(config.capture.editAfterCapture)")
+        out.append("preview_recording = \(config.capture.previewRecording)")
         out.append("")
         out.append("[timer]")
         out.append("presets = [\(config.timer.presets.map(String.init).joined(separator: ", "))]")

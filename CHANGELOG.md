@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Annotate** window for screenshots: arrow, rectangle, text and crop, six colours, a line-width slider, undo, copy, and save over the original. `/shot` gains "capture and annotate" rows, and `[capture] edit_after_capture` opens the editor after every screenshot.
+- **Recording preview**: a player window with scrub, reveal and copy path when a recording stops (`[capture] preview_recording`, on by default).
+
+### Fixed
+
+- Provider tabs, clipboard filter chips, mode chips and footer hints ignored the theme's `typography.ui_family`; they now use it like the rest of the UI.
+
 ## 2.3.4 — 2026-11-15
 
 ### Added

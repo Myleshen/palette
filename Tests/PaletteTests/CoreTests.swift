@@ -175,6 +175,8 @@ final class CoreTests: XCTestCase {
         recording_format = "mp4"
         delay = 3
         show_clicks = true
+        edit_after_capture = true
+        preview_recording = false
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         var config = ConfigLoader.load(paths: paths).config
@@ -184,12 +186,19 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(config.capture.recordingFormat, "mp4")
         XCTAssertEqual(config.capture.delay, 3)
         XCTAssertTrue(config.capture.showClicks)
+        XCTAssertTrue(config.capture.editAfterCapture)
+        XCTAssertFalse(config.capture.previewRecording)
         XCTAssertFalse(config.capture.screenshotAction.savesFile)
         XCTAssertTrue(config.capture.screenshotAction.copiesToClipboard)
 
         config.capture.screenshotAction = .saveCopy
+        config.capture.editAfterCapture = false
+        config.capture.previewRecording = true
         try ConfigWriter.render(config).write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.capture.screenshotAction, .saveCopy)
+        let reloaded = ConfigLoader.load(paths: paths).config
+        XCTAssertEqual(reloaded.capture.screenshotAction, .saveCopy)
+        XCTAssertFalse(reloaded.capture.editAfterCapture)
+        XCTAssertTrue(reloaded.capture.previewRecording)
     }
 
     func testTimerDurationParsing() {

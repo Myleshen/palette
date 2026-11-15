@@ -551,7 +551,7 @@ struct LauncherRootView: View {
                         .font(.system(size: 10, weight: .semibold))
                 }
                 Text(title)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(theme.font(size: 10, weight: .medium))
                     .lineLimit(1)
             }
             .foregroundColor(theme.color(selected
@@ -594,7 +594,7 @@ struct LauncherRootView: View {
             controller.setClipboardFilter(value)
         } label: {
             Text(title)
-                .font(.system(size: 10, weight: .semibold))
+                .font(theme.font(size: 10, weight: .semibold))
                 .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
                 .padding(.horizontal, 9)
                 .padding(.vertical, 3)
@@ -610,7 +610,7 @@ struct LauncherRootView: View {
     private func modeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 10, weight: .semibold))
+                .font(theme.font(size: 10, weight: .semibold))
                 .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
                 .padding(.horizontal, 9)
                 .padding(.vertical, 3)
@@ -899,7 +899,7 @@ struct LauncherRootView: View {
                 .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.55))
                 .lineLimit(1)
         }
-        .font(.system(size: 10, weight: .medium))
+        .font(theme.font(size: 10, weight: .medium))
         .foregroundColor(theme.color(theme.footer.hintColor))
         .padding(.horizontal, isPill ? 20 : 16)
         .frame(height: 28)

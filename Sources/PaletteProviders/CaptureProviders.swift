@@ -29,13 +29,19 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
             row(id: "screen", title: "Capture the screen", subtitle: delay > 0 ? "After \(Int(delay)) seconds" : "All displays", value: "screen", score: 9_000),
             row(id: "region", title: "Capture a region", subtitle: "Drag to select", value: "region", score: 8_900),
             row(id: "window", title: "Capture a window", subtitle: "Click a window", value: "window", score: 8_800),
+            row(id: "annotate-region", title: "Capture a region and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:region", score: 8_700),
+            row(id: "annotate-screen", title: "Capture the screen and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:screen", score: 8_600),
         ]
         guard !query.isEmpty else { return items }
         return items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        guard let raw = action.value.text, let mode = CaptureMode(rawValue: raw) else { return }
+        guard let raw = action.value.text else { return }
+        let annotate = raw.hasPrefix("annotate:")
+        let name = annotate ? String(raw.dropFirst("annotate:".count)) : raw
+        guard let mode = CaptureMode(rawValue: name) else { return }
+        await MainActor.run { service.annotateNextCapture = annotate }
         let hide = await service.config.hidePalette
         if hide { await beforeCapture() }
         // Give the panel a beat to leave the screen before capturing.
@@ -52,7 +58,7 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
             group: "Screenshot",
             score: score,
             actions: [PaletteAction(id: id, title: title, kind: .custom, value: .text(value))],
-            preview: .text("Saves to the configured capture directory and copies to the clipboard, depending on [capture] settings.\n\nRegion and window use the system selection UI; press Escape to cancel."),
+            preview: .text("Saves to the configured capture directory and copies to the clipboard, depending on [capture] settings.\n\nAnnotate opens the editor with arrow, rectangle, text and crop tools. Region and window use the system selection UI; press Escape to cancel."),
             providerID: descriptor.id,
             providerName: descriptor.name
         )

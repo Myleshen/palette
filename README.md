@@ -285,6 +285,23 @@ profile. Restarting Palette inside that window does not ask for the master
 password again; **Refresh Bitwarden Cache** forces a fresh read without logging
 you out. The master password itself is never stored.
 
+### Screenshots and recordings
+
+`/shot` captures the screen, a region, or a window; `/rec` starts and stops a
+recording. Both use the system capture engine and land in the configured
+capture directory. `⌘⌥⇧S` and `⌘⌥⇧R` run the same actions from anywhere, and a
+menu-bar **Stop recording · m:ss** item shows while a recording runs.
+
+**Annotate** rows in `/shot` open the editor on the capture: arrow, rectangle,
+text and crop, six colours, a width slider, `⌘Z` undo, `⌘C` copy and `⌘S` save
+over the original file. Marks are stored as fractions of the image, so they look
+the same at any window size, and cropping remaps them instead of dropping them.
+
+Recordings open in a player window when they stop: play, scrub, reveal in
+Finder, or copy the path. Both behaviours are toggles in Settings → Capture
+(`edit_after_capture`, `preview_recording`), and the first capture asks for
+Screen Recording permission once per build.
+
 ### Bitwarden
 
 `/bw`, `/bwu`, `/bwt`, `/bwn`, and `/bwo` share one in-memory session. The first
