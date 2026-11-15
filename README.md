@@ -297,8 +297,10 @@ live in Settings → **Shortcuts** and can be cleared or rebound.
 
 A capture plays a shutter sound and shows a thumbnail for a couple of seconds
 (both toggles in Settings → Capture), so it is obvious that it worked. `/shots`
-lists everything in the capture directory, newest first, with open, annotate,
-copy image and reveal.
+lists everything in the capture directory, newest first and grouped by day —
+screenshots and recordings together — with a thumbnail (a poster frame for
+videos) in the preview pane, plus open, annotate, copy image and reveal. Thumbnails
+are generated once per file and cached by path and modification date.
 
 Recordings can target the whole screen, a single display, or a fixed region, and
 optionally include the default audio input — set under Settings → Capture or per

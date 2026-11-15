@@ -187,7 +187,7 @@ public final class SearchController: ObservableObject, HostBridge {
         let parsed = registry.parser.parse(query)
         // Preview is useful wherever a row has something worth showing:
         // clipboard, Ask, snippets, and path/project providers.
-        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj"]
+        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj", "shots"]
             .contains(parsed.providerID ?? "")
         if previewProvider {
             if !previewEnabled {
