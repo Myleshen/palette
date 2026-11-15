@@ -1,21 +1,30 @@
 import AppKit
+import PalettePlatform
 import SwiftUI
+
+/// Back to a menu-bar app once no editor or player window is left.
+@MainActor
+func restoreAccessoryPolicyIfIdle() {
+    let editing = NSApp.windows.contains { $0.isVisible && $0.canBecomeKey && $0.title != "" && $0.className != "NSStatusBarWindow" }
+    if !editing, NSApp.activationPolicy() == .regular {
+        NSApp.setActivationPolicy(.accessory)
+    }
+}
 
 /// Annotate window: a screenshot, a small tool strip, and Save/Copy.
 @MainActor
 final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     private let editor: AnnotationEditor
-    private var onClose: (() -> Void)?
+    var onClose: (() -> Void)?
 
-    init(image: NSImage, url: URL?, onClose: (() -> Void)? = nil) {
+    init(image: NSImage, url: URL?) {
         editor = AnnotationEditor(image: image, url: url)
-        self.onClose = onClose
 
         let size = image.size
         let maxSize = NSSize(width: 1180, height: 760)
         let scale = min(1, min(maxSize.width / max(1, size.width), maxSize.height / max(1, size.height)))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale + 52),
+            contentRect: NSRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale + 44),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -34,13 +43,20 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func show() {
+        // Palette is an accessory app (LSUIElement), so its windows never become
+        // key on their own and the canvas would not receive clicks.
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+        }
         showWindow(nil)
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
         window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKey()
     }
 
     func windowWillClose(_ notification: Notification) {
         onClose?()
+        restoreAccessoryPolicyIfIdle()
     }
 }
 
@@ -103,7 +119,6 @@ struct AnnotateView: View {
                             .padding(10)
                     }
                 }
-                .onAppear { setWindowSize(fitted: fitted) }
             }
         }
     }
@@ -182,14 +197,6 @@ struct AnnotateView: View {
         let width = image.width * scale
         let height = image.height * scale
         return CGRect(x: (size.width - width) / 2, y: (size.height - height) / 2, width: width, height: height)
-    }
-
-    private func setWindowSize(fitted: CGRect) {
-        guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.title != "Palette" }) else { return }
-        let desired = NSSize(width: max(520, fitted.width), height: max(360, fitted.height + 96))
-        guard abs(window.frame.width - desired.width) > 1 || abs(window.frame.height - desired.height) > 40 else { return }
-        window.setContentSize(desired)
-        window.center()
     }
 
     private func fraction(_ point: CGPoint, in fitted: CGRect) -> CGPoint {

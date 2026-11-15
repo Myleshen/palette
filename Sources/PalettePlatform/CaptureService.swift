@@ -98,7 +98,9 @@ public final class CaptureService {
         }
 
         var saved: URL?
-        if config.screenshotAction.savesFile {
+        // The annotator can only save over a real file, so a copy-only action
+        // still writes one when this capture is going to the editor.
+        if config.screenshotAction.savesFile || annotateNextCapture {
             let target = directory.appendingPathComponent(fileName(kind: "shot", extension: config.screenshotFormat))
             try? FileManager.default.removeItem(at: target)
             try FileManager.default.moveItem(at: temp, to: target)

@@ -195,6 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.searchController.setStatus(message, duration: 4)
         }
         captureService.onFailure = { [weak self] message in
+            self?.captureService.annotateNextCapture = false
             Task { await self?.searchController.notify(message) }
         }
         captureService.onScreenshot = { [weak self] url in
@@ -706,9 +707,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task { await searchController.notify("Could not open \(url.lastPathComponent) for editing") }
             return
         }
-        var controller: AnnotateWindowController!
-        controller = AnnotateWindowController(image: image, url: url) { [weak self] in
-            self?.annotateWindows.removeAll { $0 === controller }
+        let controller = AnnotateWindowController(image: image, url: url)
+        controller.onClose = { [weak self, weak controller] in
+            guard let self, let controller else { return }
+            self.annotateWindows.removeAll { $0 === controller }
         }
         annotateWindows.append(controller)
         Log.shared.info("Annotator: window \(annotateWindows.count) open", source: "capture")
@@ -751,10 +753,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func openMediaPreview(_ url: URL) {
         let controller = MediaPreviewWindowController(url: url)
+        controller.onClose = { [weak self, weak controller] in
+            guard let self, let controller else { return }
+            self.mediaPreviews.removeAll { $0 === controller }
+        }
         mediaPreviews.append(controller)
         controller.show()
-        // Keep only the most recent preview alive.
-        if mediaPreviews.count > 3 { mediaPreviews.removeFirst() }
     }
 
     @objc private func stopRecordingFromMenu() {

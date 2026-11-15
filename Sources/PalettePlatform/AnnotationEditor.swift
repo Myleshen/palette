@@ -3,12 +3,12 @@ import Foundation
 
 /// A mark drawn on a screenshot. Coordinates and sizes are fractions of the
 /// image, so the same shape renders at any zoom or window size.
-enum AnnotationShape: Equatable {
+public enum AnnotationShape: Equatable {
     case arrow(from: CGPoint, to: CGPoint, color: NSColor, width: CGFloat)
     case rectangle(rect: CGRect, color: NSColor, width: CGFloat)
     case text(at: CGPoint, text: String, size: CGFloat, color: NSColor)
 
-    var color: NSColor {
+    public var color: NSColor {
         switch self {
         case let .arrow(_, _, color, _): return color
         case let .rectangle(_, color, _): return color
@@ -17,15 +17,15 @@ enum AnnotationShape: Equatable {
     }
 }
 
-enum AnnotateTool: String, CaseIterable, Identifiable {
+public enum AnnotateTool: String, CaseIterable, Identifiable {
     case arrow
     case rectangle
     case text
     case crop
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var symbol: String {
+    public var symbol: String {
         switch self {
         case .arrow: return "arrow.up.right"
         case .rectangle: return "rectangle"
@@ -34,7 +34,7 @@ enum AnnotateTool: String, CaseIterable, Identifiable {
         }
     }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .arrow: return "Arrow"
         case .rectangle: return "Rectangle"
@@ -47,16 +47,16 @@ enum AnnotateTool: String, CaseIterable, Identifiable {
 /// Everything the annotate window edits: a base image, the marks drawn on it
 /// and an undo history. Nothing touches the file until `save` or `copy`.
 @MainActor
-final class AnnotationEditor: ObservableObject {
-    @Published var tool: AnnotateTool = .arrow
-    @Published var color: NSColor = .systemRed
+public final class AnnotationEditor: ObservableObject {
+    @Published public var tool: AnnotateTool = .arrow
+    @Published public var color: NSColor = .systemRed
     /// Line width and text size as fractions of the image, so marks keep their
     /// weight at any resolution.
-    @Published var lineWidth: CGFloat = 0.004
-    @Published var shapes: [AnnotationShape] = []
-    @Published private(set) var image: NSImage
+    @Published public var lineWidth: CGFloat = 0.004
+    @Published public var shapes: [AnnotationShape] = []
+    @Published public private(set) var image: NSImage
 
-    let sourceURL: URL?
+    public let sourceURL: URL?
     private let original: NSImage
     private var undoStack: [Snapshot] = []
 
@@ -65,38 +65,38 @@ final class AnnotationEditor: ObservableObject {
         var shapes: [AnnotationShape]
     }
 
-    init(image: NSImage, url: URL?) {
+    public init(image: NSImage, url: URL?) {
         self.image = image
         self.original = image
         self.sourceURL = url
     }
 
-    var canUndo: Bool { !undoStack.isEmpty }
+    public var canUndo: Bool { !undoStack.isEmpty }
 
     private func pushUndo() {
         undoStack.append(Snapshot(image: image, shapes: shapes))
-        if undoStack.count > 40 { undoStack.removeFirst() }
+        if undoStack.count > 10 { undoStack.removeFirst() }
     }
 
-    func add(_ shape: AnnotationShape) {
+    public func add(_ shape: AnnotationShape) {
         pushUndo()
         shapes.append(shape)
     }
 
-    func undo() {
+    public func undo() {
         guard let last = undoStack.popLast() else { return }
         image = last.image
         shapes = last.shapes
     }
 
-    func revert() {
+    public func revert() {
         pushUndo()
         image = original
         shapes = []
     }
 
     /// Crops destructively but remaps every mark so nothing drawn is lost.
-    func crop(to rect: CGRect) {
+    public func crop(to rect: CGRect) {
         let clamped = rect.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
         guard clamped.width > 0.02, clamped.height > 0.02 else { return }
         pushUndo()
@@ -136,23 +136,42 @@ final class AnnotationEditor: ObservableObject {
 
     // MARK: - Output
 
-    func rendered() -> NSImage {
-        let size = image.size
-        let output = NSImage(size: size)
-        output.lockFocus()
-        image.draw(in: CGRect(origin: .zero, size: size))
-        for shape in shapes {
-            draw(shape, in: size)
+    public func rendered() -> NSImage {
+        let points = image.size
+        let pixels = image.pixelSize
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(pixels.width),
+            pixelsHigh: Int(pixels.height),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+        guard let rep, let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            return image
         }
-        output.unlockFocus()
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        image.draw(in: CGRect(origin: .zero, size: points))
+        for shape in shapes {
+            draw(shape, in: points)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        let output = NSImage(size: points)
+        output.addRepresentation(rep)
         return output
     }
 
     private func draw(_ shape: AnnotationShape, in size: CGSize) {
         switch shape {
         case let .arrow(from, to, color, width):
-            let start = CGPoint(x: from.x * size.width, y: from.y * size.height)
-            let end = CGPoint(x: to.x * size.width, y: to.y * size.height)
+            // Fractions are top-left; this context is bottom-left.
+            let start = CGPoint(x: from.x * size.width, y: (1 - from.y) * size.height)
+            let end = CGPoint(x: to.x * size.width, y: (1 - to.y) * size.height)
             let line = max(1, width * size.width)
             color.setStroke()
             let path = NSBezierPath()
@@ -177,7 +196,7 @@ final class AnnotationEditor: ObservableObject {
         case let .rectangle(rect, color, width):
             let target = CGRect(
                 x: rect.minX * size.width,
-                y: rect.minY * size.height,
+                y: (1 - rect.maxY) * size.height,
                 width: rect.width * size.width,
                 height: rect.height * size.height
             )
@@ -206,7 +225,7 @@ final class AnnotationEditor: ObservableObject {
     }
 
     @discardableResult
-    func save() throws -> URL {
+    public func save() throws -> URL {
         guard let sourceURL else { throw AnnotationError.noDestination }
         let data: Data?
         if ["jpg", "jpeg"].contains(sourceURL.pathExtension.lowercased()) {
@@ -215,23 +234,26 @@ final class AnnotationEditor: ObservableObject {
             data = rendered().pngData()
         }
         guard let data else { throw AnnotationError.encodeFailed }
-        try data.write(to: sourceURL)
+        let temp = sourceURL.deletingLastPathComponent()
+            .appendingPathComponent(".\(UUID().uuidString).tmp")
+        try data.write(to: temp)
+        _ = try FileManager.default.replaceItemAt(sourceURL, withItemAt: temp)
         return sourceURL
     }
 
-    func renderedPNG() -> Data? { rendered().pngData() }
+    public func renderedPNG() -> Data? { rendered().pngData() }
 
-    func copy() {
+    public func copy() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([rendered()])
     }
 
-    enum AnnotationError: LocalizedError {
+    public enum AnnotationError: LocalizedError {
         case noDestination
         case encodeFailed
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .noDestination: return "This image has no file to save to"
             case .encodeFailed: return "Could not encode the annotated image"
@@ -241,6 +263,14 @@ final class AnnotationEditor: ObservableObject {
 }
 
 extension NSImage {
+    /// Backing pixel size, which differs from `size` on Retina screenshots.
+    public var pixelSize: CGSize {
+        if let rep = representations.first {
+            return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
+        }
+        return size
+    }
+
     fileprivate func cropped(to rect: CGRect) -> NSImage? {
         guard let cg = cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         let scale = CGFloat(cg.width) / size.width
@@ -250,17 +280,10 @@ extension NSImage {
             width: rect.width * scale,
             height: rect.height * scale
         )
-        // CGImage crop origin is bottom-left, NSImage's is top-left.
-        let flipped = CGRect(
-            x: pixels.minX,
-            y: CGFloat(cg.height) - pixels.maxY,
-            width: pixels.width,
-            height: pixels.height
-        )
-        guard let cropped = cg.cropping(to: flipped) else { return nil }
+        guard let cropped = cg.cropping(to: pixels) else { return nil }
         return NSImage(
             cgImage: cropped,
-            size: NSSize(width: flipped.width / scale, height: flipped.height / scale)
+            size: NSSize(width: pixels.width / scale, height: pixels.height / scale)
         )
     }
 

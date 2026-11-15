@@ -4,8 +4,9 @@ import SwiftUI
 
 /// Preview for a finished recording: play it, reveal it, or copy its path.
 @MainActor
-final class MediaPreviewWindowController: NSWindowController {
+final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
     private let player: AVPlayer
+    var onClose: (() -> Void)?
 
     init(url: URL) {
         player = AVPlayer(url: url)
@@ -21,6 +22,7 @@ final class MediaPreviewWindowController: NSWindowController {
         window.appearance = NSAppearance(named: .darkAqua)
         window.isReleasedWhenClosed = false
         super.init(window: window)
+        window.delegate = self
         window.contentView = NSHostingView(rootView: MediaPreviewView(player: player, url: url, close: { [weak self] in
             self?.player.pause()
             self?.close()
@@ -32,7 +34,16 @@ final class MediaPreviewWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    func windowWillClose(_ notification: Notification) {
+        player.pause()
+        onClose?()
+        restoreAccessoryPolicyIfIdle()
+    }
+
     func show() {
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+        }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
