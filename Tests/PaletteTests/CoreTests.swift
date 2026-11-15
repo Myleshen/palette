@@ -181,6 +181,8 @@ final class CoreTests: XCTestCase {
         recording_display = 2
         recording_region = "10,20,300,400"
         recording_audio = true
+        sound = false
+        thumbnail = false
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         var config = ConfigLoader.load(paths: paths).config
@@ -196,6 +198,8 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(config.capture.recordingDisplay, 2)
         XCTAssertEqual(config.capture.recordingRegion, "10,20,300,400")
         XCTAssertTrue(config.capture.recordingAudio)
+        XCTAssertFalse(config.capture.captureSound)
+        XCTAssertFalse(config.capture.captureThumbnail)
         XCTAssertFalse(config.capture.screenshotAction.savesFile)
         XCTAssertTrue(config.capture.screenshotAction.copiesToClipboard)
 

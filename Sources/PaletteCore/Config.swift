@@ -239,6 +239,9 @@ public struct CaptureConfig: Sendable, Equatable {
     /// "x,y,w,h" in screen points, used when recordingTarget is region.
     public var recordingRegion = ""
     public var recordingAudio = false
+    /// Play a shutter sound and show the thumbnail after a screenshot.
+    public var captureSound = true
+    public var captureThumbnail = true
     /// Open the annotate window after a screenshot.
     public var editAfterCapture = false
     /// Open a player after a recording stops.
@@ -590,6 +593,8 @@ public enum ConfigLoader {
             config.capture.captureCursor = capture.bool("capture_cursor") ?? config.capture.captureCursor
             config.capture.showClicks = capture.bool("show_clicks") ?? config.capture.showClicks
             config.capture.editAfterCapture = capture.bool("edit_after_capture") ?? config.capture.editAfterCapture
+            config.capture.captureSound = capture.bool("sound") ?? config.capture.captureSound
+            config.capture.captureThumbnail = capture.bool("thumbnail") ?? config.capture.captureThumbnail
             config.capture.previewRecording = capture.bool("preview_recording") ?? config.capture.previewRecording
             if let value = capture.str("recording_target"), ["screen", "display", "region"].contains(value.lowercased()) {
                 config.capture.recordingTarget = value.lowercased()
@@ -816,6 +821,8 @@ public enum ConfigLoader {
         recording_display = 1
         recording_region = ""
         recording_audio = false
+        sound = true                       # shutter sound after a screenshot
+        thumbnail = true                   # brief thumbnail after a screenshot
         edit_after_capture = false         # open the annotate window
         preview_recording = true           # player after a recording stops
 
@@ -965,6 +972,8 @@ public enum ConfigWriter {
         out.append("capture_cursor = \(config.capture.captureCursor)")
         out.append("show_clicks = \(config.capture.showClicks)")
         out.append("edit_after_capture = \(config.capture.editAfterCapture)")
+        out.append("sound = \(config.capture.captureSound)")
+        out.append("thumbnail = \(config.capture.captureThumbnail)")
         out.append("preview_recording = \(config.capture.previewRecording)")
         out.append("recording_target = \(quote(config.capture.recordingTarget))")
         out.append("recording_display = \(config.capture.recordingDisplay)")

@@ -979,6 +979,8 @@ struct SettingsView: View {
                 Toggle("Hide Palette before capturing", isOn: $config.capture.hidePalette)
                 Toggle("Include the cursor", isOn: $config.capture.captureCursor)
                 Toggle("Show clicks while recording", isOn: $config.capture.showClicks)
+                Toggle("Shutter sound after a screenshot", isOn: $config.capture.captureSound)
+                Toggle("Show a thumbnail after a screenshot", isOn: $config.capture.captureThumbnail)
                 Toggle("Open the annotator after a screenshot", isOn: $config.capture.editAfterCapture)
                 Toggle("Preview recordings when they stop", isOn: $config.capture.previewRecording)
                 Text("Use /shot for screenshots and /rec to start or stop a recording. Recordings are saved with the system capture engine.")

@@ -80,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentAskHotKey: HotKeySpec?
     private var recordingMenuItem: NSMenuItem?
     private var recordingTicker: Timer?
+    private let screenshotHUD = ScreenshotHUD()
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
     private var startupDiagnostics: [Diagnostic] = []
@@ -206,12 +207,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             let forced = self.captureService.annotateNextCapture
             self.captureService.annotateNextCapture = false
-            guard forced || self.configuration.capture.editAfterCapture else { return }
-            self.openAnnotator(url)
+            if forced || self.configuration.capture.editAfterCapture {
+                self.openAnnotator(url)
+                return
+            }
+            self.confirmCapture(url)
         }
         captureService.onRecordingStopped = { [weak self] url in
             guard let self, self.configuration.capture.previewRecording else { return }
             self.openMediaPreview(url)
+        }
+        NotificationCenter.default.addObserver(
+            forName: .paletteAnnotateRequest,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let path = note.object as? String else { return }
+            Task { @MainActor in self?.openAnnotator(URL(fileURLWithPath: path)) }
         }
         clamshellObserver = NotificationCenter.default.addObserver(
             forName: .paletteClamshellDropped,
@@ -285,6 +297,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.openAnnotator(URL(fileURLWithPath: value))
                 } else if let value = step.dropPrefix("annotate_export=") {
                     self.annotateExport(value)
+                } else if let value = step.dropPrefix("cue=") {
+                    self.confirmCapture(URL(fileURLWithPath: value))
+                    try? await Task.sleep(nanoseconds: 400_000_000)
                 } else if let value = step.dropPrefix("preview=") {
                     self.openMediaPreview(URL(fileURLWithPath: value))
                 } else if let value = step.dropPrefix("ui_drag=") {
@@ -301,12 +316,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else if let value = step.dropPrefix("snapshot=") {
                     self.writeSnapshot(to: value)
                 } else if let value = step.dropPrefix("window_snapshot=") {
-                    let target = self.annotateWindows.last?.window
-                        ?? self.mediaPreviews.last?.window
-                        ?? NSApp.keyWindow
-                        ?? NSApp.windows.last(where: { $0.isVisible })
-                    if let view = target?.contentView {
-                        self.write(view: view, to: value)
+                    if let hud = self.annotateWindows.last?.window
+                        ?? self.mediaPreviews.last?.window {
+                        self.write(view: hud.contentView ?? NSView(), to: value)
+                    } else if let hudView = self.screenshotHUD.view {
+                        self.write(view: hudView, to: value)
+                    } else if let other = NSApp.keyWindow ?? NSApp.windows.last(where: { $0.isVisible }) {
+                        self.write(view: other.contentView ?? NSView(), to: value)
                     }
                 } else if let value = step.dropPrefix("settings_snapshot=") {
                     self.writeSettingsSnapshot(to: value)
@@ -443,6 +459,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(GitHubProvider(launcher: launcher, terminalApp: configuration.terminalApp))
         providers.append(UnitsProvider())
         providers.append(WindowProvider(launcher: launcher))
+        providers.append(ShotsProvider(service: captureService))
         let hideForCapture: @MainActor () -> Void = { [weak self] in
             self?.panel?.hide(activatePrevious: false)
         }
@@ -863,6 +880,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func annotationShapeCount() -> Int {
         annotateWindows.last?.shapeCount ?? 0
+    }
+
+    /// Sound plus a brief thumbnail: a capture must never look like nothing
+    /// happened.
+    private func confirmCapture(_ url: URL) {
+        if configuration.capture.captureSound {
+            NSSound(named: NSSound.Name("Tink"))?.play()
+        }
+        guard configuration.capture.captureThumbnail,
+              let image = NSImage(contentsOf: url) else { return }
+        screenshotHUD.show(image: image, title: url.lastPathComponent) { [weak self] in
+            self?.openAnnotator(url)
+        }
     }
 
     private func openMediaPreview(_ url: URL) {
