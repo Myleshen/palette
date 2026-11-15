@@ -124,6 +124,96 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 5)
     }
 
+    func testUnitConversion() throws {
+        let km = try XCTUnwrap(Units.parse("10 km in mi"))
+        XCTAssertEqual(Units.convert(km), 6.2137, accuracy: 0.001)
+        let temp = try XCTUnwrap(Units.parse("72 f to c"))
+        XCTAssertEqual(Units.convert(temp), 22.2222, accuracy: 0.001)
+        let data = try XCTUnwrap(Units.parse("1.5 gib in mb"))
+        XCTAssertEqual(Units.convert(data), 1610.612, accuracy: 0.01)
+        XCTAssertNil(Units.parse("10 km in kg"), "different kinds do not convert")
+        XCTAssertNil(Units.parse("banana"))
+        XCTAssertTrue(try XCTUnwrap(Units.parse("20 usd in eur")).isCurrency)
+    }
+
+    func testSSHConfigParsing() {
+        let text = """
+        # comment
+        Host prod
+          HostName 10.0.0.5
+          User deploy
+          Port 2222
+
+        Host *.internal
+          User nobody
+
+        Host staging
+          HostName staging.example.com
+        """
+        let hosts = SSHConfig.parse(text)
+        XCTAssertEqual(hosts.map(\.alias), ["prod", "staging"], "wildcards are skipped")
+        XCTAssertEqual(hosts[0].user, "deploy")
+        XCTAssertEqual(hosts[0].port, "2222")
+        XCTAssertEqual(hosts[0].destination, "deploy@prod")
+        XCTAssertNil(hosts[1].user)
+    }
+
+    func testCaptureConfigParsesAndRoundTrips() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-capture-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config"),
+            stateDir: root.appendingPathComponent("state"),
+            cacheDir: root.appendingPathComponent("cache")
+        )
+        try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
+        try """
+        [capture]
+        directory = "~/Pictures/Shots"
+        screenshot_action = "copy"
+        recording_format = "mp4"
+        delay = 3
+        show_clicks = true
+        """.write(to: paths.configFile, atomically: true, encoding: .utf8)
+
+        var config = ConfigLoader.load(paths: paths).config
+        XCTAssertTrue(config.capture.directory.hasSuffix("Pictures/Shots"))
+        XCTAssertFalse(config.capture.directory.contains("~"))
+        XCTAssertEqual(config.capture.screenshotAction, .copy)
+        XCTAssertEqual(config.capture.recordingFormat, "mp4")
+        XCTAssertEqual(config.capture.delay, 3)
+        XCTAssertTrue(config.capture.showClicks)
+        XCTAssertFalse(config.capture.screenshotAction.savesFile)
+        XCTAssertTrue(config.capture.screenshotAction.copiesToClipboard)
+
+        config.capture.screenshotAction = .saveCopy
+        try ConfigWriter.render(config).write(to: paths.configFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.capture.screenshotAction, .saveCopy)
+    }
+
+    func testTimerDurationParsing() {
+        XCTAssertEqual(TimerDuration.parse("25m"), 1500)
+        XCTAssertEqual(TimerDuration.parse("90s"), 90)
+        XCTAssertEqual(TimerDuration.parse("1h30m"), 5400)
+        XCTAssertEqual(TimerDuration.parse("1h 30m"), 5400)
+        XCTAssertEqual(TimerDuration.parse("1:30"), 90)
+        XCTAssertEqual(TimerDuration.parse("1:05:00"), 3900)
+        XCTAssertEqual(TimerDuration.parse("2"), 120, "a bare number means minutes")
+        XCTAssertNil(TimerDuration.parse(""))
+        XCTAssertNil(TimerDuration.parse("abc"))
+        XCTAssertNil(TimerDuration.parse("0"))
+        XCTAssertNil(TimerDuration.parse("1:75"), "seconds must be below 60")
+
+        XCTAssertEqual(TimerDuration.format(1500), "25:00")
+        XCTAssertEqual(TimerDuration.format(0), "0:00")
+        XCTAssertEqual(TimerDuration.format(3900), "1:05:00")
+        XCTAssertEqual(TimerDuration.format(59.2), "1:00", "rounds up so the last second is visible")
+
+        XCTAssertEqual(TimerDuration.label(1500), "25 minutes")
+        XCTAssertEqual(TimerDuration.label(5400), "1 hour 30 minutes")
+    }
+
     func testWindowConfigScaleAndOverrides() {
         var window = WindowConfig()
         XCTAssertEqual(window.launcherWidth, 680)

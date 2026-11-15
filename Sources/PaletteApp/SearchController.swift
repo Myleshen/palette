@@ -112,6 +112,8 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public var previewLayout: PreviewPlacement { configuration.window.previewLayout }
 
+    private var timerObserver: NSObjectProtocol?
+
     private var screenSize: CGSize {
         (PanelController.screenUnderPointer() ?? panel?.panel.screen)?.visibleFrame.size
             ?? CGSize(width: 1440, height: 900)
@@ -994,17 +996,49 @@ public final class SearchController: ObservableObject, HostBridge {
         }
     }
 
+    /// Re-render the timer tab once a second so the countdown moves.
+    public func observeTimerTicks() {
+        guard timerObserver == nil else { return }
+        timerObserver = NotificationCenter.default.addObserver(
+            forName: TimerService.tickNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.activeTabID == "timer" else { return }
+                self.scheduleSearch(debounce: true)
+            }
+        }
+    }
+
+    /// Measured height of the wrapping provider tab strip.
+    public private(set) var tabStripHeight: CGFloat = 44
+
+    public func setTabStripHeight(_ height: CGFloat) {
+        guard height > 0, abs(height - tabStripHeight) > 0.5 else { return }
+        tabStripHeight = height
+        updatePanelHeight()
+    }
+
     public func updatePanelHeight() {
         guard let panel else { return }
         let theme = themeManager.theme
+        // The tab strip wraps, so use its measured height; add a sub-row when
+        // a mode (clipboard filters, Ask history, provider group) adds one.
+        var tabs = max(44, tabStripHeight)
+        if activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1 { tabs += 38 }
+        let footer = theme.footer.show ? CGFloat(28) : 0
+        let pillExtra: CGFloat = 22
+
         if scratchpadActive {
-            panel.setContentHeight(CGFloat(theme.search.height) + 500 + 22)
+            panel.setContentHeight(CGFloat(theme.search.height) + 500 + tabs + footer + pillExtra)
             return
         }
         if terminalActive {
-            panel.setContentHeight(660)
+            panel.setContentHeight(660 + tabs + footer + pillExtra)
             return
         }
+
         let row = CGFloat(theme.effectiveRowHeight)
         let spacing: CGFloat = 6
         // The configured row count is the panel's fixed height: a short list
@@ -1019,11 +1053,6 @@ public final class SearchController: ObservableObject, HostBridge {
         } else {
             content = listHeight
         }
-        let footer = theme.footer.show ? CGFloat(28) : 0
-        // Provider tab strip, plus the clipboard filter chips when previewing.
-        // Two flow rows (three only with an unusually large provider set) plus
-        // the clipboard/Ask sub-tab row.
-        let tabs: CGFloat = (activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1) ? 110 : 82
         if previewEnabled {
             if previewLayout == .beside {
                 panel.widthOverride = CGFloat(windowConfig.previewWidth(for: screenSize))
@@ -1032,9 +1061,6 @@ public final class SearchController: ObservableObject, HostBridge {
                 content += 240
             }
         }
-        // Pill floats the search capsule above the content card: 12 pt top and
-        // bottom margins plus a 10 pt gap replace the old inline spacing.
-        let pillExtra: CGFloat = 22
         panel.setContentHeight(CGFloat(theme.search.height) + content + tabs + footer + pillExtra)
     }
 

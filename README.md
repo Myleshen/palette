@@ -148,6 +148,16 @@ trigger word:
 | `/sys <query>` | settings, lock, sleep, trash, reload, quit |
 | `/theme <query>` | switch themes live |
 | `/calc <expr>` | calculator (also works unprefixed) |
+| `/timer <duration>` | countdown timer: `25m`, `1h30m`, `1:30`, or stop |
+| `/shot` | screenshot the screen, a region, or a window |
+| `/rec` | start or stop a screen recording |
+| `/color` | pick a colour and copy its hex |
+| `/win <query>` | switch to any open window |
+| `/unit <amount> <unit> in <unit>` | unit and currency conversion |
+| `/stats` | disk, memory, load, battery, uptime |
+| `/ssh <query>` | hosts from `~/.ssh/config` |
+| `/docker <query>` | containers: start, stop, restart, logs |
+| `/gh <query>` | pull requests and issues through the `gh` CLI |
 
 A trailing slash browses a directory breadth-first: `/edit ~/dev/` shows the
 direct children of `~/dev` first, then the next level.
@@ -488,6 +498,8 @@ clipboard_hotkey = "opt+v"
 terminal_hotkey = "cmd+option+t"     # empty disables
 scratchpad_hotkey = "cmd+option+s"   # empty disables
 ask_hotkey = "cmd+option+a"          # empty disables
+screenshot_hotkey = "cmd+option+shift+s"
+recording_hotkey = "cmd+option+shift+r"
 search_position = "top"        # top | center
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent
@@ -505,6 +517,11 @@ preview_width = 0
 terminal_width = 0             # 0 = 1000 * scale
 scratchpad_width = 0
 preview_layout = "below"       # below | beside
+
+[timer]
+presets = [5, 10, 15, 25, 30, 45, 60]   # minutes, shown in /timer
+sound = true                   # chime when a timer finishes
+notify = true                  # system notification when a timer finishes
 
 [typography]
 ui_family = ""                 # empty inherits the theme

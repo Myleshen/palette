@@ -1,0 +1,127 @@
+import Foundation
+import PaletteCore
+import PalettePlatform
+
+/// Docker containers with start/stop/restart and logs in the terminal.
+public final class DockerProvider: PaletteProvider, @unchecked Sendable {
+    public let descriptor = ProviderDescriptor(
+        id: "docker",
+        name: "Docker",
+        trigger: "docker",
+        isGlobal: false,
+        priority: 46,
+        icon: "symbol:shippingbox",
+        keywords: ["docker", "container", "compose", "logs", "restart", "stop", "start"]
+    )
+
+    private let launcher: LauncherService
+    private let terminalApp: String
+
+    public init(launcher: LauncherService, terminalApp: String) {
+        self.launcher = launcher
+        self.terminalApp = terminalApp
+    }
+
+    private var dockerPath: String? { ToolLocator.shared.path(for: "docker") }
+
+    public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
+        let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let docker = dockerPath else {
+            return [PaletteItem(
+                id: "docker-missing",
+                title: "Docker is not installed",
+                subtitle: "Install Docker Desktop or colima, then reload Palette",
+                icon: .symbol("shippingbox"),
+                group: "Docker",
+                score: 1_000,
+                actions: [],
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            )]
+        }
+
+        guard let result = try? await ProcessRunner.run(
+            [docker, "ps", "-a", "--format", "{{.Names}}\t{{.State}}\t{{.Image}}\t{{.Status}}"],
+            timeout: 8
+        ), result.status == 0 else {
+            return [PaletteItem(
+                id: "docker-down",
+                title: "Docker is not running",
+                subtitle: "Start Docker Desktop or the daemon, then reload",
+                icon: .symbol("shippingbox"),
+                group: "Docker",
+                score: 1_000,
+                actions: [PaletteAction(id: "open-app", title: "Open Docker", kind: .custom, value: .text("open-app"))],
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            )]
+        }
+
+        let containers = result.stdoutString
+            .split(separator: "\n")
+            .map { $0.split(separator: "\t", omittingEmptySubsequences: false).map(String.init) }
+            .filter { $0.count >= 4 }
+
+        guard !containers.isEmpty else {
+            return [PaletteItem(
+                id: "docker-empty",
+                title: "No containers",
+                subtitle: "docker ps shows nothing on this machine",
+                icon: .symbol("shippingbox"),
+                group: "Docker",
+                score: 1_000,
+                actions: [],
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            )]
+        }
+
+        var items = containers.map { fields -> PaletteItem in
+            let name = fields[0]
+            let state = fields[1]
+            let image = fields[2]
+            let status = fields[3]
+            let running = state == "running"
+            return PaletteItem(
+                id: "docker:\(name)",
+                title: name,
+                subtitle: "\(state) · \(image)",
+                icon: .symbol(running ? "shippingbox.fill" : "shippingbox"),
+                badge: running ? "RUNNING" : state.uppercased(),
+                group: running ? "Running" : "Stopped",
+                score: running ? 9_000 : 8_000,
+                actions: [
+                    PaletteAction(id: running ? "stop" : "start", title: running ? "Stop \(name)" : "Start \(name)", kind: .custom, value: .text("\(running ? "stop" : "start"):\(name)")),
+                    PaletteAction(id: "restart", title: "Restart \(name)", kind: .custom, value: .text("restart:\(name)")),
+                    PaletteAction(id: "logs", title: "Follow logs", kind: .custom, value: .text("logs:\(name)")),
+                ],
+                preview: .text("\(name)\n\(status)\nImage: \(image)\n\nEnter toggles the container. ⌘K for restart or logs."),
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            )
+        }
+        if !query.isEmpty {
+            items = items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
+        }
+        return items
+    }
+
+    public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
+        guard let docker = dockerPath, let raw = action.value.text else { return }
+        let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return }
+        let command = parts[0]
+        let name = parts[1]
+        switch command {
+        case "logs":
+            let app = terminalApp
+            try await MainActor.run { try launcher.openTerminal(command: "\(docker) logs -f \(name)", app: app) }
+        case "open-app":
+            if let app = ToolLocator.shared.appPath(named: "Docker") {
+                await MainActor.run { launcher.activateApp(path: app) }
+            }
+        default:
+            _ = try? await ProcessRunner.run([docker, command, name], timeout: 20)
+        }
+    }
+}

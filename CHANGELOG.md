@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.3.4 — 2026-11-15
+
+### Added
+
+- Global shortcuts for **Screenshot** (`⌘⌥⇧S`) and **Recording** (`⌘⌥⇧R`), configurable in Settings → Shortcuts. While recording, the menu bar shows a live **Stop recording · m:ss** item.
+- **Screenshot** (`/shot`) and **Recording** (`/rec`) through the system capture engine: full screen, region, or window; configurable directory, format, action (save/copy/save-and-copy/preview), delay, cursor and click indicators. Failures report the capture error instead of returning nothing.
+- **Window switcher** (`/win`): every open window, keyboard-first, raises the selected window through the accessibility API.
+- **Colour picker** (`/color`): system sampler, copies the hex value, keeps recent picks.
+- **Convert** (`/unit`): length, mass, volume, data and temperature offline; currency through a one-hour cached rate table.
+- **System stats** (`/stats`): disk, memory, load, battery and uptime.
+- **SSH** (`/ssh`): hosts from `~/.ssh/config`, opened in the configured terminal.
+- **Docker** (`/docker`): containers with start/stop/restart and following logs.
+- **GitHub** (`/gh`): pull requests and issues via the `gh` CLI, with a clear prompt when auth is missing.
+- **Timers** provider (`/timer`): `25m`, `1h30m`, `1:30`, presets from `[timer] presets`, one timer at a time, a live countdown in the row, a chime and a notification when it finishes. Toggle sound/notification in Settings → Providers → Timers.
+
+### Fixed
+
+- Clamshell mode could report "on" while nothing kept the lid awake: a leftover flag made the guard look armed, and the root guard was a background shell that died with the authorisation session. It now runs as a launchd daemon, verifies `pmset` really reports `SleepDisabled 1`, re-checks after arming, and warns if it stops. The installer asked for a password and then failed because it called `/bin/chown`, which does not exist; it now uses `/usr/sbin/chown`.
+- Provider tabs wrap instead of clipping the last chip at the card edge, and the panel height follows the wrapped strip.
+- A capture that fails because Screen Recording is not granted now says so, in the log and on screen, instead of finishing silently.
+
 ## 2.3.3 — 2026-11-14
 
 ### Changed

@@ -57,6 +57,8 @@ struct SettingsView: View {
     @State private var terminalRecordToken = 0
     @State private var scratchpadRecordToken = 0
     @State private var askRecordToken = 0
+    @State private var screenshotRecordToken = 0
+    @State private var recordingRecordToken = 0
     @State private var settingsSearch = ""
     @State private var accessibilityTrusted: Bool
     @State private var askKeyInput = ""
@@ -488,6 +490,32 @@ struct SettingsView: View {
                             .accessibilityLabel("Record Ask hotkey")
                     }
                 }
+                LabeledContent("Screenshot shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.screenshotHotkey,
+                            label: "Screenshot hotkey",
+                            recordToken: screenshotRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { screenshotRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record screenshot hotkey")
+                    }
+                }
+                LabeledContent("Recording shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.recordingHotkey,
+                            label: "Recording hotkey",
+                            recordToken: recordingRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { recordingRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record recording hotkey")
+                    }
+                }
                 Text("Click Record, then press the shortcut you want. Save applies it immediately; clear an optional shortcut to disable it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -865,6 +893,43 @@ struct SettingsView: View {
 
     private var providerSettings: some View {
         Form {
+            Section("Screenshots and recording") {
+                TextField("Save to", text: $config.capture.directory)
+                Picker("Screenshots", selection: $config.capture.screenshotAction) {
+                    Text("Save").tag(CaptureAction.save)
+                    Text("Copy").tag(CaptureAction.copy)
+                    Text("Save and copy").tag(CaptureAction.saveCopy)
+                    Text("Save and preview").tag(CaptureAction.preview)
+                }
+                Picker("Format", selection: $config.capture.screenshotFormat) {
+                    Text("PNG").tag("png")
+                    Text("JPG").tag("jpg")
+                }
+                Picker("Recordings", selection: $config.capture.recordingAction) {
+                    Text("Save").tag(CaptureAction.save)
+                    Text("Save and copy").tag(CaptureAction.saveCopy)
+                }
+                Picker("Recording format", selection: $config.capture.recordingFormat) {
+                    Text("MOV").tag("mov")
+                    Text("MP4").tag("mp4")
+                }
+                Stepper(value: $config.capture.delay, in: 0...10, step: 1) {
+                    LabeledContent("Screenshot delay", value: "\(Int(config.capture.delay)) s")
+                }
+                Toggle("Hide Palette before capturing", isOn: $config.capture.hidePalette)
+                Toggle("Include the cursor", isOn: $config.capture.captureCursor)
+                Toggle("Show clicks while recording", isOn: $config.capture.showClicks)
+                Text("Use /shot for screenshots and /rec to start or stop a recording. Recordings are saved with the system capture engine.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Timers") {
+                Toggle("Play a sound when a timer finishes", isOn: $config.timer.sound)
+                Toggle("Show a notification when a timer finishes", isOn: $config.timer.notify)
+                Text("Presets (minutes) are set with [timer] presets in config.toml. Use /timer 25m, /timer 1h30m or /timer 1:30 to start any duration.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("Visible tabs") {
                 Text("Turn off providers you do not use. Hidden providers disappear from the tab bar and Tab cycling; apps always stay visible.")
                     .font(.caption)

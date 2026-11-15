@@ -52,12 +52,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var registry: ProviderRegistry!
     private let bitwardenVault = BitwardenVault()
     private let keepAwake = KeepAwakeService()
+    private let timerService = TimerService()
+    private let captureService = CaptureService()
+    private var clamshellObserver: NSObjectProtocol?
     private var searchController: SearchController!
     private var panel: PanelController!
     private var hotkey: HotKeyManager!
     private var clipboardHotkey: HotKeyManager!
     private var terminalHotkey: HotKeyManager!
     private var scratchpadHotkey: HotKeyManager!
+    private var screenshotHotkey: HotKeyManager!
+    private var recordingHotkey: HotKeyManager!
+    private var currentScreenshotHotKey: HotKeySpec?
+    private var currentRecordingHotKey: HotKeySpec?
     private var statusItem: NSStatusItem!
     private var hostProxy: HostBridgeProxy!
     private var appIndex: AppIndex!
@@ -67,6 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentScratchpadHotKey: HotKeySpec?
     private var askHotkey: HotKeyManager!
     private var currentAskHotKey: HotKeySpec?
+    private var recordingMenuItem: NSMenuItem?
+    private var recordingTicker: Timer?
     private var startupDiagnostics: [Diagnostic] = []
     private var themeObserver: NSObjectProtocol?
     private var watcherTimer: Timer?
@@ -157,6 +166,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
+        timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
+        captureService.config = configuration.capture
         themeManager.reload()
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
@@ -177,6 +188,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             clipboardMonitor: nil
         )
         hostProxy.setTarget(searchController)
+        searchController.observeTimerTicks()
+        captureService.onStatus = { [weak self] message in
+            self?.searchController.setStatus(message, duration: 4)
+        }
+        captureService.onFailure = { [weak self] message in
+            Task { await self?.searchController.notify(message) }
+        }
+        clamshellObserver = NotificationCenter.default.addObserver(
+            forName: .paletteClamshellDropped,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.searchController.setStatus("Clamshell mode stopped; lid sleep is back on", duration: 6)
+                self.searchController.refreshResults()
+                await self.refreshKeepAwakeMenu()
+            }
+        }
         wireControllerCallbacks()
         buildPanel()
         buildMainMenu()
@@ -225,6 +255,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.panel.toggle()
                 } else if step == "actions" {
                     self.searchController.toggleActions()
+                } else if step == "shot" {
+                    self.captureScreenshot()
+                } else if step == "rec" {
+                    self.toggleRecording()
+                } else if step == "clamshell" {
+                    try? await self.keepAwake.setClamshell(true)
                 } else if step == "settings" {
                     self.showSettings()
                 } else if step == "clipboard" {
@@ -292,7 +328,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "left": (123, "\u{F702}"), "right": (124, "\u{F703}"),
             "enter": (36, "\r"), "esc": (53, "\u{1B}"), "tab": (48, "\t"),
             "space": (49, " "), "comma": (43, ","), "k": (40, "k"),
-            "r": (15, "r"), "w": (13, "w"),
+            "r": (15, "r"), "w": (13, "w"), "s": (1, "s"), "o": (31, "o"), "c": (8, "c"),
             "1": (18, "1"), "2": (19, "2"), "3": (20, "3"),
             "4": (21, "4"), "5": (23, "5"), "6": (22, "6"),
             "7": (26, "7"), "8": (28, "8"), "9": (25, "9"),
@@ -363,6 +399,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ScratchpadProvider(store: store))
         providers.append(TerminalProvider())
         providers.append(KeepAwakeProvider(service: keepAwake, bridge: hostProxy, launcher: launcher))
+        providers.append(TimerProvider(service: timerService, presetMinutes: configuration.timer.presets))
+        providers.append(ColorProvider())
+        providers.append(StatsProvider())
+        providers.append(SSHProvider(launcher: launcher, terminalApp: configuration.terminalApp))
+        providers.append(DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp))
+        providers.append(GitHubProvider(launcher: launcher, terminalApp: configuration.terminalApp))
+        providers.append(UnitsProvider())
+        providers.append(WindowProvider(launcher: launcher))
+        let hideForCapture: @MainActor () -> Void = { [weak self] in
+            self?.panel?.hide(activatePrevious: false)
+        }
+        providers.append(ShotProvider(service: captureService, beforeCapture: hideForCapture))
+        providers.append(RecProvider(service: captureService, beforeStart: hideForCapture))
         providers.append(WebSearchProvider(
             engines: configuration.webSearchEngines,
             enabled: configuration.webSearchEnabled,
@@ -478,6 +527,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installTerminalHotKey()
         installScratchpadHotKey()
         installAskHotKey()
+        installScreenshotHotKey()
+        installRecordingHotKey()
     }
 
     private func installLauncherHotKey() {
@@ -523,6 +574,130 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "Clipboard hotkey '\(configuration.clipboardHotkey)' unavailable: \(error.localizedDescription)",
                 source: "hotkey"
             )
+        }
+    }
+
+    private func installScreenshotHotKey() {
+        guard !configuration.screenshotHotkey.isEmpty else {
+            screenshotHotkey?.unregister()
+            currentScreenshotHotKey = nil
+            return
+        }
+        if screenshotHotkey == nil {
+            screenshotHotkey = HotKeyManager(hotKeyID: 6)
+            screenshotHotkey.onPressed = { [weak self] in self?.captureScreenshot() }
+        }
+        do {
+            currentScreenshotHotKey = try screenshotHotkey.register(configuration.screenshotHotkey)
+            Log.shared.info("Screenshot hotkey registered: \(currentScreenshotHotKey?.display ?? configuration.screenshotHotkey)", source: "hotkey")
+        } catch {
+            currentScreenshotHotKey = nil
+            Log.shared.warn("Screenshot hotkey '\(configuration.screenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
+        }
+    }
+
+    private func installRecordingHotKey() {
+        guard !configuration.recordingHotkey.isEmpty else {
+            recordingHotkey?.unregister()
+            currentRecordingHotKey = nil
+            return
+        }
+        if recordingHotkey == nil {
+            recordingHotkey = HotKeyManager(hotKeyID: 7)
+            recordingHotkey.onPressed = { [weak self] in self?.toggleRecording() }
+        }
+        do {
+            currentRecordingHotKey = try recordingHotkey.register(configuration.recordingHotkey)
+            Log.shared.info("Recording hotkey registered: \(currentRecordingHotKey?.display ?? configuration.recordingHotkey)", source: "hotkey")
+        } catch {
+            currentRecordingHotKey = nil
+            Log.shared.warn("Recording hotkey '\(configuration.recordingHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
+        }
+    }
+
+    // MARK: - Capture actions
+
+    private func captureScreenshot() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if self.panel?.isVisible == true {
+                self.panel?.hide(activatePrevious: false)
+                try? await Task.sleep(nanoseconds: 180_000_000)
+            }
+            do {
+                let result = try await self.captureService.screenshot(.screen)
+                self.searchController.setStatus("Saved \(result.url.lastPathComponent)", duration: 4)
+            } catch CaptureError.cancelled {
+                self.searchController.setStatus("Screenshot cancelled", duration: 3)
+            } catch {
+                // The panel is hidden during a capture, so a plain status
+                // message would never be seen.
+                Log.shared.error("Screenshot failed: \(error.localizedDescription)", source: "capture")
+                await self.searchController.notify("Screenshot failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func toggleRecording() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if self.captureService.isRecording {
+                do {
+                    let url = try await self.captureService.stopRecording()
+                    self.searchController.setStatus("Saved \(url.lastPathComponent)", duration: 4)
+                } catch {
+                    await self.searchController.notify("Recording failed: \(error.localizedDescription)")
+                }
+                self.recordingTicker?.invalidate()
+                self.recordingTicker = nil
+                self.updateRecordingMenuItem()
+            } else {
+                if self.panel?.isVisible == true {
+                    self.panel?.hide(activatePrevious: false)
+                }
+                do {
+                    try self.captureService.startRecording()
+                    self.searchController.setStatus("Recording started", duration: 3)
+                } catch {
+                    await self.searchController.notify("Recording failed: \(error.localizedDescription)")
+                }
+                self.updateRecordingMenuItem()
+                self.recordingTicker?.invalidate()
+                self.recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    Task { @MainActor in self?.updateRecordingMenuItem() }
+                }
+            }
+        }
+    }
+
+    @objc private func stopRecordingFromMenu() {
+        toggleRecording()
+    }
+
+    /// Keeps the menu bar honest about a running recording.
+    private func updateRecordingMenuItem() {
+        guard let menu = statusItem?.menu else { return }
+        if captureService.isRecording {
+            if recordingMenuItem == nil {
+                Log.shared.info("Recording indicator shown in the menu bar", source: "capture")
+                let item = NSMenuItem(title: "Stop recording", action: #selector(stopRecordingFromMenu), keyEquivalent: "")
+                item.target = self
+                item.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: nil)
+                menu.insertItem(item, at: 0)
+                menu.insertItem(.separator(), at: 1)
+                recordingMenuItem = item
+            }
+            recordingMenuItem?.title = "Stop recording · \(TimerDuration.format(captureService.recordingElapsed))"
+        } else if let item = recordingMenuItem {
+            let index = menu.index(of: item)
+            if index >= 0 {
+                menu.removeItem(at: index)
+                if index < menu.numberOfItems, menu.item(at: index)?.isSeparatorItem == true {
+                    menu.removeItem(at: index)
+                }
+            }
+            recordingMenuItem = nil
+            Log.shared.info("Recording indicator removed from the menu bar", source: "capture")
         }
     }
 
@@ -1062,6 +1237,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
+        timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
+        captureService.config = configuration.capture
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.windowConfig = configuration.window
@@ -1076,7 +1253,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || currentClipboardHotKey?.display.lowercased() != configuration.clipboardHotkey.lowercased()
             || currentTerminalHotKey?.display.lowercased() != configuration.terminalHotkey.lowercased()
             || currentScratchpadHotKey?.display.lowercased() != configuration.scratchpadHotkey.lowercased()
-            || currentAskHotKey?.display.lowercased() != configuration.askHotkey.lowercased() {
+            || currentAskHotKey?.display.lowercased() != configuration.askHotkey.lowercased()
+            || currentScreenshotHotKey?.display.lowercased() != configuration.screenshotHotkey.lowercased()
+            || currentRecordingHotKey?.display.lowercased() != configuration.recordingHotkey.lowercased() {
             installHotKey()
         }
         configureClipboard()

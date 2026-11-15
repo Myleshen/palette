@@ -515,28 +515,27 @@ struct LauncherRootView: View {
                 .padding(.horizontal, isPill ? 14 : 12)
                 .padding(.top, isPill ? 8 : 6)
             }
-            if isPill {
-                FlowLayout(spacing: 3) {
-                    ForEach(controller.providerTabs) { tab in
-                        tabChip(tab)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(controller.providerTabs) { tab in
-                            tabChip(tab)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+            // Wrap the chips: a clipped half-chip at the card edge reads as a
+            // rendering bug, and every provider stays one click away.
+            FlowLayout(spacing: 2) {
+                ForEach(controller.providerTabs) { tab in
+                    tabChip(tab)
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: TabStripHeightKey.self, value: proxy.size.height)
+                }
+            )
             Rectangle()
                 .fill(theme.color(theme.palette.separator).opacity(isPill ? 0.35 : 0.6))
                 .frame(height: 1)
+        }
+        .onPreferenceChange(TabStripHeightKey.self) { height in
+            controller.setTabStripHeight(height)
         }
     }
 
@@ -552,14 +551,14 @@ struct LauncherRootView: View {
                         .font(.system(size: 10, weight: .semibold))
                 }
                 Text(title)
-                    .font(.system(size: isPill ? 10.5 : 10.5, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .lineLimit(1)
             }
             .foregroundColor(theme.color(selected
                 ? theme.palette.accent
                 : theme.palette.fgMuted))
-            .padding(.horizontal, isPill ? 8 : 10)
-            .padding(.vertical, isPill ? 8 : 4)
+            .padding(.horizontal, 7)
+            .padding(.vertical, isPill ? 7 : 3)
             .background(
                 Capsule().fill(
                     selected
@@ -701,8 +700,12 @@ struct LauncherRootView: View {
     private var content: some View {
         if controller.terminalActive {
             TerminalPane(theme: theme, initialCommand: controller.terminalInitialCommand, session: controller.terminalSession)
+                .padding(.horizontal, isPill ? 8 : 4)
+                .padding(.bottom, isPill ? 6 : 3)
         } else if controller.scratchpadActive {
             ScratchpadView(controller: controller, theme: theme)
+                .padding(.horizontal, isPill ? 8 : 4)
+                .padding(.bottom, isPill ? 6 : 3)
         } else if let prompt = controller.prompt {
             PromptView(prompt: prompt, controller: controller, theme: theme, focused: $promptFocused, pill: isPill)
         } else if controller.actionsMode {
@@ -1205,6 +1208,13 @@ struct ClipboardPreviewPane: View {
 /// Wraps provider chips onto as many rows as they need. The old horizontal
 /// scroller hid half the providers behind a clipped edge; tab bars are for
 /// discovery, so every provider should be visible.
+private struct TabStripHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct FlowLayout: Layout {
     var spacing: CGFloat = 4
 
