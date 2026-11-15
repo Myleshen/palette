@@ -213,6 +213,43 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(reloaded.capture.recordingAudio)
     }
 
+    func testOldCaptureShortcutDefaultsAreMigrated() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-hotkeys-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config"),
+            stateDir: root.appendingPathComponent("state"),
+            cacheDir: root.appendingPathComponent("cache")
+        )
+        try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
+        try """
+        screenshot_hotkey = "cmd+option+shift+s"
+        recording_hotkey = "cmd+option+shift+r"
+        """.write(to: paths.configFile, atomically: true, encoding: .utf8)
+
+        let config = ConfigLoader.load(paths: paths).config
+        XCTAssertEqual(config.screenshotHotkey, "cmd+shift+3")
+        XCTAssertEqual(config.recordingHotkey, "cmd+shift+5")
+    }
+
+    func testCustomCaptureShortcutIsKept() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-hotkeys2-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config"),
+            stateDir: root.appendingPathComponent("state"),
+            cacheDir: root.appendingPathComponent("cache")
+        )
+        try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
+        try """
+        screenshot_hotkey = "cmd+option+9"
+        """.write(to: paths.configFile, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.screenshotHotkey, "cmd+option+9")
+    }
+
     func testTimerDurationParsing() {
         XCTAssertEqual(TimerDuration.parse("25m"), 1500)
         XCTAssertEqual(TimerDuration.parse("90s"), 90)

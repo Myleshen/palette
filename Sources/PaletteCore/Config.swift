@@ -493,6 +493,14 @@ public enum ConfigLoader {
         if let hotkey = table.str("recording_hotkey") {
             config.recordingHotkey = hotkey
         }
+        // 2.4 moved the capture keys onto the number row. A config that still
+        // carries the old defaults was never customised, so it moves with it.
+        if config.screenshotHotkey == "cmd+option+shift+s" {
+            config.screenshotHotkey = "cmd+shift+3"
+        }
+        if config.recordingHotkey == "cmd+option+shift+r" {
+            config.recordingHotkey = "cmd+shift+5"
+        }
         if let prefix = table.str("provider_prefix"), !prefix.isEmpty {
             config.providerPrefix = prefix
         }
