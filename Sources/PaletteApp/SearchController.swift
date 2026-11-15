@@ -1011,11 +1011,21 @@ public final class SearchController: ObservableObject, HostBridge {
         }
     }
 
+    /// Measured height of the wrapping provider tab strip.
+    public private(set) var tabStripHeight: CGFloat = 44
+
+    public func setTabStripHeight(_ height: CGFloat) {
+        guard height > 0, abs(height - tabStripHeight) > 0.5 else { return }
+        tabStripHeight = height
+        updatePanelHeight()
+    }
+
     public func updatePanelHeight() {
         guard let panel else { return }
         let theme = themeManager.theme
-        // One scrollable tab row, plus a sub-row when a mode adds one.
-        var tabs: CGFloat = 44
+        // The tab strip wraps, so use its measured height; add a sub-row when
+        // a mode (clipboard filters, Ask history, provider group) adds one.
+        var tabs = max(44, tabStripHeight)
         if activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1 { tabs += 38 }
         let footer = theme.footer.show ? CGFloat(28) : 0
         let pillExtra: CGFloat = 22

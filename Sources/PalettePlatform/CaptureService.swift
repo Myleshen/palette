@@ -64,6 +64,7 @@ public final class CaptureService {
     // MARK: - Screenshots
 
     public func screenshot(_ mode: CaptureMode) async throws -> CaptureResult {
+        try Self.requireScreenRecording()
         let directory = try destinationDirectory()
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("palette-shot-\(UUID().uuidString).png")
@@ -116,8 +117,19 @@ public final class CaptureService {
 
     // MARK: - Recording
 
+    /// screencapture just says "could not create image from display" when the
+    /// grant is missing, so ask for the permission and say what to do.
+    private static func requireScreenRecording() throws {
+        if CGPreflightScreenCaptureAccess() { return }
+        if CGRequestScreenCaptureAccess() { return }
+        throw CaptureError.failed(
+            "Screen Recording is off for Palette. Enable it in System Settings → Privacy & Security → Screen Recording, then try again."
+        )
+    }
+
     public func startRecording() throws {
         guard !isRecording else { return }
+        try Self.requireScreenRecording()
         let directory = try destinationDirectory()
         let target = directory.appendingPathComponent(fileName(kind: "rec", extension: "mov"))
         let process = Process()
