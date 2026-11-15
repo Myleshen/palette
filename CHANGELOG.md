@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.3.4 — 2026-11-15
 
 ### Added
 
@@ -17,7 +17,9 @@
 
 ### Fixed
 
-- Clamshell mode could report "on" while nothing kept the lid awake: a leftover flag made the guard look armed, and the root guard was a background shell that died with the authorisation session. It now runs as a launchd daemon, verifies `pmset` really reports `SleepDisabled 1`, re-checks after arming, and warns if it stops.
+- Clamshell mode could report "on" while nothing kept the lid awake: a leftover flag made the guard look armed, and the root guard was a background shell that died with the authorisation session. It now runs as a launchd daemon, verifies `pmset` really reports `SleepDisabled 1`, re-checks after arming, and warns if it stops. The installer asked for a password and then failed because it called `/bin/chown`, which does not exist; it now uses `/usr/sbin/chown`.
+- Provider tabs wrap instead of clipping the last chip at the card edge, and the panel height follows the wrapped strip.
+- A capture that fails because Screen Recording is not granted now says so, in the log and on screen, instead of finishing silently.
 
 ## 2.3.3 — 2026-11-14
 
