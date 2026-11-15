@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.4.0 — 2026-11-15
 
 ### Added
 
@@ -12,6 +12,8 @@
 ### Fixed
 
 - The editor drew a light border and title bar around the image, and Done closed the window without saving; the window is now a dark floating card that saves on Done and closes after Save/Copy with a confirmation toast.
+- The editor and the recording player are floating panels excluded from tiling window managers, so Amethyst no longer stretches them across the screen.
+- Capture shortcuts that are already owned by another app (Shottr, Raycast) now say so instead of failing silently; every capture shortcut can be rebound or cleared in Settings → Shortcuts.
 - Provider tabs, clipboard filter chips, mode chips and footer hints ignored the theme's `typography.ui_family`; they now use it like the rest of the UI.
 
 ## 2.3.4 — 2026-11-15
