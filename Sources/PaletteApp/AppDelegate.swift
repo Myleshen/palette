@@ -62,8 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var terminalHotkey: HotKeyManager!
     private var scratchpadHotkey: HotKeyManager!
     private var screenshotHotkey: HotKeyManager!
+    private var regionHotkey: HotKeyManager!
+    private var windowHotkey: HotKeyManager!
     private var recordingHotkey: HotKeyManager!
     private var currentScreenshotHotKey: HotKeySpec?
+    private var currentRegionHotKey: HotKeySpec?
+    private var currentWindowHotKey: HotKeySpec?
     private var currentRecordingHotKey: HotKeySpec?
     private var statusItem: NSStatusItem!
     private var hostProxy: HostBridgeProxy!
@@ -271,6 +275,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.searchController.toggleActions()
                 } else if step == "shot" {
                     self.captureScreenshot()
+                } else if step == "shot_region" {
+                    self.captureScreenshot(mode: .region)
                 } else if step == "rec" {
                     self.toggleRecording()
                 } else if step == "clamshell" {
@@ -281,6 +287,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.annotateExport(value)
                 } else if let value = step.dropPrefix("preview=") {
                     self.openMediaPreview(URL(fileURLWithPath: value))
+                } else if let value = step.dropPrefix("ui_drag=") {
+                    await self.simulateDrag(value)
                 } else if step == "settings" {
                     self.showSettings()
                 } else if step == "clipboard" {
@@ -556,6 +564,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installScratchpadHotKey()
         installAskHotKey()
         installScreenshotHotKey()
+        installRegionHotKey()
+        installWindowHotKey()
         installRecordingHotKey()
     }
 
@@ -624,6 +634,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private func installRegionHotKey() {
+        guard !configuration.regionScreenshotHotkey.isEmpty else {
+            regionHotkey?.unregister()
+            currentRegionHotKey = nil
+            return
+        }
+        if regionHotkey == nil {
+            regionHotkey = HotKeyManager(hotKeyID: 8)
+            regionHotkey.onPressed = { [weak self] in self?.captureScreenshot(mode: .region) }
+        }
+        do {
+            currentRegionHotKey = try regionHotkey.register(configuration.regionScreenshotHotkey)
+            Log.shared.info("Region hotkey registered: \(currentRegionHotKey?.display ?? configuration.regionScreenshotHotkey)", source: "hotkey")
+        } catch {
+            currentRegionHotKey = nil
+            Log.shared.warn("Region hotkey '\(configuration.regionScreenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
+            searchController?.setStatus("⌘⇧4 is taken by another app; set a region shortcut in Settings", duration: 6)
+        }
+    }
+
+    private func installWindowHotKey() {
+        guard !configuration.windowScreenshotHotkey.isEmpty else {
+            windowHotkey?.unregister()
+            currentWindowHotKey = nil
+            return
+        }
+        if windowHotkey == nil {
+            windowHotkey = HotKeyManager(hotKeyID: 9)
+            windowHotkey.onPressed = { [weak self] in self?.captureScreenshot(mode: .window) }
+        }
+        do {
+            currentWindowHotKey = try windowHotkey.register(configuration.windowScreenshotHotkey)
+            Log.shared.info("Window hotkey registered: \(currentWindowHotKey?.display ?? configuration.windowScreenshotHotkey)", source: "hotkey")
+        } catch {
+            currentWindowHotKey = nil
+            Log.shared.warn("Window hotkey '\(configuration.windowScreenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
+        }
+    }
+
     private func installRecordingHotKey() {
         guard !configuration.recordingHotkey.isEmpty else {
             recordingHotkey?.unregister()
@@ -645,7 +694,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Capture actions
 
-    private func captureScreenshot() {
+    private func captureScreenshot(mode: CaptureMode = .screen) {
         Task { @MainActor [weak self] in
             guard let self else { return }
             if self.panel?.isVisible == true {
@@ -653,7 +702,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 try? await Task.sleep(nanoseconds: 180_000_000)
             }
             do {
-                let result = try await self.captureService.screenshot(.screen)
+                let result = try await self.captureService.screenshot(mode)
                 self.searchController.setStatus("Saved \(result.url.lastPathComponent)", duration: 4)
             } catch CaptureError.cancelled {
                 self.searchController.setStatus("Screenshot cancelled", duration: 3)
@@ -749,6 +798,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             Log.shared.error("annotate_export failed: \(error.localizedDescription)", source: "capture")
         }
+    }
+
+    /// Posts a real mouse drag into the annotator window. System-wide synthetic
+    /// input needs Accessibility, but a window can always send itself events,
+    /// and SwiftUI handles them exactly like a user's drag.
+    private func simulateDrag(_ spec: String) async -> Int {
+        let parts = spec.split(separator: ",").compactMap { Double($0) }
+        guard parts.count == 4 else { return 0 }
+        guard let window = annotateWindows.last?.window, let view = window.contentView else {
+            Log.shared.error("ui_drag: no annotator window", source: "capture")
+            return 0
+        }
+        let size = view.bounds.size
+        func point(_ fx: Double, _ fy: Double) -> NSPoint {
+            NSPoint(x: fx * size.width, y: (1 - fy) * size.height)
+        }
+        let start = point(parts[0], parts[1])
+        let end = point(parts[2], parts[3])
+
+        func send(_ type: NSEvent.EventType, _ location: NSPoint) {
+            guard let event = NSEvent.mouseEvent(
+                with: type,
+                location: location,
+                modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            ) else { return }
+            // The run loop routes it like a real click; sendEvent alone misses
+            // SwiftUI's gesture monitor.
+            NSApp.postEvent(event, atStart: false)
+        }
+
+        window.makeKey()
+        send(.leftMouseDown, start)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        for step in 1...10 {
+            let t = Double(step) / 10
+            send(.leftMouseDragged, NSPoint(
+                x: start.x + (end.x - start.x) * t,
+                y: start.y + (end.y - start.y) * t
+            ))
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+        send(.leftMouseUp, end)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        let count = annotationShapeCount()
+        Log.shared.info("ui_drag: \(spec) -> \(count) shape(s)", source: "capture")
+        return count
+    }
+
+    private func annotationShapeCount() -> Int {
+        annotateWindows.last?.shapeCount ?? 0
     }
 
     private func openMediaPreview(_ url: URL) {
@@ -1346,6 +1451,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || currentScratchpadHotKey?.display.lowercased() != configuration.scratchpadHotkey.lowercased()
             || currentAskHotKey?.display.lowercased() != configuration.askHotkey.lowercased()
             || currentScreenshotHotKey?.display.lowercased() != configuration.screenshotHotkey.lowercased()
+            || currentRegionHotKey?.display.lowercased() != configuration.regionScreenshotHotkey.lowercased()
+            || currentWindowHotKey?.display.lowercased() != configuration.windowScreenshotHotkey.lowercased()
             || currentRecordingHotKey?.display.lowercased() != configuration.recordingHotkey.lowercased() {
             installHotKey()
         }

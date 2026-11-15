@@ -144,10 +144,7 @@ public final class CaptureService {
         let target = directory.appendingPathComponent(fileName(kind: "rec", extension: "mov"))
         let process = Process()
         process.executableURL = URL(fileURLWithPath: Self.tool)
-        var arguments = ["-v"]
-        if config.captureCursor { arguments.append("-C") }
-        if config.showClicks { arguments.append("-k") }
-        arguments.append(target.path)
+        let arguments = Self.recordingArguments(config: config, path: target.path)
         process.arguments = arguments
         // screencapture exits at once when Screen Recording is not granted;
         // without this the indicator just vanishes mid-recording.
@@ -165,10 +162,34 @@ public final class CaptureService {
         try process.run()
         recorder = process
         stopRequested = false
-        Log.shared.info("Recording started to \(target.lastPathComponent) (pid \(process.processIdentifier))", source: "capture")
+        Log.shared.info(
+            "Recording started to \(target.lastPathComponent) (pid \(process.processIdentifier), args: \(arguments.joined(separator: " ")))",
+            source: "capture"
+        )
         recordingURL = target
         recordingStartedAt = Date()
         onStatus?("Recording to \(target.lastPathComponent)")
+    }
+
+    /// The exact `screencapture -v` arguments for a config. Kept separate so
+    /// the target, display, region and audio options are testable without
+    /// running a capture.
+    public nonisolated static func recordingArguments(config: CaptureConfig, path: String) -> [String] {
+        var arguments = ["-v"]
+        switch config.recordingTarget {
+        case "display":
+            arguments.append(contentsOf: ["-D", String(max(1, config.recordingDisplay))])
+        case "region":
+            let region = config.recordingRegion.trimmingCharacters(in: .whitespaces)
+            if !region.isEmpty { arguments.append(contentsOf: ["-R", region]) }
+        default:
+            break
+        }
+        if config.recordingAudio { arguments.append("-g") }
+        if config.captureCursor { arguments.append("-C") }
+        if config.showClicks { arguments.append("-k") }
+        arguments.append(path)
+        return arguments
     }
 
     public func stopRecording() async throws -> URL {

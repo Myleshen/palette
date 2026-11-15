@@ -289,8 +289,14 @@ you out. The master password itself is never stored.
 
 `/shot` captures the screen, a region, or a window; `/rec` starts and stops a
 recording. Both use the system capture engine and land in the configured
-capture directory. `⌘⌥⇧S` and `⌘⌥⇧R` run the same actions from anywhere, and a
-menu-bar **Stop recording · m:ss** item shows while a recording runs.
+capture directory. `⌘⇧3`, `⌘⇧4` and `⌘⇧6` capture the screen, a region and a
+window from anywhere (they replace the macOS keys), `⌘⇧5` records, and a
+menu-bar **Stop recording · m:ss** item shows while a recording runs. All four
+live in Settings → **Shortcuts** and can be cleared or rebound.
+
+Recordings can target the whole screen, a single display, or a fixed region, and
+optionally include the default audio input — set under Settings → Capture or per
+row in `/rec`, which lists every active display by name and resolution.
 
 **Annotate** rows in `/shot` open the editor on the capture: arrow, rectangle,
 text and crop, six colours, a width slider, `⌘Z` undo, `⌘C` copy and `⌘S` save

@@ -10,16 +10,24 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
 
     init(url: URL) {
         player = AVPlayer(url: url)
-        let window = NSWindow(
+        let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 860, height: 540),
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable, .resizable, .utilityWindow],
             backing: .buffered,
             defer: false
         )
+        window.isFloatingPanel = true
+        window.becomesKeyOnlyIfNeeded = false
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.setAccessibilitySubrole(.dialog)
         window.title = url.lastPathComponent
         // The app runs a dark theme; without this the stock buttons draw white
         // text on a white bezel.
         window.appearance = NSAppearance(named: .darkAqua)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = NSColor(white: 0.10, alpha: 1)
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self

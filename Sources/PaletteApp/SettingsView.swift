@@ -13,12 +13,13 @@ struct ProviderSettingsInfo: Identifiable, Equatable {
 }
 
 private enum SettingsTab: Int, CaseIterable, Identifiable {
-    case general, appearance, clipboard, search, ask, providers, advanced
+    case general, shortcuts, appearance, clipboard, search, ask, providers, advanced
 
     var id: Int { rawValue }
     var title: String {
         switch self {
         case .general: return "General"
+        case .shortcuts: return "Shortcuts"
         case .appearance: return "Appearance"
         case .clipboard: return "Clipboard"
         case .search: return "Search"
@@ -30,6 +31,7 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "slider.horizontal.3"
+        case .shortcuts: return "command"
         case .appearance: return "paintpalette"
         case .clipboard: return "doc.on.clipboard"
         case .search: return "magnifyingglass"
@@ -58,6 +60,8 @@ struct SettingsView: View {
     @State private var scratchpadRecordToken = 0
     @State private var askRecordToken = 0
     @State private var screenshotRecordToken = 0
+    @State private var regionRecordToken = 0
+    @State private var windowRecordToken = 0
     @State private var recordingRecordToken = 0
     @State private var settingsSearch = ""
     @State private var accessibilityTrusted: Bool
@@ -261,6 +265,7 @@ struct SettingsView: View {
     private var selectedSettingsContent: some View {
         switch SettingsTab(rawValue: selectedTab) ?? .general {
         case .general: general
+        case .shortcuts: shortcuts
         case .appearance: appearance
         case .clipboard: clipboard
         case .search: search
@@ -276,21 +281,21 @@ struct SettingsView: View {
 
     private var destinations: [SettingsDestination] {
         [
-            .init(title: "Global shortcuts", tab: 0, keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record"),
+            .init(title: "Global shortcuts", tab: 1, keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record screen region window"),
             .init(title: "Apps and editor", tab: 0, keywords: "terminal editor neovide kitty external app"),
             .init(title: "Embedded terminal", tab: 0, keywords: "terminal session zellij tmux fish shell font"),
             .init(title: "Startup", tab: 0, keywords: "login start startup launch item"),
             .init(title: "Permissions", tab: 0, keywords: "accessibility permission paste automation"),
             .init(title: "Launcher position and app order", tab: 0, keywords: "top center alphabetical frequent layout"),
-            .init(title: "Themes", tab: 1, keywords: "theme dark light catppuccin gruvbox aetheria"),
-            .init(title: "Typography and fonts", tab: 1, keywords: "font family size mono typography"),
-            .init(title: "Clipboard history", tab: 2, keywords: "clipboard history entries poll clear retention"),
-            .init(title: "Web search", tab: 3, keywords: "web search engine google duckduckgo github youtube"),
-            .init(title: "Web app browser", tab: 3, keywords: "browser helium chrome chromium web app"),
-            .init(title: "Ask models and API key", tab: 4, keywords: "ask model api key token endpoint history retention"),
-            .init(title: "Provider order and aliases", tab: 5, keywords: "provider order alias visibility trigger"),
-            .init(title: "Backup and diagnostics", tab: 6, keywords: "backup export restore diagnostics crash log version"),
-            .init(title: "Configuration files", tab: 6, keywords: "config providers themes log folder file"),
+            .init(title: "Themes", tab: 2, keywords: "theme dark light catppuccin gruvbox aetheria"),
+            .init(title: "Typography and fonts", tab: 2, keywords: "font family size mono typography"),
+            .init(title: "Clipboard history", tab: 3, keywords: "clipboard history entries poll clear retention"),
+            .init(title: "Web search", tab: 4, keywords: "web search engine google duckduckgo github youtube"),
+            .init(title: "Web app browser", tab: 4, keywords: "browser helium chrome chromium web app"),
+            .init(title: "Ask models and API key", tab: 5, keywords: "ask model api key token endpoint history retention"),
+            .init(title: "Provider order and aliases", tab: 6, keywords: "provider order alias visibility trigger"),
+            .init(title: "Backup and diagnostics", tab: 7, keywords: "backup export restore diagnostics crash log version"),
+            .init(title: "Configuration files", tab: 7, keywords: "config providers themes log folder file"),
         ]
     }
 
@@ -406,6 +411,10 @@ struct SettingsView: View {
             ("Terminal", config.terminalHotkey),
             ("Scratchpad", config.scratchpadHotkey),
             ("Ask", config.askHotkey),
+            ("Screen", config.screenshotHotkey),
+            ("Region", config.regionScreenshotHotkey),
+            ("Window", config.windowScreenshotHotkey),
+            ("Recording", config.recordingHotkey),
         ].filter { !$0.1.isEmpty }
         let values = entries.map { "\($0.0) \($0.1)" }.joined(separator: " · ")
         return hasShortcutConflict ? "Conflict: each global shortcut must be unique." : values
@@ -418,13 +427,17 @@ struct SettingsView: View {
             config.terminalHotkey,
             config.scratchpadHotkey,
             config.askHotkey,
+            config.screenshotHotkey,
+            config.regionScreenshotHotkey,
+            config.windowScreenshotHotkey,
+            config.recordingHotkey,
         ].filter { !$0.isEmpty }.map { $0.lowercased() }
         return Set(values).count != values.count
     }
 
-    private var general: some View {
+    private var shortcuts: some View {
         Form {
-            Section("Shortcuts") {
+            Section("Global shortcuts") {
                 LabeledContent("Launcher shortcut") {
                     HStack(spacing: 6) {
                         ShortcutRecorder(
@@ -503,6 +516,32 @@ struct SettingsView: View {
                             .accessibilityLabel("Record screenshot hotkey")
                     }
                 }
+                LabeledContent("Region shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.regionScreenshotHotkey,
+                            label: "Region hotkey",
+                            recordToken: regionRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { regionRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record region hotkey")
+                    }
+                }
+                LabeledContent("Window shortcut") {
+                    HStack(spacing: 6) {
+                        ShortcutRecorder(
+                            value: $config.windowScreenshotHotkey,
+                            label: "Window hotkey",
+                            recordToken: windowRecordToken
+                        )
+                        .frame(width: 170, height: 26)
+                        Button("Record") { windowRecordToken += 1 }
+                            .controlSize(.small)
+                            .accessibilityLabel("Record window hotkey")
+                    }
+                }
                 LabeledContent("Recording shortcut") {
                     HStack(spacing: 6) {
                         ShortcutRecorder(
@@ -523,6 +562,11 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(hasShortcutConflict ? .red : .secondary)
             }
+        }
+    }
+
+    private var general: some View {
+        Form {
             Section("Keep Awake") {
                 Toggle("Keep Mac Awake", isOn: keepAwakeBinding)
                 Toggle("Clamshell Mode (Lid Closed)", isOn: clamshellBinding)
@@ -909,6 +953,22 @@ struct SettingsView: View {
                     Text("Save").tag(CaptureAction.save)
                     Text("Save and copy").tag(CaptureAction.saveCopy)
                 }
+                Picker("Record", selection: $config.capture.recordingTarget) {
+                    Text("Whole screen").tag("screen")
+                    Text("A display").tag("display")
+                    Text("A region").tag("region")
+                }
+                if config.capture.recordingTarget == "display" {
+                    Picker("Display", selection: $config.capture.recordingDisplay) {
+                        ForEach(CaptureDisplays.active()) { display in
+                            Text(display.label).tag(display.index)
+                        }
+                    }
+                }
+                if config.capture.recordingTarget == "region" {
+                    TextField("Region (x,y,w,h)", text: $config.capture.recordingRegion)
+                }
+                Toggle("Record audio", isOn: $config.capture.recordingAudio)
                 Picker("Recording format", selection: $config.capture.recordingFormat) {
                     Text("MOV").tag("mov")
                     Text("MP4").tag("mp4")
@@ -1131,6 +1191,10 @@ struct SettingsView: View {
             config.terminalHotkey,
             config.scratchpadHotkey,
             config.askHotkey,
+            config.screenshotHotkey,
+            config.regionScreenshotHotkey,
+            config.windowScreenshotHotkey,
+            config.recordingHotkey,
         ].filter { !$0.isEmpty }.map { $0.lowercased() }
         if Set(shortcuts).count != shortcuts.count {
             saveError = "Each global shortcut must be unique."

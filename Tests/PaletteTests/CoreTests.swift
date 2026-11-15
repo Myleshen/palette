@@ -177,6 +177,10 @@ final class CoreTests: XCTestCase {
         show_clicks = true
         edit_after_capture = true
         preview_recording = false
+        recording_target = "display"
+        recording_display = 2
+        recording_region = "10,20,300,400"
+        recording_audio = true
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         var config = ConfigLoader.load(paths: paths).config
@@ -188,17 +192,25 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(config.capture.showClicks)
         XCTAssertTrue(config.capture.editAfterCapture)
         XCTAssertFalse(config.capture.previewRecording)
+        XCTAssertEqual(config.capture.recordingTarget, "display")
+        XCTAssertEqual(config.capture.recordingDisplay, 2)
+        XCTAssertEqual(config.capture.recordingRegion, "10,20,300,400")
+        XCTAssertTrue(config.capture.recordingAudio)
         XCTAssertFalse(config.capture.screenshotAction.savesFile)
         XCTAssertTrue(config.capture.screenshotAction.copiesToClipboard)
 
         config.capture.screenshotAction = .saveCopy
         config.capture.editAfterCapture = false
         config.capture.previewRecording = true
+        config.capture.recordingTarget = "region"
+        config.capture.recordingAudio = false
         try ConfigWriter.render(config).write(to: paths.configFile, atomically: true, encoding: .utf8)
         let reloaded = ConfigLoader.load(paths: paths).config
         XCTAssertEqual(reloaded.capture.screenshotAction, .saveCopy)
         XCTAssertFalse(reloaded.capture.editAfterCapture)
         XCTAssertTrue(reloaded.capture.previewRecording)
+        XCTAssertEqual(reloaded.capture.recordingTarget, "region")
+        XCTAssertFalse(reloaded.capture.recordingAudio)
     }
 
     func testTimerDurationParsing() {

@@ -16,6 +16,7 @@ func restoreAccessoryPolicyIfIdle() {
 final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     private let editor: AnnotationEditor
     var onClose: (() -> Void)?
+    var shapeCount: Int { editor.shapes.count }
 
     init(image: NSImage, url: URL?) {
         editor = AnnotationEditor(image: image, url: url)
@@ -23,14 +24,28 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
         let size = image.size
         let maxSize = NSSize(width: 1180, height: 760)
         let scale = min(1, min(maxSize.width / max(1, size.width), maxSize.height / max(1, size.height)))
-        let window = NSWindow(
+        // A panel, not a standard window: tiling WMs (Amethyst) only manage
+        // AXStandardWindow, so this stays where it is instead of going
+        // full-screen, and a floating level keeps it above the app the user
+        // came from.
+        let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale + 44),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            styleMask: [.titled, .closable, .resizable, .utilityWindow],
             backing: .buffered,
             defer: false
         )
+        window.isFloatingPanel = true
+        window.becomesKeyOnlyIfNeeded = false
+        window.hidesOnDeactivate = false
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.setAccessibilitySubrole(.dialog)
         window.title = url?.lastPathComponent ?? "Annotate"
         window.appearance = NSAppearance(named: .darkAqua)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = NSColor(white: 0.10, alpha: 1)
+        window.isOpaque = true
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
@@ -85,7 +100,9 @@ struct AnnotateView: View {
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
-    @State private var status: String?
+    @State private var toast: String?
+    @State private var toastToken = 0
+    @State private var unsaved = false
 
     private let palette: [NSColor] = [.systemRed, .systemYellow, .systemGreen, .systemBlue, .white, .black]
 
@@ -96,7 +113,7 @@ struct AnnotateView: View {
             GeometryReader { geo in
                 let fitted = fittedRect(in: geo.size)
                 ZStack {
-                    Color(nsColor: .windowBackgroundColor).opacity(0.6)
+                    Color(white: 0.10)
                     Image(nsImage: editor.image)
                         .resizable()
                         .interpolation(.high)
@@ -109,15 +126,29 @@ struct AnnotateView: View {
                     .contentShape(Rectangle())
                     .gesture(drag(fitted: fitted))
                 }
-                .overlay(alignment: .bottomLeading) {
-                    if let status {
-                        Text(status)
-                            .font(.system(size: 11))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.thinMaterial, in: Capsule())
-                            .padding(10)
+                .overlay(alignment: .top) {
+                    if let toast {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text(toast)
+                                .lineLimit(2)
+                        }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule().fill(Color(white: 0.16))
+                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.15)))
+                        )
+                        .padding(.top, 14)
+                        .transition(.opacity)
                     }
+                }
+                .task(id: toastToken) {
+                    guard toast != nil else { return }
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    withAnimation { toast = nil }
                 }
             }
         }
@@ -160,7 +191,7 @@ struct AnnotateView: View {
                 .keyboardShortcut("c", modifiers: .command)
             Button("Save") { save() }
                 .keyboardShortcut("s", modifiers: .command)
-            Button("Done") { close() }
+            Button("Done") { finish() }
                 .keyboardShortcut(.escape, modifiers: [])
         }
         .buttonStyle(PillButton())
@@ -306,6 +337,7 @@ struct AnnotateView: View {
                 case .arrow:
                     guard hypot(end.x - start.x, end.y - start.y) > 0.01 else { return }
                     editor.add(.arrow(from: start, to: end, color: editor.color, width: editor.lineWidth))
+                    unsaved = true
                 case .rectangle:
                     let rect = CGRect(
                         x: min(start.x, end.x),
@@ -315,6 +347,7 @@ struct AnnotateView: View {
                     )
                     guard rect.width > 0.01, rect.height > 0.01 else { return }
                     editor.add(.rectangle(rect: rect, color: editor.color, width: editor.lineWidth))
+                    unsaved = true
                 case .text:
                     addText(at: start)
                 case .crop:
@@ -325,7 +358,8 @@ struct AnnotateView: View {
                         height: abs(end.y - start.y)
                     )
                     editor.crop(to: rect)
-                    status = "Cropped · ⌘Z to undo"
+                    unsaved = true
+                    notify("Cropped · ⌘Z to undo")
                 }
             }
     }
@@ -346,24 +380,51 @@ struct AnnotateView: View {
         let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         editor.add(.text(at: point, text: text, size: 0.05, color: editor.color))
+        unsaved = true
+    }
+
+    private func notify(_ message: String) {
+        Log.shared.info("Annotator: \(message)", source: "capture")
+        withAnimation { toast = message }
+        toastToken += 1
     }
 
     private func undo() {
         editor.undo()
-        status = nil
     }
 
     private func copyImage() {
         editor.copy()
-        status = "Copied to the clipboard"
+        notify("Copied to the clipboard")
+        closeAfterToast()
     }
 
-    private func save() {
+    /// The toast is the confirmation, then the window gets out of the way.
+    private func closeAfterToast() {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            close()
+        }
+    }
+
+    @discardableResult
+    private func save() -> Bool {
         do {
             let url = try editor.save()
-            status = "Saved \(url.lastPathComponent)"
+            unsaved = false
+            notify("Saved \(url.lastPathComponent)")
+            closeAfterToast()
+            return true
         } catch {
-            status = error.localizedDescription
+            Log.shared.error("Annotator: save failed: \(error.localizedDescription)", source: "capture")
+            notify("Save failed: \(error.localizedDescription)")
+            return false
         }
+    }
+
+    private func finish() {
+        // Done must not throw work away: save first when anything was drawn.
+        if unsaved, !save() { return }
+        close()
     }
 }
