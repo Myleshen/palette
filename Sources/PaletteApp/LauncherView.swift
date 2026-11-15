@@ -517,7 +517,7 @@ struct LauncherRootView: View {
             }
             // Wrap the chips: a clipped half-chip at the card edge reads as a
             // rendering bug, and every provider stays one click away.
-            FlowLayout(spacing: 3) {
+            FlowLayout(spacing: 2) {
                 ForEach(controller.providerTabs) { tab in
                     tabChip(tab)
                 }
@@ -557,7 +557,7 @@ struct LauncherRootView: View {
             .foregroundColor(theme.color(selected
                 ? theme.palette.accent
                 : theme.palette.fgMuted))
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 7)
             .padding(.vertical, isPill ? 7 : 3)
             .background(
                 Capsule().fill(
