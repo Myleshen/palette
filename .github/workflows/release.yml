@@ -81,7 +81,7 @@ jobs:
               sub(/^<ul>/, "", line)
               gsub(/<[^>]*>/, "", line)
               gsub(/&ldquo;|&rdquo;/, "\"", line)
-              gsub(/&lsquo;|&rsquo;/, "'", line)
+              gsub(/&lsquo;|&rsquo;/, "\047", line)
               gsub(/&mdash;/, "—", line)
               gsub(/&ndash;/, "–", line)
               gsub(/&hellip;/, "…", line)
