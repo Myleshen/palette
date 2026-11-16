@@ -35,6 +35,7 @@ public enum AnnotationShape: Equatable {
 }
 
 public enum AnnotateTool: String, CaseIterable, Identifiable {
+    case pointer
     case arrow
     case rectangle
     case text
@@ -44,6 +45,7 @@ public enum AnnotateTool: String, CaseIterable, Identifiable {
 
     public var symbol: String {
         switch self {
+        case .pointer: return "cursorarrow"
         case .arrow: return "arrow.up.right"
         case .rectangle: return "rectangle"
         case .text: return "textformat"
@@ -53,6 +55,7 @@ public enum AnnotateTool: String, CaseIterable, Identifiable {
 
     public var title: String {
         switch self {
+        case .pointer: return "Pointer"
         case .arrow: return "Arrow"
         case .rectangle: return "Rectangle"
         case .text: return "Text"
@@ -65,11 +68,14 @@ public enum AnnotateTool: String, CaseIterable, Identifiable {
 /// and an undo history. Nothing touches the file until `save` or `copy`.
 @MainActor
 public final class AnnotationEditor: ObservableObject {
-    @Published public var tool: AnnotateTool = .arrow
+    @Published public var tool: AnnotateTool = .pointer
     @Published public var color: NSColor = .systemRed
     /// Line width and text size as fractions of the image, so marks keep their
     /// weight at any resolution.
     @Published public var lineWidth: CGFloat = 0.004
+    /// Text size as a fraction of the image height, adjustable while the text
+    /// tool is active.
+    @Published public var textSize: CGFloat = 0.05
     @Published public var shapes: [AnnotationShape] = []
     /// Index of the mark under the last click, for moving and deleting.
     @Published public var selected: Int?
