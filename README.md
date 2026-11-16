@@ -4,6 +4,10 @@ A keyboard-first launcher for macOS: press a hotkey, type, act. Native Swift
 app with an extensible provider system — no window chrome, no Dock icon, no
 script layer holding the core together.
 
+```sh
+brew install --cask Myleshen/tap/palette
+```
+
 This file exists only so the repository has a landing page. **All documentation
 is HTML:**
 
@@ -17,4 +21,3 @@ is HTML:**
 | [CONTRIBUTING.html](CONTRIBUTING.html) | build, release and Homebrew flow |
 | [CHANGELOG.html](CHANGELOG.html) | release notes |
 
-Install with `brew install --cask Myleshen/tap/palette`.
