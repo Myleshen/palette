@@ -225,4 +225,6 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
 extension Notification.Name {
     /// Posted with the file path when a capture row asks to annotate.
     public static let paletteAnnotateRequest = Notification.Name("palette.annotate.request")
+    /// Posted with a tab index to open Settings on that tab (used by tests).
+    public static let paletteSettingsTab = Notification.Name("palette.settings.tab")
 }

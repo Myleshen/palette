@@ -100,14 +100,7 @@ public final class AnnotationEditor: ObservableObject {
         let clamped = rect.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
         guard clamped.width > 0.02, clamped.height > 0.02 else { return }
         pushUndo()
-        let size = image.size
-        let pixels = CGRect(
-            x: clamped.minX * size.width,
-            y: clamped.minY * size.height,
-            width: clamped.width * size.width,
-            height: clamped.height * size.height
-        )
-        guard let cropped = image.cropped(to: pixels) else { return }
+        guard let cropped = image.cropped(toFraction: clamped) else { return }
 
         func remap(_ point: CGPoint) -> CGPoint {
             CGPoint(
@@ -156,9 +149,11 @@ public final class AnnotationEditor: ObservableObject {
         }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
-        image.draw(in: CGRect(origin: .zero, size: points))
+        // Draw in pixels, not points: on a 2x display a 100 pt image has a
+        // 200 px rep, and using points left three quarters of it transparent.
+        image.draw(in: CGRect(origin: .zero, size: pixels))
         for shape in shapes {
-            draw(shape, in: points)
+            draw(shape, in: pixels)
         }
         NSGraphicsContext.restoreGraphicsState()
         let output = NSImage(size: points)
@@ -271,20 +266,25 @@ extension NSImage {
         return size
     }
 
-    fileprivate func cropped(to rect: CGRect) -> NSImage? {
-        guard let cg = cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-        let scale = CGFloat(cg.width) / size.width
-        let pixels = CGRect(
-            x: rect.minX * scale,
-            y: rect.minY * scale,
-            width: rect.width * scale,
-            height: rect.height * scale
+    /// Crops by fraction, working entirely in pixels. Asking for a CGImage
+    /// through `cgImage(forProposedRect:)` rasters at the screen scale, which
+    /// upscaled a 1x screenshot on a 2x display.
+    fileprivate func cropped(toFraction rect: CGRect) -> NSImage? {
+        guard let tiff = tiffRepresentation,
+              let source = NSBitmapImageRep(data: tiff),
+              let cg = source.cgImage else { return nil }
+        let width = CGFloat(source.pixelsWide)
+        let height = CGFloat(source.pixelsHigh)
+        let crop = CGRect(
+            x: rect.minX * width,
+            y: rect.minY * height,
+            width: rect.width * width,
+            height: rect.height * height
         )
-        guard let cropped = cg.cropping(to: pixels) else { return nil }
-        return NSImage(
-            cgImage: cropped,
-            size: NSSize(width: pixels.width / scale, height: pixels.height / scale)
-        )
+        guard let output = cg.cropping(to: crop) else { return nil }
+        let image = NSImage(size: NSSize(width: size.width * rect.width, height: size.height * rect.height))
+        image.addRepresentation(NSBitmapImageRep(cgImage: output))
+        return image
     }
 
     fileprivate func pngData() -> Data? {

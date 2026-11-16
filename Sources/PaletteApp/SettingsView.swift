@@ -43,16 +43,16 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
 }
 
 private struct SettingsDestination: Identifiable {
-    var id: String { "\(tab)-\(title)" }
+    var id: String { "\(tab.rawValue)-\(title)" }
     var title: String
-    var tab: Int
+    var tab: SettingsTab
     var keywords: String
 }
 
 struct SettingsView: View {
     @State private var config: PaletteConfig
     @State private var engines: [WebSearchEngine]
-    @State private var selectedTab = 0
+    @State private var selectedTab: SettingsTab = .general
     @State private var saveError: String?
     @State private var launcherRecordToken = 0
     @State private var clipboardRecordToken = 0
@@ -131,47 +131,53 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            settingsTabs
+        NavigationSplitView {
+            VStack(spacing: 0) {
+                searchField
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
 
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search settings", text: $settingsSearch)
-                    .textFieldStyle(.plain)
-                if !settingsSearch.isEmpty {
-                    Button {
-                        settingsSearch = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
+                List(selection: $selectedTab) {
+                    ForEach(SettingsTab.allCases) { tab in
+                        Label(tab.title, systemImage: tab.icon)
+                            .font(theme.font(size: 12))
+                            .tag(tab)
                     }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
                 }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .background(theme.color(theme.palette.bg).opacity(0.35))
+            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
+        } detail: {
+            VStack(spacing: 0) {
+                if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {
+                    selectedSettingsContent
+                        .scrollContentBackground(.hidden)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    settingsSearchResults
+                }
 
-            if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {
-                selectedSettingsContent
-                    .scrollContentBackground(.hidden)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                settingsSearchResults
+                Divider()
+
+                HStack {
+                    Spacer()
+                    Button("Cancel") { NSApp.keyWindow?.close() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") { save() }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(16)
             }
-
-            Divider()
-
-            HStack {
-                Spacer()
-                Button("Cancel") { NSApp.keyWindow?.close() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Save") { save() }
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(16)
+            .navigationTitle(selectedTab.title)
         }
-        .frame(width: 780, height: 660)
+        .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsTab)) { note in
+            guard let index = note.object as? Int, let tab = SettingsTab(rawValue: index) else { return }
+            selectedTab = tab
+        }
+        .toolbar(.hidden, for: .windowToolbar)
+        .frame(minWidth: 820, minHeight: 560)
         .background(
             ZStack {
                 GlassBackdrop(material: .hudWindow)
@@ -189,6 +195,69 @@ struct SettingsView: View {
             Button("OK") { saveError = nil }
         } message: {
             Text(saveError ?? "")
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search settings", text: $settingsSearch)
+                .textFieldStyle(.plain)
+            if !settingsSearch.isEmpty {
+                Button {
+                    settingsSearch = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(theme.color(theme.palette.elevated).opacity(0.5))
+        )
+    }
+
+    /// A stepper that keeps its control visible. `Stepper("label", …)` and
+    /// `Stepper { LabeledContent }` both squeezed the control to a sliver in a
+    /// grouped form, leaving only the arrows at the window edge.
+    private func stepperRow(
+        _ title: String,
+        display: String,
+        value: Binding<Int>,
+        in range: ClosedRange<Int>,
+        step: Int
+    ) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: 8) {
+                if !display.isEmpty {
+                    Text(display).monospacedDigit()
+                }
+                Stepper(value: value, in: range, step: step) { EmptyView() }
+                    .labelsHidden()
+            }
+        }
+    }
+
+    private func stepperRow(
+        _ title: String,
+        display: String,
+        value: Binding<Double>,
+        in range: ClosedRange<Double>,
+        step: Double
+    ) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: 8) {
+                if !display.isEmpty {
+                    Text(display).monospacedDigit()
+                }
+                Stepper(value: value, in: range, step: step) { EmptyView() }
+                    .labelsHidden()
+            }
         }
     }
 
@@ -218,52 +287,9 @@ struct SettingsView: View {
         )
     }
 
-    private var settingsTabs: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(SettingsTab.allCases) { tab in
-                    let selected = selectedTab == tab.rawValue
-                    Button {
-                        selectedTab = tab.rawValue
-                    } label: {
-                        Label(tab.title, systemImage: tab.icon)
-                            .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                            .foregroundColor(theme.color(selected ? theme.palette.accent : theme.palette.fgMuted))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule().fill(
-                                    selected
-                                        ? theme.color(theme.palette.accent).opacity(0.18)
-                                        : theme.color(theme.palette.elevated).opacity(0.35)
-                                )
-                            )
-                            .overlay(
-                                Capsule().strokeBorder(
-                                    selected
-                                        ? theme.color(theme.palette.accent).opacity(0.55)
-                                        : theme.color(theme.palette.border).opacity(0.25),
-                                    lineWidth: 1
-                                )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(tab.title)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 26)
-            .padding(.bottom, 8)
-        }
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.color(theme.palette.separator)).frame(height: 1)
-        }
-    }
-
     @ViewBuilder
     private var selectedSettingsContent: some View {
-        switch SettingsTab(rawValue: selectedTab) ?? .general {
+        switch selectedTab {
         case .general: general
         case .shortcuts: shortcuts
         case .appearance: appearance
@@ -281,21 +307,21 @@ struct SettingsView: View {
 
     private var destinations: [SettingsDestination] {
         [
-            .init(title: "Global shortcuts", tab: 1, keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record screen region window"),
-            .init(title: "Apps and editor", tab: 0, keywords: "terminal editor neovide kitty external app"),
-            .init(title: "Embedded terminal", tab: 0, keywords: "terminal session zellij tmux fish shell font"),
-            .init(title: "Startup", tab: 0, keywords: "login start startup launch item"),
-            .init(title: "Permissions", tab: 0, keywords: "accessibility permission paste automation"),
-            .init(title: "Launcher position and app order", tab: 0, keywords: "top center alphabetical frequent layout"),
-            .init(title: "Themes", tab: 2, keywords: "theme dark light catppuccin gruvbox aetheria"),
-            .init(title: "Typography and fonts", tab: 2, keywords: "font family size mono typography"),
-            .init(title: "Clipboard history", tab: 3, keywords: "clipboard history entries poll clear retention"),
-            .init(title: "Web search", tab: 4, keywords: "web search engine google duckduckgo github youtube"),
-            .init(title: "Web app browser", tab: 4, keywords: "browser helium chrome chromium web app"),
-            .init(title: "Ask models and API key", tab: 5, keywords: "ask model api key token endpoint history retention"),
-            .init(title: "Provider order and aliases", tab: 6, keywords: "provider order alias visibility trigger"),
-            .init(title: "Backup and diagnostics", tab: 7, keywords: "backup export restore diagnostics crash log version"),
-            .init(title: "Configuration files", tab: 7, keywords: "config providers themes log folder file"),
+            .init(title: "Global shortcuts", tab: .shortcuts, keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record screen region window"),
+            .init(title: "Apps and editor", tab: .general, keywords: "terminal editor neovide kitty external app"),
+            .init(title: "Embedded terminal", tab: .general, keywords: "terminal session zellij tmux fish shell font"),
+            .init(title: "Startup", tab: .general, keywords: "login start startup launch item"),
+            .init(title: "Permissions", tab: .general, keywords: "accessibility permission paste automation"),
+            .init(title: "Launcher position and app order", tab: .general, keywords: "top center alphabetical frequent layout"),
+            .init(title: "Themes", tab: .appearance, keywords: "theme dark light catppuccin gruvbox aetheria"),
+            .init(title: "Typography and fonts", tab: .appearance, keywords: "font family size mono typography"),
+            .init(title: "Clipboard history", tab: .clipboard, keywords: "clipboard history entries poll clear retention"),
+            .init(title: "Web search", tab: .search, keywords: "web search engine google duckduckgo github youtube"),
+            .init(title: "Web app browser", tab: .search, keywords: "browser helium chrome chromium web app"),
+            .init(title: "Ask models and API key", tab: .ask, keywords: "ask model api key token endpoint history retention"),
+            .init(title: "Provider order and aliases", tab: .providers, keywords: "provider order alias visibility trigger"),
+            .init(title: "Backup and diagnostics", tab: .advanced, keywords: "backup export restore diagnostics crash log version"),
+            .init(title: "Configuration files", tab: .advanced, keywords: "config providers themes log folder file"),
         ]
     }
 
@@ -438,123 +464,22 @@ struct SettingsView: View {
     private var shortcuts: some View {
         Form {
             Section("Global shortcuts") {
-                LabeledContent("Launcher shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.hotkey,
-                            label: "Launcher hotkey",
-                            recordToken: launcherRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { launcherRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record launcher hotkey")
-                    }
-                }
-                LabeledContent("Clipboard shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.clipboardHotkey,
-                            label: "Clipboard hotkey",
-                            recordToken: clipboardRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { clipboardRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record clipboard hotkey")
-                    }
-                }
-                LabeledContent("Terminal shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.terminalHotkey,
-                            label: "Terminal hotkey",
-                            recordToken: terminalRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { terminalRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record terminal hotkey")
-                    }
-                }
-                LabeledContent("Scratchpad shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.scratchpadHotkey,
-                            label: "Scratchpad hotkey",
-                            recordToken: scratchpadRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { scratchpadRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record scratchpad hotkey")
-                    }
-                }
-                LabeledContent("Ask shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.askHotkey,
-                            label: "Ask hotkey",
-                            recordToken: askRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { askRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record Ask hotkey")
-                    }
-                }
-                LabeledContent("Screenshot shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.screenshotHotkey,
-                            label: "Screenshot hotkey",
-                            recordToken: screenshotRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { screenshotRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record screenshot hotkey")
-                    }
-                }
-                LabeledContent("Region shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.regionScreenshotHotkey,
-                            label: "Region hotkey",
-                            recordToken: regionRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { regionRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record region hotkey")
-                    }
-                }
-                LabeledContent("Window shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.windowScreenshotHotkey,
-                            label: "Window hotkey",
-                            recordToken: windowRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { windowRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record window hotkey")
-                    }
-                }
-                LabeledContent("Recording shortcut") {
-                    HStack(spacing: 6) {
-                        ShortcutRecorder(
-                            value: $config.recordingHotkey,
-                            label: "Recording hotkey",
-                            recordToken: recordingRecordToken
-                        )
-                        .frame(width: 170, height: 26)
-                        Button("Record") { recordingRecordToken += 1 }
-                            .controlSize(.small)
-                            .accessibilityLabel("Record recording hotkey")
-                    }
-                }
+                shortcutRow("Launcher shortcut", value: $config.hotkey, token: $launcherRecordToken, label: "Launcher hotkey")
+                shortcutRow("Clipboard shortcut", value: $config.clipboardHotkey, token: $clipboardRecordToken, label: "Clipboard hotkey")
+                shortcutRow("Terminal shortcut", value: $config.terminalHotkey, token: $terminalRecordToken, label: "Terminal hotkey")
+                shortcutRow("Scratchpad shortcut", value: $config.scratchpadHotkey, token: $scratchpadRecordToken, label: "Scratchpad hotkey")
+                shortcutRow("Ask shortcut", value: $config.askHotkey, token: $askRecordToken, label: "Ask hotkey")
+            }
+            Section("Screenshots and recording") {
+                shortcutRow("Screen shortcut", value: $config.screenshotHotkey, token: $screenshotRecordToken, label: "Screen hotkey")
+                shortcutRow("Region shortcut", value: $config.regionScreenshotHotkey, token: $regionRecordToken, label: "Region hotkey")
+                shortcutRow("Window shortcut", value: $config.windowScreenshotHotkey, token: $windowRecordToken, label: "Window hotkey")
+                shortcutRow("Recording shortcut", value: $config.recordingHotkey, token: $recordingRecordToken, label: "Recording hotkey")
+                Text("⌘⇧3 and ⌘⇧4 take over the macOS screenshot keys while they are set here. Clear one to give it back.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
                 Text("Click Record, then press the shortcut you want. Save applies it immediately; clear an optional shortcut to disable it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -562,6 +487,29 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(hasShortcutConflict ? .red : .secondary)
             }
+        }
+        .formStyle(.grouped)
+    }
+
+    /// Explicit label / control / button row. `LabeledContent` sized its label
+    /// column to the longest title and pushed the whole row past the form's
+    /// inset, clipping "Scratchpad shortcut" at the window edge.
+    private func shortcutRow(
+        _ title: String,
+        value: Binding<String>,
+        token: Binding<Int>,
+        label: String
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 12)
+            ShortcutRecorder(value: value, label: label, recordToken: token.wrappedValue)
+                .frame(width: 170, height: 26)
+            Button("Record") { token.wrappedValue += 1 }
+                .controlSize(.small)
+                .accessibilityLabel("Record \(label)")
         }
     }
 
@@ -697,15 +645,12 @@ struct SettingsView: View {
                     Text("Most used").tag(AppSort.frequent)
                 }
                 Toggle("Fit to the active screen", isOn: $config.window.autoSize)
-                Stepper(value: widthBinding, in: 560...1_400, step: 20) {
-                    LabeledContent("Width", value: "\(Int(widthBinding.wrappedValue)) pt")
-                }
-                Stepper(value: visibleRowsBinding, in: 5...10) {
-                    LabeledContent("Visible rows", value: "\(visibleRowsBinding.wrappedValue)")
-                }
-                Stepper(value: scaleBinding, in: 0.8...1.6, step: 0.05) {
-                    LabeledContent("Scale", value: String(format: "%.0f%%", scaleBinding.wrappedValue * 100))
-                }
+                stepperRow("Width", display: "\(Int(widthBinding.wrappedValue)) pt",
+                           value: widthBinding, in: 560...1_400, step: 20)
+                stepperRow("Visible rows", display: "\(visibleRowsBinding.wrappedValue)",
+                           value: visibleRowsBinding, in: 5...10, step: 1)
+                stepperRow("Scale", display: String(format: "%.0f%%", scaleBinding.wrappedValue * 100),
+                           value: scaleBinding, in: 0.8...1.6, step: 0.05)
                 Picker("Preview", selection: $config.window.previewLayout) {
                     Text("Below the list").tag(PreviewPlacement.below)
                     Text("Beside the list").tag(PreviewPlacement.beside)
@@ -741,8 +686,9 @@ struct SettingsView: View {
                     ForEach(fontFamilies, id: \.self) { Text($0).tag($0) }
                 }
                 TextField("Or type a family name", text: $config.typography.uiFamily)
-                Stepper(
+                stepperRow(
                     "UI size: \(config.typography.uiSize == 0 ? "theme" : "\(Int(config.typography.uiSize)) pt")",
+                    display: "",
                     value: $config.typography.uiSize,
                     in: 0...48,
                     step: 1
@@ -752,8 +698,9 @@ struct SettingsView: View {
                     ForEach(fontFamilies, id: \.self) { Text($0).tag($0) }
                 }
                 TextField("Or type a mono family name", text: $config.typography.monoFamily)
-                Stepper(
+                stepperRow(
                     "Mono size: \(config.typography.monoSize == 0 ? "theme" : "\(Int(config.typography.monoSize)) pt")",
+                    display: "",
                     value: $config.typography.monoSize,
                     in: 0...48,
                     step: 1
@@ -777,7 +724,7 @@ struct SettingsView: View {
                 }
             }
             Section {
-                Text("Theme files use TOML. See THEMING.md; saving this window reloads the active theme.")
+                Text("Theme files use TOML. See THEMING.html; saving this window reloads the active theme.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -916,7 +863,8 @@ struct SettingsView: View {
             }
 
             Section("History") {
-                Stepper("Keep \(config.ask.maxHistory) questions and answers", value: $config.ask.maxHistory, in: 10...20_000, step: 10)
+                stepperRow("Keep \(config.ask.maxHistory) questions and answers", display: "",
+                           value: $config.ask.maxHistory, in: 10...20_000, step: 10)
                 Stepper("Delete answers older than \(config.ask.retentionDays) days", value: $config.ask.retentionDays, in: 1...3_650, step: 1)
                 Text("Ask History is the History sub-tab under /ask. Rows show the model, endpoint, age, duration, and token count.")
                     .font(.caption)
@@ -973,9 +921,8 @@ struct SettingsView: View {
                     Text("MOV").tag("mov")
                     Text("MP4").tag("mp4")
                 }
-                Stepper(value: $config.capture.delay, in: 0...10, step: 1) {
-                    LabeledContent("Screenshot delay", value: "\(Int(config.capture.delay)) s")
-                }
+                stepperRow("Screenshot delay", display: "\(Int(config.capture.delay)) s",
+                           value: $config.capture.delay, in: 0...10, step: 1)
                 Toggle("Hide Palette before capturing", isOn: $config.capture.hidePalette)
                 Toggle("Include the cursor", isOn: $config.capture.captureCursor)
                 Toggle("Show clicks while recording", isOn: $config.capture.showClicks)

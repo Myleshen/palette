@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palette — Contributing</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<h1>Contributing</h1>
+<p>Palette is a SwiftPM macOS app: SwiftUI shell, one package, no Xcode project.</p>
+<h2>Build and test</h2>
+<pre><code class="language-sh">make test     # swift test
+make          # release .app bundle at build/Palette.app
+make run      # build and launch it
+</code></pre>
+<p><code>swift test</code> runs the whole suite. Provider tests skip themselves when their
+external tool (<code>fd</code>, <code>fzf</code>, <code>python3</code>, <code>bw</code>) is missing, so a green run locally
+does not prove the provider works; the manual checks for that are in
+<code>TESTING.html</code>.</p>
+<h2>Where things live</h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Sources/PaletteApp</code></td>
+<td>App shell: delegate, launcher window, settings, onboarding</td>
+</tr>
+<tr>
+<td><code>Sources/PaletteCore</code></td>
+<td>Parsing, ranking, calculator, snippets, themes, config</td>
+</tr>
+<tr>
+<td><code>Sources/PalettePlatform</code></td>
+<td>macOS pieces: hotkey, pasteboard, database, icons, keep-awake</td>
+</tr>
+<tr>
+<td><code>Sources/PaletteProviders</code></td>
+<td>One file per <code>/slash</code> provider</td>
+</tr>
+<tr>
+<td><code>Sources/PaletteRuntime</code></td>
+<td>External provider process, NDJSON protocol</td>
+</tr>
+<tr>
+<td><code>Tests/PaletteTests</code></td>
+<td>The test suite</td>
+</tr>
+<tr>
+<td><code>Resources/</code></td>
+<td>Info.plist, app icon, bundled themes, providers, examples</td>
+</tr>
+<tr>
+<td><code>Scripts/</code></td>
+<td>Icon generation</td>
+</tr>
+</tbody></table>
+<p>Deeper notes: <code>ARCHITECTURE.html</code>, <code>PROVIDERS.html</code>, <code>THEMING.html</code>, <code>TESTING.html</code>.</p>
+<h2>Rules of the road</h2>
+<ul>
+<li><code>main</code> takes pull requests only: a PR and a green <code>build</code> check are required,
+and force-pushes and deletions are blocked. There are no bypass actors.</li>
+<li>No version bump in a PR. The maintainer sets the version and tags the release.</li>
+<li>User-visible changes get a <code>CHANGELOG.html</code> entry: a <code>## x.y.z — YYYY-MM-DD</code>
+heading with <code>Added</code> / <code>Changed</code> / <code>Fixed</code> / <code>Verified</code> sections.</li>
+<li>New behaviour gets a test. Prefer a unit test in <code>Tests/PaletteTests</code>; the
+fake-based patterns in <code>KeepAwakeTests</code> are the model for anything touching
+system services.</li>
+<li>No new dependencies without a reason. The package stays small on purpose.</li>
+</ul>
+<h2>Pull requests</h2>
+<p>CI builds every PR: <code>swift test</code>, then <code>make app</code>, then an arch check. Fix the
+red check rather than admin-merging; the <code>build</code> check is what stands between a
+merge and a release.</p>
+<h2>Releasing</h2>
+<ol>
+<li><p>Bump <code>CFBundleShortVersionString</code> in <code>Resources/Info.plist</code> (and
+<code>CFBundleVersion</code>, which Settings shows alongside it).</p>
+</li>
+<li><p>Add the <code>CHANGELOG.html</code> entry. Its text becomes the release body.</p>
+</li>
+<li><p>Merge the PR.</p>
+</li>
+<li><p>Tag and push:</p>
+<pre><code class="language-sh">git tag v2.2.3
+git push origin v2.2.3
+</code></pre>
+</li>
+</ol>
+<p>Tagging is the release. <code>.github/workflows/release.yml</code> refuses a tag that
+disagrees with <code>Resources/Info.plist</code>, runs the tests, builds the app, publishes
+<code>Palette-&lt;version&gt;.zip</code> with the CHANGELOG entry as notes, and moves <code>palette.rb</code>
+in <a href="https://github.com/Myleshen/homebrew-tap">Myleshen/homebrew-tap</a> so users get
+it with <code>brew upgrade --cask palette</code>.</p>
+<p>If the run fails before publishing, delete the tag, fix, and tag again — no
+release number is burned, because nothing was published. The cask step needs the
+<code>TAP_DEPLOY_KEY</code> secret: the private half of an SSH deploy key with write access
+to the tap. Without it the release still publishes and the run warns that the
+cask was left behind.</p>
+</main>
+</body>
+</html>

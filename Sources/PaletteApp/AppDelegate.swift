@@ -306,6 +306,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     await self.simulateDrag(value)
                 } else if step == "settings" {
                     self.showSettings()
+                } else if let value = step.dropPrefix("settings_tab="), let index = Int(value) {
+                    self.showSettings()
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    NotificationCenter.default.post(name: .paletteSettingsTab, object: index)
                 } else if step == "clipboard" {
                     self.showClipboard()
                 } else if step == "exit" {
@@ -1568,8 +1572,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 780, height: 660),
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
