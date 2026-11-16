@@ -304,6 +304,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.openMediaPreview(URL(fileURLWithPath: value))
                 } else if let value = step.dropPrefix("ui_drag=") {
                     await self.simulateDrag(value)
+                } else if step == "close_windows" {
+                    self.annotateWindows.forEach { $0.close() }
+                    self.mediaPreviews.forEach { $0.close() }
+                    try? await Task.sleep(nanoseconds: 300_000_000)
                 } else if step == "settings" {
                     self.showSettings()
                 } else if let value = step.dropPrefix("settings_tab="), let index = Int(value) {
@@ -360,7 +364,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func writeOnboardingSnapshot(to destination: String) {
-        guard let view = onboardingWindow?.contentView else { return }
+        guard let view = onboardingWindow?.contentView?.superview ?? onboardingWindow?.contentView else { return }
         write(view: view, to: destination)
     }
 
@@ -782,6 +786,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Annotate and preview
 
+    /// Palette is a menu-bar app. Editing and preview windows need a Dock icon
+    /// and a normal app menu, so the policy follows them and nothing else —
+    /// scanning NSApp.windows used to leave the Dock icon behind whenever any
+    /// other window happened to be visible.
+    private func updateActivationPolicy() {
+        let editing = !annotateWindows.isEmpty || !mediaPreviews.isEmpty
+        let policy: NSApplication.ActivationPolicy = editing ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        NSApp.setActivationPolicy(policy)
+        Log.shared.info("Activation policy: \(editing ? "regular" : "accessory")", source: "app")
+    }
+
     private func openAnnotator(_ url: URL) {
         Log.shared.info("Annotator: opening \(url.path)", source: "capture")
         guard let image = NSImage(contentsOf: url) else {
@@ -793,8 +809,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.onClose = { [weak self, weak controller] in
             guard let self, let controller else { return }
             self.annotateWindows.removeAll { $0 === controller }
+            self.updateActivationPolicy()
         }
         annotateWindows.append(controller)
+        updateActivationPolicy()
         Log.shared.info("Annotator: window \(annotateWindows.count) open", source: "capture")
         controller.show()
     }
@@ -907,6 +925,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.onClose = { [weak self, weak controller] in
             guard let self, let controller else { return }
             self.mediaPreviews.removeAll { $0 === controller }
+            self.updateActivationPolicy()
         }
         mediaPreviews.append(controller)
         controller.show()
@@ -1115,9 +1134,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         window.title = "Set up Palette"
         window.appearance = NSAppearance(named: .darkAqua)
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.titlebarAppearsTransparent = true
+        // A clear background left the title bar area blank; match the content.
+        window.isOpaque = true
+        window.backgroundColor = NSColor(white: 0.10, alpha: 1)
+        window.titlebarAppearsTransparent = false
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: view)
         window.center()

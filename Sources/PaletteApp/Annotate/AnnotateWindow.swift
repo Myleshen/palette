@@ -3,15 +3,6 @@ import PalettePlatform
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Back to a menu-bar app once no editor or player window is left.
-@MainActor
-func restoreAccessoryPolicyIfIdle() {
-    let editing = NSApp.windows.contains { $0.isVisible && $0.canBecomeKey && $0.title != "" && $0.className != "NSStatusBarWindow" }
-    if !editing, NSApp.activationPolicy() == .regular {
-        NSApp.setActivationPolicy(.accessory)
-    }
-}
-
 /// Annotate window: a screenshot, a small tool strip, and Save/Copy.
 @MainActor
 final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
@@ -76,7 +67,6 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         onClose?()
-        restoreAccessoryPolicyIfIdle()
     }
 }
 
@@ -253,9 +243,17 @@ struct AnnotateView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Colour")
             }
-            Slider(value: $editor.lineWidth, in: 0.001...0.02)
-                .frame(width: 70)
-                .accessibilityLabel("Line width")
+            if editor.tool == .text {
+                Stepper(value: $editor.textSize, in: 0.02...0.15, step: 0.005) {
+                    Text("Aa \(Int(editor.textSize * 100))").font(.system(size: 10)).monospacedDigit()
+                }
+                .frame(width: 92)
+                .accessibilityLabel("Text size")
+            } else {
+                Slider(value: $editor.lineWidth, in: 0.001...0.02)
+                    .frame(width: 70)
+                    .accessibilityLabel("Line width")
+            }
             Divider().frame(height: 18)
             Button { zoom = max(0.25, zoom / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
                 .keyboardShortcut("-", modifiers: .command)
@@ -400,7 +398,7 @@ struct AnnotateView: View {
         let padded = box.insetBy(dx: -4, dy: -4)
         context.stroke(
             Path(padded),
-            with: .color(Color(nsColor: editor.color).opacity(0.9)),
+            with: .color(Color.white.opacity(0.85)),
             style: StrokeStyle(lineWidth: 1, dash: [4, 3])
         )
     }
@@ -410,6 +408,8 @@ struct AnnotateView: View {
         let colour = Color(nsColor: editor.color)
         let line = max(1, editor.lineWidth * fitted.width)
         switch editor.tool {
+        case .pointer:
+            break
         case .arrow:
             var path = Path()
             path.move(to: start)
@@ -446,12 +446,14 @@ struct AnnotateView: View {
                 if dragStart == nil {
                     dragStart = value.startLocation
                     let startFraction = fraction(value.startLocation, in: rect)
-                    if editor.tool != .crop, let index = editor.hitTest(startFraction) {
-                        editor.selected = index
-                        moving = Moving(index: index, original: editor.shapes[index], start: startFraction)
-                        editor.beginChange()
-                    } else if editor.tool != .crop {
-                        editor.selected = nil
+                    if editor.tool == .pointer {
+                        if let index = editor.hitTest(startFraction) {
+                            editor.selected = index
+                            moving = Moving(index: index, original: editor.shapes[index], start: startFraction)
+                            editor.beginChange()
+                        } else {
+                            editor.selected = nil
+                        }
                     }
                 }
                 dragCurrent = value.location
@@ -473,9 +475,12 @@ struct AnnotateView: View {
                     if distance > 1 { unsaved = true }
                     return
                 }
+                guard editor.tool != .pointer else { return }
                 let start = fraction(value.startLocation, in: rect)
                 let end = fraction(value.location, in: rect)
                 switch editor.tool {
+                case .pointer:
+                    return
                 case .arrow:
                     guard hypot(end.x - start.x, end.y - start.y) > 0.01 else { return }
                     editor.add(.arrow(from: start, to: end, color: editor.color, width: editor.lineWidth))
@@ -512,7 +517,7 @@ struct AnnotateView: View {
         let text = entry.value.trimmingCharacters(in: .whitespacesAndNewlines)
         textEntry = nil
         guard !text.isEmpty else { return }
-        editor.add(.text(at: entry.point, text: text, size: 0.05, color: editor.color))
+        editor.add(.text(at: entry.point, text: text, size: editor.textSize, color: editor.color))
         unsaved = true
     }
 

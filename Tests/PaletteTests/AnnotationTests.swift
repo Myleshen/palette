@@ -178,6 +178,20 @@ final class AnnotationTests: XCTestCase {
 // MARK: - Selection
 
 extension AnnotationTests {
+    func testPointerIsTheDefaultToolSoClicksNeverDraw() {
+        let editor = AnnotationEditor(image: solidImage(width: 100, height: 100, color: .white), url: nil)
+        XCTAssertEqual(editor.tool, .pointer)
+        XCTAssertEqual(AnnotateTool.allCases.first, .pointer)
+    }
+
+    func testTextUsesTheConfiguredSize() {
+        let editor = AnnotationEditor(image: solidImage(width: 100, height: 100, color: .white), url: nil)
+        editor.textSize = 0.09
+        editor.add(.text(at: .zero, text: "Hi", size: editor.textSize, color: .red))
+        guard case let .text(_, _, size, _) = editor.shapes[0] else { return XCTFail("text expected") }
+        XCTAssertEqual(size, 0.09, accuracy: 0.0001)
+    }
+
     func testHitTestFindsAnArrowOnItsShaft() {
         let editor = AnnotationEditor(image: solidImage(width: 200, height: 100, color: .white), url: nil)
         editor.add(.arrow(from: CGPoint(x: 0.1, y: 0.2), to: CGPoint(x: 0.9, y: 0.2), color: .red, width: 0.004))

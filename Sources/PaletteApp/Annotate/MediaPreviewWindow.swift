@@ -45,7 +45,6 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         player.pause()
         onClose?()
-        restoreAccessoryPolicyIfIdle()
     }
 
     func show() {
