@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palette — Architecture</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<h1>Architecture</h1>
+<h2>1. What Palette is</h2>
+<p>A native macOS launcher in the Raycast / Noctalia / rofi class. One process, one
+window, keyboard-first. The host owns search, ranking, clipboard, paste, and
+launching. Providers are split into two lanes:</p>
+<ul>
+<li><strong>Bundled providers</strong> for the opinionated core: apps, paths, calculator,
+clipboard, system, zellij, Bitwarden, themes.</li>
+<li><strong>External providers</strong> discovered at runtime from <code>~/.config/palette/providers</code>,
+written in any language, speaking a documented JSON protocol.</li>
+</ul>
+<p>Extensibility is a product requirement, not a plugin afterthought. The mistake
+this design avoids is implementing core features by shelling out to a pile of
+<code>list</code>/<code>act</code> scripts. Core behavior is native; the external lane exists for
+everything the user wants to add.</p>
+<p>Non-goals for v1: App Store distribution, sandboxing, a plugin UI protocol,
+sync, AI, window management, theme marketplaces.</p>
+<h2>2. Stack and process model</h2>
+<ul>
+<li>Swift 6.4 toolchain, Swift 5 language mode, macOS 14+ deployment target.</li>
+<li>AppKit owns the app lifecycle, <code>NSPanel</code>, global hotkey, focus, and key
+handling. SwiftUI renders the launcher contents.</li>
+<li>SwiftPM executable + a <code>make app</code> step that assembles <code>Palette.app</code>, writes
+<code>Info.plist</code>, and ad-hoc signs it. No Xcode project to keep in sync.</li>
+<li><code>LSUIElement = true</code>: menu bar and <code>⌥Space</code>, no Dock icon.</li>
+<li>No IPC between UI and core; everything is in one process except external
+providers, which are supervised child processes.</li>
+</ul>
+<p>Rationale for no in-process plugin loading: Swift has no stable ABI, a crashing
+plugin would take the launcher down, and signing becomes fragile. Out-of-process
+providers also make the extension API language-agnostic, which is what makes
+rofi and wofi-style ecosystems work.</p>
+<h2>3. Modules</h2>
+<pre><code>PaletteCore        no AppKit/SwiftUI
+  models, query parser, ranking, frecency, calculator, scope matching,
+  config + theme loading, storage contracts, provider protocols
+
+PalettePlatform    macOS services
+  hotkey, panel controller, pasteboard + clipboard monitor, fd enumeration,
+  fzf ranking, process runner, tool locator, app/file icons, launching,
+  SQLite store, permission checks
+
+PaletteProviders   bundled providers
+  apps, paths (/neo, /neof), calculator, clipboard, system, zellij,
+  bitwarden, themes
+
+PaletteRuntime     external providers
+  manifest discovery, NDJSON codec, process supervision, registry
+
+PaletteApp         shell
+  AppDelegate, SearchCoordinator, SwiftUI views, prompt sheets, menu bar
+</code></pre>
+<p>Dependency direction:</p>
+<pre><code>PaletteApp → PaletteRuntime → PaletteProviders → PalettePlatform → PaletteCore
+</code></pre>
+<p>Providers depend on narrow service protocols (<code>FileEnumerating</code>,
+<code>FuzzyRanking</code>, <code>Pasteboarding</code>, <code>Launching</code>, <code>Storing</code>) declared in Core, so
+they can be tested with fakes.</p>
+<h2>4. Filesystem layout</h2>
+<table>
+<thead>
+<tr>
+<th>Purpose</th>
+<th>Path</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Config</td>
+<td><code>$XDG_CONFIG_HOME/palette</code> or <code>~/.config/palette</code></td>
+<td>hand-edited, dotfile-friendly</td>
+</tr>
+<tr>
+<td>Providers</td>
+<td><code>…/palette/providers/&lt;id&gt;/</code></td>
+<td>user providers override bundled by <code>id</code></td>
+</tr>
+<tr>
+<td>Themes</td>
+<td><code>…/palette/themes/*.toml</code></td>
+<td>native theme files</td>
+</tr>
+<tr>
+<td>State</td>
+<td><code>$XDG_STATE_HOME/palette</code> or <code>~/.local/state/palette</code></td>
+<td>SQLite, logs</td>
+</tr>
+<tr>
+<td>Cache</td>
+<td><code>~/Library/Caches/Palette</code></td>
+<td>icons, thumbnails; disposable</td>
+</tr>
+<tr>
+<td>Bundled providers</td>
+<td><code>Palette.app/Contents/Resources/Providers/</code></td>
+<td>read-only</td>
+</tr>
+<tr>
+<td>Bundled themes</td>
+<td><code>Palette.app/Contents/Resources/Themes/</code></td>
+<td>read-only</td>
+</tr>
+</tbody></table>
+<p>On first run the app writes a commented <code>config.toml</code>, seeds the bundled <code>neo</code>
+provider into the user directory when absent, and copies <code>neof</code> from the bundled
+examples. Nothing overwrites a user file.</p>
+<h2>5. Startup</h2>
+<ol>
+<li>Create directories, open SQLite, run migrations.</li>
+<li>Load <code>config.toml</code> (defaults on missing keys, diagnostics on invalid ones).</li>
+<li>Resolve the active theme (including <code>extends</code> chains) and keep the last good
+theme on failure.</li>
+<li>Discover providers: bundled manifests, then user manifests by <code>id</code>.</li>
+<li>Register the Carbon hotkey. Failure is reported, not fatal.</li>
+<li>Warm background work: app index, clipboard poller, path caches.</li>
+</ol>
+<p>The panel is built lazily on first show.</p>
+<h2>6. Query lifecycle</h2>
+<pre><code>keystroke
+  → debounce 30–40 ms (path providers; zero for prefix-bound immediate queries)
+  → parse: trigger prefix? expression? plain terms?
+  → generation += 1, cancel the previous task group
+  → route:
+       bound provider  → one provider, remainder as query
+       plain query     → global providers + apps + commands, parallel
+  → stream results, merge, rank, publish
+  → preserve selection by stable item id
+</code></pre>
+<p>Rules:</p>
+<ul>
+<li>A prefix matches <code>provider_prefix + trigger</code> only when followed by a space or
+end of input, and triggers are matched longest-first. Absolute paths therefore
+never collide because triggers are bare words and the shared prefix is <code>/</code>.</li>
+<li>Changing the shared prefix character moves every provider at once. Duplicate
+triggers are a config warning; the first wins deterministically by <code>id</code>.</li>
+<li>No provider may block the list. Each gets a deadline and a result cap.</li>
+<li><code>Esc</code> clears a non-empty query before dismissing.</li>
+</ul>
+<h2>7. Providers</h2>
+<h3>7.1 Native providers</h3>
+<p>Compiled in, <code>@MainActor</code> where they touch UI services. They return the same
+<code>PaletteItem</code> model as everything else.</p>
+<h3>7.2 Paths providers</h3>
+<p>Declarative manifests with <code>engine = &quot;paths&quot;</code>. The host runs:</p>
+<pre><code>fd --hidden --no-ignore --print0 --max-depth N --exclude … --type d|f .
+</code></pre>
+<p>with <code>cwd</code> at each scope root, then ranks with:</p>
+<pre><code>fzf --filter &quot;&lt;query&gt;&quot; --scheme=path --read0 --print0
+</code></pre>
+<p>NUL framing keeps odd filenames safe. <code>fd</code> was measured at 0.05 s for 37k
+entries versus 0.75 s for <code>FileManager.enumerator</code>; enumeration is cached per
+scope and invalidated by FSEvents plus a TTL. A full re-walk is cheap enough
+that v1 has no persisted path index.</p>
+<p>Scopes apply allow lists (<code>roots</code>) and gitignore-style excludes during
+enumeration and again in-process (for <code>!</code> re-includes). Defaults exclude
+<code>node_modules</code>, <code>.git</code>, build outputs, packages, and <code>Library</code>.</p>
+<h3>7.3 External providers</h3>
+<p>Any executable speaking NDJSON on stdin/stdout. Long-lived, lazy-started, idle
+exited, restarted with backoff. Full protocol in <a href="PROVIDERS.html">PROVIDERS.html</a>.</p>
+<h2>8. Ranking and frecency</h2>
+<ul>
+<li>Path results: fzf&#39;s score and order, <code>--scheme=path</code>.</li>
+<li>Apps and commands: tiered match (exact, prefix, word-boundary, substring,
+subsequence) on title, keywords, and subtitle.</li>
+<li>Global merge: base match score plus <code>0.30 * log1p(uses)</code> plus a recency boost
+with a 30-day half-life. Stable tie-break by provider priority then title.</li>
+<li>Every result has a stable id: <code>&lt;provider-id&gt;:&lt;item-id&gt;</code>. Frecency is keyed on
+it, so updates and streamed results never move the selection.</li>
+<li>Caps: 8 per provider in global search, 50 in bound mode.</li>
+</ul>
+<h2>9. Storage</h2>
+<p>SQLite via the system library, one actor, WAL mode.</p>
+<pre><code class="language-sql">items(id TEXT PRIMARY KEY, provider TEXT, uses INTEGER, last_used REAL);
+clipboard(id TEXT PRIMARY KEY, hash TEXT UNIQUE, text TEXT, created REAL,
+          pinned INTEGER DEFAULT 0);
+meta(key TEXT PRIMARY KEY, value TEXT);
+</code></pre>
+<p>Clipboard cap is enforced after insert. Text only in v1; images are a roadmap
+item. Frecency and clipboard writes happen off the main actor.</p>
+<h2>10. Clipboard and paste</h2>
+<ul>
+<li>Poll <code>NSPasteboard.general.changeCount</code> every 500 ms.</li>
+<li>Ignore <code>org.nspasteboard.ConcealedType</code>, <code>org.nspasteboard.TransientType</code>, and
+empty content.</li>
+<li>Deduplicate by SHA-256. Cap at <code>max_entries</code>.</li>
+<li><code>copyText</code> writes the pasteboard; with <code>concealed</code> it also marks the item so
+Palette&#39;s own history skips it.</li>
+<li><code>pasteText</code>: remember the previously frontmost app, hide the panel, reactivate
+that app, write the pasteboard, synthesize <code>⌘V</code> via <code>CGEvent</code> after a short
+delay. Requires Accessibility; without it the action degrades to copy and
+shows a hint.</li>
+<li>Copies from Bitwarden use a 30 s auto-clear timer.</li>
+</ul>
+<h2>11. Permissions</h2>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Hotkey, apps, paths, calculator, themes</td>
+<td>none</td>
+</tr>
+<tr>
+<td>Paste into another app, window actions</td>
+<td>Accessibility</td>
+</tr>
+<tr>
+<td>Lock screen / logout via System Events</td>
+<td>Automation</td>
+</tr>
+<tr>
+<td>Empty Trash via Finder</td>
+<td>Automation</td>
+</tr>
+</tbody></table>
+<p>Accessibility is requested only when the user first triggers a paste, never at
+launch. Ad-hoc signing means the grant can reset after a rebuild; the app
+detects this and re-prompts.</p>
+<h2>12. Tool resolution</h2>
+<p>GUI processes do not inherit the shell <code>PATH</code>. <code>ToolLocator</code> probes the inherited
+<code>PATH</code>, then <code>/opt/homebrew/bin</code>, <code>/usr/local/bin</code>, <code>~/.local/bin</code>, and an
+optional <code>tools_path</code> config entry, caching results. <code>fd</code>, <code>fzf</code>, <code>bw</code>,
+<code>zellij</code>, <code>kitty</code>, and <code>open</code> all go through it.</p>
+<h2>13. Concurrency</h2>
+<ul>
+<li>UI and view models: <code>@MainActor</code>.</li>
+<li>Search: one <code>Task</code> per generation; providers are <code>Sendable</code> and cancellation-
+aware. Process-backed work kills the child on cancellation.</li>
+<li>Storage: dedicated actor.</li>
+<li>Clipboard polling: background queue, hops to storage.</li>
+<li>No locks in provider code; shared mutable state is confined to actors.</li>
+</ul>
+<h2>14. Packaging</h2>
+<pre><code>make            # swift build -c release, assemble .app, ad-hoc sign
+make install    # copy to ~/Applications
+make run        # build + install + open
+make test       # swift test
+</code></pre>
+<p><code>Palette.app/Contents/Info.plist</code> sets <code>LSUIElement</code>, <code>CFBundleIdentifier dev.myleshen.palette</code>, <code>NSHighResolutionCapable</code>, and the minimum system version.
+The app is re-signed with <code>codesign --force --deep --sign -</code> after every build.</p>
+<h2>15. Testing strategy</h2>
+<ul>
+<li>Pure unit tests for parsing, ranking, theme merge, scope globs, calculator,
+protocol codec, and frecency.</li>
+<li>A provider conformance harness that runs the example external provider and
+asserts query/result/activate round-trips.</li>
+<li>An app-level smoke test that launches the built bundle, verifies the hotkey
+registers, opens the panel, types, and reads a screenshot.</li>
+<li>Manual checklist in <a href="TESTING.html">TESTING.html</a> for permission and paste paths.</li>
+</ul>
+<h2>16. Roadmap after v1</h2>
+<ul>
+<li>Wallpaper-derived palettes and theme export templates (kitty, Neovide, zellij).</li>
+<li>Persistent path index and incremental FSEvents updates.</li>
+<li>Image clipboard entries.</li>
+<li>Grid layout, pinned items, snippets.</li>
+<li>Window management via the Accessibility API.</li>
+<li>Provider trust prompts and content hashes.</li>
+<li>Optional native plugin lane behind the same model, if out-of-process latency
+ever becomes a problem.</li>
+</ul>
+</main>
+</body>
+</html>

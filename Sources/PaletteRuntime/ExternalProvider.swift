@@ -30,7 +30,7 @@ private final class LineReader: @unchecked Sendable {
 }
 
 /// An out-of-process command provider speaking the NDJSON protocol from
-/// PROVIDERS.md. It is started lazily, queries are serialized, and a crash is
+/// PROVIDERS.html. It is started lazily, queries are serialized, and a crash is
 /// isolated from the host.
 public actor ExternalProvider: PaletteProvider {
     private struct ActiveQuery {

@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palette</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<h1>Palette</h1>
+<p align="center"><img src="docs/logo.png" width="160" alt="Palette — flower-shaped paint palette logo"></p><p>A keyboard-first launcher for macOS, built as a native app with a deliberately
+extensible provider system. Press a hotkey, type, act. No window chrome, no
+Dock icon, no script layer holding the core together.</p>
+<pre><code>⌥Space → /edit dotfiles → ⏎ opens the folder in your editor
+</code></pre>
+<h2>Status</h2>
+<p>v2.5.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+and not distributed through the App Store, by design: a launcher needs to see
+your files and drive other apps.</p>
+<h2>Requirements</h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Why</th>
+<th>Install</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fd</code></td>
+<td>filesystem enumeration for <code>/edit</code> and <code>/editf</code></td>
+<td><code>brew install fd</code></td>
+</tr>
+<tr>
+<td><code>fzf</code></td>
+<td>ranking for path results</td>
+<td><code>brew install fzf</code></td>
+</tr>
+<tr>
+<td><code>zellij</code></td>
+<td><code>/zj</code> sessions</td>
+<td><code>brew install zellij</code></td>
+</tr>
+<tr>
+<td><code>kitty</code></td>
+<td>terminal used by <code>/zj</code></td>
+<td><code>brew install --cask kitty</code></td>
+</tr>
+<tr>
+<td><code>bw</code></td>
+<td>Bitwarden provider</td>
+<td><code>brew install bitwarden-cli</code></td>
+</tr>
+</tbody></table>
+<p>Only <code>fd</code> and <code>fzf</code> are needed for the core file workflows. Missing tools are
+surfaced as an install row inside the launcher; nothing is installed silently.</p>
+<h2>Build and install</h2>
+<pre><code class="language-sh">make            # build a release app bundle at build/Palette.app
+make install    # copy it to ~/Applications
+make run        # build and launch the bundle in build/
+make test       # run the test suite
+</code></pre>
+<p>The app is ad-hoc signed. macOS may ask for Accessibility permission again
+after a rebuild; that is expected without a Developer ID certificate.</p>
+<h3>Homebrew</h3>
+<p>Palette ships through a public tap:</p>
+<pre><code class="language-sh">brew install --cask Myleshen/tap/palette
+</code></pre>
+<p>The cask downloads the latest GitHub release, installs <code>Palette.app</code> into
+<code>/Applications</code>, and clears the quarantine flag because the app is ad-hoc signed
+rather than notarized. No Apple Developer subscription or App Store listing is
+involved. Manual zip downloads may need System Settings &gt; Privacy &amp; Security &gt;
+Open Anyway.</p>
+<p>To publish a new version: bump <code>CFBundleShortVersionString</code> and
+<code>CFBundleVersion</code> in <code>Resources/Info.plist</code>, add a <code>CHANGELOG.html</code> entry, merge
+the PR, then push a <code>v&lt;version&gt;</code> tag. Tagging is the release: CI runs the tests,
+builds the zip, publishes it with the CHANGELOG entry as the notes, and updates
+the cask in <code>Myleshen/homebrew-tap</code>. See <code>CONTRIBUTING.html</code> and
+<code>packaging/homebrew/README.html</code>.</p>
+<h2>First run</h2>
+<ol>
+<li>Launch Palette. It lives in the menu bar.</li>
+<li>Press <code>⌥Space</code>.</li>
+<li>Run a command that pastes (for example a clipboard entry and <code>⌘⏎</code>) and grant
+Accessibility when prompted. Copy-only actions work without it.</li>
+</ol>
+<p>Configuration lives in <code>~/.config/palette</code>:</p>
+<pre><code>~/.config/palette/
+  config.toml
+  providers/
+    neof/provider.toml      # user copy of the file provider, seeded for you
+  themes/                   # optional user themes
+</code></pre>
+<p>The bundled <code>/edit</code> provider lives inside the app. On first run Palette writes a
+commented <code>config.toml</code> and seeds <code>providers/neof</code> so both examples are ready to
+use without copying anything.</p>
+<p>State (history, clipboard, frecency) lives in <code>~/.local/state/palette</code>.
+Caches live in <code>~/Library/Caches/Palette</code>.</p>
+<h2>Using it</h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>⌥Space</code></td>
+<td>show / hide</td>
+</tr>
+<tr>
+<td><code>⌥V</code></td>
+<td>clipboard browser with live preview</td>
+</tr>
+<tr>
+<td><code>⌘⌥T</code></td>
+<td>embedded terminal</td>
+</tr>
+<tr>
+<td><code>⌘⌥S</code></td>
+<td>scratchpad</td>
+</tr>
+<tr>
+<td><code>⌘⌥A</code></td>
+<td>Ask</td>
+</tr>
+<tr>
+<td><code>↑</code> <code>↓</code></td>
+<td>move selection</td>
+</tr>
+<tr>
+<td><code>⏎</code></td>
+<td>primary action</td>
+</tr>
+<tr>
+<td><code>⌘⏎</code></td>
+<td>secondary action (usually paste, or reveal for paths)</td>
+</tr>
+<tr>
+<td><code>⌘K</code></td>
+<td>action list for the selection</td>
+</tr>
+<tr>
+<td><code>⌘1</code>…<code>⌘9</code></td>
+<td>open the nth result</td>
+</tr>
+<tr>
+<td><code>Tab</code> / <code>⇧Tab</code></td>
+<td>cycle provider tabs (<code>/web</code>, <code>/zj</code>, <code>/bw</code>, …)</td>
+</tr>
+<tr>
+<td><code>Esc</code></td>
+<td>clear the query, then dismiss</td>
+</tr>
+<tr>
+<td><code>⌘,</code></td>
+<td>open Settings</td>
+</tr>
+<tr>
+<td><code>⌘R</code></td>
+<td>reload config, themes, and providers after manual file edits</td>
+</tr>
+</tbody></table>
+<p>Application rows expose Open, Show in Finder, Copy Bundle ID, and Copy Path in
+<code>⌘K</code>; files and folders expose their own open/reveal/copy actions.</p>
+<h3>Provider tabs</h3>
+<p>A tab strip under the search field shows Apps plus every provider that declares
+a trigger. It starts on <strong>Apps</strong>; clicking a tab opens that provider with an
+empty query. <code>Tab</code> and <code>⇧Tab</code> cycle through them without reaching for the
+mouse, so <code>/web</code>, <code>/zj</code>, <code>/bw</code>, <code>/clip</code>, and the rest are one key away.</p>
+<h3>Prefixes</h3>
+<p>A prefix routes the query to one provider. The shared prefix character is
+configurable (<code>provider_prefix</code>, default <code>/</code>), and each provider declares a bare
+trigger word:</p>
+<table>
+<thead>
+<tr>
+<th>Prefix</th>
+<th>Provider</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/edit &lt;query&gt;</code></td>
+<td>files and folders, opened in the configured editor</td>
+</tr>
+<tr>
+<td><code>/editf &lt;query&gt;</code></td>
+<td>folders only, opened in the configured editor</td>
+</tr>
+<tr>
+<td><code>/zj &lt;query&gt;</code></td>
+<td>zellij sessions; <code>⏎</code> attaches or creates in kitty</td>
+</tr>
+<tr>
+<td><code>/bw &lt;query&gt;</code></td>
+<td>Bitwarden passwords</td>
+</tr>
+<tr>
+<td><code>/bwu &lt;query&gt;</code></td>
+<td>Bitwarden usernames</td>
+</tr>
+<tr>
+<td><code>/bwt &lt;query&gt;</code></td>
+<td>Bitwarden TOTP codes</td>
+</tr>
+<tr>
+<td><code>/bwn &lt;query&gt;</code></td>
+<td>Bitwarden notes</td>
+</tr>
+<tr>
+<td><code>/bwo &lt;query&gt;</code></td>
+<td>Bitwarden URLs</td>
+</tr>
+<tr>
+<td><code>/clip &lt;query&gt;</code></td>
+<td>clipboard history, text/images/files</td>
+</tr>
+<tr>
+<td><code>/port &lt;query&gt;</code></td>
+<td>listening TCP ports, with process and PID</td>
+</tr>
+<tr>
+<td><code>/cmd &lt;query&gt;</code></td>
+<td>commands from <code>~/.config/palette/commands.toml</code></td>
+</tr>
+<tr>
+<td><code>/proj &lt;query&gt;</code></td>
+<td>devx projects and worktrees, or <code>~/dev</code> fallback</td>
+</tr>
+<tr>
+<td><code>/git &lt;query&gt;</code></td>
+<td>repositories with managed Git actions and panel output</td>
+</tr>
+<tr>
+<td><code>/term</code></td>
+<td>embedded terminal shell</td>
+</tr>
+<tr>
+<td><code>/scratch</code></td>
+<td>scratch notes and the editor</td>
+</tr>
+<tr>
+<td><code>/awake</code></td>
+<td>keep the Mac awake; timed or clamshell mode</td>
+</tr>
+<tr>
+<td><code>/recent</code></td>
+<td>recently used projects and files</td>
+</tr>
+<tr>
+<td><code>/snip &lt;query&gt;</code></td>
+<td>snippets with placeholder expansion</td>
+</tr>
+<tr>
+<td><code>/ask &lt;question&gt;</code></td>
+<td>one-shot OpenCode Go answer</td>
+</tr>
+<tr>
+<td><code>/askh &lt;query&gt;</code></td>
+<td>search retained Ask questions and answers</td>
+</tr>
+<tr>
+<td><code>/web &lt;query&gt;</code></td>
+<td>saved web apps; type a domain to add one</td>
+</tr>
+<tr>
+<td><code>/emoji &lt;query&gt;</code></td>
+<td>emoji picker</td>
+</tr>
+<tr>
+<td><code>/sys &lt;query&gt;</code></td>
+<td>settings, lock, sleep, trash, reload, quit</td>
+</tr>
+<tr>
+<td><code>/theme &lt;query&gt;</code></td>
+<td>switch themes live</td>
+</tr>
+<tr>
+<td><code>/calc &lt;expr&gt;</code></td>
+<td>calculator (also works unprefixed)</td>
+</tr>
+<tr>
+<td><code>/timer &lt;duration&gt;</code></td>
+<td>countdown timer: <code>25m</code>, <code>1h30m</code>, <code>1:30</code>, or stop</td>
+</tr>
+<tr>
+<td><code>/shot</code></td>
+<td>screenshot the screen, a region, or a window</td>
+</tr>
+<tr>
+<td><code>/shots</code></td>
+<td>browse screenshots and recordings from the capture directory</td>
+</tr>
+<tr>
+<td><code>/rec</code></td>
+<td>start or stop a screen recording</td>
+</tr>
+<tr>
+<td><code>/color</code></td>
+<td>pick a colour and copy its hex</td>
+</tr>
+<tr>
+<td><code>/win &lt;query&gt;</code></td>
+<td>switch to any open window</td>
+</tr>
+<tr>
+<td><code>/unit &lt;amount&gt; &lt;unit&gt; in &lt;unit&gt;</code></td>
+<td>unit and currency conversion</td>
+</tr>
+<tr>
+<td><code>/stats</code></td>
+<td>disk, memory, load, battery, uptime</td>
+</tr>
+<tr>
+<td><code>/ssh &lt;query&gt;</code></td>
+<td>hosts from <code>~/.ssh/config</code></td>
+</tr>
+<tr>
+<td><code>/docker &lt;query&gt;</code></td>
+<td>containers: start, stop, restart, logs</td>
+</tr>
+<tr>
+<td><code>/gh &lt;query&gt;</code></td>
+<td>pull requests and issues through the <code>gh</code> CLI</td>
+</tr>
+</tbody></table>
+<p>A trailing slash browses a directory breadth-first: <code>/edit ~/dev/</code> shows the
+direct children of <code>~/dev</code> first, then the next level.</p>
+<p>Unprefixed queries search apps, web apps, zellij sessions, pinned items, web
+search engines, and any provider marked <code>global = true</code>. <code>= 2+2</code> and bare
+arithmetic also work.</p>
+<h3>Search matching</h3>
+<p>Matching is fzf-style, not exact-substring. Type the letters you remember and
+Palette scores runs, word boundaries, and gaps: <code>actmon</code> finds <strong>Activity
+Monitor</strong>, <code>vsc</code> finds <strong>Visual Studio Code</strong>, <code>qbf</code> finds <strong>The quick brown
+fox</strong>, <code>tst</code> finds a Bitwarden login named <strong>Test</strong>, and <code>drgn</code> finds <strong>Dragon</strong>.
+This applies to apps, clipboard text and file names, web apps, providers,
+themes, and Bitwarden vault fields. Clipboard search scans the whole configured
+history instead of only doing a SQL prefix match, so non-contiguous searches
+work there too. <code>/edit</code> still delegates path ranking to the real <code>fzf</code> binary
+with <code>--scheme=path</code>.</p>
+<p>The empty-query screen is deliberately the <strong>app list</strong>: apps in alphabetical
+order (or most-used), with pinned apps and pinned web apps at the top. Unpinned
+web apps, running sessions, and search suggestions stay out of that screen until
+you type or pick their tab.</p>
+<h3>Web search</h3>
+<p>Type any query that is not a file or app and Palette offers one row per
+configured engine (Google, DuckDuckGo, GitHub, YouTube by default). <code>⏎</code> opens
+the result in your default browser. Engines are ordinary config rows in
+<code>[web_search]</code>; add or remove them in Settings or <code>config.toml</code>.</p>
+<h3>Ask</h3>
+<p><code>/ask</code> sends one quick question to an OpenAI-compatible endpoint and stores the
+answer. It is deliberately one-shot: there is no conversation thread, so every
+question is independent.</p>
+<p>Supported endpoint:</p>
+<ul>
+<li><strong>OpenCode Go</strong> (<code>https://opencode.ai/inference/go/openai/v1</code>) — every
+OpenAI-compatible Go chat model, ordered cheapest output price first. A Go
+key is required.</li>
+</ul>
+<p>Type <code>/ask</code> with no question to choose a model. Free Go models are listed first
+and marked <code>FREE</code>; paid models show their input/output price per million tokens
+and are ordered cheapest first. <code>/ask what is 2+2</code> asks the selected model
+directly. Answers can be copied, asked again, or found later in history.</p>
+<p>The <strong>Ask History</strong> sub-tab (or <code>/askh</code>) searches retained questions and answers.
+Each row shows the model, endpoint, age, latency, and token usage. Ask history is
+kept up to the count and age configured in Settings and can be deleted per row.</p>
+<p>API keys are stored in an encrypted user-only file under Palette&#39;s config
+directory, not in <code>config.toml</code>. A key is visible in the Settings
+field only before you save it; afterward Palette shows “Key saved in the macOS
+local key file” and never displays the value again. Keys are never written to
+<code>config.toml</code>, logs, or history. <code>OPENCODE_API_KEY</code>, <code>OPENCODE_GO_API_KEY</code>, and
+<code>OPENAI_API_KEY</code> are also accepted as environment fallbacks.</p>
+<h3>Settings</h3>
+<p><code>⌘,</code> (or the menu-bar icon) opens a native Settings window. <strong>General</strong> holds
+shortcuts, the terminal/editor used by providers, launcher position, app order,
+and <strong>Keep Awake</strong> toggles for keeping the Mac awake and arming clamshell mode. <strong>Appearance</strong> holds themes and typography. <strong>Clipboard</strong>, <strong>Search</strong>, and
+<strong>Ask</strong> cover their own features. <strong>Providers</strong> controls which tabs are visible,
+their order, and optional aliases. <strong>Advanced</strong> has config/theme/log links,
+backup, diagnostics, and version information. The <strong>Ask</strong> tab selects the endpoint and model,
+saves a local API key, toggles automatic fallback, and controls how many Q&amp;A
+entries and how many days of history are kept.
+Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
+session event tap, so macOS-reserved combinations such as <code>⌘Space</code> are captured
+instead of being swallowed by the system; it stops as soon as Settings loses
+focus. Accessibility permission is needed for reserved-key capture. Saving
+validates every shortcut, rejects duplicates, and refuses a browser that is not
+installed. The search field at the top of Settings jumps directly to a matching
+section. Changes apply immediately. Editing files by hand still works, then
+press <code>⌘R</code>.</p>
+<h3>Search position</h3>
+<p><code>search_position = &quot;top&quot; | &quot;center&quot;</code> controls where the panel opens. <code>center</code>
+keeps the top-first layout but opens the panel in the middle of the screen.
+The older <code>bottom</code> value is accepted for compatibility and now maps to
+<code>center</code>.</p>
+<p>The launcher is always the two-surface pill: a floating search capsule above a
+rounded content card. There is no alternate classic layout.</p>
+<h3>Pinned items</h3>
+<p><code>⌘K</code> on any result includes <strong>Pin to Palette</strong>; every pinned row also offers
+<strong>Unpin from Palette</strong>. Pinned apps and pinned web apps rise to the top of the
+default app screen and global search. Pins are stored in Palette’s SQLite state.</p>
+<h3>Clipboard</h3>
+<p><code>⌥V</code> opens a wide clipboard browser with a live preview pane; <code>/clip</code> opens the
+same history in the normal window. Copied text, images, and Finder file
+selections are stored separately and listed under <strong>Text</strong>, <strong>Images</strong>, and
+<strong>Files</strong> headings. Add a category word to filter: <code>/clip text</code>,
+<code>/clip images</code>, <code>/clip files</code>, optionally followed by a search.</p>
+<ul>
+<li><code>⏎</code> on any clipboard row <strong>pastes immediately</strong> into the app you came from,
+after which the clipboard browser closes. With Accessibility granted this is
+a real ⌘V; otherwise Palette copies the entry and opens the permission prompt.</li>
+<li>Text rows preview in full; long entries can be copied in full or pasted.</li>
+<li>Images store a thumbnail and dimensions, with Copy/Paste Image.</li>
+<li>Files keep their paths, icon, size, and a <code>bat</code> render for text files, with
+Copy/Paste Files and Reveal in Finder.</li>
+</ul>
+<p>Pinned entries sort to the very top, across every category, and the filter tabs
+above the list switch between <strong>All</strong>, <strong>Text</strong>, <strong>Images</strong>, and <strong>Files</strong>.
+<code>⌘K</code> toggles <strong>Pin</strong> and <strong>Delete</strong> for every kind. Retention defaults to 5,000
+entries and is configurable in Settings; images are stored as PNG and files as
+paths in Palette’s SQLite state. Anything marked concealed by another app is
+never recorded.</p>
+<p>Values copied from Bitwarden are always written as concealed and clear after 30
+seconds, so they never enter Palette’s clipboard history.</p>
+<p>The vault listing and the CLI session key are sealed with AES-GCM under
+<code>~/Library/Caches/Palette/Bitwarden</code> for thirty days, scoped to the active CLI
+profile. Restarting Palette inside that window does not ask for the master
+password again; <strong>Refresh Bitwarden Cache</strong> forces a fresh read without logging
+you out. The master password itself is never stored.</p>
+<h3>Screenshots and recordings</h3>
+<p><code>/shot</code> captures the screen, a region, or a window; <code>/rec</code> starts and stops a
+recording. Both use the system capture engine and land in the configured
+capture directory. <code>⌘⇧3</code>, <code>⌘⇧4</code> and <code>⌘⇧6</code> capture the screen, a region and a
+window from anywhere (they replace the macOS keys), <code>⌘⇧5</code> records, and a
+menu-bar <strong>Stop recording · m:ss</strong> item shows while a recording runs. All four
+live in Settings → <strong>Shortcuts</strong> and can be cleared or rebound.</p>
+<p>A capture plays a shutter sound and shows a thumbnail for a couple of seconds
+(both toggles in Settings → Capture), so it is obvious that it worked. <code>/shots</code>
+lists everything in the capture directory, newest first and grouped by day —
+screenshots and recordings together — with a thumbnail (a poster frame for
+videos) in the preview pane, plus open, annotate, copy image and reveal. Thumbnails
+are generated once per file and cached by path and modification date.</p>
+<p>Recordings can target the whole screen, a single display, or a fixed region, and
+optionally include the default audio input — set under Settings → Capture or per
+row in <code>/rec</code>, which lists every active display by name and resolution.</p>
+<p><strong>Annotate</strong> rows in <code>/shot</code> open the editor on the capture: arrow, rectangle,
+text and crop, six colours, a width slider, <code>⌘Z</code> undo, <code>⌘C</code> copy and <code>⌘S</code> save
+over the original file. Marks are stored as fractions of the image, so they look
+the same at any window size, and cropping remaps them instead of dropping them.</p>
+<p>Recordings open in a player window when they stop: play, scrub, reveal in
+Finder, or copy the path. Both behaviours are toggles in Settings → Capture
+(<code>edit_after_capture</code>, <code>preview_recording</code>), and the first capture asks for
+Screen Recording permission once per build.</p>
+<h3>Bitwarden</h3>
+<p><code>/bw</code>, <code>/bwu</code>, <code>/bwt</code>, <code>/bwn</code>, and <code>/bwo</code> share one in-memory session. The first
+read of a vault is cached for <strong>thirty days</strong> in an AES-GCM encrypted file under
+<code>~/Library/Caches/Palette/Bitwarden</code>; the key is a per-user <code>0600</code> file. Prefix
+switches, typing, and copy actions reuse the snapshot instead of spawning
+<code>bw list</code> again. Choose <strong>Refresh Bitwarden Cache</strong> in the menu-bar menu when the
+vault changed elsewhere; the next search reads it fresh. The cache is scoped to
+<code>BITWARDENCLI_APPDATA_DIR</code>, so test and real profiles never mix.</p>
+<h3>Web apps</h3>
+<p><code>/web</code> keeps your own web-app shortcuts, independent of any browser-specific
+“install as app” feature. An <strong>Add Web App…</strong> row is always present; choose it
+(and paste a URL), or type a domain directly:</p>
+<ol>
+<li><code>/web figma.com</code></li>
+<li>choose <strong>Add Web App “Figma”</strong></li>
+<li>give it a name, then optionally a shortcut such as <code>ctrl+alt+f</code></li>
+</ol>
+<p>Local development URLs work too: <code>/web http://localhost:5173</code> or
+<code>/web http://127.0.0.1:8080</code>.</p>
+<p>Web apps open in Helium by default, in their own Chromium <strong>app window</strong>
+(<code>--app=…</code>) with a dedicated Palette profile, not as a normal browser tab.
+Change the browser in Settings → Search; only Chromium-based browsers are
+listed and Palette will not save one that is not installed. Hammerspoon
+shortcuts use the same app-window launcher, so the shortcut opens the same
+standalone window instead of Safari.</p>
+<p>A shortcut needs at least two modifiers. Palette writes
+<code>~/.hammerspoon/palette-webapps.lua</code>; Hammerspoon watches that file and binds
+each app to its URL, so shortcuts are managed here, not by editing Hammerspoon
+config. Use <code>⌘K</code> on a saved app to open it, copy its URL, set/change or clear
+its shortcut, or remove it. Opens are counted by the normal frecency store, so
+frequently used apps rise to the top. Definitions live in Palette’s SQLite
+state, not in <code>config.toml</code>.</p>
+<h3>Clipboard transforms</h3>
+<p><code>⌘K</code> on any text entry includes <strong>Transform Text…</strong>. Pick a transform and the
+result opens with a full preview; <code>⏎</code> copies it and <code>⌘⏎</code> pastes it. Built-ins:
+trim, JSON pretty/minify, YAML format, TOML format, Base64 encode/decode, URL
+encode/decode, shell quote, path quote, uppercase/lowercase, sort/dedupe lines,
+strip ANSI, Markdown link, and slug. Transforms are local and deterministic; no user script runs from a
+clipboard copy.</p>
+<h3>Scratchpad and terminal</h3>
+<p><code>/scratch</code> lists saved notes and opens a persistent editor with a title field.
+It accepts pasted text, supports normal selection and editing, and provides
+<strong>Paste</strong>, <strong>Copy All</strong>, <strong>Clear</strong>, and <strong>Save &amp; Close</strong>. Clipboard text entries
+also have <strong>Open in Scratchpad</strong> in <code>⌘K</code>; the most recent note is restored by
+the <code>⌘⌥S</code> shortcut.</p>
+<p><code>/term</code> opens a persistent multiplexer session in the content panel using
+SwiftTerm. By default it attaches Zellij&#39;s <strong>Palette</strong> session, then falls back
+to tmux, then a plain shell. Closing the panel detaches the client; the session
+and any long-running command keep running, and the next <code>/term</code> reattaches.
+<code>⌘W</code> closes the panel. <code>/cmd</code> items also expose <strong>Run in Panel</strong>, which runs the
+command in that same shell.</p>
+<p><code>[terminal_session]</code> controls this:</p>
+<pre><code class="language-toml">[terminal_session]
+multiplexer = &quot;auto&quot;   # auto | zellij | tmux | none
+name = &quot;Palette&quot;
+shell = &quot;&quot;             # empty = fish if installed, else zsh
+font = &quot;&quot;              # empty = kitty font, then theme mono
+font_size = 0          # 0 = kitty size, then 13
+</code></pre>
+<p>The embedded terminal auto-detects Kitty&#39;s <code>font_family</code> and <code>font_size</code>.
+Set a Nerd Font here (or install the one Kitty uses) so Zellij/fish icons render
+correctly.</p>
+<p>Palette sets <code>SHELL</code> to the chosen shell when it starts the multiplexer, so new
+Zellij or tmux panes use fish too. An existing Zellij/tmux server keeps its old
+environment; restart that session once after changing the shell.</p>
+<h3>Developer commands</h3>
+<p><code>/cmd</code> reads <code>~/.config/palette/commands.toml</code>. Each <code>[[command]]</code> declares a
+title, keywords, executable, arguments, optional working directory, terminal or
+GUI mode, and whether to ask for confirmation. Nothing is an inline shell string
+in <code>config.toml</code>.</p>
+<pre><code class="language-toml">[[command]]
+title = &quot;Go Test&quot;
+keywords = [&quot;go&quot;, &quot;test&quot;]
+executable = &quot;go&quot;
+args = [&quot;test&quot;, &quot;./...&quot;]
+cwd = &quot;~/dev/project&quot;
+terminal = true
+confirm = false
+</code></pre>
+<h3>Scratch notes, recent items, and snippets</h3>
+<p><code>/scratch</code> lists named scratch notes plus <strong>New Scratch Note</strong>. Each note has a
+title and body; edits are saved when you close the editor. Use <code>⌘⌥S</code> to open the
+most recent note directly. <code>/recent</code> lists projects and files you have opened
+through Palette, newest first.</p>
+<p><code>/snip</code> reads <code>~/.config/palette/snippets.toml</code>:</p>
+<pre><code class="language-toml">[[snippet]]
+title = &quot;Email signature&quot;
+keywords = [&quot;mail&quot;]
+text = &quot;Best,\nMyles\n{{date}}&quot;
+</code></pre>
+<p>Snippets are never executed. <code>⌘K</code> copies the expanded text, copies the raw
+template, or opens the expansion in the scratchpad. Supported placeholders:
+<code>{{date}}</code>, <code>{{time}}</code>, <code>{{datetime}}</code>, <code>{{clipboard}}</code>, <code>{{uuid}}</code>,
+<code>{{home}}</code>, and <code>{{user}}</code>.</p>
+<h3>Keep awake</h3>
+<p><code>/awake</code> (or the <strong>Keep Awake</strong> provider tab) keeps the Mac awake for 15
+minutes, 30 minutes, 1, 2, 4, or 8 hours, or until you stop it. It also has a
+<strong>Clamshell Mode (Lid Closed)</strong> toggle and a menu-bar <strong>Keep Awake</strong> submenu.</p>
+<p>Normal keep-awake uses native power assertions, so it needs no password. The
+assertions are recreated after wake and display changes, and a timer restores
+normal sleep automatically. Clamshell mode is different: macOS treats a lid
+close as forced sleep, so Palette arms a tiny root guard through the standard
+administrator prompt. The guard disables lid sleep only while Palette is
+running, clamshell mode is on, and the Mac is on AC power. Unplugging power,
+turning clamshell off, or quitting Palette restores normal lid sleep within a
+few seconds. Never leave an awake, closed MacBook in a bag.</p>
+<h3>Projects, ports, and Git</h3>
+<ul>
+<li><code>/proj</code> lists devx projects and worktrees when devx is installed, with Open in
+Neovide, Open Terminal, Open Workspace, New/Remove Worktree, and Apply Config.
+Without devx it falls back to Git repositories directly under <code>~/dev</code>.</li>
+<li><code>/port</code> lists listening TCP ports with process, PID, user, and working
+directory. Open <code>localhost:PORT</code>, copy the port/PID, or terminate with SIGTERM
+and explicitly force-kill with SIGKILL; both kills require confirmation.</li>
+<li><code>/git</code> lists repositories and exposes status, branch, stage all, commit with a
+message, fast-forward-only pull, push, recent log, and LazyGit. Status, log,
+and mutations run as managed subprocesses and return their output to the
+panel; only <strong>Open LazyGit</strong> launches a terminal. Complex Git work still
+belongs in LazyGit; Palette never force-pushes or rewrites history.</li>
+</ul>
+<h3>App and file actions</h3>
+<p>Application rows offer <strong>Open</strong>, <strong>Show in Finder</strong>, <strong>Copy Bundle ID</strong>, <strong>Copy
+Path</strong>, <strong>Quit App</strong>, and, for apps under <code>/Applications</code>, <strong>Move App to the
+Trash…</strong> with a confirmation. Project, path, recent, command, port, Git, and
+Finder-file rows include <strong>Open in Embedded Terminal</strong> at the row&#39;s directory.
+Clipboard file previews use QuickLook, so PDFs, images, archives, and other
+formats render directly in the preview pane.</p>
+<h3>Typography</h3>
+<p><code>[typography]</code> overrides the active theme. Empty strings and zero sizes inherit
+from the theme, which in turn falls back to the system font. Settings →
+Appearance has family pickers, a free-text family field, size controls, a live
+preview, and <strong>Reset to Theme</strong>. Missing fonts fall back silently with a startup
+diagnostic.</p>
+<pre><code class="language-toml">[typography]
+ui_family = &quot;Avenir Next&quot;
+mono_family = &quot;Menlo&quot;
+ui_size = 15
+mono_size = 13
+</code></pre>
+<h3>Provider aliases, order, and visibility</h3>
+<p><code>[providers]</code> stores tab order, extra trigger words, and providers you want to
+hide. Turn providers on or off in Settings → Advanced; the tab bar and Tab
+cycling only include enabled providers. Order with the up/down buttons; aliases
+are comma-separated. The canonical trigger never changes. Duplicate aliases or
+triggers are rejected when saving.</p>
+<pre><code class="language-toml">[providers]
+order = [&quot;apps&quot;, &quot;clip&quot;, &quot;port&quot;, &quot;git&quot;, &quot;proj&quot;]
+disabled = []
+
+[providers.aliases]
+apps = [&quot;launch&quot;, &quot;a&quot;]
+clip = [&quot;cb&quot;]
+</code></pre>
+<h3>Themes</h3>
+<p><code>/theme</code> switches live. Built-ins include Default Dark/Light, Catppuccin
+Mocha/Latte, Gruvbox Dark/Light, and <strong>Aetheria Pink</strong> (the pink/violet Noctalia
+palette). Settings can choose the dark/light pair and auto/dark/light mode; theme
+TOML files live in <code>~/.config/palette/themes</code>.</p>
+<h2>Configuration</h2>
+<p>Minimal <code>config.toml</code>:</p>
+<pre><code class="language-toml">hotkey = &quot;opt+space&quot;
+provider_prefix = &quot;/&quot;
+terminal = &quot;kitty&quot;
+terminal_app = &quot;kitty&quot;
+editor_open_with = &quot;neovide&quot;
+clipboard_hotkey = &quot;opt+v&quot;
+terminal_hotkey = &quot;cmd+option+t&quot;     # empty disables
+scratchpad_hotkey = &quot;cmd+option+s&quot;   # empty disables
+ask_hotkey = &quot;cmd+option+a&quot;          # empty disables
+screenshot_hotkey = &quot;cmd+option+shift+s&quot;
+recording_hotkey = &quot;cmd+option+shift+r&quot;
+search_position = &quot;top&quot;        # top | center
+web_app_browser = &quot;Helium&quot;
+app_sort = &quot;alphabetical&quot;      # alphabetical | frequent
+
+
+[window]
+auto_size = true               # size to the screen under the cursor
+scale = 1.0                    # 0.8-1.6; multiplies every size below, like rem
+width = 0                      # points; 0 = 680 * scale
+max_height = 0                 # points; 0 = 720 * scale
+visible_rows = 0               # 5-10; 0 = 7 * scale, sets the panel height
+clipboard_width = 0            # 0 = follow the panel width
+ask_width = 0
+preview_width = 0
+terminal_width = 0             # 0 = 1000 * scale
+scratchpad_width = 0
+preview_layout = &quot;below&quot;       # below | beside
+
+[timer]
+presets = [5, 10, 15, 25, 30, 45, 60]   # minutes, shown in /timer
+sound = true                   # chime when a timer finishes
+notify = true                  # system notification when a timer finishes
+
+[typography]
+ui_family = &quot;&quot;                 # empty inherits the theme
+mono_family = &quot;&quot;
+ui_size = 0
+mono_size = 0
+
+[providers]
+order = [&quot;apps&quot;, &quot;clip&quot;, &quot;port&quot;, &quot;git&quot;, &quot;proj&quot;]
+disabled = []
+
+[providers.aliases]
+apps = [&quot;launch&quot;]
+
+[terminal_session]
+multiplexer = &quot;auto&quot;
+name = &quot;Palette&quot;
+shell = &quot;&quot;
+font = &quot;&quot;
+font_size = 0
+
+[web_search]
+enabled = true
+
+[[web_search.engines]]
+name = &quot;Google&quot;
+url = &quot;https://www.google.com/search?q={query}&quot;
+
+[theme]
+mode = &quot;auto&quot;                 # dark | light | auto
+dark = &quot;catppuccin-mocha&quot;
+light = &quot;catppuccin-latte&quot;
+
+[scopes.projects]
+roots = [&quot;~/dev&quot;, &quot;~/dot-files&quot;]
+exclude = [&quot;**/node_modules/**&quot;, &quot;**/.git/**&quot;, &quot;**/.build/**&quot;, &quot;**/target/**&quot;]
+include_hidden = false
+max_depth = 12
+
+[clipboard]
+enabled = true
+max_entries = 5000
+poll_ms = 500
+clear_after_ms = 30000
+</code></pre>
+<p>See <a href="ARCHITECTURE.html">ARCHITECTURE.html</a> for the full model, <a href="THEMING.html">THEMING.html</a>
+for themes, and <a href="PROVIDERS.html">PROVIDERS.html</a> for writing your own provider.</p>
+<p><code>terminal</code> is the binary <code>/zj</code> launches; <code>terminal_app</code> is the GUI terminal used
+for Bitwarden login/install prompts. Both default to <code>kitty</code>; <code>Terminal</code> is also
+supported.</p>
+<h2>Extending</h2>
+<p>Two kinds of provider:</p>
+<ul>
+<li><strong>Paths providers</strong> are declarative manifests backed by the built-in fd + fzf
+engine. <code>/editf</code> is the reference copy: duplicate it, change <code>kind</code> and
+<code>open_with</code>.</li>
+<li><strong>Command providers</strong> are any executable that speaks newline-delimited JSON
+over stdin/stdout. Write one in shell, Python, Swift, or anything else. A
+complete Python example ships in <code>Resources/Examples/hello</code>.</li>
+</ul>
+<pre><code class="language-toml"># ~/.config/palette/providers/hello/provider.toml
+id = &quot;hello&quot;
+name = &quot;Hello&quot;
+trigger = &quot;hello&quot;
+command = [&quot;./hello.sh&quot;]
+timeout_ms = 1000
+</code></pre>
+<p>A user provider with the same <code>id</code> as a bundled one overrides it. Provider
+manifests are discovered from <code>~/.config/palette/providers</code>; Palette reloads
+them automatically when a manifest changes, and <code>⌘R</code> forces a full reload.</p>
+<h2>Development</h2>
+<pre><code class="language-sh">swift build
+swift test
+make run
+</code></pre>
+<p>Layout:</p>
+<pre><code>Sources/PaletteCore        models, config, theme, query, ranking, storage contracts
+Sources/PalettePlatform    macOS services: hotkey, panel, clipboard, fd/fzf, launch
+Sources/PaletteProviders   bundled providers
+Sources/PaletteRuntime     provider manifests and the external-process runtime
+Sources/PaletteApp         SwiftUI/AppKit shell
+Tests/                     unit and conformance tests
+</code></pre>
+<h2>Troubleshooting</h2>
+<p><strong>Nothing happens on the hotkey.</strong> Another app may own it. Change <code>hotkey</code> in
+<code>config.toml</code>, or quit the conflicting app.</p>
+<p><strong><code>fd</code>/<code>fzf</code> not found.</strong> GUI apps do not inherit your shell <code>PATH</code>. Palette
+probes <code>/opt/homebrew/bin</code>, <code>/usr/local/bin</code>, and <code>~/.local/bin</code>; if your tools
+live elsewhere, set <code>tools_path</code> in <code>config.toml</code>.</p>
+<p><strong>Paste does nothing.</strong> Grant Accessibility in System Settings → Privacy &amp;
+Security → Accessibility, then relaunch.</p>
+<p><strong>File results are stale.</strong> Palette re-walks on demand and caches briefly. Use
+<code>⌘R</code> to force a refresh.</p>
+<p><strong>A provider misbehaves.</strong> Check <code>~/.local/state/palette/logs/palette.log</code> and
+the provider&#39;s stderr in the same log.</p>
+</main>
+</body>
+</html>

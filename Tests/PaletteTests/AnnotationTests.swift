@@ -7,25 +7,48 @@ import XCTest
 /// read the rendered pixels, so a mirroring regression fails here.
 @MainActor
 final class AnnotationTests: XCTestCase {
-    private func solidImage(width: Int, height: Int, color: NSColor) -> NSImage {
+    /// Bitmap-backed so the pixel size is exact on any display scale; an
+    /// `NSImage(size:)` plus `lockFocus` doubles on a 2x screen and used to
+    /// make these assertions fail for the wrong reason.
+    private func bitmapImage(width: Int, height: Int, draw: (NSRect) -> Void) -> NSImage {
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            return NSImage(size: NSSize(width: width, height: height))
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        draw(NSRect(x: 0, y: 0, width: width, height: height))
+        NSGraphicsContext.restoreGraphicsState()
         let image = NSImage(size: NSSize(width: width, height: height))
-        image.lockFocus()
-        color.setFill()
-        NSRect(x: 0, y: 0, width: width, height: height).fill()
-        image.unlockFocus()
+        image.addRepresentation(rep)
         return image
     }
 
+    private func solidImage(width: Int, height: Int, color: NSColor) -> NSImage {
+        bitmapImage(width: width, height: height) { rect in
+            color.setFill()
+            rect.fill()
+        }
+    }
+
     private func twoToneImage(width: Int = 100, height: Int = 100) -> NSImage {
-        let image = NSImage(size: NSSize(width: width, height: height))
-        image.lockFocus()
-        NSColor.red.setFill()
-        // Top half in top-left coordinates == the high half in AppKit's space.
-        NSRect(x: 0, y: height / 2, width: width, height: height / 2).fill()
-        NSColor.blue.setFill()
-        NSRect(x: 0, y: 0, width: width, height: height / 2).fill()
-        image.unlockFocus()
-        return image
+        bitmapImage(width: width, height: height) { rect in
+            NSColor.red.setFill()
+            // Top half in top-left coordinates == the high half in AppKit's space.
+            NSRect(x: 0, y: rect.height / 2, width: rect.width, height: rect.height / 2).fill()
+            NSColor.blue.setFill()
+            NSRect(x: 0, y: 0, width: rect.width, height: rect.height / 2).fill()
+        }
     }
 
     private func pixel(_ image: NSImage, x: Int, y: Int) -> NSColor {
