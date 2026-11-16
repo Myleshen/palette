@@ -32,8 +32,12 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let directory = await service.config.directory
-        let entries = Self.entries(in: directory)
+        let config = await service.config
+        let directory = config.directory
+        var entries = Self.entries(in: directory)
+        if config.gallery == "palette" {
+            entries = entries.filter { Self.isPaletteCapture($0.url) }
+        }
         guard !entries.isEmpty else {
             return [emptyRow(
                 title: "No captures yet",
@@ -178,6 +182,13 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
     }
 
     // MARK: - Files
+
+    /// Palette names its own captures `shot-*.png` and `rec-*.mov`; anything
+    /// else in the folder came from Shottr, CleanShot, the system, or the user.
+    private static func isPaletteCapture(_ url: URL) -> Bool {
+        let name = url.lastPathComponent.lowercased()
+        return name.hasPrefix("shot-") || name.hasPrefix("rec-")
+    }
 
     private static func entries(in directory: String) -> [Entry] {
         let expanded = (directory as NSString).expandingTildeInPath

@@ -80,6 +80,16 @@ jobs:
               sub(/^<\/ul>/, "", line)
               sub(/^<ul>/, "", line)
               gsub(/<[^>]*>/, "", line)
+              gsub(/&ldquo;|&rdquo;/, "\"", line)
+              gsub(/&lsquo;|&rsquo;/, "'", line)
+              gsub(/&mdash;/, "—", line)
+              gsub(/&ndash;/, "–", line)
+              gsub(/&hellip;/, "…", line)
+              gsub(/&nbsp;/, " ", line)
+              gsub(/&lt;/, "<", line)
+              gsub(/&gt;/, ">", line)
+              gsub(/&quot;/, "\"", line)
+              gsub(/&amp;/, "\\&", line)
               if (line ~ /[^[:space:]]/) print line
             }
           ' CHANGELOG.html > notes.txt

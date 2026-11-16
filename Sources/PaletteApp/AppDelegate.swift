@@ -352,6 +352,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func writeSettingsSnapshot(to destination: String) {
+        // Drop the blinking caret: focused text fields made snapshot diffs
+        // flicker by a percent between runs.
+        settingsWindow?.makeFirstResponder(nil)
         guard let view = settingsWindow?.contentView else { return }
         write(view: view, to: destination)
     }

@@ -80,6 +80,18 @@ screen-recording permission, so it works on a locked display.</p>
 and <code>PALETTE_ACTIONS</code>.</p>
 <p>The harness calls the same <code>SearchController</code> keyboard path as the panel, but
 it does not test Carbon hotkey delivery or real typing. Check those manually.</p>
+<h2>Layout check</h2>
+<p>Unit tests cannot see a clipped label or a squashed stepper. <code>make layout-check</code>
+renders all eight Settings sections headlessly and compares each one with the
+reference in <code>Tests/Snapshots/</code>:</p>
+<pre><code class="language-sh">make layout-check              # fail if any section drifts more than 2%
+Scripts/layout-check.sh --record   # accept the current rendering
+</code></pre>
+<p>Snapshots are normalised to 900 px wide, so a different display scale does not
+produce noise, and the diff ignores differences below a 6% channel delta. A
+focused text field used to make the numbers wobble by a percent; the capture
+resigns first responder before rendering. Run it after any change to
+<code>SettingsView</code>.</p>
 <h2>Manual macOS checklist</h2>
 <p>Run <code>make run</code>, then work through this list. Items marked ⚠ require permissions.</p>
 <p><strong>Lifecycle</strong></p>

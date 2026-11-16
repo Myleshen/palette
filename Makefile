@@ -40,6 +40,9 @@ debug:
 	swift build
 	swift run PaletteApp
 
+layout-check:
+	Scripts/layout-check.sh
+
 test:
 	swift test
 

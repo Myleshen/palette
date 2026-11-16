@@ -183,6 +183,7 @@ final class CoreTests: XCTestCase {
         recording_audio = true
         sound = false
         thumbnail = false
+        gallery = "palette"
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         var config = ConfigLoader.load(paths: paths).config
@@ -200,6 +201,7 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(config.capture.recordingAudio)
         XCTAssertFalse(config.capture.captureSound)
         XCTAssertFalse(config.capture.captureThumbnail)
+        XCTAssertEqual(config.capture.gallery, "palette")
         XCTAssertFalse(config.capture.screenshotAction.savesFile)
         XCTAssertTrue(config.capture.screenshotAction.copiesToClipboard)
 

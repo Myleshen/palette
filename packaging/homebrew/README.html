@@ -14,8 +14,14 @@
 so there is no Apple Developer subscription involved. Homebrew applies the
 quarantine flag to downloads, so the cask removes it in <code>postflight</code>; otherwise
 Gatekeeper would refuse the unnotarized app.</p>
+<p>Homebrew treats third-party taps as untrusted: a first install may need
+<code>brew trust --tap Myleshen/tap</code> before the cask will load.</p>
 <p>Users install with:</p>
 <pre><code class="language-sh">brew install --cask Myleshen/tap/palette
+</code></pre>
+<p>Remove it completely (data plus a clean slate; the privacy grants still need
+the two <code>tccutil reset</code> commands from the main README):</p>
+<pre><code class="language-sh">brew uninstall --cask --zap palette
 </code></pre>
 <p>Upgrades:</p>
 <pre><code class="language-sh">brew upgrade --cask palette
