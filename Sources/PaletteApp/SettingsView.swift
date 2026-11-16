@@ -917,6 +917,10 @@ struct SettingsView: View {
                     TextField("Region (x,y,w,h)", text: $config.capture.recordingRegion)
                 }
                 Toggle("Record audio", isOn: $config.capture.recordingAudio)
+                Picker("Captures list", selection: $config.capture.gallery) {
+                    Text("Everything in the folder").tag("all")
+                    Text("Only Palette's captures").tag("palette")
+                }
                 Picker("Recording format", selection: $config.capture.recordingFormat) {
                     Text("MOV").tag("mov")
                     Text("MP4").tag("mp4")

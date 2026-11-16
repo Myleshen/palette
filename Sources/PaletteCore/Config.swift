@@ -239,6 +239,8 @@ public struct CaptureConfig: Sendable, Equatable {
     /// "x,y,w,h" in screen points, used when recordingTarget is region.
     public var recordingRegion = ""
     public var recordingAudio = false
+    /// Which captures `/shots` lists: everything in the folder or only Palette's.
+    public var gallery = "all"
     /// Play a shutter sound and show the thumbnail after a screenshot.
     public var captureSound = true
     public var captureThumbnail = true
@@ -602,6 +604,9 @@ public enum ConfigLoader {
             if let value = capture.int("recording_display"), value >= 1 { config.capture.recordingDisplay = value }
             if let value = capture.str("recording_region") { config.capture.recordingRegion = value }
             config.capture.recordingAudio = capture.bool("recording_audio") ?? config.capture.recordingAudio
+            if let value = capture.str("gallery"), ["all", "palette"].contains(value.lowercased()) {
+                config.capture.gallery = value.lowercased()
+            }
         }
 
         if let timer = table.table("timer") {
@@ -821,6 +826,7 @@ public enum ConfigLoader {
         recording_display = 1
         recording_region = ""
         recording_audio = false
+        gallery = "all"                    # all | palette (only shot-*/rec-* files)
         sound = true                       # shutter sound after a screenshot
         thumbnail = true                   # brief thumbnail after a screenshot
         edit_after_capture = false         # open the annotate window
@@ -979,6 +985,7 @@ public enum ConfigWriter {
         out.append("recording_display = \(config.capture.recordingDisplay)")
         out.append("recording_region = \(quote(config.capture.recordingRegion))")
         out.append("recording_audio = \(config.capture.recordingAudio)")
+        out.append("gallery = \(quote(config.capture.gallery))")
         out.append("")
         out.append("[timer]")
         out.append("presets = [\(config.timer.presets.map(String.init).joined(separator: ", "))]")

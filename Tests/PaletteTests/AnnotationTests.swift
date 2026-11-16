@@ -174,3 +174,63 @@ final class AnnotationTests: XCTestCase {
         XCTAssertEqual(saved.pixelSize.height, 120, accuracy: 1)
     }
 }
+
+// MARK: - Selection
+
+extension AnnotationTests {
+    func testHitTestFindsAnArrowOnItsShaft() {
+        let editor = AnnotationEditor(image: solidImage(width: 200, height: 100, color: .white), url: nil)
+        editor.add(.arrow(from: CGPoint(x: 0.1, y: 0.2), to: CGPoint(x: 0.9, y: 0.2), color: .red, width: 0.004))
+        XCTAssertEqual(editor.hitTest(CGPoint(x: 0.5, y: 0.2)), 0)
+        XCTAssertNil(editor.hitTest(CGPoint(x: 0.5, y: 0.6)))
+    }
+
+    func testHitTestFindsARectangleInsideAndNotOutside() {
+        let editor = AnnotationEditor(image: solidImage(width: 200, height: 100, color: .white), url: nil)
+        editor.add(.rectangle(rect: CGRect(x: 0.2, y: 0.2, width: 0.3, height: 0.4), color: .blue, width: 0.004))
+        XCTAssertEqual(editor.hitTest(CGPoint(x: 0.3, y: 0.3)), 0)
+        XCTAssertNil(editor.hitTest(CGPoint(x: 0.8, y: 0.8)))
+    }
+
+    func testTranslateMovesOnlyTheSelectedMark() {
+        let editor = AnnotationEditor(image: solidImage(width: 200, height: 100, color: .white), url: nil)
+        editor.add(.arrow(from: CGPoint(x: 0.1, y: 0.1), to: CGPoint(x: 0.2, y: 0.2), color: .red, width: 0.004))
+        editor.add(.rectangle(rect: CGRect(x: 0.5, y: 0.5, width: 0.2, height: 0.2), color: .blue, width: 0.004))
+        editor.replace(1, with: editor.shapes[1].offset(by: CGPoint(x: 0.1, y: -0.1)))
+        guard case let .rectangle(rect, _, _) = editor.shapes[1] else { return XCTFail("rect expected") }
+        XCTAssertEqual(rect.minX, 0.6, accuracy: 0.001)
+        XCTAssertEqual(rect.minY, 0.4, accuracy: 0.001)
+        guard case let .arrow(from, _, _, _) = editor.shapes[0] else { return XCTFail("arrow expected") }
+        XCTAssertEqual(from.x, 0.1, accuracy: 0.001, "the other mark must not move")
+    }
+
+    func testDeleteRemovesTheSelectedMarkAndUndoBringsItBack() {
+        let editor = AnnotationEditor(image: solidImage(width: 100, height: 100, color: .white), url: nil)
+        editor.add(.rectangle(rect: CGRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2), color: .red, width: 0.004))
+        editor.selected = 0
+        editor.removeSelected()
+        XCTAssertTrue(editor.shapes.isEmpty)
+        editor.undo()
+        XCTAssertEqual(editor.shapes.count, 1)
+    }
+
+    func testSaveAsWritesANewFile() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-save-as-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("original.png")
+        try XCTUnwrap(solidImage(width: 120, height: 60, color: .white).tiffRepresentation).write(to: source)
+
+        let editor = AnnotationEditor(image: try XCTUnwrap(NSImage(contentsOf: source)), url: source)
+        editor.add(.rectangle(rect: CGRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2), color: .red, width: 0.01))
+
+        let copy = directory.appendingPathComponent("copy.png")
+        try editor.save(to: copy)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copy.path))
+        XCTAssertEqual(try XCTUnwrap(NSImage(contentsOf: copy)).pixelSize.width, 120, accuracy: 1)
+        // The original is untouched by Save As.
+        XCTAssertEqual(try XCTUnwrap(NSImage(contentsOf: source)).pixelSize.width, 120, accuracy: 1)
+    }
+}

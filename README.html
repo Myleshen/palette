@@ -15,7 +15,7 @@ Dock icon, no script layer holding the core together.</p>
 <pre><code>⌥Space → /edit dotfiles → ⏎ opens the folder in your editor
 </code></pre>
 <h2>Status</h2>
-<p>v2.5.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+<p>v2.5.1. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.</p>
 <h2>Requirements</h2>
@@ -64,8 +64,10 @@ make test       # run the test suite
 <p>The app is ad-hoc signed. macOS may ask for Accessibility permission again
 after a rebuild; that is expected without a Developer ID certificate.</p>
 <h3>Homebrew</h3>
-<p>Palette ships through a public tap:</p>
-<pre><code class="language-sh">brew install --cask Myleshen/tap/palette
+<p>Palette ships through a public tap. Homebrew treats third-party taps as
+untrusted, so the first install may ask you to approve it:</p>
+<pre><code class="language-sh">brew trust --tap Myleshen/tap
+brew install --cask Myleshen/tap/palette
 </code></pre>
 <p>The cask downloads the latest GitHub release, installs <code>Palette.app</code> into
 <code>/Applications</code>, and clears the quarantine flag because the app is ad-hoc signed
@@ -78,6 +80,25 @@ the PR, then push a <code>v&lt;version&gt;</code> tag. Tagging is the release: C
 builds the zip, publishes it with the CHANGELOG entry as the notes, and updates
 the cask in <code>Myleshen/homebrew-tap</code>. See <code>CONTRIBUTING.html</code> and
 <code>packaging/homebrew/README.html</code>.</p>
+<h2>Uninstall</h2>
+<p>A plain uninstall removes the app and its login item. Palette's data lives
+outside the bundle, exactly like most Mac apps, so ask Homebrew to zap it as
+well when you want a clean slate:</p>
+<pre><code class="language-sh">brew uninstall --cask --zap palette
+</code></pre>
+<p>That removes <code>~/.config/palette</code> (settings, providers, themes),
+<code>~/.local/state/palette</code> (clipboard history, database, logs),
+<code>~/Library/Caches/Palette</code> (Bitwarden session, favicons, web-app icons),
+the preferences plist, saved window state and the Hammerspoon export.</p>
+<p>macOS keeps the privacy grants separately from the app, so finish the reset
+with the two commands below. <code>tccutil</code> is the only way to clear them;
+Homebrew casks cannot run commands on uninstall.</p>
+<pre><code class="language-sh">tccutil reset Accessibility dev.myleshen.palette
+tccutil reset ScreenCapture dev.myleshen.palette
+</code></pre>
+<p>If the first command reports <code>No such bundle identifier</code>, the grants are
+already gone. Deleting the app by dragging it to the Trash removes neither the
+data nor the grants.</p>
 <h2>First run</h2>
 <ol>
 <li>Launch Palette. It lives in the menu bar.</li>
@@ -443,11 +464,18 @@ videos) in the preview pane, plus open, annotate, copy image and reveal. Thumbna
 are generated once per file and cached by path and modification date.</p>
 <p>Recordings can target the whole screen, a single display, or a fixed region, and
 optionally include the default audio input — set under Settings → Capture or per
-row in <code>/rec</code>, which lists every active display by name and resolution.</p>
+row in <code>/rec</code>, which lists every active display by name and resolution.
+<code>[capture] gallery = "all" | "palette"</code> decides whether <code>/shots</code> lists everything in
+the folder or only Palette's own <code>shot-*</code> and <code>rec-*</code> files.</p>
 <p><strong>Annotate</strong> rows in <code>/shot</code> open the editor on the capture: arrow, rectangle,
-text and crop, six colours, a width slider, <code>⌘Z</code> undo, <code>⌘C</code> copy and <code>⌘S</code> save
-over the original file. Marks are stored as fractions of the image, so they look
-the same at any window size, and cropping remaps them instead of dropping them.</p>
+text and crop, six colours, a width slider, <code>⌘Z</code> undo, <code>⌘C</code> copy, <code>⌘S</code> save over
+the original file and <code>⌘⇧S</code> save as a copy. Marks are stored as fractions of the
+image, so they look the same at any window size, and cropping remaps them instead
+of dropping them.</p>
+<p>Click a mark to select it (dashed outline), drag it to move it, press
+<code>delete</code> to remove it. Text is typed in place: pick the text tool, click, type,
+press return. <code>⌘+</code>, <code>⌘-</code> and <code>⌘0</code> zoom the canvas, and the scroll wheel pans
+while zoomed, so a 3440 px screenshot can be edited at 1:1.</p>
 <p>Recordings open in a player window when they stop: play, scrub, reveal in
 Finder, or copy the path. Both behaviours are toggles in Settings → Capture
 (<code>edit_after_capture</code>, <code>preview_recording</code>), and the first capture asks for
