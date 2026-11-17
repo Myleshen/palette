@@ -344,6 +344,7 @@ final class CoreTests: XCTestCase {
         visible_rows = 9
         terminal_width = 1200
         preview_layout = "beside"
+        show_tabs = false
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         var loaded = ConfigLoader.load(paths: paths).config
@@ -354,6 +355,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(loaded.window.launcherWidth, 900)
         XCTAssertEqual(loaded.window.launcherRows, 9)
         XCTAssertEqual(loaded.window.previewLayout, .beside)
+        XCTAssertFalse(loaded.window.showTabs)
 
         // A settings save must round-trip the [window] table.
         loaded.window.scale = 1.1
@@ -364,6 +366,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(reloaded.width, 900)
         XCTAssertEqual(reloaded.askWidth, 1_000)
         XCTAssertEqual(reloaded.previewLayout, .beside)
+        XCTAssertFalse(reloaded.showTabs)
     }
 
     func testThemeLoaderFallsBackAndValidates() {
@@ -378,6 +381,51 @@ final class CoreTests: XCTestCase {
         let missing = ThemeLoader.load(name: "does-not-exist", themesDirectory: directory, fallback: .defaultLight)
         XCTAssertEqual(missing.theme.name, Theme.defaultLight.name)
         XCTAssertFalse(missing.diagnostics.isEmpty)
+    }
+
+    func testWebSearchEngineBangFieldsRoundTrip() throws {
+        var config = PaletteConfig()
+        config.webSearchEngines[0].keyword = "goog"
+        config.webSearchEngines[0].browser = "Safari"
+        let table = try TOMLTable(string: ConfigWriter.render(config))
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.webSearchEngines[0].keyword, "goog")
+        XCTAssertEqual(parsed.webSearchEngines[0].browser, "Safari")
+        XCTAssertEqual(parsed.webSearchEngines[1].browser, "")
+    }
+
+    func testStockWebSearchEnginesCarryKeywords() {
+        XCTAssertEqual(WebSearchEngine.defaults.map(\.keyword), ["g", "ddg", "gh", "yt"])
+    }
+
+    func testRestoringDefaultsReAddsDeletedStockEngine() {
+        let engines = WebSearchEngine.defaults.filter { $0.name != "GitHub" }
+        let restored = WebSearchEngine.restoringDefaults(into: engines)
+        XCTAssertEqual(restored.map(\.name), ["Google", "DuckDuckGo", "YouTube", "GitHub"])
+        XCTAssertEqual(restored.last?.keyword, "gh")
+    }
+
+    func testRestoringDefaultsBackfillsMissingKeyword() {
+        let engines = [
+            WebSearchEngine(name: "Google", urlTemplate: "https://example.com/?q={query}", browser: "Safari"),
+        ]
+        let restored = WebSearchEngine.restoringDefaults(into: engines)
+        XCTAssertEqual(restored.first?.keyword, "g")
+        XCTAssertEqual(restored.first?.urlTemplate, "https://example.com/?q={query}")
+        XCTAssertEqual(restored.first?.browser, "Safari")
+    }
+
+    func testRestoringDefaultsKeepsCustomEnginesAndCustomKeywords() {
+        let engines = [
+            WebSearchEngine(name: "Google", urlTemplate: "https://www.google.com/search?q={query}", keyword: "goog"),
+            WebSearchEngine(name: "Kagi", urlTemplate: "https://kagi.com/search?q={query}", keyword: "k"),
+        ]
+        let restored = WebSearchEngine.restoringDefaults(into: engines)
+        XCTAssertEqual(restored.count, 5)
+        XCTAssertEqual(restored.map(\.name), ["Google", "Kagi", "DuckDuckGo", "GitHub", "YouTube"])
+        XCTAssertEqual(restored[0].keyword, "goog")
+        XCTAssertEqual(restored[1].keyword, "k")
     }
 
     func testParityDefaultsAndWebSearchConfigRoundTrip() throws {

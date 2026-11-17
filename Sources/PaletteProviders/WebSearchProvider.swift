@@ -29,8 +29,7 @@ public final class WebSearchProvider: PaletteProvider, @unchecked Sendable {
         let query = request.text
         var items: [PaletteItem] = []
         for (index, engine) in engines.enumerated() {
-            let encoded = query.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? query
-            guard let url = URL(string: engine.urlTemplate.replacingOccurrences(of: "{query}", with: encoded)) else { continue }
+            guard let url = Self.url(for: engine, query: query) else { continue }
             items.append(PaletteItem(
                 id: "\(engine.id):\(query)",
                 title: "Search \(engine.name) for “\(query)”",
@@ -43,6 +42,12 @@ public final class WebSearchProvider: PaletteProvider, @unchecked Sendable {
             ))
         }
         return items
+    }
+
+    /// Shared with `!bang` rows so both encode `{query}` the same way.
+    public static func url(for engine: WebSearchEngine, query: String) -> URL? {
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? query
+        return URL(string: engine.urlTemplate.replacingOccurrences(of: "{query}", with: encoded))
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {}

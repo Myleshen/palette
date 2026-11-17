@@ -71,6 +71,8 @@ struct SettingsView: View {
     @State private var providerOrder: [String]
     @State private var aliases: [String: String]
     @State private var disabledProviders: [String]
+    @State private var bookmarks: [Bookmark] = []
+    @State private var bookmarksLoaded = false
     @State private var terminalShellChoice: String
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
@@ -312,7 +314,7 @@ struct SettingsView: View {
             .init(title: "Embedded terminal", tab: .general, keywords: "terminal session zellij tmux fish shell font"),
             .init(title: "Startup", tab: .general, keywords: "login start startup launch item"),
             .init(title: "Permissions", tab: .general, keywords: "accessibility permission paste automation"),
-            .init(title: "Launcher position and app order", tab: .general, keywords: "top center alphabetical frequent layout"),
+            .init(title: "Launcher position and app order", tab: .general, keywords: "top center alphabetical frequent layout tabs chips providers show"),
             .init(title: "Themes", tab: .appearance, keywords: "theme dark light catppuccin gruvbox aetheria"),
             .init(title: "Typography and fonts", tab: .appearance, keywords: "font family size mono typography"),
             .init(title: "Clipboard history", tab: .clipboard, keywords: "clipboard history entries poll clear retention"),
@@ -645,6 +647,7 @@ struct SettingsView: View {
                     Text("Most used").tag(AppSort.frequent)
                 }
                 Toggle("Fit to the active screen", isOn: $config.window.autoSize)
+                Toggle("Show provider tabs", isOn: $config.window.showTabs)
                 stepperRow("Width", display: "\(Int(widthBinding.wrappedValue)) pt",
                            value: widthBinding, in: 560...1_400, step: 20)
                 stepperRow("Visible rows", display: "\(visibleRowsBinding.wrappedValue)",
@@ -774,12 +777,22 @@ struct SettingsView: View {
             DisclosureGroup("Advanced: custom engines") {
                 ForEach($engines) { $engine in
                     VStack(alignment: .leading, spacing: 4) {
-                        TextField("Name", text: $engine.name)
-                        TextField("Search URL with {query}", text: $engine.urlTemplate)
-                        Button("Remove", role: .destructive) {
-                            engines.removeAll { $0.id == engine.id }
+                        HStack {
+                            TextField("Name", text: $engine.name)
+                            Button {
+                                engines.removeAll { $0.id == engine.id }
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Remove engine")
                         }
-                        .font(.caption)
+                        TextField("Search URL with {query}", text: $engine.urlTemplate)
+                        TextField("Keyword (!bang)", text: Binding(
+                            get: { engine.keyword ?? "" },
+                            set: { engine.keyword = $0.isEmpty ? nil : $0 }
+                        ))
+                        BrowserPicker(browser: $engine.browser)
                     }
                     .padding(.vertical, 3)
                 }
@@ -788,6 +801,10 @@ struct SettingsView: View {
                         name: "New Engine",
                         urlTemplate: "https://example.com/?q={query}"
                     ))
+                }
+                Button("Restore Defaults") {
+                    engines = WebSearchEngine.restoringDefaults(into: engines)
+                    config.webSearchEngines = engines
                 }
             }
             Section("Web apps") {
@@ -798,8 +815,48 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("Bookmarks") {
+                ForEach($bookmarks) { $bookmark in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            TextField("Name", text: $bookmark.name)
+                            Button {
+                                bookmarks.removeAll { $0.id == bookmark.id }
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Remove bookmark")
+                        }
+                        TextField("URL", text: $bookmark.url)
+                        BrowserPicker(browser: $bookmark.browser)
+                        TextField("Keywords (comma separated)", text: Binding(
+                            get: { bookmark.keywords.joined(separator: ", ") },
+                            set: { text in
+                                bookmark.keywords = text
+                                    .split(separator: ",")
+                                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                                    .filter { !$0.isEmpty }
+                            }
+                        ))
+                    }
+                    .padding(.vertical, 3)
+                }
+                Button("Add bookmark") {
+                    bookmarks.append(Bookmark(name: "", url: "", browser: ""))
+                }
+                Text("Bookmarks open in a normal browser window, in the browser you pick.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+        .onAppear {
+            // Load once so switching tabs does not discard unsaved edits.
+            guard !bookmarksLoaded else { return }
+            bookmarks = BookmarkStore.load(from: PalettePaths.resolve().bookmarksFile)
+            bookmarksLoaded = true
+        }
     }
 
     private var ask: some View {
@@ -917,6 +974,13 @@ struct SettingsView: View {
                     TextField("Region (x,y,w,h)", text: $config.capture.recordingRegion)
                 }
                 Toggle("Record audio", isOn: $config.capture.recordingAudio)
+                Picker("Microphone", selection: $config.capture.recordingMicrophone) {
+                    Text("System default").tag("")
+                    ForEach(CaptureMicrophones.active(), id: \.id) { microphone in
+                        Text(microphone.name).tag(microphone.id)
+                    }
+                }
+                .disabled(!config.capture.recordingAudio)
                 Picker("Captures list", selection: $config.capture.gallery) {
                     Text("Everything in the folder").tag("all")
                     Text("Only Palette's captures").tag("palette")
@@ -1194,6 +1258,13 @@ struct SettingsView: View {
             if config.terminalSession.shell.trimmingCharacters(in: .whitespaces).isEmpty {
                 config.terminalSession.shell = ""
             }
+        }
+        // Only write bookmarks once the editor has loaded them; a save from
+        // another tab must not blank the file with an empty in-memory list.
+        if bookmarksLoaded {
+            let bookmarkFile = PalettePaths.resolve().bookmarksFile
+            try? BookmarkStore.save(bookmarks, to: bookmarkFile)
+            bookmarks = BookmarkStore.load(from: bookmarkFile)
         }
         onSave(config)
     }

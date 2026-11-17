@@ -517,22 +517,29 @@ struct LauncherRootView: View {
             }
             // Wrap the chips: a clipped half-chip at the card edge reads as a
             // rendering bug, and every provider stays one click away.
-            FlowLayout(spacing: 2) {
-                ForEach(controller.providerTabs) { tab in
-                    tabChip(tab)
+            if controller.configuration.window.showTabs {
+                FlowLayout(spacing: 2) {
+                    ForEach(controller.providerTabs) { tab in
+                        tabChip(tab)
+                    }
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: TabStripHeightKey.self, value: proxy.size.height)
+                    }
+                )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.preference(key: TabStripHeightKey.self, value: proxy.size.height)
-                }
-            )
-            Rectangle()
-                .fill(theme.color(theme.palette.separator).opacity(isPill ? 0.35 : 0.6))
-                .frame(height: 1)
+            if controller.configuration.window.showTabs
+                || controller.activeTabID == "clip"
+                || controller.activeTabID == "ask"
+                || controller.activeGroupMembers.count > 1 {
+                Rectangle()
+                    .fill(theme.color(theme.palette.separator).opacity(isPill ? 0.35 : 0.6))
+                    .frame(height: 1)
+            }
         }
         .onPreferenceChange(TabStripHeightKey.self) { height in
             controller.setTabStripHeight(height)

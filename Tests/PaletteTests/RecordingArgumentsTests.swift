@@ -61,4 +61,20 @@ final class RecordingArgumentsTests: XCTestCase {
             ["-v", "-g", "-C", "-k", path]
         )
     }
+
+    func testConfiguredMicrophoneUsesTheGFlagAndNotTheDefault() {
+        var config = CaptureConfig()
+        config.recordingAudio = true
+        config.recordingMicrophone = "  BuiltInMicrophoneDevice  "
+        let arguments = CaptureService.recordingArguments(config: config, path: path)
+        XCTAssertEqual(arguments, ["-v", "-G", "BuiltInMicrophoneDevice", path])
+        XCTAssertFalse(arguments.contains("-g"))
+    }
+
+    func testEmptyMicrophoneFallsBackToTheSystemDefault() {
+        var config = CaptureConfig()
+        config.recordingAudio = true
+        config.recordingMicrophone = "   "
+        XCTAssertEqual(CaptureService.recordingArguments(config: config, path: path), ["-v", "-g", path])
+    }
 }
