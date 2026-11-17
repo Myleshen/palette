@@ -59,22 +59,43 @@ public struct TerminalSessionConfig: Sendable, Equatable {
 public struct WebSearchEngine: Sendable, Equatable, Identifiable {
     public var name: String
     public var urlTemplate: String
+    /// `!keyword` that addresses this engine directly. Nil or empty means the
+    /// engine is not bangable.
     public var keyword: String?
+    /// Browser app name; empty means the system default.
+    public var browser: String = ""
 
     public var id: String { name.lowercased() }
 
-    public init(name: String, urlTemplate: String, keyword: String? = nil) {
+    public init(name: String, urlTemplate: String, keyword: String? = nil, browser: String = "") {
         self.name = name
         self.urlTemplate = urlTemplate
         self.keyword = keyword
+        self.browser = browser
     }
 
     public static let defaults: [WebSearchEngine] = [
-        WebSearchEngine(name: "Google", urlTemplate: "https://www.google.com/search?q={query}"),
-        WebSearchEngine(name: "DuckDuckGo", urlTemplate: "https://duckduckgo.com/?q={query}"),
-        WebSearchEngine(name: "GitHub", urlTemplate: "https://github.com/search?q={query}"),
-        WebSearchEngine(name: "YouTube", urlTemplate: "https://www.youtube.com/results?search_query={query}"),
+        WebSearchEngine(name: "Google", urlTemplate: "https://www.google.com/search?q={query}", keyword: "g"),
+        WebSearchEngine(name: "DuckDuckGo", urlTemplate: "https://duckduckgo.com/?q={query}", keyword: "ddg"),
+        WebSearchEngine(name: "GitHub", urlTemplate: "https://github.com/search?q={query}", keyword: "gh"),
+        WebSearchEngine(name: "YouTube", urlTemplate: "https://www.youtube.com/results?search_query={query}", keyword: "yt"),
     ]
+
+    /// Re-add any missing stock engines and backfill a default keyword onto a
+    /// stock engine that has none. Custom engines are preserved.
+    public static func restoringDefaults(into engines: [WebSearchEngine]) -> [WebSearchEngine] {
+        var result = engines
+        for stock in defaults {
+            if let index = result.firstIndex(where: { $0.name == stock.name }) {
+                if (result[index].keyword ?? "").isEmpty {
+                    result[index].keyword = stock.keyword
+                }
+            } else {
+                result.append(stock)
+            }
+        }
+        return result
+    }
 }
 
 public struct ClipboardConfig: Sendable, Equatable {
@@ -118,6 +139,8 @@ public struct WindowConfig: Sendable, Equatable {
     public var scale: Double = 1
     /// Size to the screen under the cursor instead of one fixed size.
     public var autoSize: Bool = true
+    /// Show the row of provider chips above the list.
+    public var showTabs: Bool = true
     /// Points. 0 means "use the default times scale".
     public var width: Double = 0
     public var maxHeight: Double = 0
@@ -239,6 +262,8 @@ public struct CaptureConfig: Sendable, Equatable {
     /// "x,y,w,h" in screen points, used when recordingTarget is region.
     public var recordingRegion = ""
     public var recordingAudio = false
+    /// AVCaptureDevice uniqueID, as `screencapture -G` expects; empty is the system default.
+    public var recordingMicrophone = ""
     /// Which captures `/shots` lists: everything in the folder or only Palette's.
     public var gallery = "all"
     /// Play a shutter sound and show the thumbnail after a screenshot.
@@ -404,6 +429,7 @@ public struct PalettePaths: Sendable {
     }
 
     public var configFile: URL { configDir.appendingPathComponent("config.toml") }
+    public var bookmarksFile: URL { configDir.appendingPathComponent("bookmarks.toml") }
     public var providersDir: URL { configDir.appendingPathComponent("providers", isDirectory: true) }
     public var themesDir: URL { configDir.appendingPathComponent("themes", isDirectory: true) }
     public var databaseFile: URL { stateDir.appendingPathComponent("palette.sqlite") }
@@ -539,6 +565,7 @@ public enum ConfigLoader {
         }
         if let window = table.table("window") {
             config.window.autoSize = window.bool("auto_size") ?? config.window.autoSize
+            config.window.showTabs = window.bool("show_tabs") ?? config.window.showTabs
             if let value = window.number("scale"), value > 0 { config.window.scale = value }
             if let value = window.number("width"), value > 0 { config.window.width = value }
             if let value = window.number("max_height"), value > 0 { config.window.maxHeight = value }
@@ -604,6 +631,9 @@ public enum ConfigLoader {
             if let value = capture.int("recording_display"), value >= 1 { config.capture.recordingDisplay = value }
             if let value = capture.str("recording_region") { config.capture.recordingRegion = value }
             config.capture.recordingAudio = capture.bool("recording_audio") ?? config.capture.recordingAudio
+            if let value = capture.str("recording_microphone") {
+                config.capture.recordingMicrophone = value.trimmingCharacters(in: .whitespaces)
+            }
             if let value = capture.str("gallery"), ["all", "palette"].contains(value.lowercased()) {
                 config.capture.gallery = value.lowercased()
             }
@@ -670,7 +700,8 @@ public enum ConfigLoader {
                     return WebSearchEngine(
                         name: name,
                         urlTemplate: url,
-                        keyword: engine.str("keyword")
+                        keyword: engine.str("keyword"),
+                        browser: engine.str("browser") ?? ""
                     )
                 }
                 if !parsed.isEmpty { config.webSearchEngines = parsed }
@@ -800,6 +831,7 @@ public enum ConfigLoader {
         # 0 means "use the default times scale".
         [window]
         auto_size = true               # size to the screen under the cursor
+        show_tabs = true               # provider chip strip above the list
         scale = 1.0                    # 0.8 - 1.6
         width = 0                      # points, 0 = 680 * scale
         max_height = 0                 # points, 0 = 720 * scale
@@ -878,18 +910,22 @@ public enum ConfigLoader {
         [[web_search.engines]]
         name = "Google"
         url = "https://www.google.com/search?q={query}"
+        keyword = "g"
 
         [[web_search.engines]]
         name = "DuckDuckGo"
         url = "https://duckduckgo.com/?q={query}"
+        keyword = "ddg"
 
         [[web_search.engines]]
         name = "GitHub"
         url = "https://github.com/search?q={query}"
+        keyword = "gh"
 
         [[web_search.engines]]
         name = "YouTube"
         url = "https://www.youtube.com/results?search_query={query}"
+        keyword = "yt"
 
         [theme]
         mode = "auto"                 # dark | light | auto
@@ -956,6 +992,7 @@ public enum ConfigWriter {
         out.append("")
         out.append("[window]")
         out.append("auto_size = \(config.window.autoSize)")
+        out.append("show_tabs = \(config.window.showTabs)")
         out.append("scale = \(config.window.scale)")
         if config.window.width > 0 { out.append("width = \(config.window.width)") }
         if config.window.maxHeight > 0 { out.append("max_height = \(config.window.maxHeight)") }
@@ -985,6 +1022,7 @@ public enum ConfigWriter {
         out.append("recording_display = \(config.capture.recordingDisplay)")
         out.append("recording_region = \(quote(config.capture.recordingRegion))")
         out.append("recording_audio = \(config.capture.recordingAudio)")
+        out.append("recording_microphone = \(quote(config.capture.recordingMicrophone))")
         out.append("gallery = \(quote(config.capture.gallery))")
         out.append("")
         out.append("[timer]")
@@ -1036,6 +1074,7 @@ public enum ConfigWriter {
             out.append("name = \(quote(engine.name))")
             out.append("url = \(quote(engine.urlTemplate))")
             if let keyword = engine.keyword { out.append("keyword = \(quote(keyword))") }
+            if !engine.browser.isEmpty { out.append("browser = \(quote(engine.browser))") }
         }
         for name in config.scopes.keys.sorted() {
             guard let scope = config.scopes[name] else { continue }

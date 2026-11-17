@@ -27,4 +27,33 @@ public enum BrowserCatalog {
         }
         return nil
     }
+
+    /// App names are matched against the bundle names in the standard app
+    /// directories, so each entry must be the real `.app` name.
+    /// shortcut: curated list, not a full /Applications scan; add the bundle
+    /// name here when a browser is missing.
+    public static let knownBrowsers = [
+        "Safari",
+        "Google Chrome",
+        "Firefox",
+        "LibreWolf",
+        "Zen",
+        "Arc",
+        "Brave Browser",
+        "Vivaldi",
+        "Opera",
+        "Microsoft Edge",
+        "Orion",
+        "Chromium",
+        "Waterfox",
+        "Tor Browser",
+        "SigmaOS",
+        "Helium",
+    ]
+
+    /// Installed browser names, sorted. Empty when none of the known names is
+    /// installed, so callers must still offer the default browser.
+    public static func activeBrowsers() -> [String] {
+        Array(Set(knownBrowsers.filter { ToolLocator.shared.appPath(named: $0) != nil })).sorted()
+    }
 }

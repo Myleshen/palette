@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.6.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.7.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -102,6 +102,7 @@ Configuration lives in `~/.config/palette`:
 ```
 ~/.config/palette/
   config.toml
+  bookmarks.toml            # /bookmark entries, seeded with an example
   providers/
     neof/provider.toml      # user copy of the file provider, seeded for you
   themes/                   # optional user themes
@@ -141,7 +142,9 @@ Application rows expose Open, Show in Finder, Copy Bundle ID, and Copy Path in
 A tab strip under the search field shows Apps plus every provider that declares
 a trigger. It starts on **Apps**; clicking a tab opens that provider with an
 empty query. `Tab` and `⇧Tab` cycle through them without reaching for the
-mouse, so `/web`, `/zj`, `/bw`, `/clip`, and the rest are one key away.
+mouse, so `/web`, `/zj`, `/bw`, `/clip`, and the rest are one key away. Set
+`[window] show_tabs = false` to hide the strip; prefixes and Tab cycling keep
+working.
 
 ### Prefixes
 
@@ -172,6 +175,7 @@ trigger word:
 | `/ask <question>` | one-shot OpenCode Go answer |
 | `/askh <query>` | search retained Ask questions and answers |
 | `/web <query>` | saved web apps; type a domain to add one |
+| `/bookmark <query>` | bookmarks from `bookmarks.toml`, opened as normal browser windows |
 | `/emoji <query>` | emoji picker |
 | `/sys <query>` | settings, lock, sleep, trash, reload, quit |
 | `/theme <query>` | switch themes live |
@@ -218,6 +222,12 @@ Type any query that is not a file or app and Palette offers one row per
 configured engine (Google, DuckDuckGo, GitHub, YouTube by default). `⏎` opens
 the result in your default browser. Engines are ordinary config rows in
 `[web_search]`; add or remove them in Settings or `config.toml`.
+
+Give an engine a keyword and `!keyword query` searches it directly, in its own
+browser when one is set: `!gh palette launcher`. Bangs open a normal browser
+window. Type `!` on its own to list every engine that has a keyword. Keywords
+and per-engine browsers are set under Settings → Search → Advanced: custom
+engines.
 
 ### Ask
 
@@ -327,12 +337,14 @@ A capture plays a shutter sound and shows a thumbnail for a couple of seconds
 (both toggles in Settings → Capture), so it is obvious that it worked. `/shots`
 lists everything in the capture directory, newest first and grouped by day —
 screenshots and recordings together — with a thumbnail (a poster frame for
-videos) in the preview pane, plus open, annotate, copy image and reveal. Thumbnails
-are generated once per file and cached by path and modification date.
+videos) on every row and in the preview pane, plus open, annotate, copy image
+and reveal. Thumbnails are generated once per file and cached by path and
+modification date, so the rows reuse the same cache as the preview.
 
 Recordings can target the whole screen, a single display, or a fixed region, and
-optionally include the default audio input — set under Settings → Capture or per
-row in `/rec`, which lists every active display by name and resolution.
+optionally include audio from the system default input or a chosen microphone
+(`[capture] recording_microphone`), set under Settings → Capture or per row in
+`/rec`, which lists every active display by name and resolution.
 `[capture] gallery = "all" | "palette"` decides whether `/shots` lists everything
 in the folder or only Palette's own `shot-*` and `rec-*` files.
 
@@ -387,6 +399,23 @@ config. Use `⌘K` on a saved app to open it, copy its URL, set/change or clear
 its shortcut, or remove it. Opens are counted by the normal frecency store, so
 frequently used apps rise to the top. Definitions live in Palette’s SQLite
 state, not in `config.toml`.
+
+### Bookmarks
+
+`/bookmark` lists entries from `~/.config/palette/bookmarks.toml`, which is
+seeded with a commented example on first run:
+
+```toml
+[[bookmark]]
+name = "GitHub"
+url = "https://github.com"
+browser = "Safari"          # empty = system default browser
+keywords = ["code", "repos"]
+```
+
+A bookmark opens the URL as a **normal browser window**, not the `/web` app
+mode, and in the browser you pick. Edit rows in Settings → Search → Bookmarks;
+they are written back to the file when you press Save.
 
 ### Clipboard transforms
 
@@ -572,6 +601,7 @@ app_sort = "alphabetical"      # alphabetical | frequent
 
 [window]
 auto_size = true               # size to the screen under the cursor
+show_tabs = true               # provider chip strip above the list
 scale = 1.0                    # 0.8-1.6; multiplies every size below, like rem
 width = 0                      # points; 0 = 680 * scale
 max_height = 0                 # points; 0 = 720 * scale
@@ -614,6 +644,22 @@ enabled = true
 [[web_search.engines]]
 name = "Google"
 url = "https://www.google.com/search?q={query}"
+keyword = "g"
+
+[[web_search.engines]]
+name = "DuckDuckGo"
+url = "https://duckduckgo.com/?q={query}"
+keyword = "ddg"
+
+[[web_search.engines]]
+name = "GitHub"
+url = "https://github.com/search?q={query}"
+keyword = "gh"
+
+[[web_search.engines]]
+name = "YouTube"
+url = "https://www.youtube.com/results?search_query={query}"
+keyword = "yt"
 
 [theme]
 mode = "auto"                 # dark | light | auto

@@ -22,7 +22,10 @@ let package = Package(
         ),
         .target(
             name: "PalettePlatform",
-            dependencies: ["PaletteCore"],
+            dependencies: [
+                "PaletteCore",
+                .product(name: "TOMLKit", package: "TOMLKit"),
+            ],
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         .target(

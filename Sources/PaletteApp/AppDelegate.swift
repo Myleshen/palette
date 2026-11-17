@@ -158,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         seedUserProviders()
         seedCommandsFile()
+        seedBookmarksFile()
         registerLoginItemOnFirstLaunch()
         launcher = LauncherService()
         pasteboard = PasteboardService()
@@ -489,6 +490,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, onChange: { [weak self] in
             await self?.exportWebApps()
         }))
+        providers.append(BookmarkProvider())
         providers.append(ZellijProvider(terminal: configuration.terminal, launcher: launcher, bridge: hostProxy))
         providers.append(PortProvider(launcher: launcher, bridge: hostProxy))
         providers.append(CommandProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))
@@ -1155,6 +1157,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try CommandProvider.example.write(to: file, atomically: true, encoding: .utf8)
         } catch {
             Log.shared.warn("Could not seed commands.toml: \(error.localizedDescription)", source: "providers")
+        }
+    }
+
+    private func seedBookmarksFile() {
+        let file = paths.bookmarksFile
+        guard !FileManager.default.fileExists(atPath: file.path) else { return }
+        do {
+            try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
+            try BookmarkProvider.example.write(to: file, atomically: true, encoding: .utf8)
+        } catch {
+            Log.shared.warn("Could not seed bookmarks.toml: \(error.localizedDescription)", source: "providers")
         }
     }
 

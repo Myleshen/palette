@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import PaletteCore
 import PalettePlatform
+import PaletteProviders
 import PaletteRuntime
 
 public struct PromptState: Identifiable, Equatable {
@@ -240,6 +241,26 @@ public final class SearchController: ObservableObject, HostBridge {
 
     private func performSearch(raw: String) async {
         isSearching = true
+        // `!keyword query` goes straight to a search engine; providers never
+        // see it, and the list is the bang row (or the matching engines).
+        if raw.trimmingCharacters(in: .whitespaces).hasPrefix("!") {
+            let previousID = selectedItem?.stableID
+            let rows = BangResolver.items(for: raw, engines: configuration.webSearchEngines)
+            items = rows
+            highlightTerms = raw.dropFirst()
+                .split(whereSeparator: \.isWhitespace)
+                .dropFirst()
+                .map(String.init)
+            if let previousID, let index = rows.firstIndex(where: { $0.stableID == previousID }) {
+                selectionIndex = index
+            } else {
+                selectionIndex = 0
+            }
+            actionIndex = 0
+            isSearching = false
+            updatePanelHeight()
+            return
+        }
         let result = await registry.search(raw: raw)
         guard !Task.isCancelled else { return }
 
@@ -1025,7 +1046,8 @@ public final class SearchController: ObservableObject, HostBridge {
         let theme = themeManager.theme
         // The tab strip wraps, so use its measured height; add a sub-row when
         // a mode (clipboard filters, Ask history, provider group) adds one.
-        var tabs = max(44, tabStripHeight)
+        // Hidden tabs contribute no strip, but their sub-row still shows.
+        var tabs = windowConfig.showTabs ? max(44, tabStripHeight) : 0
         if activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1 { tabs += 38 }
         let footer = theme.footer.show ? CGFloat(28) : 0
         let pillExtra: CGFloat = 22

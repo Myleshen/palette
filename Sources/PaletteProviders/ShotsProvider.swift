@@ -68,16 +68,20 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         }
         actions.append(PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .reveal, value: .text(entry.url.path)))
 
+        let preview = await Self.preview(for: entry)
+        var icon = IconSpec.file(entry.url.path)
+        if case let .image(base64, _, _) = preview { icon = .base64(base64) }
+
         return PaletteItem(
             id: "shot:\(entry.url.path)",
             title: name,
             subtitle: "\(Self.age(entry.date)) · \(Self.size(entry.bytes))",
-            icon: .file(entry.url.path),
+            icon: icon,
             badge: entry.isVideo ? "MOV" : "SHOT",
             group: Self.day(entry.date),
             score: 10_000 - Double(entry.date.timeIntervalSinceNow) / 3600,
             actions: actions,
-            preview: await Self.preview(for: entry),
+            preview: preview,
             providerID: descriptor.id,
             providerName: descriptor.name
         )

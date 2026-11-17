@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.7.0 — 2026-11-17
+
+### Added
+
+- **Provider-tab toggle**: `[window] show_tabs` hides the chip strip above the
+  launcher list; `/trigger` commands and Tab cycling still work.
+- **Bookmarks**: `bookmarks.toml` entries that open a URL in a chosen browser as
+  a normal window (not the `/webapp` app mode). Managed in Settings → Search →
+  Bookmarks.
+- **`!` bangs**: `!keyword query` searches a configured engine (keyword, URL
+  template, and browser) straight from the launcher; `!` alone lists available
+  bangs.
+- **Microphone picker** for recordings (`screencapture -G`), alongside the
+  system default input.
+- **Thumbnails in `/shots` rows**, reusing the existing preview cache.
+
+### Fixed
+
+- Hidden provider tabs no longer leave a stray separator line at the top of the
+  launcher card.
+
 ## 2.6.0 — 2026-11-16
 
 ### Added

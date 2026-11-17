@@ -256,7 +256,7 @@ on the roadmap.
 | `neo` | `edit` | paths | files and folders across home, freeform, opens in the configured editor (`/neo` alias) |
 | `neof` | `editf` | paths | folders only, seeded user copy (`/neof` alias) |
 | `zj` | `zj` | native | global; running sessions globally, create rows only under `/zj` |
-| `search` | — | native | global web-search rows for configured engines |
+| `search` | — | native | global web-search rows for configured engines; `!keyword` bangs when an engine has one |
 | `bw` | `bw` | native | Bitwarden passwords |
 | `bwu` | `bwu` | native | Bitwarden usernames |
 | `bwt` | `bwt` | native | Bitwarden TOTP codes |
@@ -275,6 +275,7 @@ on the roadmap.
 | `snip` | `snip` | native | snippets from snippets.toml with safe placeholder expansion |
 | `askh` | `askh` | native | retained Ask history with fuzzy search and metadata |
 | `web` | `web` | native | global web apps with optional Hammerspoon shortcuts |
+| `bookmark` | `bookmark` | native | bookmarks from `bookmarks.toml`, opened in a normal browser window, global |
 | `emoji` | `emoji` | native | full Unicode emoji catalog with name search |
 | `system` | `sys` | native | sleep, lock, empty trash, reload, quit |
 | `theme` | `theme` | native | live theme switching |

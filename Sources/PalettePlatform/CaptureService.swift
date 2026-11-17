@@ -185,7 +185,14 @@ public final class CaptureService {
         default:
             break
         }
-        if config.recordingAudio { arguments.append("-g") }
+        if config.recordingAudio {
+            let microphone = config.recordingMicrophone.trimmingCharacters(in: .whitespaces)
+            if microphone.isEmpty {
+                arguments.append("-g")
+            } else {
+                arguments.append(contentsOf: ["-G", microphone])
+            }
+        }
         if config.captureCursor { arguments.append("-C") }
         if config.showClicks { arguments.append("-k") }
         arguments.append(path)
