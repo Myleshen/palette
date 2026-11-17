@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palette — Tasks</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1d1d1f; --muted: #6b7280; --bg: #ffffff; --card: #f5f5f7;
+    --line: #e3e3e8; --accent: #c2410c; --ok: #15803d; --warn: #b45309;
+    --code: #f2f2f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e6e6ea; --muted: #9ba0ab; --bg: #17181c; --card: #1e2026;
+      --line: #2c2f37; --accent: #fb923c; --ok: #4ade80; --warn: #fbbf24;
+      --code: #22252c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 44px 24px 96px; }
+  h1 { font-size: 2em; margin: 0 0 0.2em; font-weight: 650; }
+  h2 { font-size: 1.28em; margin: 2.2em 0 0.6em; border-bottom: 1px solid var(--line); padding-bottom: .28em; font-weight: 650; }
+  h3 { font-size: 1em; margin: 1.6em 0 .4em; font-weight: 650; }
+  p, ul, ol, table { margin: 0 0 1.1em; }
+  ul, ol { padding-left: 1.35em; }
+  li { margin: .3em 0; }
+  .sub { color: var(--muted); margin: 0 0 1.6em; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 1.4em 0 2em; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card .n { font-size: 1.7em; font-weight: 650; line-height: 1.1; }
+  .card .l { color: var(--muted); font-size: .82em; text-transform: uppercase; letter-spacing: .04em; }
+  table { border-collapse: collapse; width: 100%; font-size: .92em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--card); font-weight: 600; }
+  code { background: var(--code); border-radius: 4px; padding: .1em .32em; font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: .88em; }
+  .tag { display: inline-block; font-size: .76em; font-weight: 600; padding: .12em .5em; border-radius: 999px; border: 1px solid var(--line); }
+  .tag.human { color: var(--warn); border-color: var(--warn); }
+  .tag.done { color: var(--ok); border-color: var(--ok); }
+  .tag.later { color: var(--muted); }
+  .check { list-style: none; padding-left: 0; }
+  .check li { padding-left: 1.6em; position: relative; }
+  .check li::before { content: "☐"; position: absolute; left: 0; color: var(--muted); }
+  .muted { color: var(--muted); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2.2em 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1 id="top">Palette — Tasks</h1>
+<p class="sub">Updated 16 November 2026 · shipped <strong>2.6.0</strong> (build 51) · <a href="README.md">README</a> · <a href="CHANGELOG.md">CHANGELOG</a></p>
+
+<div class="cards">
+  <div class="card"><div class="n">0</div><div class="l">blocking</div></div>
+  <div class="card"><div class="n">4</div><div class="l">need a human</div></div>
+  <div class="card"><div class="n">7</div><div class="l">deferred</div></div>
+</div>
+
+<h2 id="human">Needs a human</h2>
+<p>These cannot be verified from an automated session: macOS only delivers input to an
+AX-trusted process, and Screen&nbsp;Recording permission is per build.</p>
+
+<h3 id="annotator">1. Annotator click-through <span class="tag human">10 min</span></h3>
+<p>Press <code>⌘⇧4</code> → <em>Capture a region and annotate</em>, or run <code>/shot</code> and pick an annotate row.</p>
+<ul class="check">
+  <li>Click a mark: dashed white outline appears, nothing new is drawn.</li>
+  <li>Drag it: it moves; press <code>delete</code>: it goes; <code>⌘Z</code> brings it back.</li>
+  <li>Text tool: click, type, press return — text appears where you clicked.</li>
+  <li><code>⌘+</code> / <code>⌘-</code> / <code>⌘0</code> zoom; the canvas scrolls while zoomed.</li>
+  <li><code>⌘⇧S</code> writes a separate file; <code>⌘S</code> overwrites the capture.</li>
+  <li>Resize the window to its minimum: the toolbar keeps every button readable.</li>
+</ul>
+
+<h3 id="hotkeys">2. Shortcut conflicts <span class="tag human">2 min</span></h3>
+<p><code>⌘⇧3</code> and <code>⌘⇧4</code> are Apple's screenshot keys and Shottr may hold them too.
+Press each one: if the wrong app answers, rebind in <strong>Settings → Shortcuts</strong>.
+Palette reports a taken key in the panel and in the log instead of failing silently.</p>
+
+<h3 id="permissions">3. Permission prompts <span class="tag human">2 min</span></h3>
+<p>Every release is ad-hoc signed, so macOS treats it as a new app.</p>
+<ul class="check">
+  <li>First screenshot: grant <em>Screen Recording</em> once.</li>
+  <li>First paste: grant <em>Accessibility</em> once.</li>
+  <li>Nothing is granted silently; a refusal shows the exact Settings path.</li>
+</ul>
+
+<h3 id="onboarding">4. First-run setup <span class="tag human">optional</span></h3>
+<p>Onboarding only appears when Palette <em>creates</em> <code>config.toml</code>, so upgrades
+skip it by design. To see it again:</p>
+<p><code>brew uninstall --cask --zap palette &amp;&amp; brew install --cask Myleshen/tap/palette</code></p>
+<p class="muted">This also clears the two privacy grants, so the prompts in step 3 return.</p>
+
+<h2 id="deferred">Deferred</h2>
+<p>Deliberate omissions, not defects. Each one is a separate feature, not a fix.</p>
+<table>
+  <tr><th>Item</th><th>Why it is parked</th><th>Size</th></tr>
+  <tr><td>Resize handles on marks</td><td>Move is done; resizing needs a new interaction model (handles, hit targets, aspect locks).</td><td>M</td></tr>
+  <tr><td>Blur / pixelate / highlight</td><td>Outside the agreed minimal Shottr parity.</td><td>M</td></tr>
+  <tr><td>Edit text after placement</td><td>Delete and redraw works; in-place editing needs a caret model on the canvas.</td><td>M</td></tr>
+  <tr><td>Interactive region recording</td><td><code>screencapture -v</code> has no region-selection UI; the region is configured instead.</td><td>L</td></tr>
+  <tr><td>Microphone device picker</td><td>Recording uses the system default input (<code>-g</code>).</td><td>S</td></tr>
+  <tr><td>Thumbnails inside <code>/shots</code> rows</td><td>The preview pane shows them; rows use Finder icons.</td><td>S</td></tr>
+  <tr><td>Developer ID / notarization</td><td>No Apple developer account by decision; ad-hoc signing stays. Cost: a re-grant per update.</td><td>—</td></tr>
+</table>
+
+<h2 id="constraints">Known constraints</h2>
+<ul>
+  <li><strong>Signing.</strong> Ad-hoc, so Screen&nbsp;Recording and Accessibility grants reset after every release. Accepted.</li>
+  <li><strong>Uninstall.</strong> <code>brew uninstall --cask --zap palette</code> removes data; the privacy grants need <code>tccutil reset Accessibility dev.myleshen.palette</code> and <code>tccutil reset ScreenCapture dev.myleshen.palette</code>. Casks cannot run commands on uninstall.</li>
+  <li><strong>Layout guard.</strong> <code>make layout-check</code> is local, not in CI, and the Advanced pane prints the version — re-record with <code>Scripts/layout-check.sh --record</code> after every version bump.</li>
+  <li><strong>Homebrew trust.</strong> A fresh machine may need <code>brew trust --tap Myleshen/tap</code> before the cask loads.</li>
+</ul>
+
+<h2 id="done">Done in 2.6.0</h2>
+<ul>
+  <li>Pointer tool as the default: select, move, delete; drawing tools no longer grab marks.</li>
+  <li>Text size stepper and in-place text entry.</li>
+  <li>Dock icon no longer lingers: the accessory policy follows editor and player windows only.</li>
+  <li>Setup window has a real title bar instead of a blank strip.</li>
+  <li><code>[capture] gallery</code> filters <code>/shots</code> to Palette's own captures.</li>
+  <li><code>make layout-check</code> with reference snapshots; catches layout drift (14.30% when the old clipping bug was reintroduced).</li>
+  <li>Docs back to Markdown with uninstall, trust and layout-check sections.</li>
+</ul>
+
+<h2 id="decisions">Decisions</h2>
+<ul>
+  <li><strong>No Apple developer account.</strong> Ad-hoc signing accepted; the permission re-grant per update is the cost.</li>
+  <li><strong>Semver.</strong> Additive tools, defaults and config keys are minor bumps (2.6.0), fixes are patches.</li>
+  <li><strong>Docs.</strong> Markdown for anything GitHub renders (README files and the docs linked from them); HTML for plans, trackers and reports — this file.</li>
+</ul>
+
+<hr>
+<p class="muted">Nothing above is blocking. When the four human checks pass, this page has no
+open work left.</p>
+
+</main>
+</body>
+</html>
