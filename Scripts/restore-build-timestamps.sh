@@ -37,9 +37,10 @@ if [ -n "$cached" ] && git cat-file -e "$cached^{commit}" 2>/dev/null; then
   fi
 else
   # No marker, or its commit is gone from history: the objects cannot be
-  # trusted, so start cold rather than testing stale code.
-  rm -rf .build
-  echo "no usable cache marker, starting cold"
+  # trusted. Drop the build products but keep the checkouts, so the rebuild
+  # never waits on the network.
+  rm -rf .build/debug .build/release
+  echo "no usable cache marker, rebuilding from the checkouts"
 fi
 
 mkdir -p .build
