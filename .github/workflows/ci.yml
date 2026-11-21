@@ -45,17 +45,14 @@ jobs:
         run: Scripts/restore-build-timestamps.sh
 
       - name: Test
-        # Release configuration on purpose: `make app` builds release too, so one
-        # set of artifacts serves both steps and the cache stays warm. Debug
-        # artifacts were being evicted from the cache, so every run recompiled.
-        run: swift test -c release ${{ github.event_name == 'push' && '--enable-code-coverage' || '' }}
+        run: swift test ${{ github.event_name == 'push' && '--enable-code-coverage' || '' }}
 
       - name: Report coverage
         if: github.event_name == 'push'
         continue-on-error: true
         run: |
           set -euo pipefail
-          report="$(ls .build/release/codecov/*.json 2>/dev/null | head -n 1)"
+          report="$(ls .build/debug/codecov/*.json 2>/dev/null | head -n 1)"
           if [ -z "$report" ]; then
             echo "no coverage report produced"
             exit 0
@@ -63,9 +60,9 @@ jobs:
           # xccov cannot read SPM's LLVM JSON on every toolchain, so fall back
           # to llvm-cov instead of losing the report.
           xcrun xccov view --report "$report" && exit 0
-          bundle="$(find -H .build/release -maxdepth 3 -name '*.xctest' -type d | head -n 1)"
+          bundle="$(find -H .build/debug -maxdepth 3 -name '*.xctest' -type d | head -n 1)"
           xcrun llvm-cov report "$bundle/Contents/MacOS/$(ls "$bundle/Contents/MacOS" | head -n 1)" \
-            -instr-profile=.build/release/codecov/default.profdata \
+            -instr-profile=.build/debug/codecov/default.profdata \
             -ignore-filename-regex='\.build/checkouts|/Tests/'
 
       - name: Build the app bundle
