@@ -350,6 +350,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var windowScreenshotHotkey: String
     public var recordingHotkey: String
     public var providerPrefix: String
+    /// Overrides the theme's search-field placeholder; empty inherits it.
+    public var searchPlaceholder: String
     public var toolsPath: [String]
     public var terminal: String
     public var terminalApp: String
@@ -395,6 +397,7 @@ public struct PaletteConfig: Sendable, Equatable {
         windowScreenshotHotkey: String = "cmd+shift+6",
         recordingHotkey: String = "cmd+shift+5",
         providerPrefix: String = "/",
+        searchPlaceholder: String = "",
         toolsPath: [String] = [],
         terminal: String = "kitty",
         terminalApp: String = "kitty",
@@ -429,6 +432,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.windowScreenshotHotkey = windowScreenshotHotkey
         self.recordingHotkey = recordingHotkey
         self.providerPrefix = providerPrefix
+        self.searchPlaceholder = searchPlaceholder
         self.toolsPath = toolsPath
         self.terminal = terminal
         self.terminalApp = terminalApp
@@ -614,6 +618,9 @@ public enum ConfigLoader {
         }
         if let prefix = table.str("provider_prefix"), !prefix.isEmpty {
             config.providerPrefix = prefix
+        }
+        if let placeholder = table.str("search_placeholder") {
+            config.searchPlaceholder = placeholder.trimmingCharacters(in: .whitespaces)
         }
         if let tools = table.strArray("tools_path") {
             config.toolsPath = tools
@@ -1114,6 +1121,7 @@ public enum ConfigWriter {
         out.append("window_screenshot_hotkey = \(quote(config.windowScreenshotHotkey))")
         out.append("recording_hotkey = \(quote(config.recordingHotkey))")
         out.append("provider_prefix = \(quote(config.providerPrefix))")
+        out.append("search_placeholder = \(quote(config.searchPlaceholder))")
         out.append("tools_path = [\(config.toolsPath.map(quote).joined(separator: ", "))]")
         out.append("terminal = \(quote(config.terminal))")
         out.append("terminal_app = \(quote(config.terminalApp))")

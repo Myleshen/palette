@@ -533,7 +533,8 @@ final class CoreTests: XCTestCase {
     }
 
     func testParityDefaultsAndWebSearchConfigRoundTrip() throws {
-        let config = PaletteConfig()
+        var config = PaletteConfig()
+        config.searchPlaceholder = "Find anything"
         XCTAssertEqual(config.clipboard.maxEntries, 5_000)
         XCTAssertEqual(config.webSearchEngines.count, 4)
         XCTAssertEqual(config.clipboardHotkey, "opt+v")
@@ -554,6 +555,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(parsed.askHotkey, config.askHotkey)
         XCTAssertEqual(parsed.searchPosition, .top)
         XCTAssertEqual(parsed.webAppBrowser, "Helium")
+        XCTAssertEqual(parsed.searchPlaceholder, "Find anything")
         XCTAssertTrue(diagnostics.isEmpty)
         XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))
         XCTAssertTrue(ThemeLoader.builtinNames.contains("aetheria-pink"))

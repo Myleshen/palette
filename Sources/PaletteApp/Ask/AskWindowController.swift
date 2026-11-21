@@ -18,7 +18,8 @@ final class AskWindowController: NSWindowController, NSWindowDelegate {
         model: AskModel,
         themeManager: ThemeManager,
         notify: Bool,
-        webSearch: Bool = false
+        webSearch: Bool = false,
+        onOpenSettings: @escaping () -> Void
     ) {
         let theme = themeManager.theme
         let window = NSPanel(
@@ -57,6 +58,7 @@ final class AskWindowController: NSWindowController, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: AskWindowView(
             state: state,
             themeManager: themeManager,
+            openSettings: onOpenSettings,
             close: { [weak self] in self?.close() }
         ))
     }

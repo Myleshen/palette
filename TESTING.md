@@ -46,7 +46,9 @@ PALETTE_SCRIPT='show; query=Safari; wait=1.2; actions; \
 
 Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `query=<text>`, `snapshot=<path>`, `shot`, `settings_tab=<index>`,
-`settings_snapshot=<path>`, `wait=<seconds>`, `dump=<path>`, `assert=<cond>`,
+`settings_size=<w>x<h>`, `settings_edit=<field>=<value>`,
+`settings_clear_search`, `awake=<seconds>`, `settings_snapshot=<path>`,
+`wait=<seconds>`, `dump=<path>`, `assert=<cond>`,
 `wait_until=<cond>[;timeout=<s>]`, and
 `key=<token>` where token is `up`, `down`, `enter`, `esc`, `tab`, `space`,
 `comma`, `k`, `r`, `w`, `1`…`9`, optionally prefixed with `cmd+`, `opt+`, or
@@ -75,7 +77,7 @@ log, or a missing artifact:
 | `empty-query-reset` | hiding and reshowing resets the query and selection to the first row |
 | `screenshot-keeps-panel` | a capture leaves the panel visible |
 | `universal-search` | an unprefixed query returns rows from the default global providers (`system`, `timer`, `awake`) |
-| `terminal-tab` | the Terminal Settings tab renders, via `settings_snapshot=` |
+| `launcher-tab` | the Launcher Settings tab renders, via `settings_snapshot=` |
 | `cheatsheets` | a temp `[cheatsheets] folders` entry reaches `/cheat`, which returns rows from the `cheat` provider |
 
 The capture flow asserts panel visibility only: a real capture needs Screen

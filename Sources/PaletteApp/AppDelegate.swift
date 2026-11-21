@@ -198,6 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
+        themeManager.searchPlaceholder = configuration.searchPlaceholder
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.config = configuration.capture
         themeManager.reload()
@@ -341,6 +342,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.toggleRecording()
                 } else if step == "clamshell" {
                     try? await self.keepAwake.setClamshell(true)
+                } else if let value = step.dropPrefix("awake=") {
+                    try? await self.keepAwake.start(duration: Double(value))
                 } else if let value = step.dropPrefix("annotate=") {
                     self.openAnnotator(URL(fileURLWithPath: value))
                 } else if let value = step.dropPrefix("annotate_export=") {
@@ -362,6 +365,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.showSettings()
                     try? await Task.sleep(nanoseconds: 300_000_000)
                     NotificationCenter.default.post(name: .paletteSettingsTab, object: index)
+                } else if let value = step.dropPrefix("settings_size=") {
+                    let parts = value.lowercased().split(separator: "x").compactMap { Double($0) }
+                    if parts.count == 2 {
+                        self.showSettings()
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                        self.settingsWindow?.setContentSize(NSSize(width: parts[0], height: parts[1]))
+                        self.settingsWindow?.center()
+                    }
+                } else if let value = step.dropPrefix("settings_edit=") {
+                    let parts = value.split(separator: "=", maxSplits: 1).map(String.init)
+                    if parts.count == 2 {
+                        NotificationCenter.default.post(
+                            name: .paletteSettingsEdit,
+                            object: [parts[0]: parts[1]]
+                        )
+                    }
+                } else if step == "settings_clear_search" {
+                    NotificationCenter.default.post(name: .paletteSettingsClearSearch, object: nil)
                 } else if step == "clipboard" {
                     self.showClipboard()
                 } else if step == "scratchpad" {
@@ -1308,7 +1329,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 model: selected,
                 themeManager: self.themeManager,
                 notify: self.configuration.ask.notify,
-                webSearch: self.configuration.ask.webSearch
+                webSearch: self.configuration.ask.webSearch,
+                onOpenSettings: { [weak self] in self?.openAskSettingsFromWindow() }
             )
             controller.onClose = { [weak self] in
                 guard let self else { return }
@@ -1702,6 +1724,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appMenu = NSMenu()
         appItem.submenu = appMenu
         appMenu.addItem(withTitle: "About Palette", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))"
+        let versionItem = NSMenuItem(title: "Version \(version)", action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
+        appMenu.addItem(versionItem)
+        let update = NSMenuItem(title: "Copy Update Command", action: #selector(copyUpdateCommandFromMenu), keyEquivalent: "")
+        update.target = self
+        appMenu.addItem(update)
+        appMenu.addItem(.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
         settings.target = self
         appMenu.addItem(settings)
@@ -2007,7 +2037,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    func reload(quiet: Bool) {
+    func reload(quiet: Bool, refreshSettings: Bool = true) {
         guard !reloadInFlight else { return }
         reloadInFlight = true
         defer { reloadInFlight = false }
@@ -2018,6 +2048,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
+        themeManager.searchPlaceholder = configuration.searchPlaceholder
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.config = configuration.capture
         themeManager.updateSelection(configuration.theme)
@@ -2042,7 +2073,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             installHotKey()
         }
         configureClipboard()
-        refreshSettingsWindow()
+        if refreshSettings { refreshSettingsWindow() }
         if !quiet {
             searchController.setStatus("Configuration reloaded", duration: 2)
         }
@@ -2102,6 +2133,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openReadmeFromMenu() {
         guard let url = URL(string: "https://github.com/Myleshen/palette/blob/main/README.md") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    @objc private func copyUpdateCommandFromMenu() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("brew upgrade --cask palette", forType: .string)
+        searchController.setStatus("Update command copied", duration: 2)
+    }
+
+    @objc private func openAskSettingsFromWindow() {
+        showSettings()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NotificationCenter.default.post(name: .paletteSettingsTab, object: SettingsTab.ask.rawValue)
+        }
     }
 
     private func showSettings() {
@@ -2195,16 +2239,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         SettingsView(
             config: configuration,
             keepAwake: keepAwake,
-            theme: themeManager.theme,
+            themeManager: themeManager,
             themesDirectory: paths.themesDir,
             accessibilityTrusted: pasteboard.isAccessibilityTrusted,
-            providerSummary: registry.providers.map {
-                "\($0.descriptor.name)  ·  \($0.descriptor.trigger.map { "/\($0)" } ?? "global")"
-            },
             providers: allProviderInfo,
             diagnostics: startupDiagnostics.map { "\($0.level.rawValue): \($0.message)" },
-            onSave: { [weak self] updated in
-                self?.saveSettings(updated)
+            onApply: { [weak self] updated in
+                self?.applySettings(updated)
             },
             onOpen: { [weak self] url in
                 self?.launcher.openPath(url.path)
@@ -2221,16 +2262,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow.contentView = makeSettingsHostingView()
     }
 
-    private func saveSettings(_ updated: PaletteConfig) -> String? {
+    /// Auto-apply writes the same canonical file the old Save button wrote, then
+    /// reloads the app in place. The Settings view is not rebuilt, so the field
+    /// the user is typing in keeps focus.
+    private func applySettings(_ updated: PaletteConfig) -> String? {
         do {
             try ConfigWriter.render(updated).write(to: paths.configFile, atomically: true, encoding: .utf8)
         } catch {
             return "Could not save settings: \(error.localizedDescription)"
         }
-        settingsWindow?.close()
-        settingsWindow = nil
-        reload(quiet: false)
+        reload(quiet: true, refreshSettings: false)
+        updateSettingsWindowChrome()
         return nil
+    }
+
+    private func updateSettingsWindowChrome() {
+        guard let settingsWindow else { return }
+        settingsWindow.appearance = themeManager.theme.nsAppearance
+        settingsWindow.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
     }
 
     @objc private func openProvidersFromMenu() {

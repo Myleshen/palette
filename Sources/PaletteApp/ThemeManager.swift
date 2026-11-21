@@ -14,6 +14,7 @@ public final class ThemeManager: ObservableObject {
     public var selection: ThemeSelection
     public var typography = TypographyConfig()
     public var window = WindowConfig()
+    public var searchPlaceholder = ""
     public var onChange: ((Theme) -> Void)?
 
     private let store: PaletteStore?
@@ -110,6 +111,9 @@ public final class ThemeManager: ObservableObject {
             if !Self.fontExists(typography.monoFamily) {
                 diagnostics.append(Diagnostic(.warning, "Mono font '\(typography.monoFamily)' is not installed; using the system font.", source: "theme"))
             }
+        }
+        if !searchPlaceholder.isEmpty {
+            resolved.search.placeholder = searchPlaceholder
         }
         if typography.uiSize > 0 {
             resolved.typography.size = typography.uiSize

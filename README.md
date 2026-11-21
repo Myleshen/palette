@@ -243,8 +243,8 @@ browser when one is set: `!gh palette launcher`. A bang opens a normal browser
 window, unless the engine has **Open in web app** on, which sends that search to
 the web-app browser (SSB) instead; that needs a Chromium-based web-app browser,
 set per engine or under **Web apps**. Type `!` on its own to list every engine
-that has a keyword. Settings → Search edits each engine as a card: Name ·
-Search URL · `!keyword` · Browser · Open in web app.
+that has a keyword. Settings → Search edits each engine as a row: Name ·
+`!keyword` · Search URL · Browser · Open in web app.
 
 ### Ask
 
@@ -391,7 +391,7 @@ menu-bar **Stop recording · m:ss** item shows while a recording runs. All four
 live in Settings → **Shortcuts** and can be cleared or rebound.
 
 A capture plays a shutter sound and shows a thumbnail for a couple of seconds
-(both toggles in Settings → Capture), so it is obvious that it worked. `/shots`
+(both toggles in Settings → Search → Screenshots), so it is obvious that it worked. `/shots`
 lists everything in the capture directory, newest first and grouped by day —
 screenshots and recordings together — with a thumbnail (a poster frame for
 videos) on every row and in the preview pane, plus open, annotate, copy image,
@@ -402,7 +402,7 @@ same cache as the preview.
 
 Recordings can target the whole screen, a single display, or a fixed region, and
 optionally include audio from the system default input or a chosen microphone
-(`[capture] recording_microphone`), set under Settings → Capture or per row in
+(`[capture] recording_microphone`), set under Settings → Search → Recordings or per row in
 `/rec`, which lists every active display by name and resolution.
 `[capture] gallery = "all" | "palette"` decides whether `/shots` lists everything
 in the folder or only Palette's own `shot-*` and `rec-*` files.
@@ -417,14 +417,14 @@ while zoomed. Marks are stored as fractions of the image, so they look the same
 at any window size, and cropping remaps them instead of dropping them.
 
 Recordings open in a player window when they stop: play, scrub, reveal in
-Finder, or copy the path. Both behaviours are toggles in Settings → Capture
+Finder, or copy the path. Both behaviours are toggles in Settings → Search → Screenshots
 (`edit_after_capture`, `preview_recording`), and the first capture asks for
 Screen Recording permission once per build.
 
 ### Cheatsheets
 
 `/cheat` lists PDF, HTML, Markdown, text and image files from the folders you add
-in Settings → **Cheatsheets**, one level deep. Selecting a row previews it with
+in Settings → **Search → Cheatsheets**, one level deep. Selecting a row previews it with
 QuickLook inside the launcher; `⌥P` enlarges the preview. Rows also open the file
 and reveal it in Finder. Folders and extensions are ordinary config:
 
