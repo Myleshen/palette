@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.15.1 — 2026-11-22
+
+### Changed
+
+- Dependency updates: SwiftTerm 1.99.3, Yams 6.2.2, actions/checkout 7,
+  actions/cache 6 and actions/attest-build-provenance 4. The bumped actions run
+  on Node 24, so CI no longer emits Node 20 deprecation warnings.
+
+### Fixed
+
+- The build is warning-free again: unused results on the GitHub open-URL and
+  annotator drag/save paths, an unused Docker status field, a non-Sendable
+  stream callback, and a test lock taken from an async context are cleaned up.
+- `NSApp.activate(ignoringOtherApps:)` replaced with `NSApp.activate()` on
+  macOS 14, where the old call is deprecated.
+
 ## 2.15.0 — 2026-11-22
 
 ### Added

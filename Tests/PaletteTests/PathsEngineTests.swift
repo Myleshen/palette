@@ -182,9 +182,7 @@ private final class CountingEnumerator: PathEnumerating, @unchecked Sendable {
     }
 
     func enumerateEntries(scope: Scope, kind: PathKind) async throws -> [PathEntry] {
-        lock.lock()
-        count += 1
-        lock.unlock()
+        lock.withLock { count += 1 }
         try await Task.sleep(nanoseconds: 50_000_000)
         return entries
     }

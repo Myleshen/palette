@@ -240,7 +240,7 @@ extension AnnotationTests {
         editor.add(.rectangle(rect: CGRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2), color: .red, width: 0.01))
 
         let copy = directory.appendingPathComponent("copy.png")
-        try editor.save(to: copy)
+        _ = try editor.save(to: copy)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: copy.path))
         XCTAssertEqual(try XCTUnwrap(NSImage(contentsOf: copy)).pixelSize.width, 120, accuracy: 1)
