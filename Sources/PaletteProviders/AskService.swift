@@ -82,6 +82,9 @@ public actor AskService {
         var rejectedEndpoints: Set<AskEndpoint> = []
 
         for model in candidates where !rejectedEndpoints.contains(model.endpoint) {
+            // Cancel must stop the whole chain: a cancelled request is not a
+            // model failure, so it neither falls back nor lands in history.
+            if Task.isCancelled { throw CancellationError() }
             // Falling back on timeouts could otherwise spend 130 s per model;
             // cap the whole ask so the panel cannot sit busy for many minutes.
             if attempts > 0, Date().timeIntervalSince(started) > 300 { break }
@@ -123,6 +126,7 @@ public actor AskService {
                 }
                 if !error.allowsFallback { break }
             } catch {
+                if Task.isCancelled || error is CancellationError { throw CancellationError() }
                 lastError = error
                 Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
             }

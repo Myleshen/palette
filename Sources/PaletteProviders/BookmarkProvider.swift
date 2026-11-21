@@ -25,12 +25,10 @@ public final class BookmarkProvider: PaletteProvider, @unchecked Sendable {
         // Global providers run on every search: only offer the setup row when
         // the user asked for bookmarks explicitly.
         guard !bookmarks.isEmpty else { return request.isBound ? [setupItem()] : [] }
-        // When bound to /bookmark the query is the provider prefix only, so
-        // list everything instead of filtering.
-        let terms = request.isBound ? [] : request.terms
         return bookmarks.compactMap { bookmark in
             let haystack = ([bookmark.name] + bookmark.keywords).joined(separator: " ")
-            if !terms.isEmpty, Ranking.score(terms: terms, candidate: haystack) == nil { return nil }
+            if !request.terms.isEmpty,
+               Ranking.score(terms: request.terms, candidate: haystack) == nil { return nil }
             return item(bookmark)
         }
     }

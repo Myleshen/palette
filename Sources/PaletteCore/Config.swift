@@ -838,6 +838,9 @@ public enum ConfigLoader {
             if let fallback = askTable.bool("fallback") {
                 ask.fallback = fallback
             }
+            if let notify = askTable.bool("notify") {
+                ask.notify = notify
+            }
             if AskModel.find(id: ask.model)?.endpoint != ask.endpoint {
                 ask.model = AskModel.defaultModel.id
             }
@@ -1024,6 +1027,7 @@ public enum ConfigLoader {
         retention_days = 30
         max_tokens = 8192
         fallback = true                # use free/cheap models when quota runs out
+        notify = true                  # sound and Dock bounce when an answer arrives
 
         # Global web search. Add or remove engines as you like; {query} is
         # replaced with the URL-encoded search text. app_mode = true opens
@@ -1189,6 +1193,7 @@ public enum ConfigWriter {
         out.append("retention_days = \(config.ask.retentionDays)")
         out.append("max_tokens = \(config.ask.maxTokens)")
         out.append("fallback = \(config.ask.fallback)")
+        out.append("notify = \(config.ask.notify)")
         out.append("")
         out.append("[theme]")
         out.append("mode = \(quote(config.theme.mode.rawValue))")

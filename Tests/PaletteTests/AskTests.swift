@@ -14,6 +14,7 @@ final class AskTests: XCTestCase {
         config.ask.retentionDays = 9
         config.ask.maxTokens = 256
         config.ask.fallback = false
+        config.ask.notify = false
 
         let rendered = ConfigWriter.render(config)
         XCTAssertFalse(rendered.lowercased().contains("api_key"))
@@ -27,6 +28,20 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(parsed.ask.retentionDays, 9)
         XCTAssertEqual(parsed.ask.maxTokens, 256)
         XCTAssertFalse(parsed.ask.fallback)
+        XCTAssertFalse(parsed.ask.notify)
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testAskNotifyDefaultsOnAndParsesOff() throws {
+        XCTAssertTrue(AskConfig().notify)
+        XCTAssertTrue(ConfigLoader.defaultTOML().contains("notify = true"))
+        let table = try TOMLTable(string: """
+        [ask]
+        notify = false
+        """)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertFalse(parsed.ask.notify)
         XCTAssertTrue(diagnostics.isEmpty)
     }
 
@@ -55,7 +70,9 @@ final class AskTests: XCTestCase {
         let models = AskModel.models(for: .opencodeGo)
         XCTAssertFalse(models.isEmpty)
         XCTAssertTrue(models.allSatisfy { $0.endpoint == .opencodeGo })
-        XCTAssertEqual(models.filter(\.free).count, 2)
+        XCTAssertEqual(models.filter(\.free).count, 4)
+        XCTAssertTrue(models.contains { $0.id == "grok-4.7" })
+        XCTAssertTrue(models.contains { $0.id == "gpt-6-luna" })
     }
 
     func testAskKeyFileRoundTrip() throws {
@@ -87,6 +104,32 @@ final class AskTests: XCTestCase {
         XCTAssertTrue(paid.contains { $0.id == "longcat-2.0" })
         XCTAssertTrue(paid.contains { $0.id == "glm-5.3" })
         XCTAssertFalse(paid.contains { $0.id == "glm-5.2" })
+    }
+
+    func testAskRecordMetaLineShowsModelAndUsage() {
+        let record = AskRecord(
+            id: "1",
+            question: "q",
+            answer: "a",
+            model: "hy3",
+            provider: "opencode-go",
+            createdAt: Date(),
+            durationMs: 1_250,
+            promptTokens: 30,
+            completionTokens: 12
+        )
+        XCTAssertEqual(record.metaLine, "hy3 · 1250 ms · 42 tokens")
+
+        let untokened = AskRecord(
+            id: "2",
+            question: "q",
+            answer: "",
+            model: "beam-free",
+            provider: "opencode-go",
+            createdAt: Date(),
+            error: "boom"
+        )
+        XCTAssertEqual(untokened.metaLine, "beam-free · 0 ms")
     }
 
     func testAskDefaultsAllowLongerAnswers() {
@@ -299,6 +342,33 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(history.first?.answer, "")
         XCTAssertEqual(history.first?.model, "hy3")
         XCTAssertEqual(history.first?.error, "No answer after 130s — the model was too slow.")
+    }
+
+    func testAskCancelStopsFallbackAndWritesNoHistory() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let counter = CallCounter()
+        let stub = StubCompleter { _, _ in
+            await counter.increment()
+            throw CancellationError()
+        }
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "hy3"),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
+            completer: stub
+        )
+        do {
+            _ = try await service.ask("cancel me")
+            XCTFail("expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        let calls = await counter.value
+        XCTAssertEqual(calls, 1, "a cancelled ask must not fall back to another model")
+        let history = try await store.askHistory()
+        XCTAssertTrue(history.isEmpty, "cancelling must not record a failure")
     }
 }
 
