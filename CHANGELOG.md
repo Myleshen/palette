@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.12.1 — 2026-11-21
+
+### Fixed
+
+- The Atlas provider is now `/atlas`-only instead of participating in the
+  unprefixed/global search, so a plain query like `settings` no longer surfaces
+  Atlas artifacts. Under `/atlas` it still shows the document preview; Enter opens
+  the artifact and "Mark Reviewed" stays in the ⌘K menu.
+
 ## 2.12.0 — 2026-11-21
 
 ### Added
