@@ -13,7 +13,7 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
         id: "atlas",
         name: "Atlas",
         trigger: "atlas",
-        isGlobal: true,
+        isGlobal: false,
         priority: 46,
         icon: "symbol:book.closed",
         keywords: ["atlas", "index", "artifacts", "docs", "notes", "review", "inbox"]
