@@ -13,7 +13,7 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
         trigger: "cmd",
         isGlobal: false,
         priority: 57,
-        icon: "symbol:terminal"
+        icon: "symbol:command"
     )
 
     public struct Command: Identifiable, Equatable, Sendable {

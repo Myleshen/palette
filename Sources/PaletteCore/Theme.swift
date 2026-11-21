@@ -266,6 +266,10 @@ public enum ThemeLoader {
         ensureContrast(on: theme.palette.accent, &theme.palette.accentFg, label: "accent_fg", theme: theme.name, diagnostics: &diagnostics)
         ensureContrast(on: theme.palette.selectionBg, &theme.palette.selectionFg, label: "selection_fg", theme: theme.name, diagnostics: &diagnostics)
         ensureContrast(on: theme.palette.badgeBg, &theme.palette.badgeFg, label: "badge_fg", theme: theme.name, diagnostics: &diagnostics)
+        if let background = theme.states.selected.bg, var foreground = theme.states.selected.fg {
+            ensureContrast(on: background, &foreground, label: "states.selected.fg", theme: theme.name, diagnostics: &diagnostics)
+            theme.states.selected.fg = foreground
+        }
     }
 
     private static func ensureContrast(
@@ -531,6 +535,11 @@ public enum ThemeLoader {
            let badgeFg = RGBA(hex: theme.palette.badgeFg),
            badgeBg.contrast(with: badgeFg) < 4.5 {
             diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low badge contrast.", source: "theme"))
+        }
+        if let selectedBg = theme.states.selected.bg.flatMap(RGBA.init(hex:)),
+           let selectedFg = theme.states.selected.fg.flatMap(RGBA.init(hex:)),
+           selectedBg.contrast(with: selectedFg) < 4.5 {
+            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low selected-row contrast.", source: "theme"))
         }
     }
 

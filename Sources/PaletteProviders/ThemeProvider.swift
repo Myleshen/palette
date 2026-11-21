@@ -10,7 +10,7 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
         trigger: "theme",
         isGlobal: false,
         priority: 5,
-        icon: "symbol:paintpalette"
+        icon: "symbol:circle.lefthalf.filled"
     )
 
     private let themesDirectory: URL

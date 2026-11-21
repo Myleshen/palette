@@ -585,7 +585,7 @@ public final class SearchController: ObservableObject, HostBridge {
         public var id: String
         public var title: String
         public var trigger: String?
-        public var icon: String
+        public var icon: String?
     }
 
     /// Everything first, then one row per provider in registry order. `askh`
@@ -601,7 +601,7 @@ public final class SearchController: ObservableObject, HostBridge {
                 id: descriptor.id,
                 title: descriptor.name,
                 trigger: trigger,
-                icon: descriptor.icon ?? "symbol:square.grid.2x2"
+                icon: descriptor.icon
             ))
         }
         return entries

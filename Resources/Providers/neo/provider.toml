@@ -1,4 +1,5 @@
 id = "neo"
+icon = "pencil"
 name = "Editor"
 trigger = "edit"
 engine = "paths"

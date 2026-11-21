@@ -9,7 +9,7 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
         trigger: "zj",
         isGlobal: true,
         priority: 20,
-        icon: "symbol:terminal"
+        icon: "symbol:rectangle.split.3x1"
     )
 
     private let launcher: LauncherService

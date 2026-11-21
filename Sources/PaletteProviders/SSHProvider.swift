@@ -10,7 +10,7 @@ public final class SSHProvider: PaletteProvider, @unchecked Sendable {
         trigger: "ssh",
         isGlobal: false,
         priority: 48,
-        icon: "symbol:network",
+        icon: "symbol:lock.shield",
         keywords: ["ssh", "host", "server", "remote", "shell", "config"]
     )
 

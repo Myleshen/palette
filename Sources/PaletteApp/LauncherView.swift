@@ -423,18 +423,15 @@ struct ResultRow: View {
     private var hovered: Bool { hoverArmed && !selected }
 
     private var selectedBase: String {
-        pill ? theme.palette.fg : (theme.states.selected.fg ?? theme.palette.selectionFg)
+        theme.states.selected.fg ?? theme.palette.selectionFg
     }
 
-    private var selectedMatch: String {
-        pill ? theme.palette.accent : selectedBase
-    }
+    /// On a selected row every text colour comes from the selection pair;
+    /// accent-on-accent made matched terms disappear.
+    private var selectedMatch: String { selectedBase }
 
     private var subtitleColor: String {
-        if selected {
-            return pill ? theme.palette.fgMuted : selectedBase
-        }
-        return theme.palette.fgMuted
+        selected ? selectedBase : theme.palette.fgMuted
     }
 
     var body: some View {
@@ -455,7 +452,7 @@ struct ResultRow: View {
                 if theme.list.showSubtitles, let subtitle = item.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.system(size: theme.typography.subtitleSize))
-                        .foregroundColor(theme.color(subtitleColor).opacity(selected && !pill ? 0.7 : 1))
+                        .foregroundColor(theme.color(subtitleColor))
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -467,8 +464,8 @@ struct ResultRow: View {
             if showProvider, let name = item.providerName, !name.isEmpty, item.providerID != "apps" {
                 Text(name)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.color(selected && !pill ? selectedBase : theme.palette.fgMuted)
-                        .opacity(selected && !pill ? 0.75 : 0.8))
+                    .foregroundColor(theme.color(selected ? selectedBase : theme.palette.fgMuted))
+                    .opacity(selected ? 1 : 0.8)
                     .lineLimit(1)
             }
         }
@@ -637,12 +634,13 @@ struct LauncherRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
     @FocusState private var promptFocused: Bool
+    @State private var railScrollTarget: String?
     private var theme: Theme { themeManager.theme }
     private var isPill: Bool { true }
 
     var body: some View {
         GeometryReader { proxy in
-            pillLayout(railCollapsed: controller.previewVisible || proxy.size.width < 900)
+            pillLayout(railCollapsed: controller.previewVisible || proxy.size.width < 700)
         }
         .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
         .onAppear {
@@ -678,10 +676,16 @@ struct LauncherRootView: View {
     /// height between the search pill and the footer. Icons only when the
     /// preview is open or the panel is narrow.
     private func rail(collapsed: Bool) -> some View {
-        ScrollViewReader { proxy in
+        GeometryReader { proxy in
+            // Whole rows only: the scroll viewport is trimmed to a row
+            // boundary so the last provider cannot be cut by the card edge.
+            let pinned = LauncherMetrics.innerPadding + 32
+            let inset: CGFloat = 20
+            let stride: CGFloat = 34
+            let rows = max(1, Int((proxy.size.height - pinned - inset) / stride))
             VStack(spacing: 0) {
-                // Everything is pinned: the default scope must always be one
-                // click away, even while the provider list scrolls.
+                // Everything is pinned: the default scope must always be
+                // one click away, even while the provider list scrolls.
                 if let everything = controller.railEntries.first {
                     railRow(everything, collapsed: collapsed)
                         .padding(.horizontal, LauncherMetrics.innerPadding)
@@ -692,7 +696,7 @@ struct LauncherRootView: View {
                         }
                 }
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    VStack(spacing: 2) {
                         ForEach(Array(controller.railEntries.dropFirst())) { entry in
                             railRow(entry, collapsed: collapsed)
                                 .id(entry.id)
@@ -702,16 +706,18 @@ struct LauncherRootView: View {
                                 }
                         }
                     }
-                    .padding(.vertical, 8)
+                    .padding(.top, 8)
+                    .padding(.bottom, LauncherMetrics.innerPadding)
                     .padding(.horizontal, LauncherMetrics.innerPadding)
+                    .scrollTargetLayout()
                 }
+                .frame(height: CGFloat(rows) * stride + 18)
                 .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
-                .onChange(of: controller.activeRailID) { _, id in
-                    guard id != "everything" else { return }
-                    withAnimation(reduceMotion ? nil : theme.scrollAnimation) {
-                        proxy.scrollTo(id)
-                    }
+                .scrollPosition(id: $railScrollTarget, anchor: .center)
+                .onChange(of: controller.activeRailID, initial: true) { _, id in
+                    railScrollTarget = id == "everything" ? nil : id
                 }
+                Spacer(minLength: 0)
             }
         }
         .frame(width: collapsed ? 56 : 200)
@@ -719,15 +725,34 @@ struct LauncherRootView: View {
         .cardSurface(theme: theme)
     }
 
+    /// Two initials keep "Editor" and "Editor Folders" apart when a provider
+    /// ships no icon.
+    private func railInitials(_ title: String) -> String {
+        let words = title.split(whereSeparator: \.isWhitespace).prefix(2)
+        return words.compactMap { $0.first }.map { String($0).uppercased() }.joined()
+    }
+
     private func railRow(_ entry: SearchController.RailEntry, collapsed: Bool) -> some View {
         let selected = controller.activeRailID == entry.id
-        let symbol = entry.icon.hasPrefix("symbol:")
-            ? String(entry.icon.dropFirst("symbol:".count))
-            : "square.grid.2x2"
+        let symbol = entry.icon.flatMap { raw -> String? in
+            raw.hasPrefix("symbol:") ? String(raw.dropFirst("symbol:".count)) : nil
+        }
         return HStack(spacing: collapsed ? 0 : 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: collapsed ? 24 : 16)
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: collapsed ? 24 : 16)
+            } else {
+                // A repeated grid glyph is worse than a letter: every row
+                // stays distinguishable in the icon-only rail.
+                Text(railInitials(entry.title))
+                    .font(.system(size: 10, weight: .bold))
+                    .frame(width: collapsed ? 22 : 16, height: 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(theme.color(theme.palette.elevated))
+                    )
+            }
             if !collapsed {
                 Text(entry.title)
                     .font(theme.font(size: 11, weight: .medium))
