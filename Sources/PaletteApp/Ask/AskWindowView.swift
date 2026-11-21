@@ -85,6 +85,7 @@ final class AskWindowState: ObservableObject {
 struct AskWindowView: View {
     @ObservedObject var state: AskWindowState
     @ObservedObject var themeManager: ThemeManager
+    var openSettings: () -> Void
     var close: () -> Void
 
     @State private var copied = false
@@ -192,6 +193,13 @@ struct AskWindowView: View {
                     .foregroundStyle(theme.color(theme.palette.fg))
                     .multilineTextAlignment(.center)
                     .textSelection(.enabled)
+                if message.localizedCaseInsensitiveContains("API key") {
+                    Button("Open Ask Settings") {
+                        openSettings()
+                        close()
+                    }
+                    .buttonStyle(PillButton(theme: theme))
+                }
                 Button("Retry") { state.askAgain() }
                     .buttonStyle(PillButton(theme: theme))
             }

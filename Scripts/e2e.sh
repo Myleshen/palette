@@ -84,9 +84,9 @@ run_flow screenshot-keeps-panel \
 run_flow universal-search \
   'show; query=session; wait=1.0; assert=itemCount>0; dump=%DIR%/state.json; exit'
 
-run_flow terminal-tab \
-  'settings; wait=0.8; settings_tab=10; wait=0.9; settings_snapshot=%DIR%/settings-terminal.png; exit' \
-  '%DIR%/settings-terminal.png'
+run_flow launcher-tab \
+  'settings; wait=0.8; settings_tab=1; wait=0.9; settings_snapshot=%DIR%/settings-launcher.png; exit' \
+  '%DIR%/settings-launcher.png'
 
 # The scratchpad, ask, terminal and preview panels share one content area:
 # opening a mode must close the previous one.

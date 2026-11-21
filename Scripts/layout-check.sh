@@ -38,7 +38,7 @@ for ((tab = 0; tab < TAB_COUNT; tab++)); do
   config="$(mktemp -d /tmp/palette-layout-cfg.XXXXXX)"
   PALETTE_CONFIG_DIR="$config" \
   PALETTE_STATE_DIR="$config/state" \
-  PALETTE_SCRIPT="settings; wait=0.8; settings_tab=$tab; wait=0.9; settings_snapshot=$CURRENT_DIR/section-$tab.png; exit" \
+  PALETTE_SCRIPT="settings; wait=0.8; settings_tab=$tab; wait=0.9; settings_clear_search; wait=0.15; settings_snapshot=$CURRENT_DIR/section-$tab.png; exit" \
     "$APP" >/dev/null 2>&1 || true
 
   reference="$REFERENCE_DIR/settings-$tab.png"
