@@ -43,6 +43,9 @@ debug:
 layout-check:
 	Scripts/layout-check.sh
 
+e2e:
+	Scripts/e2e.sh
+
 test:
 	swift test
 

@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.10.0 — 2026-11-21
+
+### Added
+
+- **Terminal settings tab** — the embedded-terminal session, shell and font
+  settings moved out of General into their own Terminal tab.
+- **Universal default search** — a plain query can search a configurable set of
+  providers in addition to the built-in ones. `[providers] global` controls it
+  (default: `system`, `timer`, `awake`), with a "Search without a prefix"
+  multi-select in Settings → Search. Calculator already participates.
+- **E2E harness + coverage** — `PALETTE_SCRIPT` gained `dump=`, `assert=` and
+  `wait_until=` with a non-zero exit on failure, plus script-mode isolation (no
+  global hotkeys or clipboard monitor). `make e2e` runs the flow suite; CI
+  reports coverage and runs an E2E job.
+
+### Fixed
+
+- **Screenshotting the launcher** — a screenshot hotkey no longer dismisses the
+  open launcher; it stays visible and is captured. Captures suppress auto-hide
+  and re-focus the panel afterwards.
+- **Empty-query position** — closing and reopening the launcher resets to the top
+  instead of restoring the previous row/scroll position.
+- **`/neo` `/edit` first-launch speed** — the path enumeration is cached to disk,
+  de-duplicated in flight and prewarmed at launch, and the path debounce was
+  raised, cutting the first `/edit` from ~3.5 s to milliseconds once warm.
+
 ## 2.9.0 — 2026-11-21
 
 ### Changed

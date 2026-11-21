@@ -327,6 +327,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var providerAliases: [String: [String]]
     public var providerOrder: [String]
     public var disabledProviders: [String]
+    /// Providers searched by a plain, unprefixed query, in addition to built-ins.
+    public var globalProviders: [String]
     public var terminalSession: TerminalSessionConfig
     public var timer: TimerConfig
     public var capture: CaptureConfig
@@ -364,6 +366,7 @@ public struct PaletteConfig: Sendable, Equatable {
         ],
         providerOrder: [String] = [],
         disabledProviders: [String] = [],
+        globalProviders: [String] = ["system", "timer", "awake"],
         terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
         timer: TimerConfig = TimerConfig(),
         capture: CaptureConfig = CaptureConfig()
@@ -396,6 +399,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.providerAliases = providerAliases
         self.providerOrder = providerOrder
         self.disabledProviders = disabledProviders
+        self.globalProviders = globalProviders
         self.terminalSession = terminalSession
         self.timer = timer
         self.capture = capture
@@ -430,7 +434,9 @@ public struct PalettePaths: Sendable {
             ?? environment["XDG_STATE_HOME"].map { $0 + "/palette" }
             ?? home + "/.local/state/palette"
         let cacheBase = environment["PALETTE_CACHE_DIR"]
-            ?? home + "/Library/Caches/Palette"
+            ?? (environment["PALETTE_SCRIPT"] != nil
+                ? stateBase + "/cache"
+                : home + "/Library/Caches/Palette")
 
         return PalettePaths(
             home: home,
@@ -665,6 +671,13 @@ public enum ConfigLoader {
             config.disabledProviders = (providers.strArray("disabled") ?? [])
                 .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
                 .filter { !$0.isEmpty && $0 != "apps" }
+            // Absent key keeps the default extras, so old configs gain them;
+            // an explicit `global = []` opts out.
+            if let global = providers.strArray("global") {
+                config.globalProviders = global
+                    .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                    .filter { !$0.isEmpty }
+            }
             if let aliases = providers.table("aliases") {
                 var parsed = config.providerAliases
                 for key in aliases.keys {
@@ -896,6 +909,8 @@ public enum ConfigLoader {
         [providers]
         order = []
         disabled = []
+        # Plain queries also search these providers; /trigger targets one.
+        global = ["system", "timer", "awake"]
 
         [providers.aliases]
 
@@ -1054,6 +1069,7 @@ public enum ConfigWriter {
         out.append("[providers]")
         out.append("order = [\(config.providerOrder.map(quote).joined(separator: ", "))]")
         out.append("disabled = [\(config.disabledProviders.map(quote).joined(separator: ", "))]")
+        out.append("global = [\(config.globalProviders.map(quote).joined(separator: ", "))]")
         out.append("")
         out.append("[providers.aliases]")
         for id in config.providerAliases.keys.sorted() {

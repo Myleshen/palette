@@ -27,6 +27,7 @@ public final class ProviderRegistry: @unchecked Sendable {
         aliases: [String: [String]] = [:],
         order: [String] = [],
         disabled: [String] = [],
+        global: [String] = [],
         diagnostics initialDiagnostics: [Diagnostic] = []
     ) {
         var diagnostics = initialDiagnostics
@@ -91,7 +92,14 @@ public final class ProviderRegistry: @unchecked Sendable {
         }
 
         self.parser = QueryParser(prefix: prefix, triggers: triggers)
-        self.globalProviders = self.providers.filter { $0.descriptor.isGlobal }
+        let knownIDs = Set(providers.map { $0.descriptor.id.lowercased() })
+        let extraGlobal = Set(global.map { $0.lowercased() })
+        for id in extraGlobal.sorted() where !knownIDs.contains(id) {
+            diagnostics.append(Diagnostic(.warning, "Global search is configured for unknown provider '\(id)'.", source: "providers"))
+        }
+        self.globalProviders = self.providers.filter {
+            $0.descriptor.isGlobal || extraGlobal.contains($0.descriptor.id.lowercased())
+        }
         self.diagnostics = diagnostics
     }
 

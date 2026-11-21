@@ -139,6 +139,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let forceOnboarding = ProcessInfo.processInfo.environment["PALETTE_FORCE_ONBOARDING"] == "1"
         shouldShowOnboarding = (configResult.createdDefault || forceOnboarding)
             && (forceOnboarding || !UserDefaults.standard.bool(forKey: "onboardingCompleted"))
+        if isScriptMode {
+            // A scripted run must never open a focus-stealing window or touch
+            // the real onboarding flag.
+            shouldShowOnboarding = false
+        }
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
 
         do {
@@ -184,7 +189,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.applyThemeToCaptureWindows(theme)
         }
 
-        registry = buildRegistry()
+        let builtRegistry = buildRegistry()
+        registry = builtRegistry
+        // Warm `/edit` and `/neo` off the main thread: the walk is cached to
+        // disk, so the first bound query after this launch is instant.
+        if ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] == nil {
+            Task.detached(priority: .utility) {
+                for case let provider as PathsProvider in builtRegistry.providers {
+                    await provider.prewarm()
+                }
+            }
+        }
         Task { await exportWebApps() }
         searchController = SearchController(
             registry: registry,
@@ -273,11 +288,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Drives the real controller with synthetic key events for unattended
     /// smoke tests. Format: steps separated by ';', e.g.
     /// `show; query=/calc 2+2*3; wait=0.4; key=enter; wait=1; snapshot=/tmp/a.png`.
+    /// `assert=`/`wait_until=`/`dump=`/`exit` make a run verifiable: the process
+    /// exits non-zero when any assertion or step fails.
     private func runScriptIfRequested() {
         guard let script = ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] else { return }
-        let steps = script.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+        var steps = script.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+        // `wait_until=<cond>;timeout=<s>` carries its own semicolon.
+        var merged: [String] = []
+        for step in steps {
+            if let last = merged.last, last.hasPrefix("wait_until="), step.hasPrefix("timeout=") {
+                merged[merged.count - 1] = last + ";" + step
+            } else if !step.isEmpty {
+                merged.append(step)
+            }
+        }
+        steps = merged
         Task { @MainActor [weak self] in
-            for step in steps where !step.isEmpty {
+            for step in steps {
                 guard let self else { return }
                 if step == "show" {
                     self.panel.show()
@@ -319,8 +346,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else if step == "clipboard" {
                     self.showClipboard()
                 } else if step == "exit" {
-                    NSApp.terminate(nil)
-                    return
+                    self.finishScript()
+                } else if let value = step.dropPrefix("dump=") {
+                    self.writeScriptDump(to: value)
+                } else if let value = step.dropPrefix("assert=") {
+                    self.recordScriptFailure(self.scriptConditionFailure(value))
+                } else if let value = step.dropPrefix("wait_until=") {
+                    let parts = value.split(separator: ";").map(String.init)
+                    let condition = parts.first ?? ""
+                    let timeout = parts.dropFirst()
+                        .first { $0.hasPrefix("timeout=") }
+                        .flatMap { Double($0.dropFirst("timeout=".count)) } ?? 5
+                    let deadline = Date().addingTimeInterval(timeout)
+                    var failure = self.scriptConditionFailure(condition)
+                    while failure != nil, Date() < deadline {
+                        try? await Task.sleep(nanoseconds: 50_000_000)
+                        failure = self.scriptConditionFailure(condition)
+                    }
+                    self.recordScriptFailure(
+                        failure.map { "wait_until '\(condition)' timed out after \(timeout)s: \($0)" }
+                    )
                 } else if let value = step.dropPrefix("query=") {
                     self.searchController.query = value
                 } else if let value = step.dropPrefix("snapshot=") {
@@ -347,9 +392,167 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     if let event = self.syntheticKey(value) {
                         _ = self.searchController.handleKey(event)
                     }
+                } else {
+                    Log.shared.warn("Unknown script step: \(step)", source: "app")
+                    self.recordScriptFailure("unknown step '\(step)'")
                 }
             }
         }
+    }
+
+    // MARK: - Script assertions
+
+    /// Everything an `assert=` or `dump=` can observe, read from the live
+    /// controller and panel.
+    private struct ScriptObservation {
+        var panelVisible: Bool
+        var query: String
+        var scopeLabel: String
+        var selectionIndex: Int
+        var itemCount: Int
+        var actionsMode: Bool
+        var previewEnabled: Bool
+        var statusMessage: String
+        var items: [PaletteItem]
+    }
+
+    private var scriptFailure = false
+    private var scriptFailureReasons: [String] = []
+
+    private static let scriptKeys = [
+        "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
+        "actionsMode", "previewEnabled", "firstTitle", "firstProvider", "statusMessage",
+    ]
+
+    private func scriptObservation() -> ScriptObservation {
+        ScriptObservation(
+            panelVisible: panel?.isVisible == true,
+            query: searchController?.query ?? "",
+            scopeLabel: searchController?.scopeLabel ?? "",
+            selectionIndex: searchController?.selectionIndex ?? 0,
+            itemCount: searchController?.items.count ?? 0,
+            actionsMode: searchController?.actionsMode ?? false,
+            previewEnabled: searchController?.previewEnabled ?? false,
+            statusMessage: searchController?.statusMessage ?? "",
+            items: searchController?.items ?? []
+        )
+    }
+
+    private func scriptValue(_ key: String, _ observation: ScriptObservation) -> String {
+        switch key {
+        case "panelVisible": return String(observation.panelVisible)
+        case "selectionIndex": return String(observation.selectionIndex)
+        case "itemCount": return String(observation.itemCount)
+        case "actionsMode": return String(observation.actionsMode)
+        case "previewEnabled": return String(observation.previewEnabled)
+        case "query": return observation.query
+        case "scopeLabel": return observation.scopeLabel
+        case "firstTitle": return observation.items.first?.title ?? ""
+        case "firstProvider": return observation.items.first?.providerID ?? ""
+        default: return observation.statusMessage
+        }
+    }
+
+    /// Nil when the condition holds; otherwise why it did not.
+    /// Grammar: `<key><op><value>`, op ∈ {=, !=, >, <, ~=}.
+    private func scriptConditionFailure(_ condition: String) -> String? {
+        let observation = scriptObservation()
+        guard let key = Self.scriptKeys.first(where: { condition.hasPrefix($0) }) else {
+            return "unknown condition '\(condition)'"
+        }
+        let rest = condition.dropFirst(key.count)
+        guard let op = ["!=", "~=", "=", ">", "<"].first(where: { rest.hasPrefix($0) }) else {
+            return "missing operator in '\(condition)'"
+        }
+        let expected = String(rest.dropFirst(op.count))
+        let actual = scriptValue(key, observation)
+
+        switch key {
+        case "panelVisible", "actionsMode", "previewEnabled":
+            guard let want = Bool(expected) else {
+                return "\(key) expects true/false, got '\(expected)'"
+            }
+            let have = actual == "true"
+            switch op {
+            case "=": return have == want ? nil : "\(key)=\(actual), expected \(want)"
+            case "!=": return have != want ? nil : "\(key)=\(actual), expected != \(want)"
+            default: return "'\(op)' is not supported for \(key)"
+            }
+        case "selectionIndex", "itemCount":
+            guard let want = Int(expected), let have = Int(actual) else {
+                return "\(key) expects a number, got '\(expected)'"
+            }
+            let ok: Bool
+            switch op {
+            case "=": ok = have == want
+            case "!=": ok = have != want
+            case ">": ok = have > want
+            case "<": ok = have < want
+            default: ok = false
+            }
+            return ok ? nil : "\(key)=\(actual), expected \(op) \(expected)"
+        default:
+            switch op {
+            case "=": return actual == expected ? nil : "\(key)='\(actual)', expected '\(expected)'"
+            case "!=": return actual != expected ? nil : "\(key)='\(actual)', expected != '\(expected)'"
+            case "~=":
+                guard let regex = try? NSRegularExpression(pattern: expected) else {
+                    return "invalid regex '\(expected)'"
+                }
+                let range = NSRange(actual.startIndex..., in: actual)
+                return regex.firstMatch(in: actual, range: range) != nil
+                    ? nil
+                    : "\(key)='\(actual)' does not match /\(expected)/"
+            default: return "'\(op)' is not supported for \(key)"
+            }
+        }
+    }
+
+    private func recordScriptFailure(_ reason: String?) {
+        guard let reason else { return }
+        scriptFailure = true
+        scriptFailureReasons.append(reason)
+        fputs("SCRIPT: \(reason)\n", stderr)
+    }
+
+    private func writeScriptDump(to destination: String) {
+        let observation = scriptObservation()
+        let dump: [String: Any] = [
+            "panelVisible": observation.panelVisible,
+            "query": observation.query,
+            "scopeLabel": observation.scopeLabel,
+            "selectionIndex": observation.selectionIndex,
+            "itemCount": observation.itemCount,
+            "actionsMode": observation.actionsMode,
+            "previewEnabled": observation.previewEnabled,
+            "statusMessage": observation.statusMessage,
+            "items": observation.items.map {
+                ["id": $0.id, "title": $0.title, "providerID": $0.providerID]
+            },
+            "firstTitle": observation.items.first?.title ?? "",
+        ]
+        do {
+            let data = try JSONSerialization.data(
+                withJSONObject: dump,
+                options: [.prettyPrinted, .sortedKeys]
+            )
+            try data.write(to: URL(fileURLWithPath: destination))
+        } catch {
+            recordScriptFailure("dump to \(destination) failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// NSApp.terminate always exits 0, so a failed script exits directly.
+    private func finishScript() -> Never {
+        let reasons = scriptFailureReasons
+        if reasons.isEmpty && !scriptFailure {
+            print("SCRIPT OK")
+        } else {
+            print("SCRIPT FAILED: \(reasons.joined(separator: " | "))")
+        }
+        fflush(stdout)
+        fflush(stderr)
+        exit(scriptFailure ? 1 : 0)
     }
 
     private func writeSnapshot(to destination: String) {
@@ -542,6 +745,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 configuration: configuration,
                 launcher: launcher,
                 host: hostProxy,
+                cacheDirectory: paths.cacheDir,
                 diagnostics: &diagnostics
             ) {
                 providers.append(provider)
@@ -554,6 +758,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             aliases: configuration.providerAliases,
             order: configuration.providerOrder,
             disabled: configuration.disabledProviders,
+            global: configuration.globalProviders,
             diagnostics: diagnostics
         )
         Log.shared.info("Registered providers: \(registry.providers.map { "\($0.descriptor.id)/\($0.descriptor.trigger ?? "-")" }.joined(separator: ", "))", source: "providers")
@@ -593,7 +798,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         searchController.onQuit = { NSApp.terminate(nil) }
     }
 
+    /// Scripted runs drive the controller directly; Carbon hotkeys would grab
+    /// ⌘⇧3/4/5/6 and fight the test host.
+    private var isScriptMode: Bool {
+        ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] != nil
+    }
+
     private func installHotKey() {
+        guard !isScriptMode else { return }
         installLauncherHotKey()
         installClipboardHotKey()
         installTerminalHotKey()
@@ -739,23 +951,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Capture actions
 
+    /// Runs a capture with the launcher left open and key: the screenshot should
+    /// include it, and `screencapture -i` must not look like the user clicked
+    /// away. If the capture opens the annotator or a recording preview, that
+    /// window keeps the focus instead of the launcher.
+    private func captureKeepingPanel(_ body: @MainActor () async -> Void) async {
+        let editorsBefore = annotateWindows.count + mediaPreviews.count
+        let wasVisible = panel?.isVisible == true
+        let previousSuppress = panel?.suppressAutoHide ?? false
+        if wasVisible { panel?.suppressAutoHide = true }
+        await body()
+        if wasVisible,
+           annotateWindows.count + mediaPreviews.count == editorsBefore,
+           let panel, panel.isVisible, !panel.panel.isKeyWindow {
+            panel.panel.makeKeyAndOrderFront(nil)
+        }
+        panel?.suppressAutoHide = previousSuppress
+    }
+
     private func captureScreenshot(mode: CaptureMode = .screen) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if self.panel?.isVisible == true {
-                self.panel?.hide(activatePrevious: false)
-                try? await Task.sleep(nanoseconds: 180_000_000)
-            }
-            do {
-                let result = try await self.captureService.screenshot(mode)
-                self.searchController.setStatus("Saved \(result.url.lastPathComponent)", duration: 4)
-            } catch CaptureError.cancelled {
-                self.searchController.setStatus("Screenshot cancelled", duration: 3)
-            } catch {
-                // The panel is hidden during a capture, so a plain status
-                // message would never be seen.
-                Log.shared.error("Screenshot failed: \(error.localizedDescription)", source: "capture")
-                await self.searchController.notify("Screenshot failed: \(error.localizedDescription)")
+            await self.captureKeepingPanel {
+                do {
+                    let result = try await self.captureService.screenshot(mode)
+                    self.searchController.setStatus("Saved \(result.url.lastPathComponent)", duration: 4)
+                } catch CaptureError.cancelled {
+                    self.searchController.setStatus("Screenshot cancelled", duration: 3)
+                } catch {
+                    // A capture can outlive the launcher, so notify() bounces
+                    // the Dock icon when the panel is gone.
+                    Log.shared.error("Screenshot failed: \(error.localizedDescription)", source: "capture")
+                    await self.searchController.notify("Screenshot failed: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -763,30 +991,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func toggleRecording() {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if self.captureService.isRecording {
-                do {
-                    let url = try await self.captureService.stopRecording()
-                    self.searchController.setStatus("Saved \(url.lastPathComponent)", duration: 4)
-                } catch {
-                    await self.searchController.notify("Recording failed: \(error.localizedDescription)")
-                }
-                self.recordingTicker?.invalidate()
-                self.recordingTicker = nil
-                self.updateRecordingMenuItem()
-            } else {
-                if self.panel?.isVisible == true {
-                    self.panel?.hide(activatePrevious: false)
-                }
-                do {
-                    try self.captureService.startRecording()
-                    self.searchController.setStatus("Recording started", duration: 3)
-                } catch {
-                    await self.searchController.notify("Recording failed: \(error.localizedDescription)")
-                }
-                self.updateRecordingMenuItem()
-                self.recordingTicker?.invalidate()
-                self.recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                    Task { @MainActor in self?.updateRecordingMenuItem() }
+            await self.captureKeepingPanel {
+                if self.captureService.isRecording {
+                    do {
+                        let url = try await self.captureService.stopRecording()
+                        self.searchController.setStatus("Saved \(url.lastPathComponent)", duration: 4)
+                    } catch {
+                        await self.searchController.notify("Recording failed: \(error.localizedDescription)")
+                    }
+                    self.recordingTicker?.invalidate()
+                    self.recordingTicker = nil
+                    self.updateRecordingMenuItem()
+                } else {
+                    do {
+                        try self.captureService.startRecording()
+                        self.searchController.setStatus("Recording started", duration: 3)
+                    } catch {
+                        await self.searchController.notify("Recording failed: \(error.localizedDescription)")
+                    }
+                    self.updateRecordingMenuItem()
+                    self.recordingTicker?.invalidate()
+                    self.recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                        Task { @MainActor in self?.updateRecordingMenuItem() }
+                    }
                 }
             }
         }
@@ -1081,7 +1308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func configureClipboard() {
         clipboardMonitor?.stop()
-        guard configuration.clipboard.enabled else {
+        guard !isScriptMode, configuration.clipboard.enabled else {
             clipboardMonitor = nil
             return
         }
@@ -1124,7 +1351,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             themeManager: themeManager,
             config: configuration,
             providers: registry.providers.map {
-                ProviderSettingsInfo(id: $0.descriptor.id, name: $0.descriptor.name, trigger: $0.descriptor.trigger)
+                ProviderSettingsInfo(
+                    id: $0.descriptor.id,
+                    name: $0.descriptor.name,
+                    trigger: $0.descriptor.trigger,
+                    isGlobal: $0.descriptor.isGlobal
+                )
             },
             onFinish: { [weak self] updated in
                 guard let self else { return }
@@ -1705,7 +1937,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 ProviderSettingsInfo(
                     id: $0.descriptor.id,
                     name: $0.descriptor.name,
-                    trigger: $0.descriptor.trigger
+                    trigger: $0.descriptor.trigger,
+                    isGlobal: $0.descriptor.isGlobal
                 )
             },
             diagnostics: startupDiagnostics.map { "\($0.level.rawValue): \($0.message)" },

@@ -150,6 +150,10 @@ public final class SearchController: ObservableObject, HostBridge {
             query = ""
             resetting = false
         }
+        // A fresh open starts at the top: dropping the list also drops the
+        // scroll offset and any row restored by stableID.
+        items = []
+        selectionIndex = 0
         scopeLabel = nil
         highlightTerms = []
         previewEnabled = false
@@ -229,7 +233,7 @@ public final class SearchController: ObservableObject, HostBridge {
         searchTask?.cancel()
         let raw = query
         let pathQuery = registry.parser.parse(raw).isBound
-        let delay: UInt64 = debounce && pathQuery ? 30_000_000 : (debounce ? 12_000_000 : 0)
+        let delay: UInt64 = debounce && pathQuery ? 120_000_000 : (debounce ? 12_000_000 : 0)
         searchTask = Task { [weak self] in
             if delay > 0 {
                 try? await Task.sleep(nanoseconds: delay)
