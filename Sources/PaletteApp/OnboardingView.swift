@@ -47,6 +47,7 @@ struct OnboardingView: View {
         }
     }
 
+    @ObservedObject var themeManager: ThemeManager
     @State private var config: PaletteConfig
     @State private var step = 0
     @State private var preset: Preset = .essentials
@@ -56,12 +57,16 @@ struct OnboardingView: View {
     let onFinish: (PaletteConfig) -> Void
     let onSkip: () -> Void
 
+    private var theme: Theme { themeManager.theme }
+
     init(
+        themeManager: ThemeManager,
         config: PaletteConfig,
         providers: [ProviderSettingsInfo],
         onFinish: @escaping (PaletteConfig) -> Void,
         onSkip: @escaping () -> Void
     ) {
+        _themeManager = ObservedObject(wrappedValue: themeManager)
         _config = State(initialValue: config)
         self.providers = providers
         self.onFinish = onFinish
@@ -112,11 +117,10 @@ struct OnboardingView: View {
         .background(
             ZStack {
                 GlassBackdrop(material: .hudWindow)
-                Color(red: 0.10, green: 0.11, blue: 0.13).opacity(0.65)
+                theme.color(theme.palette.bg).opacity(0.65)
             }
         )
-        .background(.ultraThinMaterial)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(theme.appearance == "light" ? .light : .dark)
     }
 
     private var shortcuts: some View {

@@ -181,6 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             self.panel?.apply(theme: theme)
             self.searchController?.refreshTheme()
+            self.applyThemeToCaptureWindows(theme)
         }
 
         registry = buildRegistry()
@@ -812,7 +813,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task { await searchController.notify("Could not open \(url.lastPathComponent) for editing") }
             return
         }
-        let controller = AnnotateWindowController(image: image, url: url)
+        let controller = AnnotateWindowController(image: image, url: url, themeManager: themeManager)
         controller.onClose = { [weak self, weak controller] in
             guard let self, let controller else { return }
             self.annotateWindows.removeAll { $0 === controller }
@@ -922,13 +923,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         guard configuration.capture.captureThumbnail,
               let image = NSImage(contentsOf: url) else { return }
-        screenshotHUD.show(image: image, title: url.lastPathComponent) { [weak self] in
+        screenshotHUD.show(image: image, title: url.lastPathComponent, theme: themeManager.theme) { [weak self] in
             self?.openAnnotator(url)
         }
     }
 
     private func openMediaPreview(_ url: URL) {
-        let controller = MediaPreviewWindowController(url: url)
+        let controller = MediaPreviewWindowController(url: url, themeManager: themeManager)
         controller.onClose = { [weak self, weak controller] in
             guard let self, let controller else { return }
             self.mediaPreviews.removeAll { $0 === controller }
@@ -936,6 +937,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         mediaPreviews.append(controller)
         controller.show()
+    }
+
+    /// Capture windows outlive theme changes; their SwiftUI content observes the
+    /// theme manager, but the AppKit window chrome needs this nudge.
+    private func applyThemeToCaptureWindows(_ theme: Theme) {
+        onboardingWindow?.appearance = theme.nsAppearance
+        onboardingWindow?.backgroundColor = theme.nsColor(theme.palette.bg)
+        for controller in annotateWindows { controller.apply(theme: theme) }
+        for controller in mediaPreviews { controller.apply(theme: theme) }
     }
 
     @objc private func stopRecordingFromMenu() {
@@ -1111,6 +1121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func showOnboardingIfNeeded() {
         guard shouldShowOnboarding else { return }
         let view = OnboardingView(
+            themeManager: themeManager,
             config: configuration,
             providers: registry.providers.map {
                 ProviderSettingsInfo(id: $0.descriptor.id, name: $0.descriptor.name, trigger: $0.descriptor.trigger)
@@ -1140,10 +1151,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             defer: false
         )
         window.title = "Set up Palette"
-        window.appearance = NSAppearance(named: .darkAqua)
+        window.appearance = themeManager.theme.nsAppearance
         // A clear background left the title bar area blank; match the content.
-        window.isOpaque = true
-        window.backgroundColor = NSColor(white: 0.10, alpha: 1)
+        window.isOpaque = false
+        window.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
         window.titlebarAppearsTransparent = false
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: view)

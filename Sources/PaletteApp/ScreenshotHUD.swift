@@ -1,4 +1,5 @@
 import AppKit
+import PaletteCore
 import SwiftUI
 
 /// Brief thumbnail that appears after a capture so a screenshot is never a
@@ -8,7 +9,7 @@ final class ScreenshotHUD {
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
 
-    func show(image: NSImage, title: String, onOpen: @escaping () -> Void) {
+    func show(image: NSImage, title: String, theme: Theme, onOpen: @escaping () -> Void) {
         dismiss()
 
         let size = image.size
@@ -18,6 +19,7 @@ final class ScreenshotHUD {
         let width = max(120, size.width * scale)
         let height = size.height * scale
 
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         let content = VStack(alignment: .leading, spacing: 6) {
             Image(nsImage: image)
                 .resizable()
@@ -26,18 +28,19 @@ final class ScreenshotHUD {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             Text(title)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(theme.color(theme.palette.fgMuted))
                 .lineLimit(1)
         }
         .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(white: 0.12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.14))
-                )
-        )
+        .background {
+            ZStack {
+                GlassBackdrop(material: .hudWindow)
+                    .allowsHitTesting(false)
+                shape.fill(theme.color(theme.palette.elevated).opacity(0.8))
+            }
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(theme.color(theme.palette.border)))
+        }
         .onTapGesture { onOpen() }
 
         let panel = NSPanel(
@@ -48,6 +51,7 @@ final class ScreenshotHUD {
         )
         panel.isFloatingPanel = true
         panel.level = .floating
+        panel.appearance = theme.nsAppearance
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true

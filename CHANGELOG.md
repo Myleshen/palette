@@ -4,13 +4,25 @@
 
 ### Changed
 
+- **New default themes**: Siri Silver (light) and Siri Graphite (dark) — silvery
+  surfaces with a Siri blue/purple accent. These are only the defaults; built-in
+  and user `themes/*.toml` themes still work and can be picked in Appearance.
+- **Liquid Glass everywhere**: the launcher card, search bar, prompt, scratchpad,
+  preview, screenshot HUD, annotator and media-preview chrome use the system glass
+  effect on macOS 26+, with the existing material below 26.
+- **Honours system preferences**: glass falls back to an opaque fill when Reduce
+  Transparency is on, and gains a contrast stroke when Increase Contrast is on;
+  the macOS glass-intensity setting is applied by the system itself.
+- **The theme reaches every window**: Onboarding, the screenshot HUD, annotator and
+  media preview follow the theme's light/dark appearance and palette (media
+  canvases stay neutral); the status-bar and main menus follow the theme light/dark.
 - **Launcher footer** is a live primary-action pill: it shows what Enter will do
-  on the selected row (e.g. "⏎ Open Application", "⏎ Run Command", "⏎ Open
-  Bookmark") next to "Actions ⌘K", replacing the six static hints (which now live
-  in the ⌘K keyboard reference).
-- **Liquid Glass on macOS 26+**: the launcher panel, settings and onboarding use
-  the system glass effect where available, falling back to the existing material
-  on macOS 14–25, so the deployment floor is unchanged.
+  on the selected row (e.g. the primary action title) next to "Actions ⌘K",
+  replacing the six static hints (which now live in the ⌘K keyboard reference).
+
+### Fixed
+
+- The annotator's selection outline stays neutral white so it reads over any image.
 
 ## 2.8.0 — 2026-11-21
 

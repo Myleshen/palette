@@ -24,6 +24,10 @@ extension Theme {
         (RGBA(hex: hex) ?? RGBA(hex: fallback) ?? RGBA(red: 1, green: 1, blue: 1)).nsColor
     }
 
+    var nsAppearance: NSAppearance? {
+        NSAppearance(named: appearance == "light" ? .aqua : .darkAqua)
+    }
+
     func font(size: Double, weight: Font.Weight = .regular) -> Font {        let family = typography.family.trimmingCharacters(in: .whitespaces)
         if family.isEmpty || family == "SF Pro Text" || family == "System" {
             return .system(size: size, weight: weight)
@@ -68,31 +72,98 @@ extension Theme {
     }
 }
 
+/// The two public accessibility prefs that change how glass may be painted.
+/// Glass intensity itself is left to AppKit's own slider; no private prefs
+/// (`NSGlassTintAmount` and friends) are read.
+struct GlassPolicy: Equatable {
+    var reduceTransparency = false
+    var increaseContrast = false
+
+    /// Public AppKit prefs, for views SwiftUI does not re-render for us.
+    static var current: GlassPolicy {
+        let workspace = NSWorkspace.shared
+        return GlassPolicy(
+            reduceTransparency: workspace.accessibilityDisplayShouldReduceTransparency,
+            increaseContrast: workspace.accessibilityDisplayShouldIncreaseContrast
+        )
+    }
+}
+
 struct GlassBackdrop: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
 
+    final class Coordinator {
+        var observer: NSObjectProtocol?
+    }
+
+    private static let glassID = NSUserInterfaceItemIdentifier("palette.glass")
+    private static let materialID = NSUserInterfaceItemIdentifier("palette.material")
+    private static let opaqueID = NSUserInterfaceItemIdentifier("palette.opaque")
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> NSView {
+        let host = NSView()
         if #available(macOS 26.0, *) {
-            let view = NSGlassEffectView()
-            view.style = .regular
-            view.cornerRadius = 0
-            return view
-        }
-        return makeMaterialView()
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if #available(macOS 26.0, *), let glass = nsView as? NSGlassEffectView {
+            let glass = NSGlassEffectView()
             glass.style = .regular
-            return
+            glass.cornerRadius = 0
+            glass.identifier = Self.glassID
+            host.addSubview(glass)
+        } else {
+            let view = Self.materialView(material: material)
+            view.identifier = Self.materialID
+            host.addSubview(view)
         }
-        guard let view = nsView as? NSVisualEffectView else { return }
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .active
+        let opaque = Self.materialView(material: .contentBackground)
+        opaque.identifier = Self.opaqueID
+        host.addSubview(opaque)
+        for view in host.subviews {
+            view.frame = host.bounds
+            view.autoresizingMask = [.width, .height]
+        }
+        // SwiftUI only re-renders on the environment change; observe the AppKit
+        // notifications too so the fallback swaps even outside a render pass.
+        context.coordinator.observer = NotificationCenter.default.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak host] _ in
+            guard let host else { return }
+            Self.apply(.current, to: host)
+        }
+        Self.apply(.current, to: host)
+        return host
     }
 
-    private func makeMaterialView() -> NSVisualEffectView {
+    func updateNSView(_ host: NSView, context: Context) {
+        if #available(macOS 26.0, *),
+           let glass = host.subviews.first(where: { $0.identifier == Self.glassID }) as? NSGlassEffectView {
+            glass.style = .regular
+        }
+        Self.apply(.current, to: host)
+    }
+
+    static func dismantleNSView(_ host: NSView, coordinator: Coordinator) {
+        if let observer = coordinator.observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private static func apply(_ policy: GlassPolicy, to host: NSView) {
+        for view in host.subviews {
+            switch view.identifier {
+            case glassID, materialID:
+                view.isHidden = policy.reduceTransparency
+            case opaqueID:
+                view.isHidden = !policy.reduceTransparency
+            default:
+                break
+            }
+        }
+    }
+
+    private static func materialView(material: NSVisualEffectView.Material) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = .behindWindow
@@ -102,15 +173,40 @@ struct GlassBackdrop: NSViewRepresentable {
     }
 }
 
-/// Liquid Glass on macOS 26+, ultra-thin material before it.
+/// Liquid Glass on macOS 26+, ultra-thin material before it. Reduce Transparency
+/// replaces the glass with an opaque window background; Increase Contrast keeps
+/// the glass and adds a hairline stroke.
 struct GlassSurface<S: Shape>: View {
     var shape: S
+    var tint: Color? = nil
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private var policy: GlassPolicy {
+        GlassPolicy(reduceTransparency: reduceTransparency, increaseContrast: contrast == .increased)
+    }
 
     var body: some View {
-        if #available(macOS 26.0, *) {
-            Color.clear.glassEffect(.regular, in: shape)
-        } else {
-            shape.fill(.ultraThinMaterial)
+        ZStack {
+            if policy.reduceTransparency {
+                if #available(macOS 26.0, *) {
+                    Color.clear.glassEffect(.identity, in: shape)
+                }
+                shape.fill(Color(nsColor: .windowBackgroundColor))
+            } else if #available(macOS 26.0, *) {
+                Color.clear.glassEffect(.regular, in: shape)
+            } else {
+                shape.fill(.ultraThinMaterial)
+            }
+            if let tint {
+                shape.fill(tint)
+            }
+        }
+        .overlay {
+            if policy.increaseContrast {
+                shape.stroke(.primary.opacity(0.25), lineWidth: 1)
+            }
         }
     }
 }
@@ -1149,8 +1245,10 @@ struct PromptView: View {
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous)
-                .fill(theme.color(theme.palette.elevated).opacity(0.55))
+            GlassSurface(
+                shape: RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous),
+                tint: theme.color(theme.palette.elevated).opacity(0.55)
+            )
         )
         .overlay(
             RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous)
@@ -1225,8 +1323,10 @@ struct ClipboardPreviewPane: View {
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(theme.color(theme.palette.elevated).opacity(0.45))
+            GlassSurface(
+                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                tint: theme.color(theme.palette.elevated).opacity(0.45)
+            )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -1556,8 +1656,10 @@ struct ScratchpadView: View {
             .padding(.vertical, 8)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(theme.color(theme.palette.elevated).opacity(0.55))
+            GlassSurface(
+                shape: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                tint: theme.color(theme.palette.elevated).opacity(0.55)
+            )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)

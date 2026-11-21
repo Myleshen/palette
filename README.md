@@ -667,8 +667,8 @@ keyword = "yt"
 
 [theme]
 mode = "auto"                 # dark | light | auto
-dark = "catppuccin-mocha"
-light = "catppuccin-latte"
+dark = "siri-graphite"
+light = "siri-silver"
 
 [scopes.projects]
 roots = ["~/dev", "~/dot-files"]

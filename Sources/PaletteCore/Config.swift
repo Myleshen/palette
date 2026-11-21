@@ -15,7 +15,7 @@ public struct ThemeSelection: Sendable, Equatable {
     public var dark: String
     public var light: String
 
-    public init(mode: ThemeMode = .auto, dark: String = "catppuccin-mocha", light: String = "catppuccin-latte") {
+    public init(mode: ThemeMode = .auto, dark: String = "siri-graphite", light: String = "siri-silver") {
         self.mode = mode
         self.dark = dark
         self.light = light
@@ -944,8 +944,8 @@ public enum ConfigLoader {
 
         [theme]
         mode = "auto"                 # dark | light | auto
-        dark = "catppuccin-mocha"
-        light = "catppuccin-latte"
+        dark = "siri-graphite"
+        light = "siri-silver"
 
         [scopes.projects]
         roots = ["~/dev", "~/dot-files"]

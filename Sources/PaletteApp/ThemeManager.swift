@@ -128,6 +128,9 @@ public final class ThemeManager: ObservableObject {
         resolved.list.visibleRows = window.launcherRows
         theme = resolved
         self.diagnostics = diagnostics
+        // The status-bar and main menus have no palette, so AppKit only gets the
+        // theme's light/dark. Panels keep their own per-window appearance.
+        NSApp.appearance = NSAppearance(named: resolved.appearance == "light" ? .aqua : .darkAqua)
         for diagnostic in diagnostics where diagnostic.level != .info {
             Log.shared.warn(diagnostic.message, source: "theme")
         }
@@ -141,7 +144,9 @@ public final class ThemeManager: ObservableObject {
             || NSFontManager.shared.availableFontFamilies.contains(name)
     }
 
+    /// `apply()` pins `NSApp.appearance` to the theme, so the system pref has to
+    /// be read directly or auto mode would freeze on the last applied theme.
     private static var appearanceIsDark: Bool {
-        NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        UserDefaults.standard.string(forKey: "AppleInterfaceStyle")?.lowercased() == "dark"
     }
 }

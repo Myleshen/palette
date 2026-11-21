@@ -1,5 +1,6 @@
 import AVKit
 import AppKit
+import PaletteCore
 import SwiftUI
 
 /// Preview for a finished recording: play it, reveal it, or copy its path.
@@ -8,8 +9,9 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
     private let player: AVPlayer
     var onClose: (() -> Void)?
 
-    init(url: URL) {
+    init(url: URL, themeManager: ThemeManager) {
         player = AVPlayer(url: url)
+        let theme = themeManager.theme
         let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 860, height: 540),
             styleMask: [.titled, .closable, .resizable, .utilityWindow],
@@ -22,24 +24,34 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.setAccessibilitySubrole(.dialog)
         window.title = url.lastPathComponent
-        // The app runs a dark theme; without this the stock buttons draw white
-        // text on a white bezel.
-        window.appearance = NSAppearance(named: .darkAqua)
+        window.appearance = theme.nsAppearance
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = NSColor(white: 0.10, alpha: 1)
+        window.backgroundColor = theme.nsColor(theme.palette.bg)
+        window.isOpaque = false
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
-        window.contentView = NSHostingView(rootView: MediaPreviewView(player: player, url: url, close: { [weak self] in
-            self?.player.pause()
-            self?.close()
-        }))
+        window.contentView = NSHostingView(rootView: MediaPreviewView(
+            player: player,
+            url: url,
+            themeManager: themeManager,
+            close: { [weak self] in
+                self?.player.pause()
+                self?.close()
+            }
+        ))
         window.center()
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// The player area stays black; only the window chrome follows the theme.
+    func apply(theme: Theme) {
+        window?.appearance = theme.nsAppearance
+        window?.backgroundColor = theme.nsColor(theme.palette.bg)
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -61,7 +73,10 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
 private struct MediaPreviewView: View {
     let player: AVPlayer
     let url: URL
+    @ObservedObject var themeManager: ThemeManager
     var close: () -> Void
+
+    private var theme: Theme { themeManager.theme }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,7 +86,7 @@ private struct MediaPreviewView: View {
             HStack(spacing: 10) {
                 Text(url.lastPathComponent)
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.color(theme.palette.fgMuted))
                     .lineLimit(1)
                 Spacer()
                 Button("Reveal in Finder") {
@@ -84,11 +99,13 @@ private struct MediaPreviewView: View {
                 Button("Done") { close() }
                     .keyboardShortcut(.defaultAction)
             }
-            .buttonStyle(PillButton())
+            .buttonStyle(PillButton(theme: theme))
             .controlSize(.small)
             .padding(.horizontal, 12)
             .frame(height: 44)
-            .background(Color(white: 0.12))
+            .background {
+                GlassSurface(shape: Rectangle(), tint: theme.color(theme.palette.elevated).opacity(0.55))
+            }
         }
         .onDisappear { player.pause() }
     }
