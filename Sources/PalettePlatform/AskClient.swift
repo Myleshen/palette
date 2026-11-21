@@ -50,7 +50,10 @@ public enum AskClientError: LocalizedError, Equatable {
         // dropped connection. Another model may well answer in time.
         case .http(let status, _):
             return status == 0 || status == 401 || status == 403 || status == 429 || status >= 500
-        case .missingKey, .malformed, .empty: return false
+        case .missingKey, .malformed: return false
+        // An empty reply is model-specific (some reasoning models do it); the
+        // next model in the chain may answer normally.
+        case .empty: return true
         }
     }
 }
@@ -205,13 +208,19 @@ public enum AskClient {
             answer = ""
         }
         let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw AskClientError.empty }
+        // Reasoning models can leave `content` empty and put the text in a
+        // reasoning field. That is still an answer worth showing.
+        let reasoning = ["reasoning_content", "reasoning"]
+            .compactMap { (message[$0] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+        let reply = trimmed.isEmpty ? (reasoning ?? "") : trimmed
+        guard !reply.isEmpty else { throw AskClientError.empty }
         // A length stop means the model was cut off mid-answer; never present
         // that as a complete reply.
         let truncated = choices.first?["finish_reason"] as? String == "length"
         let usage = root["usage"] as? [String: Any]
         return AskCompletion(
-            answer: truncated ? trimmed + "\n\n…(truncated — raise max_tokens)" : trimmed,
+            answer: truncated ? reply + "\n\n…(truncated — raise max_tokens)" : reply,
             promptTokens: usage?["prompt_tokens"] as? Int ?? 0,
             completionTokens: usage?["completion_tokens"] as? Int ?? 0,
             durationMs: durationMs

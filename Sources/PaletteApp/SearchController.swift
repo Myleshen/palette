@@ -143,6 +143,10 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func openAsk() {
+        // The terminal, scratchpad and ask panel share the content area; only
+        // one may be up, so switching modes closes the previous one.
+        if terminalActive { closeTerminalPanel() }
+        if scratchpadActive { closeScratchpad(save: true) }
         previewEnabled = true
         updatePreviewWidth()
         actionsMode = false
@@ -1174,6 +1178,8 @@ public final class SearchController: ObservableObject, HostBridge {
         scratchpadActive = false
         previewEnabled = false
         previewFocused = false
+        actionsMode = false
+        actionItems = []
         panel?.widthOverride = CGFloat(windowConfig.terminalWidth(for: screenSize))
         panel?.show()
         updatePanelHeight()
@@ -1194,9 +1200,12 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
+        if terminalActive { closeTerminalPanel() }
         panel?.show()
         panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
         scratchpadActive = true
+        previewEnabled = false
+        previewFocused = false
         scratchpadNoteID = noteID
         scratchpadTitle = ""
         scratchpadText = seed ?? ""
