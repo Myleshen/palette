@@ -50,6 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pasteboard: PasteboardService!
     private var clipboardMonitor: ClipboardMonitor?
     private var registry: ProviderRegistry!
+    /// Every loaded provider, including disabled ones, so Settings can edit
+    /// their aliases and show their real names and triggers.
+    private var allProviderInfo: [ProviderSettingsInfo] = []
     private let bitwardenVault = BitwardenVault()
     private let keepAwake = KeepAwakeService()
     private let timerService = TimerService()
@@ -681,6 +684,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(UnitsProvider())
         providers.append(WindowProvider(launcher: launcher))
         providers.append(ShotsProvider(service: captureService))
+        providers.append(CheatsheetProvider(config: configuration.cheatsheets))
         let hideForCapture: @MainActor () -> Void = { [weak self] in
             self?.panel?.hide(activatePrevious: false)
         }
@@ -752,6 +756,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
+        allProviderInfo = providers.map {
+            ProviderSettingsInfo(
+                id: $0.descriptor.id,
+                name: $0.descriptor.name,
+                trigger: $0.descriptor.trigger,
+                isGlobal: $0.descriptor.isGlobal
+            )
+        }
         let registry = ProviderRegistry(
             providers: providers,
             prefix: configuration.providerPrefix,
@@ -1933,14 +1945,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             providerSummary: registry.providers.map {
                 "\($0.descriptor.name)  ·  \($0.descriptor.trigger.map { "/\($0)" } ?? "global")"
             },
-            providers: registry.providers.map {
-                ProviderSettingsInfo(
-                    id: $0.descriptor.id,
-                    name: $0.descriptor.name,
-                    trigger: $0.descriptor.trigger,
-                    isGlobal: $0.descriptor.isGlobal
-                )
-            },
+            providers: allProviderInfo,
             diagnostics: startupDiagnostics.map { "\($0.level.rawValue): \($0.message)" },
             onSave: { [weak self] updated in
                 self?.saveSettings(updated)

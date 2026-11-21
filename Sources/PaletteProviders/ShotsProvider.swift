@@ -65,6 +65,7 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         if !entry.isVideo {
             actions.append(PaletteAction(id: "annotate", title: "Annotate \(name)", kind: .custom, value: .text("annotate:\(entry.url.path)")))
             actions.append(PaletteAction(id: "copy", title: "Copy image", kind: .custom, value: .text("copy:\(entry.url.path)")))
+            actions.append(PaletteAction(id: "paste", title: "Paste \(name)", kind: .pasteImage, value: .text(entry.url.path)))
         }
         actions.append(PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .reveal, value: .text(entry.url.path)))
 

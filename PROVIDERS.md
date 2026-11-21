@@ -48,7 +48,8 @@ global = ["system", "timer", "awake"]   # default
 ```
 
 Every id in that list answers unprefixed queries in addition to the built-in
-global providers (`apps`, `calc`, `pins`, `zj`, `search`, `web`, `bookmark`).
+global providers (`apps`, `calc`, `pins`, `zj`, `search`, `web`, `bookmark`,
+`cheat`).
 `/trigger` still targets a single provider; the list only widens plain search.
 The default applies when the key is absent; `global = []` drops the extras but
 keeps the built-in ones, and an unknown id logs a warning.
@@ -291,6 +292,8 @@ on the roadmap.
 | `web` | `web` | native | global web apps with optional Hammerspoon shortcuts |
 | `bookmark` | `bookmark` | native | bookmarks from `bookmarks.toml`, opened in a normal browser window, global |
 | `emoji` | `emoji` | native | full Unicode emoji catalog with name search |
+| `cheat` | `cheat` | native | global; cheatsheet folders from Settings → Cheatsheets, one level deep, QuickLook preview |
+| `ssh` | `ssh` | native | hosts from `~/.ssh/config`; connect in the embedded terminal, one session per host that reattaches on re-run |
 | `system` | `sys` | native | sleep, lock, empty trash, reload, quit |
 | `theme` | `theme` | native | live theme switching |
 

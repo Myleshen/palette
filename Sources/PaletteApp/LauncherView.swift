@@ -894,7 +894,7 @@ struct LauncherRootView: View {
                         .frame(height: 1)
                         .padding(.horizontal, 10)
                     ClipboardPreviewPane(item: controller.selectedItem, theme: theme, focused: controller.previewFocused)
-                        .frame(height: 220)
+                        .frame(height: controller.previewPaneHeight)
                         .padding(.horizontal, isPill ? 10 : 6)
                         .padding(.top, 8)
                         .padding(.bottom, isPill ? 8 : 4)
@@ -907,7 +907,7 @@ struct LauncherRootView: View {
                         .frame(width: 1)
                         .padding(.vertical, 10)
                     ClipboardPreviewPane(item: controller.selectedItem, theme: theme, focused: controller.previewFocused)
-                        .frame(width: 300)
+                        .frame(width: controller.previewPaneWidth)
                 }
                 .padding(.horizontal, isPill ? 10 : 6)
                 .padding(.bottom, isPill ? 8 : 4)
@@ -1404,6 +1404,10 @@ struct ClipboardPreviewPane: View {
                     }
                 }
             }
+        case .document(let url, _):
+            QuickLookPreviewView(path: url)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
         case nil:
             Text("No preview available")
                 .font(.system(size: 11))

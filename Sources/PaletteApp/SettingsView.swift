@@ -13,9 +13,17 @@ struct ProviderSettingsInfo: Identifiable, Equatable {
     var isGlobal: Bool
 }
 
+/// One editable alias row. `enabled` is the effective set written to config;
+/// unchecked rows stay visible so a removed built-in alias can come back.
+private struct ProviderAliasEntry: Identifiable, Equatable {
+    var id = UUID()
+    var word: String
+    var enabled: Bool
+}
+
 private enum SettingsTab: Int, CaseIterable, Identifiable {
     // Appended last: raw values are a public contract (settings_tab=<index>).
-    case general, launcher, appearance, shortcuts, clipboard, search, capture, ask, providers, advanced, terminal
+    case general, launcher, appearance, shortcuts, clipboard, search, capture, ask, providers, advanced, terminal, cheatsheets
 
     var id: Int { rawValue }
     var title: String {
@@ -31,6 +39,7 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providers: return "Providers"
         case .advanced: return "Advanced"
         case .terminal: return "Terminal"
+        case .cheatsheets: return "Cheatsheets"
         }
     }
     var icon: String {
@@ -46,6 +55,7 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providers: return "square.stack.3d.up"
         case .advanced: return "gearshape.2"
         case .terminal: return "apple.terminal"
+        case .cheatsheets: return "book"
         }
     }
     /// Fixed tile colours like System Settings, deliberately not read from the
@@ -63,6 +73,7 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providers: return Color(red: 0.61, green: 0.44, blue: 0.31)
         case .advanced: return Color(red: 0.42, green: 0.45, blue: 0.50)
         case .terminal: return Color(red: 0.06, green: 0.62, blue: 0.52)
+        case .cheatsheets: return Color(red: 0.42, green: 0.42, blue: 0.88)
         }
     }
 }
@@ -76,7 +87,7 @@ private struct SettingsTabGroup: Identifiable {
 private extension SettingsTab {
     static let sidebarGroups: [SettingsTabGroup] = [
         SettingsTabGroup(title: "General", tabs: [.general, .launcher, .appearance]),
-        SettingsTabGroup(title: "Features", tabs: [.shortcuts, .clipboard, .search, .capture, .ask]),
+        SettingsTabGroup(title: "Features", tabs: [.shortcuts, .clipboard, .search, .capture, .ask, .cheatsheets]),
         SettingsTabGroup(title: "System", tabs: [.providers, .advanced, .terminal]),
     ]
 }
@@ -189,12 +200,15 @@ struct SettingsView: View {
     @State private var askKeyStored: Bool
     @State private var askKeyMessage: String?
     @State private var providerOrder: [String]
-    @State private var aliases: [String: String]
+    @State private var providerAliasesDraft: [String: [ProviderAliasEntry]]
+    @State private var newAlias: [String: String]
     @State private var disabledProviders: [String]
     @State private var globalProviders: [String]
     @State private var bookmarks: [Bookmark] = []
     @State private var bookmarksLoaded = false
     @State private var terminalShellChoice: String
+    @State private var cheatsheetFolders: [String]
+    @State private var cheatsheetExtensions: String
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
@@ -231,11 +245,26 @@ struct SettingsView: View {
         let ordered = order.filter { id in providers.contains { $0.id == id } }
             + providers.map(\.id).filter { !order.contains($0) }
         _providerOrder = State(initialValue: ordered)
-        var aliasState: [String: String] = [:]
-        for provider in providers {
-            aliasState[provider.id] = (config.providerAliases[provider.id] ?? []).joined(separator: ", ")
+        var aliasState: [String: [ProviderAliasEntry]] = [:]
+        for id in ordered + Array(config.providerAliases.keys) where aliasState[id] == nil {
+            var entries: [ProviderAliasEntry] = []
+            var seen = Set<String>()
+            for word in ProviderAliases.defaults[id] ?? [] {
+                guard seen.insert(word.lowercased()).inserted else { continue }
+                let active = config.providerAliases[id]?.contains {
+                    $0.lowercased() == word.lowercased()
+                } ?? false
+                entries.append(ProviderAliasEntry(word: word, enabled: active))
+            }
+            for word in config.providerAliases[id] ?? [] {
+                let trimmed = word.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty, seen.insert(trimmed.lowercased()).inserted else { continue }
+                entries.append(ProviderAliasEntry(word: trimmed, enabled: true))
+            }
+            aliasState[id] = entries
         }
-        _aliases = State(initialValue: aliasState)
+        _providerAliasesDraft = State(initialValue: aliasState)
+        _newAlias = State(initialValue: [String: String]())
         _disabledProviders = State(initialValue: config.disabledProviders.filter { $0 != "apps" })
         _globalProviders = State(initialValue: config.globalProviders)
         let configuredShell = config.terminalSession.shell.trimmingCharacters(in: .whitespaces)
@@ -243,6 +272,8 @@ struct SettingsView: View {
         _terminalShellChoice = State(initialValue: configuredShell.isEmpty
             ? "auto"
             : (["fish", "zsh"].contains(shellName) ? shellName : "custom"))
+        _cheatsheetFolders = State(initialValue: config.cheatsheets.folders)
+        _cheatsheetExtensions = State(initialValue: config.cheatsheets.extensions.joined(separator: ", "))
         self.keepAwake = keepAwake
         self.theme = theme
         self.themesDirectory = themesDirectory
@@ -485,6 +516,7 @@ struct SettingsView: View {
         case .providers: providerSettings
         case .advanced: advanced
         case .terminal: terminal
+        case .cheatsheets: cheatsheets
         }
     }
 
@@ -515,6 +547,8 @@ struct SettingsView: View {
             .init(title: "Screenshots and recordings", tab: .capture, anchor: "capture-screenshots", keywords: "screenshot capture record audio microphone delay format save folder gallery"),
             .init(title: "Ask models and API key", tab: .ask, anchor: "ask-model", keywords: "ask model api key token endpoint history retention"),
             .init(title: "Provider order and aliases", tab: .providers, anchor: "providers-order", keywords: "provider order alias visibility trigger"),
+            .init(title: "Provider shortcuts and aliases", tab: .providers, anchor: "providers-shortcuts", keywords: "provider alias shortcut trigger reset defaults enable disable neo editor neof folders"),
+            .init(title: "Cheatsheet folders", tab: .cheatsheets, anchor: "cheatsheets-folders", keywords: "cheatsheet reference pdf html markdown text image folder book"),
             .init(title: "Backup and diagnostics", tab: .advanced, anchor: "advanced-backup", keywords: "backup export restore diagnostics crash log version"),
             .init(title: "Configuration files", tab: .advanced, anchor: "advanced-config", keywords: "config providers themes log folder file"),
         ]
@@ -854,6 +888,44 @@ struct SettingsView: View {
                 Text("Embedded terminal").searchTarget("terminal-embedded")
             } footer: {
                 settingsFooter("Auto uses Zellij, then tmux, then a plain shell; plain shell sessions end when the panel closes. Empty font and a size of 0 auto-detect Kitty's font, then the theme mono font. Use a Nerd Font for icons.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var cheatsheets: some View {
+        Form {
+            Section {
+                ForEach(cheatsheetFolders.indices, id: \.self) { index in
+                    HStack(spacing: 8) {
+                        TextField("Folder", text: $cheatsheetFolders[index])
+                            .settingsField()
+                        Button {
+                            cheatsheetFolders.remove(at: index)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Remove folder")
+                    }
+                    .padding(.vertical, 4)
+                }
+                Button("Add folder") {
+                    cheatsheetFolders.append("")
+                }
+            } header: {
+                Text("Folders").searchTarget("cheatsheets-folders")
+            } footer: {
+                settingsFooter("PDF, HTML, Markdown, text and images preview in the launcher; press ⌥P to enlarge.")
+            }
+
+            Section {
+                TextField("Extensions", text: $cheatsheetExtensions, prompt: Text("pdf, html, md, txt, png"))
+                    .settingsField()
+            } header: {
+                Text("Extensions")
+            } footer: {
+                settingsFooter("Comma-separated, without the dot. Folders are scanned one level deep and ~ works in paths.")
             }
         }
         .formStyle(.grouped)
@@ -1353,21 +1425,66 @@ struct SettingsView: View {
             }
 
             Section {
-                DisclosureGroup("Aliases (optional)") {
-                    Text("An alias is another word that opens the same provider. Commas separate aliases.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ForEach(providers) { provider in
-                        TextField(
-                            "\(provider.name) aliases",
-                            text: Binding(
-                                get: { aliases[provider.id] ?? "" },
-                                set: { aliases[provider.id] = $0 }
-                            )
-                        )
-                        .settingsField()
+                ForEach(allProviderIDs, id: \.self) { id in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(providerName(id)).fontWeight(.medium)
+                            if let trigger = providerTrigger(id) {
+                                Text("trigger: \(trigger)")
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                    .help("The trigger is compiled from provider.toml. Edit that file to rename it.")
+                            } else {
+                                Text("global").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if ProviderAliases.defaults[id] != nil {
+                                Button("Reset to defaults") { resetAliases(id) }
+                                    .buttonStyle(.borderless)
+                                    .font(.caption)
+                            }
+                        }
+                        ForEach(aliasEntries(id)) { $entry in
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 8) {
+                                    Toggle("Use alias \(entry.word)", isOn: $entry.enabled)
+                                        .toggleStyle(.checkbox)
+                                        .labelsHidden()
+                                        .accessibilityLabel("Use alias \(entry.word)")
+                                    TextField("Alias", text: $entry.word)
+                                        .settingsField()
+                                        .foregroundStyle(aliasIssues[entry.id] == nil ? Color.primary : Color.red)
+                                    Button {
+                                        deleteAlias(entry.id, from: id)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Delete this alias")
+                                    .accessibilityLabel("Delete alias \(entry.word)")
+                                }
+                                if let issue = aliasIssues[entry.id] {
+                                    Text(issue).font(.caption).foregroundStyle(.red)
+                                }
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            TextField("Add alias", text: Binding(
+                                get: { newAlias[id] ?? "" },
+                                set: { newAlias[id] = $0 }
+                            ))
+                            .settingsField()
+                            .onSubmit { addAlias(id) }
+                            Button("Add") { addAlias(id) }
+                                .disabled((newAlias[id] ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
+            } header: {
+                Text("Shortcuts").searchTarget("providers-shortcuts")
+            } footer: {
+                settingsFooter("A checked alias is active and saved to config.toml; unchecking keeps the row but removes the word. Built-in defaults stay listed so they can be restored. Triggers come from provider.toml and cannot be renamed here.")
             }
 
             Section {
@@ -1446,6 +1563,73 @@ struct SettingsView: View {
 
     private func providerName(_ id: String) -> String {
         providers.first(where: { $0.id == id })?.name ?? id
+    }
+
+    private func providerTrigger(_ id: String) -> String? {
+        providers.first(where: { $0.id == id })?.trigger
+    }
+
+    private func aliasEntries(_ id: String) -> Binding<[ProviderAliasEntry]> {
+        Binding(
+            get: { providerAliasesDraft[id] ?? [] },
+            set: { providerAliasesDraft[id] = $0 }
+        )
+    }
+
+    /// Words already taken, scanned in display order so a duplicate flags the
+    /// later row instead of aborting the save.
+    private var aliasIssues: [UUID: String] {
+        var owner: [String: String] = [:]
+        for provider in providers {
+            if let trigger = provider.trigger { owner[trigger.lowercased()] = provider.name }
+        }
+        // Apps is not editable here, but its aliases still claim their words.
+        for entry in providerAliasesDraft["apps"] ?? [] where entry.enabled {
+            owner[entry.word.lowercased()] = "apps"
+        }
+        var issues: [UUID: String] = [:]
+        for id in allProviderIDs {
+            for entry in providerAliasesDraft[id] ?? [] where entry.enabled {
+                let word = entry.word.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !word.isEmpty else {
+                    issues[entry.id] = "Type a word, or uncheck this alias."
+                    continue
+                }
+                guard word.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
+                    issues[entry.id] = "Use only letters, digits, dots, dashes, and underscores."
+                    continue
+                }
+                if let existing = owner[word.lowercased()] {
+                    issues[entry.id] = "“\(word)” is already used by \(existing)."
+                    continue
+                }
+                owner[word.lowercased()] = providerName(id)
+            }
+        }
+        return issues
+    }
+
+    private func addAlias(_ id: String) {
+        let word = (newAlias[id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !word.isEmpty else { return }
+        if let index = providerAliasesDraft[id]?.firstIndex(where: {
+            $0.word.caseInsensitiveCompare(word) == .orderedSame
+        }) {
+            providerAliasesDraft[id]?[index].enabled = true
+        } else {
+            providerAliasesDraft[id, default: []].append(ProviderAliasEntry(word: word, enabled: true))
+        }
+        newAlias[id] = ""
+    }
+
+    private func deleteAlias(_ entryID: UUID, from id: String) {
+        providerAliasesDraft[id]?.removeAll { $0.id == entryID }
+    }
+
+    private func resetAliases(_ id: String) {
+        providerAliasesDraft[id] = (ProviderAliases.defaults[id] ?? []).map {
+            ProviderAliasEntry(word: $0, enabled: true)
+        }
     }
 
     private var allProviderIDs: [String] {
@@ -1535,27 +1719,27 @@ struct SettingsView: View {
             !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && $0.urlTemplate.contains("{query}")
         }
         normalizeAskModel()
+        // Row-level validation: a bad alias is flagged in the editor and left
+        // out, while every other provider's valid edits still save.
+        let aliasProblems = aliasIssues
         var aliasMap: [String: [String]] = [:]
-        var used = Set(providers.compactMap { $0.trigger?.lowercased() })
         for provider in providers {
-            let words = (aliases[provider.id] ?? "")
-                .split(whereSeparator: { $0 == "," || $0.isWhitespace })
-                .map(String.init)
+            let words = (providerAliasesDraft[provider.id] ?? [])
+                .filter { $0.enabled && aliasProblems[$0.id] == nil }
+                .map { $0.word.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-            var accepted: [String] = []
-            for word in words {
-                guard word.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
-                    saveError = "Alias “\(word)” is not a valid trigger word."
-                    return
-                }
-                let key = word.lowercased()
-                guard used.insert(key).inserted else {
-                    saveError = "Alias “\(word)” is already used by another trigger."
-                    return
-                }
-                accepted.append(word)
+            if !words.isEmpty {
+                aliasMap[provider.id] = words
+            } else if ProviderAliases.defaults[provider.id] != nil {
+                // An explicit empty list keeps removed built-in defaults removed.
+                aliasMap[provider.id] = []
             }
-            if !accepted.isEmpty { aliasMap[provider.id] = accepted }
+        }
+        // Keep aliases for providers that are not loaded right now (apps, a
+        // provider whose folder was temporarily removed).
+        let loadedIDs = Set(providers.map(\.id))
+        for (id, words) in config.providerAliases where !loadedIDs.contains(id) {
+            if !words.isEmpty { aliasMap[id] = words }
         }
         config.providerAliases = aliasMap
         config.providerOrder = providerOrder
@@ -1576,6 +1760,15 @@ struct SettingsView: View {
             try? BookmarkStore.save(bookmarks, to: bookmarkFile)
             bookmarks = BookmarkStore.load(from: bookmarkFile)
         }
+        config.cheatsheets.folders = cheatsheetFolders
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let extensions = cheatsheetExtensions
+            .split(whereSeparator: { $0 == "," || $0.isWhitespace })
+            .map { $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
+            .filter { !$0.isEmpty }
+        // An empty list would silently hide every file; keep the defaults.
+        config.cheatsheets.extensions = extensions.isEmpty ? CheatsheetConfig().extensions : extensions
         onSave(config)
     }
 }

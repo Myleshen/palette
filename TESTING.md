@@ -76,6 +76,7 @@ log, or a missing artifact:
 | `screenshot-keeps-panel` | a capture leaves the panel visible |
 | `universal-search` | an unprefixed query returns rows from the default global providers (`system`, `timer`, `awake`) |
 | `terminal-tab` | the Terminal Settings tab renders, via `settings_snapshot=` |
+| `cheatsheets` | a temp `[cheatsheets] folders` entry reaches `/cheat`, which returns rows from the `cheat` provider |
 
 The capture flow asserts panel visibility only: a real capture needs Screen
 Recording TCC, which CI does not grant.
@@ -88,7 +89,7 @@ false, and `wait_until=<condition>;timeout=<seconds>` polls until it holds
 ## Layout check
 
 Unit tests cannot see a clipped label or a squashed stepper. `make layout-check`
-renders all eleven Settings sections headlessly and compares each with the
+renders all twelve Settings sections headlessly and compares each with the
 reference in `Tests/Snapshots/`:
 
 ```sh
@@ -104,6 +105,19 @@ before rendering. Run it after any change to `SettingsView`.
 The Advanced pane shows the running version, so re-record with
 `Scripts/layout-check.sh --record` after each version bump; otherwise section 9
 trips the tolerance for the right reason but the wrong cause.
+
+## Release integrity
+
+`.github/workflows/release.yml` runs only on a `v*` tag that is on `main`, and
+refuses a tag whose version disagrees with `Resources/Info.plist`. It runs the
+tests, builds the zip, attests it with GitHub build provenance, writes
+`SHA256SUMS`, and publishes the release as a draft first — immutable releases
+cannot be edited afterwards, so the notes and assets are fixed while it is still
+a draft, then the workflow flips it. A `smoke` job then downloads the published
+assets back the way a user does, checks `shasum -a 256 -c SHA256SUMS`, unzips
+the app, and runs `codesign -dv`. The same two commands verify a download
+(`gh attestation verify Palette-<version>.zip --repo Myleshen/palette` and
+`shasum -a 256 -c SHA256SUMS`), documented in README → Release integrity.
 
 ## Manual macOS checklist
 
@@ -173,7 +187,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 150 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 154 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,

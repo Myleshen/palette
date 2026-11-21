@@ -15,15 +15,20 @@ fi
 
 failed=0
 
-# run_flow <name> <script> [required file]
+# run_flow <name> <script> [required file] [prep function]
 # %DIR% in the script and required path expands to the flow's temp directory.
+# The optional prep function runs with the temp directory before launch.
 run_flow() {
-  local name="$1" script="$2" required="${3:-}"
+  local name="$1" script="$2" required="${3:-}" prep="${4:-}"
   local dir
   dir="$(mktemp -d "${TMPDIR:-/tmp}/palette-e2e-$name.XXXXXX")"
   script="${script//%DIR%/$dir}"
   required="${required//%DIR%/$dir}"
   local log="$dir/app.log"
+
+  if [ -n "$prep" ]; then
+    "$prep" "$dir"
+  fi
 
   PALETTE_SCRIPT="$script" \
   PALETTE_CONFIG_DIR="$dir/config" \
@@ -82,6 +87,19 @@ run_flow universal-search \
 run_flow terminal-tab \
   'settings; wait=0.8; settings_tab=10; wait=0.9; settings_snapshot=%DIR%/settings-terminal.png; exit' \
   '%DIR%/settings-terminal.png'
+
+# A folder declared in the flow's own config must reach /cheat.
+prep_cheatsheets() {
+  local dir="$1" sheets="$1/sheets"
+  mkdir -p "$sheets" "$dir/config"
+  printf '# Deploy notes\n\n- build\n- ship\n' > "$sheets/notes.md"
+  printf 'tiny guide\n' > "$sheets/guide.txt"
+  printf '[cheatsheets]\nfolders = ["%s"]\n' "$sheets" > "$dir/config/config.toml"
+}
+
+run_flow cheatsheets \
+  'show; wait=0.7; query=/cheat; wait_until=itemCount>0;timeout=5; assert=firstProvider=cheat; dump=%DIR%/state.json; exit' \
+  '%DIR%/state.json' prep_cheatsheets
 
 if [ "$failed" -ne 0 ]; then
   echo "e2e failed"

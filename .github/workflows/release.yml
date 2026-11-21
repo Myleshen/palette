@@ -6,14 +6,11 @@ name: release
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Version to release, matching Resources/Info.plist
-        required: true
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: release
@@ -22,22 +19,26 @@ concurrency:
 jobs:
   release:
     runs-on: macos-26
+    environment: release
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
-      - name: Resolve version
-        id: version
-        env:
-          INPUT: ${{ inputs.version }}
+      # A tag on a side branch must never publish: only history that is on
+      # main reaches the release environment.
+      - name: Tag must be on main
         run: |
           set -euo pipefail
-          if [ -n "${INPUT}" ]; then
-            version="${INPUT#v}"
-          else
-            version="${GITHUB_REF_NAME#v}"
-          fi
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor HEAD origin/main
+
+      - name: Resolve version
+        id: version
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
           plist="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
           if [ "$plist" != "$version" ]; then
             echo "::error title=Version mismatch::Resources/Info.plist says $plist but the release is $version."
@@ -57,7 +58,17 @@ jobs:
           mkdir -p dist
           ditto -c -k --norsrc --keepParent build/Palette.app "dist/Palette-$VERSION.zip"
           shasum -a 256 "dist/Palette-$VERSION.zip" | tee sha256.txt
+          # Verified by the smoke job, so the name is bare: the asset sits next
+          # to the zip with no dist/ prefix.
+          (cd dist && shasum -a 256 "Palette-$VERSION.zip" > SHA256SUMS)
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/Palette-${{ steps.version.outputs.version }}.zip
+
+      # Draft first: immutable releases cannot be edited after publishing, so
+      # the notes and assets are fixed while it is still a draft.
       - name: Publish
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -72,12 +83,13 @@ jobs:
             on { print }
           ' CHANGELOG.md > notes.md
           if [ -s notes.md ]; then
-            gh release create "v$VERSION" --title "Palette $VERSION" \
-              --notes-file notes.md "dist/Palette-$VERSION.zip"
+            gh release create "v$VERSION" --draft --title "Palette $VERSION" \
+              --notes-file notes.md "dist/Palette-$VERSION.zip" dist/SHA256SUMS
           else
-            gh release create "v$VERSION" --title "Palette $VERSION" \
-              --generate-notes "dist/Palette-$VERSION.zip"
+            gh release create "v$VERSION" --draft --title "Palette $VERSION" \
+              --generate-notes "dist/Palette-$VERSION.zip" dist/SHA256SUMS
           fi
+          gh release edit "v$VERSION" --draft=false
 
       - name: Update the Homebrew cask
         env:
@@ -106,3 +118,22 @@ jobs:
           fi
           git -C tap commit -qam "palette: $VERSION"
           git -C tap push -q origin main
+
+  # Reads the published assets back, the way a user does.
+  smoke:
+    needs: release
+    runs-on: macos-26
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Verify the published asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          shasum -a 256 -c SHA256SUMS
+          unzip -q Palette-*.zip
+          test -x Palette.app/Contents/MacOS/Palette
+          codesign -dv Palette.app
