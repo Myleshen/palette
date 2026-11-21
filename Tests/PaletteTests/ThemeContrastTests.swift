@@ -9,13 +9,17 @@ final class ThemeContrastTests: XCTestCase {
         .appendingPathComponent("palette-theme-contrast-\(UUID().uuidString)", isDirectory: true)
 
     private func palette(_ name: String) throws -> ThemePalette {
-        let result = ThemeLoader.load(name: name, themesDirectory: themesDirectory)
-        return result.theme.palette
+        ThemeLoader.load(name: name, themesDirectory: themesDirectory).theme.palette
+    }
+
+    private func theme(_ name: String) -> Theme {
+        ThemeLoader.load(name: name, themesDirectory: themesDirectory).theme
     }
 
     func testBuiltinThemesMeetContrast() throws {
         for name in ThemeLoader.builtinNames {
             let palette = try palette(name)
+            let theme = theme(name)
             let bg = try XCTUnwrap(RGBA(hex: palette.bg), name)
             let fg = try XCTUnwrap(RGBA(hex: palette.fg), name)
             let muted = try XCTUnwrap(RGBA(hex: palette.fgMuted), name)
@@ -31,6 +35,10 @@ final class ThemeContrastTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(selectionBg.contrast(with: selectionFg), 4.5, "\(name) selection")
             XCTAssertGreaterThanOrEqual(badgeBg.contrast(with: badgeFg), 4.5, "\(name) badge")
             XCTAssertGreaterThanOrEqual(bg.contrast(with: muted), 3.0, "\(name) muted")
+            if let selectedBg = theme.states.selected.bg.flatMap(RGBA.init(hex:)),
+               let selectedFg = theme.states.selected.fg.flatMap(RGBA.init(hex:)) {
+                XCTAssertGreaterThanOrEqual(selectedBg.contrast(with: selectedFg), 4.5, "\(name) selected row")
+            }
         }
     }
 
