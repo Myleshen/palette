@@ -704,6 +704,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             await self?.exportWebApps()
         }))
         providers.append(BookmarkProvider())
+        providers.append(AtlasProvider(bridge: hostProxy))
         providers.append(ZellijProvider(terminal: configuration.terminal, launcher: launcher, bridge: hostProxy))
         providers.append(PortProvider(launcher: launcher, bridge: hostProxy))
         providers.append(CommandProvider(launcher: launcher, bridge: hostProxy, terminal: configuration.terminal))

@@ -81,6 +81,11 @@ log, or a missing artifact:
 The capture flow asserts panel visibility only: a real capture needs Screen
 Recording TCC, which CI does not grant.
 
+`make debug-app` builds `build/Palette Debug.app` with its own bundle id and
+isolated config, then launches it through LaunchServices so permission prompts
+attribute to Palette Debug instead of the terminal. E2E still launches
+`build/Palette.app` directly.
+
 Three steps make a script verifiable: `dump=<path>` writes the observable
 state as JSON, `assert=<condition>` records a failure when the condition is
 false, and `wait_until=<condition>;timeout=<seconds>` polls until it holds
@@ -187,7 +192,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 154 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 166 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,

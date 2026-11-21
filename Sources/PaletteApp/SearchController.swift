@@ -118,7 +118,12 @@ public final class SearchController: ObservableObject, HostBridge {
     /// wide preview layout and no typing required.
     private var windowConfig: WindowConfig { configuration.window }
 
-    public var previewLayout: PreviewPlacement { configuration.window.previewLayout }
+    public var previewLayout: PreviewPlacement {
+        configuration.window.resolvedPreviewLayout(
+            screenWidth: Double(screenSize.width),
+            previewPanelWidth: configuration.window.previewWidth(for: screenSize)
+        )
+    }
 
     private var timerObserver: NSObjectProtocol?
 
@@ -200,7 +205,7 @@ public final class SearchController: ObservableObject, HostBridge {
         let parsed = registry.parser.parse(query)
         // Preview is useful wherever a row has something worth showing:
         // clipboard, Ask, snippets, and path/project providers.
-        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj", "shots", "cheat"]
+        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj", "shots", "cheat", "atlas"]
             .contains(parsed.providerID ?? "")
         if previewProvider {
             if !previewEnabled {
