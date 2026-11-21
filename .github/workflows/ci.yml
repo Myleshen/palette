@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
 
       # The toolchain is part of the cache key: build products are tied to the
       # Swift module format, and restoring them after a runner image change
@@ -36,6 +38,11 @@ jobs:
           key: ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-
+
+      # See Scripts/restore-build-timestamps.sh: without this a restored cache
+      # still rebuilds everything, because checkout stamps sources with "now".
+      - name: Warm the build cache
+        run: Scripts/restore-build-timestamps.sh
 
       - name: Test
         run: swift test ${{ github.event_name == 'push' && '--enable-code-coverage' || '' }}
@@ -71,6 +78,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
 
       - name: Swift version
         id: swift
