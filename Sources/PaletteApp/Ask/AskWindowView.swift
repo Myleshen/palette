@@ -11,6 +11,7 @@ final class AskWindowState: ObservableObject {
         case asking
         case answered(AskRecord)
         case failed(String)
+        case cancelled
     }
 
     let question: String
@@ -38,8 +39,10 @@ final class AskWindowState: ObservableObject {
     }
 
     func cancel() {
+        guard phase == .asking else { return }
         task?.cancel()
         task = nil
+        phase = .cancelled
     }
 
     /// Picking a model re-asks: with no conversation, the only way to see what
@@ -110,13 +113,13 @@ struct AskWindowView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(state.question)
-                .font(theme.font(size: 13, weight: .medium))
+                .font(theme.font(size: theme.typography.size, weight: .medium))
                 .foregroundStyle(theme.color(theme.palette.fg))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
                 Text("Model")
-                    .font(.system(size: 11))
+                    .font(theme.font(size: theme.typography.subtitleSize))
                     .foregroundStyle(theme.color(theme.palette.fgMuted))
                 Picker("Model", selection: Binding(
                     get: { state.selectedModel.key },
@@ -129,7 +132,7 @@ struct AskWindowView: View {
                 }
                 .labelsHidden()
                 .controlSize(.small)
-                .frame(maxWidth: 280)
+                .frame(minWidth: 250, maxWidth: 360)
                 Spacer()
             }
         }
@@ -145,29 +148,39 @@ struct AskWindowView: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("Asking \(state.selectedModel.name)…")
-                    .font(.system(size: 12))
+                    .font(theme.font(size: theme.typography.subtitleSize))
                     .foregroundStyle(theme.color(theme.palette.fgMuted))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .answered(let record):
             VStack(spacing: 0) {
-                PreviewTextView(text: record.answer, theme: theme)
-                    .padding(.horizontal, 10)
-                    .padding(.top, 6)
+                PreviewTextView(
+                    text: record.answer,
+                    theme: theme,
+                    font: theme.nsFont(size: theme.typography.size),
+                    lineSpacing: 3
+                )
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
                 Text(record.metaLine)
-                    .font(.system(size: 10))
+                    .font(theme.font(size: max(9, theme.typography.size - 3)))
                     .foregroundStyle(theme.color(theme.palette.fgMuted))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
             }
+        case .cancelled:
+            Text("Request cancelled.")
+                .font(theme.font(size: theme.typography.subtitleSize))
+                .foregroundStyle(theme.color(theme.palette.fgMuted))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let message):
             VStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 22))
                     .foregroundStyle(theme.color(theme.palette.accent))
                 Text(message)
-                    .font(.system(size: 12))
+                    .font(theme.font(size: theme.typography.subtitleSize))
                     .foregroundStyle(theme.color(theme.palette.fg))
                     .multilineTextAlignment(.center)
                     .textSelection(.enabled)
@@ -182,21 +195,25 @@ struct AskWindowView: View {
     private var footer: some View {
         HStack(spacing: 10) {
             Spacer()
-            Button(copied ? "Copied" : "Copy") {
-                guard let record = answeredRecord else { return }
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(record.answer, forType: .string)
-                copied = true
-                Task {
-                    try? await Task.sleep(for: .milliseconds(1_200))
-                    copied = false
+            if state.phase == .asking {
+                Button("Cancel") { state.cancel() }
+                    .keyboardShortcut(.cancelAction)
+            } else {
+                Button(copied ? "Copied" : "Copy") {
+                    guard let record = answeredRecord else { return }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(record.answer, forType: .string)
+                    copied = true
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(1_200))
+                        copied = false
+                    }
                 }
+                .disabled(answeredRecord == nil)
+                Button("Ask Again") { state.askAgain() }
+                Button("Done") { close() }
+                    .keyboardShortcut(.cancelAction)
             }
-            .disabled(answeredRecord == nil)
-            Button("Ask Again") { state.askAgain() }
-                .disabled(state.phase == .asking)
-            Button("Done") { close() }
-                .keyboardShortcut(.cancelAction)
         }
         .buttonStyle(PillButton(theme: theme))
         .controlSize(.small)

@@ -6,7 +6,8 @@
 
 - `/ask` opens a dedicated answer window: one question, one answer, with an
   "Asking <model>…" state, a selectable answer, Copy, Ask Again and a model
-  picker. Esc cancels a request in flight. Still single-shot — no sessions.
+  picker. Cancel (or Esc) stops a request in flight without recording it.
+  Still single-shot — no sessions.
 - The ask model list now mirrors the live OpenCode Go endpoint: all 31 models,
   including Grok 4.7, GPT-6 Luna, Claude Haiku 5.5, Qwen4 Max and Hy4.
 - Web app shortcuts are registered by Palette itself, so ⌃⌥F opens your web app

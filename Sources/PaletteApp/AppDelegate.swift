@@ -360,6 +360,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.searchController.openAsk()
                 } else if step == "scratchpad" {
                     self.searchController.openScratchpad()
+                } else if let question = step.dropPrefix("askwindow=") {
+                    self.showAskWindow(question: question)
+                } else if step == "ask_cancel" {
+                    self.askWindows.last?.cancelRequest()
                 } else if step == "exit" {
                     self.finishScript()
                 } else if let value = step.dropPrefix("dump=") {
@@ -386,7 +390,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else if let value = step.dropPrefix("snapshot=") {
                     self.writeSnapshot(to: value)
                 } else if let value = step.dropPrefix("window_snapshot=") {
-                    if let hud = self.annotateWindows.last?.window
+                    if let ask = self.askWindows.last?.window {
+                        // Include the titlebar: it is transparent, so only the
+                        // frame view shows whether the title is legible.
+                        self.write(view: ask.contentView?.superview ?? NSView(), to: value)
+                    } else if let hud = self.annotateWindows.last?.window
                         ?? self.mediaPreviews.last?.window {
                         self.write(view: hud.contentView ?? NSView(), to: value)
                     } else if let hudView = self.screenshotHUD.view {

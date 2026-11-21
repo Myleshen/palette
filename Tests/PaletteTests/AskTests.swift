@@ -328,6 +328,33 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(history.first?.model, "hy3")
         XCTAssertEqual(history.first?.error, "No answer after 130s — the model was too slow.")
     }
+
+    func testAskCancelStopsFallbackAndWritesNoHistory() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let counter = CallCounter()
+        let stub = StubCompleter { _, _ in
+            await counter.increment()
+            throw CancellationError()
+        }
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "hy3"),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
+            completer: stub
+        )
+        do {
+            _ = try await service.ask("cancel me")
+            XCTFail("expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        let calls = await counter.value
+        XCTAssertEqual(calls, 1, "a cancelled ask must not fall back to another model")
+        let history = try await store.askHistory()
+        XCTAssertTrue(history.isEmpty, "cancelling must not record a failure")
+    }
 }
 
 private struct StubCompleter: AskCompleting {

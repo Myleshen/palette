@@ -1564,6 +1564,9 @@ extension Notification.Name {
 struct PreviewTextView: NSViewRepresentable {
     var text: String
     var theme: Theme
+    /// `nil` keeps the preview's monospaced look; prose answers pass a UI font.
+    var font: NSFont?
+    var lineSpacing: CGFloat = 0
 
     final class Coordinator {
         var observer: NSObjectProtocol?
@@ -1620,8 +1623,19 @@ struct PreviewTextView: NSViewRepresentable {
             textView.scrollToBeginningOfDocument(nil)
         }
         let family = theme.typography.mono
-        textView.font = NSFont(name: family, size: 11) ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.font = font ?? NSFont(name: family, size: 11) ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         textView.textColor = theme.nsColor(theme.palette.fg)
+        if lineSpacing > 0 {
+            let style = NSMutableParagraphStyle()
+            style.lineSpacing = lineSpacing
+            textView.defaultParagraphStyle = style
+            textView.typingAttributes[.paragraphStyle] = style
+            textView.textStorage?.addAttribute(
+                .paragraphStyle,
+                value: style,
+                range: NSRange(location: 0, length: textView.string.utf16.count)
+            )
+        }
     }
 
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {

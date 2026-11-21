@@ -58,6 +58,11 @@ final class AskWindowController: NSWindowController, NSWindowDelegate {
         onClose?()
     }
 
+    /// The Cancel button and the scripted `cancel` step share this path.
+    func cancelRequest() {
+        state.cancel()
+    }
+
     func show() {
         if NSApp.activationPolicy() != .regular {
             NSApp.setActivationPolicy(.regular)
