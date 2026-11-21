@@ -34,6 +34,11 @@ final class HostBridgeProxy: HostBridge, @unchecked Sendable {
         await target.notify(message)
     }
 
+    func beginProgress(_ message: String) async {
+        guard let target = current() else { return }
+        await target.beginProgress(message)
+    }
+
     func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {
         guard let target = current() else { return }
         await target.copyToClipboard(text, concealed: concealed, clearAfterMs: clearAfterMs)
@@ -1535,6 +1540,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.target = self
         appMenu.addItem(settings)
         appMenu.addItem(.separator())
+
+        let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
+        let servicesMenu = NSMenu(title: "Services")
+        servicesItem.submenu = servicesMenu
+        appMenu.addItem(servicesItem)
+        NSApp.servicesMenu = servicesMenu
+
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Hide Palette", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthers = appMenu.addItem(
+            withTitle: "Hide Others",
+            action: #selector(NSApplication.hideOtherApplications(_:)),
+            keyEquivalent: "h"
+        )
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(
+            withTitle: "Show All",
+            action: #selector(NSApplication.unhideAllApplications(_:)),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Palette", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         let editItem = NSMenuItem()
@@ -1548,6 +1574,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let windowItem = NSMenuItem()
+        mainMenu.addItem(windowItem)
+        let windowMenu = NSMenu(title: "Window")
+        windowItem.submenu = windowMenu
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        NSApp.windowsMenu = windowMenu
+
+        let helpItem = NSMenuItem()
+        mainMenu.addItem(helpItem)
+        let helpMenu = NSMenu(title: "Help")
+        helpItem.submenu = helpMenu
+        let readme = NSMenuItem(title: "Palette Help", action: #selector(openReadmeFromMenu), keyEquivalent: "?")
+        readme.target = self
+        helpMenu.addItem(readme)
+        NSApp.helpMenu = helpMenu
 
         NSApp.mainMenu = mainMenu
     }
@@ -1580,7 +1625,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let button = statusItem.button {
             button.image = Self.statusBarIcon()
             button.image?.isTemplate = true
-            button.toolTip = "Palette — \(currentHotKey?.display ?? configuration.hotkey)"
+            button.toolTip = "Palette — \(currentHotKey?.prettyDisplay ?? configuration.hotkey)"
         }
         let menu = NSMenu()
         let open = NSMenuItem(title: "Open Palette", action: #selector(togglePalette), keyEquivalent: "")
@@ -1854,6 +1899,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showSettings()
     }
 
+    @objc private func openReadmeFromMenu() {
+        guard let url = URL(string: "https://github.com/Myleshen/palette/blob/main/README.md") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     private func showSettings() {
         panel?.hide(activatePrevious: false)
         if let settingsWindow {
@@ -1877,6 +1927,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.title = "Palette Settings"
         window.isReleasedWhenClosed = false
         window.isOpaque = false
+        window.contentMinSize = NSSize(width: 820, height: 560)
+        window.collectionBehavior.insert(.fullScreenPrimary)
+        window.setFrameAutosaveName("PaletteSettings")
         // A themed (not transparent) titlebar keeps AppKit's native window drag.
         window.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
         window.titlebarAppearsTransparent = false
@@ -1884,7 +1937,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.titlebarSeparatorStyle = .none
         window.appearance = NSAppearance(named: themeManager.theme.appearance == "light" ? .aqua : .darkAqua)
         window.contentView = makeSettingsHostingView()
-        window.center()
+        if !window.setFrameUsingName("PaletteSettings") {
+            window.center()
+        }
         settingsWindow = window
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -1966,16 +2021,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow.contentView = makeSettingsHostingView()
     }
 
-    private func saveSettings(_ updated: PaletteConfig) {
+    private func saveSettings(_ updated: PaletteConfig) -> String? {
         do {
             try ConfigWriter.render(updated).write(to: paths.configFile, atomically: true, encoding: .utf8)
         } catch {
-            searchController.setStatus("Could not save settings: \(error.localizedDescription)", duration: 4)
-            return
+            return "Could not save settings: \(error.localizedDescription)"
         }
         settingsWindow?.close()
         settingsWindow = nil
         reload(quiet: false)
+        return nil
     }
 
     @objc private func openProvidersFromMenu() {

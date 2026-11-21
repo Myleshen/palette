@@ -79,13 +79,42 @@ final class AskTests: XCTestCase {
 
     func testGoModelsAreOrderedByCost() {
         let paid = AskModel.models(for: .opencodeGo).filter { !$0.free }
-        XCTAssertGreaterThanOrEqual(paid.count, 15)
+        XCTAssertGreaterThanOrEqual(paid.count, 14)
         let outputs = paid.map(\.outputCost)
         XCTAssertEqual(outputs, outputs.sorted())
         XCTAssertTrue(paid.contains { $0.id == "hy3" })
         XCTAssertTrue(paid.contains { $0.id == "mimo-v2.6-pro" })
         XCTAssertTrue(paid.contains { $0.id == "longcat-2.0" })
-        XCTAssertTrue(paid.contains { $0.id == "glm-5.2" })
+        XCTAssertTrue(paid.contains { $0.id == "glm-5.3" })
+        XCTAssertFalse(paid.contains { $0.id == "glm-5.2" })
+    }
+
+    func testAskDefaultsAllowLongerAnswers() {
+        XCTAssertEqual(AskConfig().maxTokens, 2_048)
+        XCTAssertEqual(AskClient.timeout, 120)
+        XCTAssertGreaterThanOrEqual(AskClient.deadline, AskClient.timeout)
+    }
+
+    func testAskTimeoutAllowsFallback() {
+        XCTAssertTrue(AskClientError.http(0, "timed out").allowsFallback)
+        XCTAssertTrue(AskClientError.http(429, "").allowsFallback)
+        XCTAssertFalse(AskClientError.http(400, "bad request").allowsFallback)
+        XCTAssertFalse(AskClientError.malformed("nope").allowsFallback)
+    }
+
+    func testAskTruncatedAnswerIsMarked() throws {
+        let data = Data("""
+        {"choices":[{"message":{"role":"assistant","content":"half a thought"},
+         "finish_reason":"length"}],"usage":{"completion_tokens":2048}}
+        """.utf8)
+        let completion = try AskClient.parse(data, durationMs: 5)
+        XCTAssertTrue(completion.answer.hasPrefix("half a thought"))
+        XCTAssertTrue(completion.answer.contains("truncated"))
+
+        let complete = try AskClient.parse(Data("""
+        {"choices":[{"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}
+        """.utf8), durationMs: 5)
+        XCTAssertEqual(complete.answer, "done")
     }
 
     func testAskResponseParsing() throws {
@@ -182,6 +211,33 @@ final class AskTests: XCTestCase {
         }
         let calls = await counter.value
         XCTAssertEqual(calls, 1)
+    }
+
+    func testAskFailureIsStoredInHistory() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let stub = StubCompleter { _, _ in
+            throw AskClientError.http(0, "No answer after 130s — the model was too slow.")
+        }
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "hy3", fallback: false),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
+            completer: stub
+        )
+        do {
+            _ = try await service.ask("slow one")
+            XCTFail("expected a timeout")
+        } catch {
+            XCTAssertEqual(error as? AskClientError, .http(0, "No answer after 130s — the model was too slow."))
+        }
+        let history = try await store.askHistory()
+        XCTAssertEqual(history.count, 1)
+        XCTAssertEqual(history.first?.question, "slow one")
+        XCTAssertEqual(history.first?.answer, "")
+        XCTAssertEqual(history.first?.model, "hy3")
+        XCTAssertEqual(history.first?.error, "No answer after 130s — the model was too slow.")
     }
 }
 

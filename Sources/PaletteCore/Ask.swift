@@ -56,6 +56,8 @@ public struct AskModel: Identifiable, Equatable, Sendable {
     /// Endpoint-qualified identity used in the runtime preference.
     public var key: String { "\(endpoint.rawValue)/\(id)" }
 
+    /// Model ids and prices come from the live endpoint, so this list can
+    /// drift as the provider adds or retires models.
     public static let catalog: [AskModel] = [
         .init(id: "beam-free", name: "Beam", endpoint: .opencodeGo, free: true),
         .init(id: "iceman-contributor-free", name: "Iceman Contributor", endpoint: .opencodeGo, free: true),
@@ -69,7 +71,6 @@ public struct AskModel: Identifiable, Equatable, Sendable {
         .init(id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", endpoint: .opencodeGo, free: false, inputCost: 0.66, outputCost: 1.98),
         .init(id: "hy4-preview", name: "Hy4 Preview", endpoint: .opencodeGo, free: false, inputCost: 0.834, outputCost: 2.501),
         .init(id: "kimi-k2.7-code", name: "Kimi K2.7 Code", endpoint: .opencodeGo, free: false, inputCost: 0.95, outputCost: 4.00),
-        .init(id: "glm-5.2", name: "GLM 5.2", endpoint: .opencodeGo, free: false, inputCost: 1.40, outputCost: 4.40),
         .init(id: "glm-5.3", name: "GLM 5.3", endpoint: .opencodeGo, free: false, inputCost: 1.40, outputCost: 4.40),
         .init(id: "step-5-preview", name: "Step 5 Preview", endpoint: .opencodeGo, free: false, inputCost: 1.00, outputCost: 2.70),
         .init(id: "kimi-k3.1-pro", name: "Kimi K3.1 Pro", endpoint: .opencodeGo, free: false, inputCost: 2.00, outputCost: 10.00),
@@ -116,7 +117,7 @@ public struct AskConfig: Sendable, Equatable {
         model: String = AskModel.defaultModel.id,
         maxHistory: Int = 200,
         retentionDays: Int = 30,
-        maxTokens: Int = 512,
+        maxTokens: Int = 2_048,
         fallback: Bool = true
     ) {
         self.endpoint = endpoint

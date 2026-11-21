@@ -223,8 +223,8 @@ struct SettingsView: View {
     private let providerNameWidth: CGFloat = 112
     private let providerDefaultWidth: CGFloat = 62
     private let providerTriggerWidth: CGFloat = 122
-    private let providerOrderWidth: CGFloat = 20
-    private let onSave: (PaletteConfig) -> Void
+    private let providerOrderWidth: CGFloat = 36
+    private let onSave: (PaletteConfig) -> String?
     private let onOpen: (URL) -> Void
     private let onExportBackup: () -> Void
 
@@ -237,7 +237,7 @@ struct SettingsView: View {
         providerSummary: [String],
         providers: [ProviderSettingsInfo],
         diagnostics: [String],
-        onSave: @escaping (PaletteConfig) -> Void,
+        onSave: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
         onExportBackup: @escaping () -> Void
     ) {
@@ -386,6 +386,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 8)
@@ -704,7 +705,9 @@ struct SettingsView: View {
             ("Window", config.windowScreenshotHotkey),
             ("Recording", config.recordingHotkey),
         ].filter { !$0.1.isEmpty }
-        let values = entries.map { "\($0.0) \($0.1)" }.joined(separator: " · ")
+        let values = entries
+            .map { "\($0.0) \(HotKeySpec.parse($0.1)?.prettyDisplay ?? $0.1)" }
+            .joined(separator: " · ")
         return hasShortcutConflict ? "Conflict: each global shortcut must be unique." : values
     }
 
@@ -911,6 +914,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.borderless)
                         .help("Remove folder")
+                        .accessibilityLabel("Remove folder")
                     }
                     .padding(.vertical, 4)
                 }
@@ -1106,7 +1110,7 @@ struct SettingsView: View {
             } header: {
                 Text("Search engines").searchTarget("search-engines")
             } footer: {
-                settingsFooter("Type !keyword in the launcher, e.g. !yt lo-fi. The search URL must contain {query}, which Palette replaces with the URL-encoded text. “Open in web app” sends that engine's searches to the web-app browser — set a Chromium-based browser below or under Web apps.")
+                settingsFooter("Type !keyword in the launcher, e.g. !yt lo-fi. The search URL must contain {query} — for example https://example.com/search?q={query} — which Palette replaces with the URL-encoded text. “Open in web app” sends that engine's searches to the web-app browser — set a Chromium-based browser below or under Web apps.")
             }
 
             Section {
@@ -1122,6 +1126,7 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.borderless)
                             .help("Remove bookmark")
+                            .accessibilityLabel("Remove bookmark")
                         }
                         TextField("URL", text: $bookmark.url)
                             .settingsField()
@@ -1178,6 +1183,7 @@ struct SettingsView: View {
             HStack(spacing: 8) {
                 LabeledContent("Name") {
                     TextField("Name", text: engine.name)
+                        .labelsHidden()
                         .settingsField()
                 }
                 Button {
@@ -1192,14 +1198,16 @@ struct SettingsView: View {
                 .accessibilityLabel("Remove \(engine.wrappedValue.name)")
             }
             LabeledContent("Search URL") {
-                TextField("https://example.com/search?q={query}", text: engine.urlTemplate)
+                TextField("Search URL", text: engine.urlTemplate)
+                    .labelsHidden()
                     .settingsField()
                     .font(.system(.body, design: .monospaced))
             }
             LabeledContent("Keyword") {
                 HStack(spacing: 4) {
                     Text("!").foregroundStyle(.secondary)
-                    TextField("e.g. yt", text: keyword)
+                    TextField("Keyword", text: keyword)
+                        .labelsHidden()
                         .settingsField()
                         .frame(width: 90)
                 }
@@ -1391,7 +1399,8 @@ struct SettingsView: View {
             Section {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 10) {
-                        Color.clear.frame(width: 18, height: 1)
+                        Text("Show")
+                            .frame(width: 30, alignment: .leading)
                         Text("Provider")
                             .frame(width: providerNameWidth, alignment: .leading)
                         Text("Default")
@@ -1553,7 +1562,7 @@ struct SettingsView: View {
             Toggle("Show \(providerName(id))", isOn: providerEnabledBinding(id))
                 .toggleStyle(.checkbox)
                 .labelsHidden()
-                .frame(width: 18, alignment: .leading)
+                .frame(width: 30, alignment: .leading)
                 .help("Show \(providerName(id)) as a launcher tab")
 
             VStack(alignment: .leading, spacing: 2) {
@@ -1868,7 +1877,10 @@ struct SettingsView: View {
             .filter { !$0.isEmpty }
         // An empty list would silently hide every file; keep the defaults.
         config.cheatsheets.extensions = extensions.isEmpty ? CheatsheetConfig().extensions : extensions
-        onSave(config)
+        // The writer owns the file; surface its failure in this window's alert.
+        if let error = onSave(config) {
+            saveError = error
+        }
     }
 }
 
@@ -1911,7 +1923,7 @@ final class RecorderView: NSView {
     var value: String = "" {
         didSet {
             needsDisplay = true
-            setAccessibilityValue(value)
+            setAccessibilityValue(HotKeySpec.parse(value)?.prettyDisplay ?? value)
         }
     }
     var label: String = "Shortcut" {
@@ -2086,7 +2098,8 @@ final class RecorderView: NSView {
         path.lineWidth = focused ? 2 : 1
         path.stroke()
 
-        let text = focused && value.isEmpty ? "Press shortcut…" : (value.isEmpty ? "Click to record" : value)
+        let shown = HotKeySpec.parse(value)?.prettyDisplay ?? value
+        let text = focused && value.isEmpty ? "Press shortcut…" : (value.isEmpty ? "Click to record" : shown)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
             .foregroundColor: value.isEmpty ? NSColor.secondaryLabelColor : NSColor.labelColor,

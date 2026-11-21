@@ -665,6 +665,15 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(commandSpace?.modifiers, UInt32(cmdKey))
     }
 
+    func testHotKeySpecPrettyDisplayUsesKeycaps() {
+        XCTAssertEqual(HotKeySpec.parse("opt+space")?.prettyDisplay, "⌥Space")
+        XCTAssertEqual(HotKeySpec.parse("cmd+shift+3")?.prettyDisplay, "⌘⇧3")
+        XCTAssertEqual(HotKeySpec.parse("ctrl+opt+shift+cmd+a")?.prettyDisplay, "⌘⌃⌥⇧A")
+        XCTAssertEqual(HotKeySpec.parse("cmd+return")?.prettyDisplay, "⌘↩")
+        // The stored/config form stays canonical.
+        XCTAssertEqual(HotKeySpec.parse("cmd+shift+3")?.display, "cmd+shift+3")
+    }
+
     func testShortcutRecorderTurnsKeyPressIntoCanonicalSpec() {
         let event = NSEvent.keyEvent(
             with: .keyDown,

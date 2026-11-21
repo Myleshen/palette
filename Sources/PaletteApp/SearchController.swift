@@ -692,12 +692,8 @@ public final class SearchController: ObservableObject, HostBridge {
         execute(item: item, action: action)
     }
 
-    public func toggleActions() {
-        if actionsMode {
-            closeActions()
-            return
-        }
-        guard let item = selectedItem else { return }
+    /// The same list ⌘K shows, also used by a row's right-click menu.
+    public func actions(for item: PaletteItem) -> [PaletteAction] {
         var actions = item.actions
         let pinID = item.providerID == "pins" ? "unpin-item" : "pin-item"
         if !actions.contains(where: { $0.id == "pin-item" || $0.id == "unpin-item" }) {
@@ -708,10 +704,24 @@ public final class SearchController: ObservableObject, HostBridge {
                 value: .text(item.stableID)
             ))
         }
+        return actions
+    }
+
+    /// Runs an action for a row that is not the ⌘K owner (context menu).
+    public func run(_ action: PaletteAction, on item: PaletteItem) {
+        execute(item: item, action: action)
+    }
+
+    public func toggleActions() {
+        if actionsMode {
+            closeActions()
+            return
+        }
+        guard let item = selectedItem else { return }
         actionsMode = true
         actionsOwner = item
         actionsOwnerID = item.stableID
-        allActions = actions
+        allActions = actions(for: item)
         queryBeforeActions = query
         query = ""
         applyActionFilter()
@@ -918,8 +928,12 @@ public final class SearchController: ObservableObject, HostBridge {
                     onOpenConfig?()
                     panel?.hide()
                 } else if action.id == "ask-again" {
+                    // Re-ask for real; reopening the query alone would just show
+                    // the cached answer again.
                     if let question = action.value.text {
+                        try await registry.activate(item: item, action: action)
                         query = registry.parser.prefix + "ask " + question
+                        scheduleSearch(debounce: false)
                     }
                 } else if action.id == "ask-history" {
                     query = registry.parser.prefix + "askh "
@@ -943,7 +957,7 @@ public final class SearchController: ObservableObject, HostBridge {
                 }
             }
         } catch {
-            setStatus(error.localizedDescription, duration: 5)
+            setStatus(error.localizedDescription, duration: 8)
         }
     }
 
@@ -1015,6 +1029,10 @@ public final class SearchController: ObservableObject, HostBridge {
                 NSApp.requestUserAttention(.informationalRequest)
             }
         }
+    }
+
+    public func beginProgress(_ message: String) async {
+        setStatus(message, duration: nil)
     }
 
     public func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {

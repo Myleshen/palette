@@ -13,6 +13,34 @@ public struct HotKeySpec: Equatable, Sendable {
         self.display = display
     }
 
+    /// Human-readable keycaps for the UI ("⌥Space", "⌘⇧3"). `display` stays
+    /// the canonical string `parse` accepts.
+    public var prettyDisplay: String {
+        let parts = display.lowercased().split(separator: "+").map(String.init)
+        let key = parts.last { !Self.modifierWords.contains($0) } ?? ""
+        var result = ""
+        // Command first, matching how this app writes shortcuts in its docs.
+        if parts.contains("cmd") || parts.contains("command") || parts.contains("meta") { result += "⌘" }
+        if parts.contains("ctrl") || parts.contains("control") { result += "⌃" }
+        if parts.contains("opt") || parts.contains("option") || parts.contains("alt") { result += "⌥" }
+        if parts.contains("shift") { result += "⇧" }
+        return result + Self.prettyKey(key)
+    }
+
+    private static let modifierWords: Set<String> = [
+        "cmd", "command", "meta", "opt", "option", "alt", "ctrl", "control", "shift",
+    ]
+
+    private static func prettyKey(_ name: String) -> String {
+        switch name {
+        case "space": return "Space"
+        case "return", "enter": return "↩"
+        case "tab": return "⇥"
+        case "esc", "escape": return "⎋"
+        default: return name.uppercased()
+        }
+    }
+
     public static func parse(_ raw: String) -> HotKeySpec? {        let parts = raw
             .lowercased()
             .split(separator: "+")
