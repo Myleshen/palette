@@ -267,10 +267,11 @@ struct HighlightedText: View {
     var base: String
     var match: String? = nil
     var weight: Font.Weight = .regular
+    var lineLimit: Int = 1
 
     var body: some View {
         Text(attributed)
-            .lineLimit(1)
+            .lineLimit(lineLimit)
             .truncationMode(.tail)
     }
 
@@ -413,6 +414,8 @@ struct ResultRow: View {
     var showProvider: Bool
     var theme: Theme
     var pill: Bool = false
+    var titleLineLimit: Int = 1
+    var rowHeight: CGFloat? = nil
 
     /// Armed hover: a parked or jittery pointer must not light a row, so the
     /// highlight waits until the pointer has moved more than a few points
@@ -447,7 +450,8 @@ struct ResultRow: View {
                     size: theme.typography.size,
                     base: selected ? selectedBase : theme.palette.fg,
                     match: selected ? selectedMatch : nil,
-                    weight: .regular
+                    weight: .regular,
+                    lineLimit: titleLineLimit
                 )
                 if theme.list.showSubtitles, let subtitle = item.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
@@ -470,7 +474,7 @@ struct ResultRow: View {
             }
         }
         .padding(.horizontal, LauncherMetrics.innerPadding)
-        .frame(height: CGFloat(theme.effectiveRowHeight))
+        .frame(height: rowHeight ?? CGFloat(theme.effectiveRowHeight))
         .background(selectionBackground)
         .contentShape(Rectangle())
         .onContinuousHover(coordinateSpace: .global) { phase in
@@ -720,9 +724,24 @@ struct LauncherRootView: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(width: collapsed ? 56 : 200)
+        .frame(width: collapsed ? 56 : 220)
         .frame(maxHeight: .infinity)
         .cardSurface(theme: theme)
+    }
+
+    /// Drop a redundant provider prefix before truncating a label mid-word.
+    private func railTitle(_ title: String, width: CGFloat) -> String {
+        let available = width - LauncherMetrics.innerPadding * 2 - 20 - 16 - 8
+        let font = theme.nsFont(size: 11, weight: .medium)
+        func fits(_ text: String) -> Bool {
+            (text as NSString).size(withAttributes: [.font: font]).width <= available
+        }
+        if fits(title) { return title }
+        for prefix in ["GitHub ", "Bitwarden ", "Neovide ", "Editor "] where title.hasPrefix(prefix) {
+            let short = String(title.dropFirst(prefix.count))
+            if fits(short) { return short }
+        }
+        return title
     }
 
     /// Two initials keep "Editor" and "Editor Folders" apart when a provider
@@ -754,7 +773,7 @@ struct LauncherRootView: View {
                     )
             }
             if !collapsed {
-                Text(entry.title)
+                Text(railTitle(entry.title, width: 220))
                     .font(theme.font(size: 11, weight: .medium))
                     .lineLimit(1)
                 Spacer(minLength: 0)
@@ -957,13 +976,16 @@ struct LauncherRootView: View {
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.top, 8)
                                 }
+                                let wraps = controller.titleWraps(item)
                                 ResultRow(
                                     item: item,
                                     selected: index == controller.selectionIndex,
                                     terms: controller.highlightTerms,
                                     showProvider: controller.scopeLabel == nil,
                                     theme: theme,
-                                    pill: isPill
+                                    pill: isPill,
+                                    titleLineLimit: wraps ? 2 : 1,
+                                    rowHeight: CGFloat(theme.effectiveRowHeight) + (wraps ? 16 : 0)
                                 )
                                 .id(item.stableID)
                                 .onTapGesture { controller.activate(index) }
