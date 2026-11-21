@@ -81,6 +81,18 @@ public struct WebSearchEngine: Sendable, Equatable, Identifiable {
         WebSearchEngine(name: "YouTube", urlTemplate: "https://www.youtube.com/results?search_query={query}", keyword: "yt"),
     ]
 
+    /// Give a stock engine the default keyword its config predates. Engines are
+    /// kept as they are otherwise: none added, removed, reordered or overwritten.
+    public static func backfillingKeywords(into engines: [WebSearchEngine]) -> [WebSearchEngine] {
+        engines.map { engine in
+            guard (engine.keyword ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
+                  let stock = defaults.first(where: { $0.name == engine.name }) else { return engine }
+            var filled = engine
+            filled.keyword = stock.keyword
+            return filled
+        }
+    }
+
     /// Re-add any missing stock engines and backfill a default keyword onto a
     /// stock engine that has none. Custom engines are preserved.
     public static func restoringDefaults(into engines: [WebSearchEngine]) -> [WebSearchEngine] {
@@ -784,6 +796,9 @@ public enum ConfigLoader {
             diagnostics.append(Diagnostic(.warning, "provider_prefix should be one character; using '/'.", source: "config"))
             config.providerPrefix = "/"
         }
+
+        // Configs written before 2.7.0 have stock engines with no `!keyword`.
+        config.webSearchEngines = WebSearchEngine.backfillingKeywords(into: config.webSearchEngines)
 
         return config
     }

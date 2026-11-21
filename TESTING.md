@@ -61,7 +61,7 @@ it does not test Carbon hotkey delivery or real typing. Check those manually.
 ## Layout check
 
 Unit tests cannot see a clipped label or a squashed stepper. `make layout-check`
-renders all eight Settings sections headlessly and compares each with the
+renders all ten Settings sections headlessly and compares each with the
 reference in `Tests/Snapshots/`:
 
 ```sh
@@ -75,7 +75,7 @@ text field used to make the numbers wobble; the capture resigns first responder
 before rendering. Run it after any change to `SettingsView`.
 
 The Advanced pane shows the running version, so re-record with
-`Scripts/layout-check.sh --record` after each version bump; otherwise section 7
+`Scripts/layout-check.sh --record` after each version bump; otherwise section 9
 trips the tolerance for the right reason but the wrong cause.
 
 ## Manual macOS checklist

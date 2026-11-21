@@ -168,7 +168,9 @@ struct OnboardingView: View {
             if preset != .essentials {
                 Section("Editor and terminal") {
                     TextField("Editor", text: $config.editorOpenWith)
+                        .settingsField()
                     TextField("Terminal", text: $config.terminalApp)
+                        .settingsField()
                     if let detected = detectedEditor {
                         Button("Use \(detected)") { config.editorOpenWith = detected }
                             .controlSize(.small)

@@ -360,8 +360,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Drop the blinking caret: focused text fields made snapshot diffs
         // flicker by a percent between runs.
         settingsWindow?.makeFirstResponder(nil)
+        // A key window draws accent controls red and a background one grey;
+        // hide the window first so a shell-launched run always captures the
+        // same (background) look.
+        settingsWindow?.orderOut(nil)
         guard let view = settingsWindow?.contentView else { return }
         write(view: view, to: destination)
+        settingsWindow?.orderFrontRegardless()
     }
 
     private func writeOnboardingSnapshot(to destination: String) {
@@ -1619,7 +1624,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // A themed (not transparent) titlebar keeps AppKit's native window drag.
         window.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
         window.titlebarAppearsTransparent = false
-        window.titleVisibility = .hidden
+        window.titleVisibility = .visible
         window.titlebarSeparatorStyle = .none
         window.appearance = NSAppearance(named: themeManager.theme.appearance == "light" ? .aqua : .darkAqua)
         window.contentView = makeSettingsHostingView()

@@ -13,16 +13,18 @@ struct ProviderSettingsInfo: Identifiable, Equatable {
 }
 
 private enum SettingsTab: Int, CaseIterable, Identifiable {
-    case general, shortcuts, appearance, clipboard, search, ask, providers, advanced
+    case general, launcher, appearance, shortcuts, clipboard, search, capture, ask, providers, advanced
 
     var id: Int { rawValue }
     var title: String {
         switch self {
         case .general: return "General"
-        case .shortcuts: return "Shortcuts"
+        case .launcher: return "Launcher"
         case .appearance: return "Appearance"
+        case .shortcuts: return "Shortcuts"
         case .clipboard: return "Clipboard"
         case .search: return "Search"
+        case .capture: return "Capture"
         case .ask: return "Ask"
         case .providers: return "Providers"
         case .advanced: return "Advanced"
@@ -31,14 +33,78 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "slider.horizontal.3"
-        case .shortcuts: return "command"
+        case .launcher: return "rectangle.topthird.inset.filled"
         case .appearance: return "paintpalette"
+        case .shortcuts: return "command"
         case .clipboard: return "doc.on.clipboard"
         case .search: return "magnifyingglass"
+        case .capture: return "camera"
         case .ask: return "sparkles"
         case .providers: return "square.stack.3d.up"
         case .advanced: return "gearshape.2"
         }
+    }
+    /// Fixed tile colours like System Settings, deliberately not read from the
+    /// theme so the icons look the same in light and dark.
+    var tint: Color {
+        switch self {
+        case .general: return Color(red: 0.55, green: 0.56, blue: 0.58)
+        case .launcher: return Color(red: 0.00, green: 0.48, blue: 1.00)
+        case .appearance: return Color(red: 0.69, green: 0.32, blue: 0.87)
+        case .shortcuts: return Color(red: 1.00, green: 0.58, blue: 0.00)
+        case .clipboard: return Color(red: 0.19, green: 0.69, blue: 0.78)
+        case .search: return Color(red: 0.20, green: 0.78, blue: 0.35)
+        case .capture: return Color(red: 0.96, green: 0.29, blue: 0.35)
+        case .ask: return Color(red: 0.72, green: 0.38, blue: 0.95)
+        case .providers: return Color(red: 0.61, green: 0.44, blue: 0.31)
+        case .advanced: return Color(red: 0.42, green: 0.45, blue: 0.50)
+        }
+    }
+}
+
+private struct SettingsTabGroup: Identifiable {
+    var id: String { title }
+    var title: String
+    var tabs: [SettingsTab]
+}
+
+private extension SettingsTab {
+    static let sidebarGroups: [SettingsTabGroup] = [
+        SettingsTabGroup(title: "General", tabs: [.general, .launcher, .appearance]),
+        SettingsTabGroup(title: "Features", tabs: [.shortcuts, .clipboard, .search, .capture, .ask]),
+        SettingsTabGroup(title: "System", tabs: [.providers, .advanced]),
+    ]
+}
+
+/// A System Settings–style tile: a small rounded gradient square holding a
+/// white symbol, so each sidebar row reads at a glance.
+private struct SettingsTabIcon: View {
+    var tab: SettingsTab
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [tab.tint, tab.tint.opacity(0.72)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(width: 22, height: 22)
+            .overlay {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// Every editable field in Settings and Onboarding uses the same bordered
+/// field, so a setting looks like an input instead of another label.
+extension View {
+    func settingsField() -> some View {
+        textFieldStyle(.roundedBorder)
     }
 }
 
@@ -46,7 +112,54 @@ private struct SettingsDestination: Identifiable {
     var id: String { "\(tab.rawValue)-\(title)" }
     var title: String
     var tab: SettingsTab
+    /// Matches the `.searchTarget(_:)` id on the row or section this entry
+    /// points at, so picking a result can scroll to it.
+    var anchor: String
     var keywords: String
+}
+
+/// A picked search result. `token` lets the same anchor fire twice in a row.
+private struct SettingsJump: Equatable {
+    var anchor: String
+    var token: Int
+}
+
+private struct SettingsHighlightKey: EnvironmentKey {
+    static let defaultValue: String? = nil
+}
+
+private extension EnvironmentValues {
+    var settingsHighlight: String? {
+        get { self[SettingsHighlightKey.self] }
+        set { self[SettingsHighlightKey.self] = newValue }
+    }
+}
+
+/// Marks a search target: gives the row a stable scroll id and pulses a
+/// rounded background behind its label — not the whole Form row — when a
+/// search result lands on it.
+private struct SettingsSearchTarget: ViewModifier {
+    @Environment(\.settingsHighlight) private var highlight
+    let anchor: String
+
+    func body(content: Content) -> some View {
+        content
+            .id(anchor)
+            .background {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.accentColor.opacity(highlight == anchor ? 0.3 : 0))
+                    // Negative insets keep the label where it was when idle.
+                    .padding(.horizontal, -5)
+                    .padding(.vertical, -2)
+            }
+            .animation(.easeInOut(duration: 0.3), value: highlight)
+    }
+}
+
+private extension View {
+    func searchTarget(_ anchor: String) -> some View {
+        modifier(SettingsSearchTarget(anchor: anchor))
+    }
 }
 
 struct SettingsView: View {
@@ -64,6 +177,8 @@ struct SettingsView: View {
     @State private var windowRecordToken = 0
     @State private var recordingRecordToken = 0
     @State private var settingsSearch = ""
+    @State private var settingsJump: SettingsJump?
+    @State private var settingsHighlight: String?
     @State private var accessibilityTrusted: Bool
     @State private var askKeyInput = ""
     @State private var askKeyStored: Bool
@@ -140,23 +255,37 @@ struct SettingsView: View {
                     .padding(.vertical, 8)
 
                 List(selection: $selectedTab) {
-                    ForEach(SettingsTab.allCases) { tab in
-                        Label(tab.title, systemImage: tab.icon)
-                            .font(theme.font(size: 12))
-                            .tag(tab)
+                    ForEach(SettingsTab.sidebarGroups) { group in
+                        Section(group.title) {
+                            ForEach(group.tabs) { tab in
+                                Label {
+                                    Text(tab.title)
+                                } icon: {
+                                    SettingsTabIcon(tab: tab)
+                                }
+                                .font(theme.font(size: 12))
+                                .tag(tab)
+                            }
+                        }
                     }
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
             }
             .background(theme.color(theme.palette.bg).opacity(0.35))
-            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
+            .navigationSplitViewColumnWidth(220)
         } detail: {
             VStack(spacing: 0) {
                 if settingsSearch.trimmingCharacters(in: .whitespaces).isEmpty {
-                    selectedSettingsContent
-                        .scrollContentBackground(.hidden)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ScrollViewReader { proxy in
+                        selectedSettingsContent
+                            .scrollContentBackground(.hidden)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .environment(\.settingsHighlight, settingsHighlight)
+                            .task(id: settingsJump) {
+                                await jumpToSearchTarget(settingsJump, proxy: proxy)
+                            }
+                    }
                 } else {
                     settingsSearchResults
                 }
@@ -178,7 +307,6 @@ struct SettingsView: View {
             guard let index = note.object as? Int, let tab = SettingsTab(rawValue: index) else { return }
             selectedTab = tab
         }
-        .toolbar(.hidden, for: .windowToolbar)
         .frame(minWidth: 820, minHeight: 560)
         .background(
             ZStack {
@@ -200,6 +328,8 @@ struct SettingsView: View {
         }
     }
 
+    /// Hand-built rather than `.searchable`: the system field cannot render the
+    /// custom result list or drive the jump-and-pulse, so the sidebar keeps it.
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
@@ -224,40 +354,76 @@ struct SettingsView: View {
         )
     }
 
-    /// A stepper that keeps its control visible. `Stepper("label", …)` and
-    /// `Stepper { LabeledContent }` both squeezed the control to a sliver in a
-    /// grouped form, leaving only the arrows at the window edge.
-    private func stepperRow(
+    /// Grouped-form footers render trailing-aligned here, so take the full row
+    /// and pin the text to the leading edge.
+    private func settingsFooter(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func clamped(_ value: Binding<Int>, to range: ClosedRange<Int>) -> Binding<Int> {
+        Binding(
+            get: { min(range.upperBound, max(range.lowerBound, value.wrappedValue)) },
+            set: { value.wrappedValue = min(range.upperBound, max(range.lowerBound, $0)) }
+        )
+    }
+
+    private func clamped(_ value: Binding<Double>, to range: ClosedRange<Double>) -> Binding<Double> {
+        Binding(
+            get: { min(range.upperBound, max(range.lowerBound, value.wrappedValue)) },
+            set: { value.wrappedValue = min(range.upperBound, max(range.lowerBound, $0)) }
+        )
+    }
+
+    /// Label, editable number field, optional unit, and the stepper arrows.
+    /// The binding is clamped on write, so a typed value cannot leave `range`
+    /// even though the field commits only when it loses focus.
+    private func numericRow(
         _ title: String,
-        display: String,
         value: Binding<Int>,
         in range: ClosedRange<Int>,
-        step: Int
+        step: Int = 1,
+        unit: String = ""
     ) -> some View {
-        LabeledContent(title) {
-            HStack(spacing: 8) {
-                if !display.isEmpty {
-                    Text(display).monospacedDigit()
+        let bound = clamped(value, to: range)
+        return LabeledContent(title) {
+            HStack(spacing: 6) {
+                TextField(title, value: bound, format: .number)
+                    .labelsHidden()
+                    .settingsField()
+                    .frame(width: 72)
+                    .multilineTextAlignment(.trailing)
+                if !unit.isEmpty {
+                    Text(unit).foregroundStyle(.secondary)
                 }
-                Stepper(value: value, in: range, step: step) { EmptyView() }
+                Stepper("", value: bound, in: range, step: step)
                     .labelsHidden()
             }
         }
     }
 
-    private func stepperRow(
+    private func numericRow(
         _ title: String,
-        display: String,
         value: Binding<Double>,
         in range: ClosedRange<Double>,
-        step: Double
+        step: Double = 1,
+        unit: String = ""
     ) -> some View {
-        LabeledContent(title) {
-            HStack(spacing: 8) {
-                if !display.isEmpty {
-                    Text(display).monospacedDigit()
+        let bound = clamped(value, to: range)
+        return LabeledContent(title) {
+            HStack(spacing: 6) {
+                TextField(title, value: bound, format: .number.precision(.fractionLength(0...2)))
+                    .labelsHidden()
+                    .settingsField()
+                    .frame(width: 72)
+                    .multilineTextAlignment(.trailing)
+                if !unit.isEmpty {
+                    Text(unit).foregroundStyle(.secondary)
                 }
-                Stepper(value: value, in: range, step: step) { EmptyView() }
+                Stepper("", value: bound, in: range, step: step)
                     .labelsHidden()
             }
         }
@@ -282,10 +448,19 @@ struct SettingsView: View {
         )
     }
 
-    private var scaleBinding: Binding<Double> {
+    /// Stored as 0.8–1.6; the field reads as a percentage.
+    private var scalePercentBinding: Binding<Double> {
         Binding(
-            get: { config.window.effectiveScale },
-            set: { config.window.scale = min(1.6, max(0.8, $0)) }
+            get: { (config.window.effectiveScale * 100).rounded() },
+            set: { config.window.scale = min(1.6, max(0.8, $0 / 100)) }
+        )
+    }
+
+    /// Stored in milliseconds; the field reads as seconds.
+    private var clearAfterSecondsBinding: Binding<Int> {
+        Binding(
+            get: { config.clipboard.clearAfterMs / 1_000 },
+            set: { config.clipboard.clearAfterMs = $0 * 1_000 }
         )
     }
 
@@ -293,10 +468,12 @@ struct SettingsView: View {
     private var selectedSettingsContent: some View {
         switch selectedTab {
         case .general: general
-        case .shortcuts: shortcuts
+        case .launcher: launcher
         case .appearance: appearance
+        case .shortcuts: shortcuts
         case .clipboard: clipboard
         case .search: search
+        case .capture: capture
         case .ask: ask
         case .providers: providerSettings
         case .advanced: advanced
@@ -309,21 +486,28 @@ struct SettingsView: View {
 
     private var destinations: [SettingsDestination] {
         [
-            .init(title: "Global shortcuts", tab: .shortcuts, keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record screen region window"),
-            .init(title: "Apps and editor", tab: .general, keywords: "terminal editor neovide kitty external app"),
-            .init(title: "Embedded terminal", tab: .general, keywords: "terminal session zellij tmux fish shell font"),
-            .init(title: "Startup", tab: .general, keywords: "login start startup launch item"),
-            .init(title: "Permissions", tab: .general, keywords: "accessibility permission paste automation"),
-            .init(title: "Launcher position and app order", tab: .general, keywords: "top center alphabetical frequent layout tabs chips providers show"),
-            .init(title: "Themes", tab: .appearance, keywords: "theme dark light catppuccin gruvbox aetheria"),
-            .init(title: "Typography and fonts", tab: .appearance, keywords: "font family size mono typography"),
-            .init(title: "Clipboard history", tab: .clipboard, keywords: "clipboard history entries poll clear retention"),
-            .init(title: "Web search", tab: .search, keywords: "web search engine google duckduckgo github youtube"),
-            .init(title: "Web app browser", tab: .search, keywords: "browser helium chrome chromium web app"),
-            .init(title: "Ask models and API key", tab: .ask, keywords: "ask model api key token endpoint history retention"),
-            .init(title: "Provider order and aliases", tab: .providers, keywords: "provider order alias visibility trigger"),
-            .init(title: "Backup and diagnostics", tab: .advanced, keywords: "backup export restore diagnostics crash log version"),
-            .init(title: "Configuration files", tab: .advanced, keywords: "config providers themes log folder file"),
+            .init(title: "Startup", tab: .general, anchor: "general-startup", keywords: "login start startup launch item"),
+            .init(title: "Permissions", tab: .general, anchor: "general-permissions", keywords: "accessibility permission paste automation"),
+            .init(title: "Power and keep awake", tab: .general, anchor: "general-power", keywords: "awake clamshell lid sleep power"),
+            .init(title: "Notifications and timers", tab: .general, anchor: "general-notifications", keywords: "timer sound notification finish"),
+            .init(title: "Apps and editor", tab: .general, anchor: "general-apps", keywords: "terminal editor neovide kitty external app detect reset"),
+            .init(title: "Embedded terminal", tab: .general, anchor: "general-terminal", keywords: "terminal session zellij tmux fish shell font"),
+            .init(title: "Launcher position and tabs", tab: .launcher, anchor: "launcher-tabs", keywords: "top center app order alphabetical frequent provider tabs chips show"),
+            .init(title: "Launcher size", tab: .launcher, anchor: "launcher-size", keywords: "width rows scale preview layout fit screen"),
+            .init(title: "Command prefix", tab: .launcher, anchor: "launcher-commands", keywords: "prefix provider command slash"),
+            .init(title: "Themes", tab: .appearance, anchor: "appearance-theme", keywords: "theme dark light catppuccin gruvbox aetheria"),
+            .init(title: "Typography and fonts", tab: .appearance, anchor: "appearance-typography", keywords: "font family size mono typography"),
+            .init(title: "Global shortcuts", tab: .shortcuts, anchor: "shortcuts-global", keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record screen region window"),
+            .init(title: "Clipboard history", tab: .clipboard, anchor: "clipboard-history", keywords: "clipboard history entries poll clear retention secrets"),
+            .init(title: "Web search", tab: .search, anchor: "search-web", keywords: "web search engine google duckduckgo github youtube"),
+            .init(title: "Search engines and bangs", tab: .search, anchor: "search-engines", keywords: "engine url keyword bang !g"),
+            .init(title: "Bookmarks", tab: .search, anchor: "search-bookmarks", keywords: "bookmark url keywords browser"),
+            .init(title: "Web app browser", tab: .search, anchor: "search-webapps", keywords: "browser helium chrome chromium web app"),
+            .init(title: "Screenshots and recordings", tab: .capture, anchor: "capture-screenshots", keywords: "screenshot capture record audio microphone delay format save folder gallery"),
+            .init(title: "Ask models and API key", tab: .ask, anchor: "ask-model", keywords: "ask model api key token endpoint history retention"),
+            .init(title: "Provider order and aliases", tab: .providers, anchor: "providers-order", keywords: "provider order alias visibility trigger"),
+            .init(title: "Backup and diagnostics", tab: .advanced, anchor: "advanced-backup", keywords: "backup export restore diagnostics crash log version"),
+            .init(title: "Configuration files", tab: .advanced, anchor: "advanced-config", keywords: "config providers themes log folder file"),
         ]
     }
 
@@ -337,6 +521,10 @@ struct SettingsView: View {
             Button {
                 selectedTab = destination.tab
                 settingsSearch = ""
+                settingsJump = SettingsJump(
+                    anchor: destination.anchor,
+                    token: (settingsJump?.token ?? 0) + 1
+                )
             } label: {
                 HStack {
                     Text(destination.title)
@@ -355,6 +543,31 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Centre the row a search result points at, then pulse its label for two
+    /// seconds. The short delay lets the freshly switched tab lay out its Form.
+    @MainActor
+    private func jumpToSearchTarget(_ jump: SettingsJump?, proxy: ScrollViewProxy) async {
+        guard let jump else { return }
+        do {
+            try await Task.sleep(for: .milliseconds(160))
+            proxy.scrollTo(jump.anchor, anchor: .center)
+            settingsHighlight = jump.anchor
+            // Form rows lay out lazily, so the first scroll can stop short on a
+            // long tab; centre again once the whole form has been measured.
+            try await Task.sleep(for: .milliseconds(400))
+            withAnimation(.easeInOut(duration: 0.3)) {
+                proxy.scrollTo(jump.anchor, anchor: .center)
+            }
+            try await Task.sleep(for: .seconds(2))
+            if settingsHighlight == jump.anchor { settingsHighlight = nil }
+        } catch {
+            // Leaving search cancels the pulse; a newer jump replaces it.
+            if settingsJump == jump, settingsHighlight == jump.anchor {
+                settingsHighlight = nil
+            }
+        }
     }
 
     private func detectDefaults() {
@@ -465,12 +678,14 @@ struct SettingsView: View {
 
     private var shortcuts: some View {
         Form {
-            Section("Global shortcuts") {
+            Section {
                 shortcutRow("Launcher shortcut", value: $config.hotkey, token: $launcherRecordToken, label: "Launcher hotkey")
                 shortcutRow("Clipboard shortcut", value: $config.clipboardHotkey, token: $clipboardRecordToken, label: "Clipboard hotkey")
                 shortcutRow("Terminal shortcut", value: $config.terminalHotkey, token: $terminalRecordToken, label: "Terminal hotkey")
                 shortcutRow("Scratchpad shortcut", value: $config.scratchpadHotkey, token: $scratchpadRecordToken, label: "Scratchpad hotkey")
                 shortcutRow("Ask shortcut", value: $config.askHotkey, token: $askRecordToken, label: "Ask hotkey")
+            } header: {
+                Text("Global shortcuts").searchTarget("shortcuts-global")
             }
             Section("Screenshots and recording") {
                 shortcutRow("Screen shortcut", value: $config.screenshotHotkey, token: $screenshotRecordToken, label: "Screen hotkey")
@@ -517,92 +732,16 @@ struct SettingsView: View {
 
     private var general: some View {
         Form {
-            Section("Keep Awake") {
-                Toggle("Keep Mac Awake", isOn: keepAwakeBinding)
-                Toggle("Clamshell Mode (Lid Closed)", isOn: clamshellBinding)
-                Text(keepAwakeSummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if let keepAwakeMessage {
-                    Text(keepAwakeMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-                Text("Clamshell uses the standard administrator prompt and keeps working with the lid shut only on AC power. Turning it off leaves an active keep-awake timer alone.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section {
+                Toggle("Open Palette at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
+            } header: {
+                Text("Startup").searchTarget("general-startup")
+            } footer: {
+                settingsFooter("Applies immediately. If macOS asks for approval, allow Palette under System Settings › General › Login Items.")
             }
-            Section("Defaults") {
-                TextField("Editor", text: $config.editorOpenWith)
-                TextField("Terminal", text: $config.terminalApp)
-                Picker("Web app browser", selection: $config.webAppBrowser) {
-                    ForEach(BrowserCatalog.chromiumChoices, id: \.self) { browser in
-                        Text(browser).tag(browser)
-                    }
-                }
-                Picker("Theme", selection: $config.theme.dark) {
-                    ForEach(themeNames, id: \.self) { name in
-                        Text(name).tag(name)
-                    }
-                }
-                Picker("Ask model", selection: $config.ask.model) {
-                    ForEach(AskModel.models(for: config.ask.endpoint)) { model in
-                        Text(model.free ? "FREE · \(model.name)" : "\(model.name) · \(model.note)")
-                            .tag(model.id)
-                    }
-                }
-                HStack {
-                    Button("Detect Installed Apps") { detectDefaults() }
-                    Button("Reset App and Theme Defaults") { resetDefaults() }
-                }
-                if let defaultsMessage {
-                    Text(defaultsMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text("These are Palette's opinionated defaults. Change them here or in the sections below; reset only affects app, theme, Ask, and terminal-session settings.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Apps") {
-                TextField("Terminal", text: $config.terminalApp)
-                TextField("Editor", text: $config.editorOpenWith)
-                Text("Used by projects, commands, Zellij, and Bitwarden. Examples: kitty, Terminal, neovide.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Embedded terminal") {
-                Picker("Session", selection: $config.terminalSession.multiplexer) {
-                    Text("Auto").tag(TerminalMultiplexer.auto)
-                    Text("Zellij").tag(TerminalMultiplexer.zellij)
-                    Text("tmux").tag(TerminalMultiplexer.tmux)
-                    Text("Plain shell").tag(TerminalMultiplexer.none)
-                }
-                TextField("Session name", text: $config.terminalSession.name)
-                Picker("Shell", selection: $terminalShellChoice) {
-                    Text("Auto (fish, then zsh)").tag("auto")
-                    Text("Fish").tag("fish")
-                    Text("Zsh").tag("zsh")
-                    Text("Custom…").tag("custom")
-                }
-                if terminalShellChoice == "custom" {
-                    TextField("Custom shell executable", text: $config.terminalSession.shell)
-                }
-                TextField("Font family", text: $config.terminalSession.font)
-                Stepper(
-                    "Font size: \(config.terminalSession.fontSize == 0 ? "auto" : "\(Int(config.terminalSession.fontSize)) pt")",
-                    value: $config.terminalSession.fontSize,
-                    in: 0...48,
-                    step: 1
-                )
-                Text("Empty font and size auto-detect Kitty's font, then the theme mono font. Use a Nerd Font for icons.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("Auto uses Zellij, then tmux, then a plain shell. Plain shell sessions end when the panel closes.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Permissions") {
+
+            Section {
                 HStack {
                     Image(systemName: accessibilityTrusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(accessibilityTrusted ? .green : .orange)
@@ -611,7 +750,7 @@ struct SettingsView: View {
                     Text(accessibilityTrusted ? "Enabled" : "Not granted")
                         .foregroundStyle(.secondary)
                 }
-                HStack {
+                HStack(spacing: 8) {
                     Button("Open Accessibility Settings") {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                             NSWorkspace.shared.open(url)
@@ -622,45 +761,139 @@ struct SettingsView: View {
                     }
                     .controlSize(.small)
                 }
-                Text("Needed for direct paste and recording system shortcuts. A new install may require granting once; subsequent updates keep the same signature.")
+            } header: {
+                Text("Permissions").searchTarget("general-permissions")
+            } footer: {
+                settingsFooter("Needed for direct paste and recording system shortcuts. A new install may require granting once; subsequent updates keep the same signature.")
+            }
+
+            Section {
+                Toggle("Keep Mac Awake", isOn: keepAwakeBinding)
+                Toggle("Clamshell Mode (Lid Closed)", isOn: clamshellBinding)
+                Text(keepAwakeSummary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let keepAwakeMessage {
+                    Text(keepAwakeMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("Power").searchTarget("general-power")
+            } footer: {
+                settingsFooter("Clamshell uses the standard administrator prompt and keeps working with the lid shut only on AC power. Turning it off leaves an active keep-awake timer alone.")
             }
-            Section("Startup") {
-                Toggle("Open at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
-                Text("Applies immediately. If macOS asks for approval, allow Palette under System Settings > General > Login Items.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+            Section {
+                Toggle("Play a sound when a timer finishes", isOn: $config.timer.sound)
+                Toggle("Show a notification when a timer finishes", isOn: $config.timer.notify)
+            } header: {
+                Text("Notifications").searchTarget("general-notifications")
+            } footer: {
+                settingsFooter("Presets (minutes) are set with [timer] presets in config.toml. Use /timer 25m, /timer 1h30m or /timer 1:30 to start any duration.")
             }
-            Section("Launcher") {
+
+            Section {
+                TextField("Editor", text: $config.editorOpenWith)
+                    .settingsField()
+                TextField("Terminal", text: $config.terminalApp)
+                    .settingsField()
+                HStack(spacing: 8) {
+                    Button("Detect Installed Apps") { detectDefaults() }
+                    Button("Reset App and Theme Defaults") { resetDefaults() }
+                }
+                if let defaultsMessage {
+                    Text(defaultsMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Apps").searchTarget("general-apps")
+            } footer: {
+                settingsFooter("Used by projects, commands, Zellij, and Bitwarden. Examples: neovide, Visual Studio Code, Cursor, kitty, Terminal. Reset also restores the theme, Ask, and terminal-session defaults.")
+            }
+
+            Section {
+                Picker("Session", selection: $config.terminalSession.multiplexer) {
+                    Text("Auto").tag(TerminalMultiplexer.auto)
+                    Text("Zellij").tag(TerminalMultiplexer.zellij)
+                    Text("tmux").tag(TerminalMultiplexer.tmux)
+                    Text("Plain shell").tag(TerminalMultiplexer.none)
+                }
+                TextField("Session name", text: $config.terminalSession.name)
+                    .settingsField()
+                Picker("Shell", selection: $terminalShellChoice) {
+                    Text("Auto (fish, then zsh)").tag("auto")
+                    Text("Fish").tag("fish")
+                    Text("Zsh").tag("zsh")
+                    Text("Custom…").tag("custom")
+                }
+                if terminalShellChoice == "custom" {
+                    TextField("Custom shell executable", text: $config.terminalSession.shell)
+                        .settingsField()
+                }
+                TextField("Font family", text: $config.terminalSession.font)
+                    .settingsField()
+                numericRow("Font size", value: $config.terminalSession.fontSize,
+                           in: 0...48, step: 1, unit: "pt")
+            } header: {
+                Text("Embedded terminal").searchTarget("general-terminal")
+            } footer: {
+                settingsFooter("Auto uses Zellij, then tmux, then a plain shell; plain shell sessions end when the panel closes. Empty font and a size of 0 auto-detect Kitty's font, then the theme mono font. Use a Nerd Font for icons.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var launcher: some View {
+        Form {
+            Section {
                 Picker("Opens at", selection: $config.searchPosition) {
                     Text("Top").tag(SearchPosition.top)
                     Text("Center").tag(SearchPosition.center)
                 }
                 .pickerStyle(.segmented)
-                Text("Top drops down from the menu bar; Center opens in the middle of the screen.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Position")
+            } footer: {
+                settingsFooter("Top drops down from the menu bar; Center opens in the middle of the screen.")
+            }
+
+            Section {
+                Toggle("Show provider tabs", isOn: $config.window.showTabs)
                 Picker("App order", selection: $config.appSort) {
                     Text("Alphabetical").tag(AppSort.alphabetical)
                     Text("Most used").tag(AppSort.frequent)
                 }
                 Toggle("Fit to the active screen", isOn: $config.window.autoSize)
-                Toggle("Show provider tabs", isOn: $config.window.showTabs)
-                stepperRow("Width", display: "\(Int(widthBinding.wrappedValue)) pt",
-                           value: widthBinding, in: 560...1_400, step: 20)
-                stepperRow("Visible rows", display: "\(visibleRowsBinding.wrappedValue)",
-                           value: visibleRowsBinding, in: 5...10, step: 1)
-                stepperRow("Scale", display: String(format: "%.0f%%", scaleBinding.wrappedValue * 100),
-                           value: scaleBinding, in: 0.8...1.6, step: 0.05)
+            } header: {
+                Text("Tabs and order").searchTarget("launcher-tabs")
+            } footer: {
+                settingsFooter("Provider tabs are the chip strip above the list. Turn individual providers on or off in the Providers tab. Fit sizes the launcher to the screen under the pointer.")
+            }
+
+            Section {
+                numericRow("Width", value: widthBinding, in: 560...1_400, step: 20, unit: "pt")
+                numericRow("Visible rows", value: visibleRowsBinding, in: 5...10, step: 1)
+                numericRow("Scale", value: scalePercentBinding, in: 80...160, step: 5, unit: "%")
                 Picker("Preview", selection: $config.window.previewLayout) {
                     Text("Below the list").tag(PreviewPlacement.below)
                     Text("Beside the list").tag(PreviewPlacement.beside)
                 }
-                Text("Scale multiplies every launcher size, like rem; width and rows override it. Clipboard, Ask, preview, terminal, and scratchpad widths are in config.toml under [window].")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Size").searchTarget("launcher-size")
+            } footer: {
+                settingsFooter("Scale multiplies every launcher size, like rem; width and rows override it. Clipboard, Ask, preview, terminal, and scratchpad widths are in config.toml under [window].")
+            }
+
+            Section {
+                TextField("Command prefix", text: $config.providerPrefix)
+                    .settingsField()
+                    .frame(width: 92)
+            } header: {
+                Text("Commands").searchTarget("launcher-commands")
+            } footer: {
+                settingsFooter("Prefix for provider commands such as /clip and /port. Usually /.")
             }
         }
         .formStyle(.grouped)
@@ -668,7 +901,7 @@ struct SettingsView: View {
 
     private var appearance: some View {
         Form {
-            Section("Theme") {
+            Section {
                 Picker("Mode", selection: $config.theme.mode) {
                     Text("Auto").tag(ThemeMode.auto)
                     Text("Dark").tag(ThemeMode.dark)
@@ -682,32 +915,29 @@ struct SettingsView: View {
                     ForEach(themeNames, id: \.self) { Text(displayName($0)).tag($0) }
                 }
                 Button("Open Themes Folder") { onOpen(PalettePaths.resolve().themesDir) }
+            } header: {
+                Text("Theme").searchTarget("appearance-theme")
+            } footer: {
+                settingsFooter("Theme files use TOML. See THEMING.html in the repository; saving this window reloads the active theme.")
             }
-            Section("Typography") {
+
+            Section {
                 Picker("UI family", selection: $config.typography.uiFamily) {
                     Text("Inherit from theme").tag("")
                     ForEach(fontFamilies, id: \.self) { Text($0).tag($0) }
                 }
-                TextField("Or type a family name", text: $config.typography.uiFamily)
-                stepperRow(
-                    "UI size: \(config.typography.uiSize == 0 ? "theme" : "\(Int(config.typography.uiSize)) pt")",
-                    display: "",
-                    value: $config.typography.uiSize,
-                    in: 0...48,
-                    step: 1
-                )
+                TextField("Or type a UI family name", text: $config.typography.uiFamily)
+                    .settingsField()
+                numericRow("UI size", value: $config.typography.uiSize,
+                           in: 0...48, step: 1, unit: "pt")
                 Picker("Mono family", selection: $config.typography.monoFamily) {
                     Text("Inherit from theme").tag("")
                     ForEach(fontFamilies, id: \.self) { Text($0).tag($0) }
                 }
                 TextField("Or type a mono family name", text: $config.typography.monoFamily)
-                stepperRow(
-                    "Mono size: \(config.typography.monoSize == 0 ? "theme" : "\(Int(config.typography.monoSize)) pt")",
-                    display: "",
-                    value: $config.typography.monoSize,
-                    in: 0...48,
-                    step: 1
-                )
+                    .settingsField()
+                numericRow("Mono size", value: $config.typography.monoSize,
+                           in: 0...48, step: 1, unit: "pt")
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Preview").font(.caption).foregroundStyle(.secondary)
                     Text("Palette — quick, local, yours")
@@ -725,11 +955,10 @@ struct SettingsView: View {
                 Button("Reset to Theme") {
                     config.typography = TypographyConfig()
                 }
-            }
-            Section {
-                Text("Theme files use TOML. See THEMING.html; saving this window reloads the active theme.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Typography").searchTarget("appearance-typography")
+            } footer: {
+                settingsFooter("A size of 0 inherits the theme. The family pickers list installed fonts; the fields below accept any family name.")
             }
         }
         .formStyle(.grouped)
@@ -737,16 +966,18 @@ struct SettingsView: View {
 
     private var clipboard: some View {
         Form {
-            Section("History") {
-                Toggle("Record clipboard history", isOn: $config.clipboard.enabled)
-                Stepper("Keep \(config.clipboard.maxEntries) entries", value: $config.clipboard.maxEntries, in: 50...50_000, step: 500)
-                Stepper("Poll every \(config.clipboard.pollMs) ms", value: $config.clipboard.pollMs, in: 200...2_000, step: 50)
-                Stepper("Clear secrets after \(config.clipboard.clearAfterMs / 1_000) s", value: $config.clipboard.clearAfterMs, in: 0...300_000, step: 5_000)
-            }
             Section {
-                Text("Text and PNG images are stored. Anything marked concealed by another app is never recorded.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Toggle("Record clipboard history", isOn: $config.clipboard.enabled)
+                numericRow("Maximum entries", value: $config.clipboard.maxEntries,
+                           in: 50...50_000, step: 500)
+                numericRow("Poll interval", value: $config.clipboard.pollMs,
+                           in: 200...2_000, step: 50, unit: "ms")
+                numericRow("Clear copied secrets after", value: clearAfterSecondsBinding,
+                           in: 0...300, step: 5, unit: "s")
+            } header: {
+                Text("History").searchTarget("clipboard-history")
+            } footer: {
+                settingsFooter("Text and PNG images are stored. Anything marked concealed by another app is never recorded. A clear-after value of 0 seconds keeps secrets until you clear the history.")
             }
         }
         .formStyle(.grouped)
@@ -754,31 +985,20 @@ struct SettingsView: View {
 
     private var search: some View {
         Form {
-            Section("Web search") {
+            Section {
                 Toggle("Show web results in search", isOn: $config.webSearchEnabled)
-                Text("When a query does not match an app or file, Palette offers a browser search.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                ForEach(webSearchChoices) { engine in
-                    Toggle(engine.name, isOn: Binding(
-                        get: { engines.contains { $0.id == engine.id } },
-                        set: { enabled in
-                            if enabled {
-                                if !engines.contains(where: { $0.id == engine.id }) {
-                                    engines.append(engine)
-                                }
-                            } else {
-                                engines.removeAll { $0.id == engine.id }
-                            }
-                        }
-                    ))
-                }
+            } header: {
+                Text("Web search").searchTarget("search-web")
+            } footer: {
+                settingsFooter("When a query does not match an app or file, Palette offers a browser search.")
             }
-            DisclosureGroup("Advanced: custom engines") {
+
+            Section {
                 ForEach($engines) { $engine in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
                             TextField("Name", text: $engine.name)
+                                .settingsField()
                             Button {
                                 engines.removeAll { $0.id == engine.id }
                             } label: {
@@ -788,38 +1008,40 @@ struct SettingsView: View {
                             .help("Remove engine")
                         }
                         TextField("Search URL with {query}", text: $engine.urlTemplate)
+                            .settingsField()
                         TextField("Keyword (!bang)", text: Binding(
                             get: { engine.keyword ?? "" },
                             set: { engine.keyword = $0.isEmpty ? nil : $0 }
                         ))
+                        .settingsField()
                         BrowserPicker(browser: $engine.browser)
                     }
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 4)
                 }
-                Button("Add Engine") {
-                    engines.append(WebSearchEngine(
-                        name: "New Engine",
-                        urlTemplate: "https://example.com/?q={query}"
-                    ))
+                HStack(spacing: 8) {
+                    Button("Add Engine") {
+                        engines.append(WebSearchEngine(
+                            name: "New Engine",
+                            urlTemplate: "https://example.com/?q={query}"
+                        ))
+                    }
+                    Button("Restore Defaults") {
+                        engines = WebSearchEngine.restoringDefaults(into: engines)
+                        config.webSearchEngines = engines
+                    }
                 }
-                Button("Restore Defaults") {
-                    engines = WebSearchEngine.restoringDefaults(into: engines)
-                    config.webSearchEngines = engines
-                }
+            } header: {
+                Text("Search engines").searchTarget("search-engines")
+            } footer: {
+                settingsFooter("Type !<keyword> in the launcher to search that engine, e.g. !g cats — set a keyword per engine above. The URL must contain {query}.")
             }
-            Section("Web apps") {
-                Picker("Open web apps in", selection: $config.webAppBrowser) {
-                    ForEach(BrowserCatalog.chromiumChoices, id: \.self) { Text($0).tag($0) }
-                }
-                Text("Chromium-based browsers only. Helium is the default.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Bookmarks") {
+
+            Section {
                 ForEach($bookmarks) { $bookmark in
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
+                        HStack(spacing: 8) {
                             TextField("Name", text: $bookmark.name)
+                                .settingsField()
                             Button {
                                 bookmarks.removeAll { $0.id == bookmark.id }
                             } label: {
@@ -829,6 +1051,7 @@ struct SettingsView: View {
                             .help("Remove bookmark")
                         }
                         TextField("URL", text: $bookmark.url)
+                            .settingsField()
                         BrowserPicker(browser: $bookmark.browser)
                         TextField("Keywords (comma separated)", text: Binding(
                             get: { bookmark.keywords.joined(separator: ", ") },
@@ -839,15 +1062,27 @@ struct SettingsView: View {
                                     .filter { !$0.isEmpty }
                             }
                         ))
+                        .settingsField()
                     }
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 4)
                 }
                 Button("Add bookmark") {
                     bookmarks.append(Bookmark(name: "", url: "", browser: ""))
                 }
-                Text("Bookmarks open in a normal browser window, in the browser you pick.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Bookmarks").searchTarget("search-bookmarks")
+            } footer: {
+                settingsFooter("Bookmarks open in a normal browser window, in the browser you pick.")
+            }
+
+            Section {
+                Picker("Open web apps in", selection: $config.webAppBrowser) {
+                    ForEach(BrowserCatalog.chromiumChoices, id: \.self) { Text($0).tag($0) }
+                }
+            } header: {
+                Text("Web apps").searchTarget("search-webapps")
+            } footer: {
+                settingsFooter("Chromium-based browsers only. Helium is the default.")
             }
         }
         .formStyle(.grouped)
@@ -859,9 +1094,97 @@ struct SettingsView: View {
         }
     }
 
+    private var capture: some View {
+        Form {
+            Section {
+                TextField("Save to", text: $config.capture.directory)
+                    .settingsField()
+                Picker("Action", selection: $config.capture.screenshotAction) {
+                    Text("Save").tag(CaptureAction.save)
+                    Text("Copy").tag(CaptureAction.copy)
+                    Text("Save and copy").tag(CaptureAction.saveCopy)
+                    Text("Save and preview").tag(CaptureAction.preview)
+                }
+                Picker("Format", selection: $config.capture.screenshotFormat) {
+                    Text("PNG").tag("png")
+                    Text("JPG").tag("jpg")
+                }
+                numericRow("Delay before capture", value: $config.capture.delay,
+                           in: 0...10, step: 1, unit: "s")
+            } header: {
+                Text("Screenshots").searchTarget("capture-screenshots")
+            } footer: {
+                settingsFooter("Use /shot or the screen, region, and window shortcuts. Save to supports ~ and is created on the first capture.")
+            }
+
+            Section {
+                Picker("Action", selection: $config.capture.recordingAction) {
+                    Text("Save").tag(CaptureAction.save)
+                    Text("Save and copy").tag(CaptureAction.saveCopy)
+                }
+                Picker("What to record", selection: $config.capture.recordingTarget) {
+                    Text("Whole screen").tag("screen")
+                    Text("A display").tag("display")
+                    Text("A region").tag("region")
+                }
+                if config.capture.recordingTarget == "display" {
+                    Picker("Display", selection: $config.capture.recordingDisplay) {
+                        ForEach(CaptureDisplays.active()) { display in
+                            Text(display.label).tag(display.index)
+                        }
+                    }
+                }
+                if config.capture.recordingTarget == "region" {
+                    TextField("Region (x,y,w,h)", text: $config.capture.recordingRegion)
+                        .settingsField()
+                }
+                Picker("Format", selection: $config.capture.recordingFormat) {
+                    Text("MOV").tag("mov")
+                    Text("MP4").tag("mp4")
+                }
+                Toggle("Record audio", isOn: $config.capture.recordingAudio)
+                Picker("Microphone", selection: $config.capture.recordingMicrophone) {
+                    Text("System default").tag("")
+                    ForEach(CaptureMicrophones.active(), id: \.id) { microphone in
+                        Text(microphone.name).tag(microphone.id)
+                    }
+                }
+                .disabled(!config.capture.recordingAudio)
+            } header: {
+                Text("Recordings")
+            } footer: {
+                settingsFooter("Use /rec to start or stop a recording. Recordings are saved with the system capture engine.")
+            }
+
+            Section {
+                Toggle("Hide Palette before capturing", isOn: $config.capture.hidePalette)
+                Toggle("Include the cursor", isOn: $config.capture.captureCursor)
+                Toggle("Show clicks while recording", isOn: $config.capture.showClicks)
+                Toggle("Shutter sound after a screenshot", isOn: $config.capture.captureSound)
+                Toggle("Show a thumbnail after a screenshot", isOn: $config.capture.captureThumbnail)
+                Toggle("Open the annotator after a screenshot", isOn: $config.capture.editAfterCapture)
+                Toggle("Preview recordings when they stop", isOn: $config.capture.previewRecording)
+            } header: {
+                Text("After the capture")
+            }
+
+            Section {
+                Picker("List", selection: $config.capture.gallery) {
+                    Text("Everything in the folder").tag("all")
+                    Text("Only Palette's captures").tag("palette")
+                }
+            } header: {
+                Text("Captures list")
+            } footer: {
+                settingsFooter("Controls what /shots shows: every image and video in the folder, or only Palette's own shot-* and rec-* files.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
     private var ask: some View {
         Form {
-            Section("Model") {
+            Section {
                 Picker("Provider", selection: $config.ask.endpoint) {
                     ForEach(AskEndpoint.allCases, id: \.self) { endpoint in
                         Text(endpoint.displayName).tag(endpoint)
@@ -878,14 +1201,16 @@ struct SettingsView: View {
                             .tag(model.id)
                     }
                 }
-                TextField("Max answer tokens", value: $config.ask.maxTokens, format: .number)
+                numericRow("Max answer tokens", value: $config.ask.maxTokens,
+                           in: 32...8_192, step: 32)
                 Toggle("Fall back to free or small models when quota runs out", isOn: $config.ask.fallback)
-                Text("Free models are listed first. If a free model is rate-limited, Ask tries the next free option, then the cheapest paid model from an endpoint where you have a key.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Model").searchTarget("ask-model")
+            } footer: {
+                settingsFooter("Free models are listed first. If a free model is rate-limited, Ask tries the next free option, then the cheapest paid model from an endpoint where you have a key.")
             }
 
-            Section("API key") {
+            Section {
                 if askKeyStored {
                     HStack {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
@@ -903,7 +1228,8 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     SecureField("Paste \(config.ask.endpoint.displayName) API key", text: $askKeyInput)
-                    HStack {
+                        .settingsField()
+                    HStack(spacing: 8) {
                         Button("Save Key") {
                             saveAskKey()
                         }
@@ -917,20 +1243,21 @@ struct SettingsView: View {
                 if let askKeyMessage {
                     Text(askKeyMessage).font(.caption).foregroundStyle(.secondary)
                 }
+            } header: {
+                Text("API key")
+            } footer: {
+                settingsFooter("Keys can also come from OPENCODE_API_KEY, OPENCODE_GO_API_KEY, or OPENAI_API_KEY for a shell-launched build. The app never logs a key.")
             }
 
-            Section("History") {
-                stepperRow("Keep \(config.ask.maxHistory) questions and answers", display: "",
-                           value: $config.ask.maxHistory, in: 10...20_000, step: 10)
-                Stepper("Delete answers older than \(config.ask.retentionDays) days", value: $config.ask.retentionDays, in: 1...3_650, step: 1)
-                Text("Ask History is the History sub-tab under /ask. Rows show the model, endpoint, age, duration, and token count.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             Section {
-                Text("Keys can also come from OPENCODE_API_KEY, OPENCODE_GO_API_KEY, or OPENAI_API_KEY for a shell-launched build. The app never logs a key.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                numericRow("Keep questions and answers", value: $config.ask.maxHistory,
+                           in: 10...20_000, step: 10)
+                numericRow("Delete answers older than", value: $config.ask.retentionDays,
+                           in: 1...3_650, step: 1, unit: "days")
+            } header: {
+                Text("History")
+            } footer: {
+                settingsFooter("Ask History is the History sub-tab under /ask. Rows show the model, endpoint, age, duration, and token count.")
             }
         }
         .formStyle(.grouped)
@@ -942,77 +1269,7 @@ struct SettingsView: View {
 
     private var providerSettings: some View {
         Form {
-            Section("Screenshots and recording") {
-                TextField("Save to", text: $config.capture.directory)
-                Picker("Screenshots", selection: $config.capture.screenshotAction) {
-                    Text("Save").tag(CaptureAction.save)
-                    Text("Copy").tag(CaptureAction.copy)
-                    Text("Save and copy").tag(CaptureAction.saveCopy)
-                    Text("Save and preview").tag(CaptureAction.preview)
-                }
-                Picker("Format", selection: $config.capture.screenshotFormat) {
-                    Text("PNG").tag("png")
-                    Text("JPG").tag("jpg")
-                }
-                Picker("Recordings", selection: $config.capture.recordingAction) {
-                    Text("Save").tag(CaptureAction.save)
-                    Text("Save and copy").tag(CaptureAction.saveCopy)
-                }
-                Picker("Record", selection: $config.capture.recordingTarget) {
-                    Text("Whole screen").tag("screen")
-                    Text("A display").tag("display")
-                    Text("A region").tag("region")
-                }
-                if config.capture.recordingTarget == "display" {
-                    Picker("Display", selection: $config.capture.recordingDisplay) {
-                        ForEach(CaptureDisplays.active()) { display in
-                            Text(display.label).tag(display.index)
-                        }
-                    }
-                }
-                if config.capture.recordingTarget == "region" {
-                    TextField("Region (x,y,w,h)", text: $config.capture.recordingRegion)
-                }
-                Toggle("Record audio", isOn: $config.capture.recordingAudio)
-                Picker("Microphone", selection: $config.capture.recordingMicrophone) {
-                    Text("System default").tag("")
-                    ForEach(CaptureMicrophones.active(), id: \.id) { microphone in
-                        Text(microphone.name).tag(microphone.id)
-                    }
-                }
-                .disabled(!config.capture.recordingAudio)
-                Picker("Captures list", selection: $config.capture.gallery) {
-                    Text("Everything in the folder").tag("all")
-                    Text("Only Palette's captures").tag("palette")
-                }
-                Picker("Recording format", selection: $config.capture.recordingFormat) {
-                    Text("MOV").tag("mov")
-                    Text("MP4").tag("mp4")
-                }
-                stepperRow("Screenshot delay", display: "\(Int(config.capture.delay)) s",
-                           value: $config.capture.delay, in: 0...10, step: 1)
-                Toggle("Hide Palette before capturing", isOn: $config.capture.hidePalette)
-                Toggle("Include the cursor", isOn: $config.capture.captureCursor)
-                Toggle("Show clicks while recording", isOn: $config.capture.showClicks)
-                Toggle("Shutter sound after a screenshot", isOn: $config.capture.captureSound)
-                Toggle("Show a thumbnail after a screenshot", isOn: $config.capture.captureThumbnail)
-                Toggle("Open the annotator after a screenshot", isOn: $config.capture.editAfterCapture)
-                Toggle("Preview recordings when they stop", isOn: $config.capture.previewRecording)
-                Text("Use /shot for screenshots and /rec to start or stop a recording. Recordings are saved with the system capture engine.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Timers") {
-                Toggle("Play a sound when a timer finishes", isOn: $config.timer.sound)
-                Toggle("Show a notification when a timer finishes", isOn: $config.timer.notify)
-                Text("Presets (minutes) are set with [timer] presets in config.toml. Use /timer 25m, /timer 1h30m or /timer 1:30 to start any duration.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Visible tabs") {
-                Text("Turn off providers you do not use. Hidden providers disappear from the tab bar and Tab cycling; apps always stay visible.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section {
                 ForEach(allProviderIDs, id: \.self) { id in
                     Toggle(providerName(id), isOn: Binding(
                         get: { !disabledProviders.contains(id) },
@@ -1025,11 +1282,13 @@ struct SettingsView: View {
                         }
                     ))
                 }
+            } header: {
+                Text("Visible tabs")
+            } footer: {
+                settingsFooter("Turn off providers you do not use. Hidden providers disappear from the tab bar and Tab cycling; apps always stay visible.")
             }
-            Section("Order") {
-                Text("Use the arrows to move a provider left or right in the tab bar.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+            Section {
                 ForEach(Array(providerOrder.enumerated()), id: \.element) { index, id in
                     HStack {
                         Text(providerName(id))
@@ -1048,29 +1307,39 @@ struct SettingsView: View {
                             .disabled(index + 1 == providerOrder.count)
                     }
                 }
+            } header: {
+                Text("Order").searchTarget("providers-order")
+            } footer: {
+                settingsFooter("Use the arrows to move a provider left or right in the tab bar.")
             }
-            DisclosureGroup("Aliases (optional)") {
-                Text("An alias is another word that opens the same provider. Commas separate aliases.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                ForEach(providers) { provider in
-                    TextField(
-                        "\(provider.name) aliases",
-                        text: Binding(
-                            get: { aliases[provider.id] ?? "" },
-                            set: { aliases[provider.id] = $0 }
+
+            Section {
+                DisclosureGroup("Aliases (optional)") {
+                    Text("An alias is another word that opens the same provider. Commas separate aliases.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(providers) { provider in
+                        TextField(
+                            "\(provider.name) aliases",
+                            text: Binding(
+                                get: { aliases[provider.id] ?? "" },
+                                set: { aliases[provider.id] = $0 }
+                            )
                         )
-                    )
+                        .settingsField()
+                    }
                 }
             }
-            Section("Files") {
+
+            Section {
                 Button("Open Providers Folder") { onOpen(PalettePaths.resolve().providersDir) }
                 Button("Open commands.toml") {
                     onOpen(PalettePaths.resolve().configDir.appendingPathComponent("commands.toml"))
                 }
-                Text("Add your own provider by creating a folder under providers/ with a provider.toml. User providers override bundled ones with the same id. Press ⌘R after editing files.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Files")
+            } footer: {
+                settingsFooter("Add your own provider by creating a folder under providers/ with a provider.toml. User providers override bundled ones with the same id. Press ⌘R after editing files.")
             }
         }
         .formStyle(.grouped)
@@ -1078,19 +1347,16 @@ struct SettingsView: View {
 
     private var advanced: some View {
         Form {
-            Section("Configuration") {
-                TextField("Command prefix", text: $config.providerPrefix)
-                Text("Prefix for provider commands such as /clip and /port. Usually /.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section {
                 Button("Open config.toml") { onOpen(configURL) }
-                Button("Open Themes Folder") { onOpen(PalettePaths.resolve().themesDir) }
                 Button("Open Log") { onOpen(PalettePaths.resolve().logFile) }
-                Text("Settings writes this file for you. Edit it directly only for options that are not in this window, then press ⌘R.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Configuration").searchTarget("advanced-config")
+            } footer: {
+                settingsFooter("Settings writes config.toml for you. Edit it directly only for options that are not in this window, then press ⌘R.")
             }
-            Section("Backup & diagnostics") {
+
+            Section {
                 Button("Export Backup…") { onExportBackup() }
                 Button("Open Crash Log") {
                     onOpen(PalettePaths.resolve().stateDir.appendingPathComponent("crash.log"))
@@ -1102,8 +1368,11 @@ struct SettingsView: View {
                         Text(line).font(.caption).foregroundStyle(.secondary)
                     }
                 }
+            } header: {
+                Text("Backup & diagnostics").searchTarget("advanced-backup")
             }
-            Section("About") {
+
+            Section {
                 LabeledContent("Version") {
                     Text("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")
                 }
@@ -1111,9 +1380,10 @@ struct SettingsView: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString("brew upgrade --cask palette", forType: .string)
                 }
-                Text("Update with the Homebrew cask; the app has no self-updater.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("About")
+            } footer: {
+                settingsFooter("Update with the Homebrew cask; the app has no self-updater.")
             }
         }
         .formStyle(.grouped)

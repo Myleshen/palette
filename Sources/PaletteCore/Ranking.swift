@@ -1,6 +1,16 @@
 import Foundation
 
 public enum Ranking {
+    /// Score bands, best first. Each band reserves 200 points for in-band
+    /// bonuses, so a bonus can never lift a match into the band above it.
+    private enum Band {
+        static let exact = 1000.0
+        static let prefix = 800.0
+        static let wordStart = 600.0
+        static let substring = 400.0
+        static let subsequence = 200.0
+    }
+
     public static func normalize(_ value: String) -> String {
         value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -9,42 +19,53 @@ public enum Ranking {
     /// Scores a single term against a candidate. Returns nil when the term does
     /// not match at all.
     public static func termScore(_ term: String, candidate: String) -> Double? {
-        let needle = normalize(term)
-        let haystack = normalize(candidate)
-        guard !needle.isEmpty else { return 0 }
-        guard !haystack.isEmpty else { return nil }
-
-        if needle == haystack { return 1000 }
-
-        if haystack.hasPrefix(needle) {
-            return 900 - min(80, Double(haystack.count - needle.count) * 2)
-        }
-
-        if let index = wordBoundaryIndex(of: needle, in: haystack) {
-            return 780 - min(120, Double(index) * 3)
-        }
-
-        if let range = haystack.range(of: needle) {
-            let index = haystack.distance(from: haystack.startIndex, to: range.lowerBound)
-            let lengthPenalty = Double(haystack.count - needle.count)
-            return 650 - min(150, Double(index) * 4) - min(50, lengthPenalty)
-        }
-
-        if let score = subsequenceScore(needle, in: haystack) {
-            return score
-        }
-
-        return nil
+        score(normalizedNeedle: normalize(term), haystack: normalize(candidate))
     }
 
     public static func score(terms: [String], candidate: String) -> Double? {
         guard !terms.isEmpty else { return 0 }
+        // Fold each side once: the candidate is shared by every term.
+        let haystack = normalize(candidate)
+        let needles = terms.map(normalize)
         var total: Double = 0
-        for term in terms {
-            guard let value = termScore(term, candidate: candidate) else { return nil }
+        for needle in needles {
+            guard let value = score(normalizedNeedle: needle, haystack: haystack) else { return nil }
             total += value
         }
         return total / Double(terms.count)
+    }
+
+    /// `needle` and `haystack` must already be folded.
+    private static func score(normalizedNeedle needle: String, haystack: String) -> Double? {
+        guard !needle.isEmpty else { return 0 }
+        guard !haystack.isEmpty else { return nil }
+
+        if needle == haystack { return Band.exact }
+
+        let trailing = Double(haystack.count - needle.count)
+        // Substring and word-start matches are contiguous runs, so their
+        // in-band bonus rewards an early, tight fit; the subsequence tier adds
+        // explicit boundary and consecutive-run bonuses below.
+        let fitBonus = 199 - min(199, trailing * 4)
+
+        if haystack.hasPrefix(needle) {
+            return Band.prefix + max(0, fitBonus)
+        }
+
+        if let index = wordBoundaryIndex(of: needle, in: haystack) {
+            return Band.wordStart + max(0, fitBonus - Double(index) * 4)
+        }
+
+        if let range = haystack.range(of: needle) {
+            let index = haystack.distance(from: haystack.startIndex, to: range.lowerBound)
+            return Band.substring + max(0, fitBonus - Double(index) * 4)
+        }
+
+        if let score = subsequenceScore(needle, in: haystack) {
+            return Band.subsequence + score
+        }
+
+        return nil
     }
 
     public static func score(query: String, candidate: String) -> Double? {
@@ -101,8 +122,7 @@ public enum Ranking {
 
     /// fzf-style subsequence scoring: every character must appear in order, but
     /// matching at a word boundary and keeping runs together beats a scattered
-    /// match. The ceiling stays below the substring tier so exact and substring
-    /// matches always rank higher.
+    /// match. Returns 0...199, the in-band bonus of the subsequence tier.
     private static func subsequenceScore(_ needle: String, in haystack: String) -> Double? {
         guard !needle.isEmpty else { return 0 }
         let needleChars = Array(needle)
@@ -147,14 +167,14 @@ public enum Ranking {
                 }
             }
 
-            let lengthPenalty = min(80, Double(hayChars.count - needleChars.count) * 2)
-            let score = 250
-                + Double(boundaries) * 45
-                + Double(min(40, consecutive * 10))
+            let lengthPenalty = min(60, Double(hayChars.count - needleChars.count) * 2)
+            let score = 199
+                + Double(min(3, boundaries)) * 20
+                + Double(min(60, consecutive * 10))
                 - Double(gaps) * 7
                 - lengthPenalty
                 - Double(min(30, start))
-            let clamped = min(430, max(80, score))
+            let clamped = min(199, max(0, score))
             best = max(best ?? clamped, clamped)
         }
         return best

@@ -62,4 +62,18 @@ final class BangResolverTests: XCTestCase {
     func testNonBangQueryProducesNothing() {
         XCTAssertTrue(BangResolver.items(for: "atwiki", engines: engines).isEmpty)
     }
+
+    func testNoBangableEnginesShowsOneHelpRow() {
+        let noKeywords = [
+            WebSearchEngine(name: "Google", urlTemplate: "https://www.google.com/search?q={query}"),
+            WebSearchEngine(name: "Kagi", urlTemplate: "https://kagi.com/search?q={query}"),
+        ]
+        let items = BangResolver.items(for: "!g palette", engines: noKeywords)
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].title, "No bangs configured")
+        XCTAssertTrue(items[0].actions.isEmpty)
+
+        // At least one bangable engine keeps the normal behaviour.
+        XCTAssertNotEqual(BangResolver.items(for: "!g", engines: engines).first?.title, "No bangs configured")
+    }
 }

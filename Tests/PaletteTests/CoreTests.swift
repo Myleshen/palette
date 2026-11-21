@@ -428,6 +428,46 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(restored[1].keyword, "k")
     }
 
+    func testBackfillFillsAnEmptyKeywordOnAStockEngine() {
+        let engines = [
+            WebSearchEngine(name: "Google", urlTemplate: "https://www.google.com/search?q={query}"),
+        ]
+        let filled = WebSearchEngine.backfillingKeywords(into: engines)
+        XCTAssertEqual(filled.map(\.keyword), ["g"])
+        XCTAssertEqual(filled.map(\.urlTemplate), engines.map(\.urlTemplate))
+    }
+
+    func testBackfillLeavesACustomKeywordUntouched() {
+        let engines = [
+            WebSearchEngine(name: "Google", urlTemplate: "https://www.google.com/search?q={query}", keyword: "goog"),
+        ]
+        XCTAssertEqual(WebSearchEngine.backfillingKeywords(into: engines).map(\.keyword), ["goog"])
+    }
+
+    func testBackfillDoesNotResurrectADeletedStockEngine() {
+        let engines = WebSearchEngine.defaults.filter { $0.name != "GitHub" }
+        let filled = WebSearchEngine.backfillingKeywords(into: engines)
+        XCTAssertEqual(filled.map(\.name), ["Google", "DuckDuckGo", "YouTube"])
+    }
+
+    func testBackfillLeavesACustomEngineUntouched() {
+        let engines = [WebSearchEngine(name: "Kagi", urlTemplate: "https://kagi.com/search?q={query}")]
+        let filled = WebSearchEngine.backfillingKeywords(into: engines)
+        XCTAssertEqual(filled, engines)
+        XCTAssertNil(filled[0].keyword)
+    }
+
+    func testLoadBackfillsKeywordsFromAPreBangConfig() throws {
+        let table = try TOMLTable(string: """
+        [[web_search.engines]]
+        name = "Google"
+        url = "https://www.google.com/search?q={query}"
+        """)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.webSearchEngines.map(\.keyword), ["g"])
+    }
+
     func testParityDefaultsAndWebSearchConfigRoundTrip() throws {
         let config = PaletteConfig()
         XCTAssertEqual(config.clipboard.maxEntries, 5_000)
