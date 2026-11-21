@@ -90,11 +90,11 @@ run_flow launcher-tab \
 
 # The scratchpad, ask, terminal and preview panels share one content area:
 # opening a mode must close the previous one.
-run_flow mode-exclusive \
-  'show; wait=0.6; scratchpad; wait=0.4; assert=scratchpadActive=true; ask; wait=0.4; assert=previewEnabled=true; assert=scratchpadActive=false; assert=terminalActive=false; dump=%DIR%/state.json; exit'
-
-run_flow mode-exclusive-reverse \
-  'show; wait=0.6; ask; wait=0.4; assert=previewEnabled=true; scratchpad; wait=0.4; assert=scratchpadActive=true; assert=previewEnabled=false; assert=terminalActive=false; dump=%DIR%/state.json; exit'
+# Ask lives in its own window now: opening it must not tear down the panel's
+# scratchpad or terminal, and the window must be tracked separately.
+run_flow ask-window-not-modal \
+  'show; wait=0.6; scratchpad; wait=0.4; askwindow=hello; wait=1.0; assert=scratchpadActive=true; assert=askWindows=1; dump=%DIR%/state.json; exit' \
+  '%DIR%/state.json'
 
 # A folder declared in the flow's own config must reach /cheat.
 prep_cheatsheets() {

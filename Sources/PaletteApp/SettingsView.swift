@@ -1519,7 +1519,6 @@ struct SettingsView: View {
             }
 
             card("Tabs and order", anchor: "launcher-tabs") {
-                toggleRow("Show provider tabs", isOn: $config.window.showTabs)
                 pickerRow("App order") {
                     Picker("App order", selection: $config.appSort) {
                         Text("Alphabetical").tag(AppSort.alphabetical)

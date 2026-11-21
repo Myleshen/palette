@@ -44,14 +44,14 @@ itself join plain search.
 Plain search is an **allowlist**: only the providers in `[providers] global`
 answer an unprefixed query, and `apps` always does whether or not it is listed.
 It covers providers you cannot edit — bundled and third-party ones alike — and
-can be set in `config.toml` or with the **Default** checkbox in
+can be set in `config.toml` or with the **Plain queries** checkbox in
 Settings → Providers:
 
 ```toml
 [providers]
 global = [
   "calc", "search", "web", "win", "unit", "zj",
-  "bookmark", "pins", "system", "timer", "awake",
+  "bookmark", "pins", "system", "timer", "awake", "cheat",
 ]
 ```
 
@@ -187,7 +187,8 @@ Provider → host:
   (PNG). Omit it to use the manifest icon.
 - The first action is the primary action (`⏎`); the second is the secondary
   (`⌘⏎`); the rest appear in the action list (`⌘K`).
-- `group` renders a section header when results are grouped.
+- `group` renders a section header whenever the visible rows contain more than
+  one distinct group; consecutive rows in the same group share one header.
 
 ### 3.4 Actions
 
@@ -270,6 +271,11 @@ on the roadmap.
 
 ## 4. Bundled providers
 
+The preview pane is only offered for a curated set — `clip`, `snip`, `recent`,
+`neo`, `neof`, `proj`, `shots`, `cheat`, and `atlas` — while one of them is the
+bound prefix, and only while the selected row has preview content. Other
+providers fill the list but never widen the panel.
+
 | ID | Trigger | Backend | Notes |
 |---|---|---|---|
 | `apps` | — | native | applications, always searched for plain queries |
@@ -287,8 +293,14 @@ on the roadmap.
 | `clip` | `clip` | native | clipboard history: text, images, Finder files; grouped and previewable |
 | `port` | `port` | native | listening TCP ports, process/cwd, confirmed kill |
 | `cmd` | `cmd` | native | manifest commands from commands.toml |
-| `proj` | `proj` | native | devx projects/worktrees, ~/dev fallback |
+| `proj` | `proj` | native | devx projects/worktrees, `~/dev` fallback; empty query adds **Clone a repository…** and **New project…** |
 | `git` | `git` | native | repository status and safe Git actions |
+| `github` | `gh` | native | current repo, an explicit `owner/repo`, or the account's open PRs and repo issues through `gh` |
+| `ghr` | `ghr` | native | the account's repositories: open, clone into a devx root, copy slug |
+| `ghp` | `ghp` | native | open PRs authored by you and awaiting your review; check out locally when a clone exists |
+| `ghi` | `ghi` | native | open issues assigned to you |
+| `gha` | `gha` | native | workflow runs for the current repo or `owner/repo`: view log, re-run failed jobs, cancel |
+| `ghn` | `ghn` | native | notification inbox: open, mark done |
 | `term` | `term` | native | embedded SwiftTerm login shell |
 | `awake` | `awake` | native | keep-awake durations and lid-closed clamshell guard |
 | `scratch` | `scratch` | native | named, searchable scratch notes and in-panel editor |
@@ -297,11 +309,19 @@ on the roadmap.
 | `web` | `web` | native | web apps with optional Hammerspoon shortcuts, in the default allowlist |
 | `bookmark` | `bookmark` | native | bookmarks from `bookmarks.toml`, opened in a normal browser window, in the default allowlist |
 | `emoji` | `emoji` | native | full Unicode emoji catalog with name search |
-| `cheat` | `cheat` | native | cheatsheet folders from Settings → Cheatsheets, one level deep, QuickLook preview; in the default allowlist (plain queries) |
+| `cheat` | `cheat` | native | cheatsheet folders from Settings → Search → Cheatsheets, one level deep, QuickLook preview; in the default allowlist (plain queries) |
 | `atlas` | `atlas` | native | artifacts and docs from `~/.config/atlas/state.json`, inbox first with a review badge and document preview; add it to the allowlist for plain queries |
 | `ssh` | `ssh` | native | hosts from `~/.ssh/config`; connect in the embedded terminal, one session per host that reattaches on re-run |
 | `system` | `sys` | native | sleep, lock, empty trash, reload, quit |
 | `theme` | `theme` | native | live theme switching |
+
+A provider that cannot answer yet returns a row instead of an empty list. The
+GitHub family uses the badge to say which kind it is: `SETUP` for a missing
+`gh`, a failed auth check, or `/gha` outside a checkout with no `owner/repo`
+(**Pick a repository**); `SCOPE` when the token lacks the `notifications` scope
+(the action runs `gh auth refresh -s notifications` in the panel); and `EMPTY`
+when `/ghn` finds no notifications in the inbox. The `/gh` setup row carries a
+**Run gh auth login** action.
 
 ## 5. Conformance checklist
 

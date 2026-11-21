@@ -3,11 +3,11 @@
 ## 1. What Palette is
 
 A native macOS launcher in the Raycast / Noctalia / rofi class. One process, one
-window, keyboard-first. The host owns search, ranking, clipboard, paste, and
-launching. Providers are split into two lanes:
+menu-bar app, keyboard-first. The host owns search, ranking, clipboard, paste,
+and launching. Providers are split into two lanes:
 
 - **Bundled providers** for the opinionated core: apps, paths, calculator,
-  clipboard, system, zellij, Bitwarden, themes.
+  clipboard, system, zellij, Bitwarden, GitHub, devx projects, themes.
 - **External providers** discovered at runtime from `~/.config/palette/providers`,
   written in any language, speaking a documented JSON protocol.
 
@@ -17,7 +17,7 @@ this design avoids is implementing core features by shelling out to a pile of
 everything the user wants to add.
 
 Non-goals for v1: App Store distribution, sandboxing, a plugin UI protocol,
-sync, AI, window management, theme marketplaces.
+sync, window management, theme marketplaces.
 
 ## 2. Stack and process model
 
@@ -49,13 +49,16 @@ PalettePlatform    macOS services
 
 PaletteProviders   bundled providers
   apps, paths (/neo, /neof), calculator, clipboard, system, zellij,
-  bitwarden, themes
+  bitwarden, GitHub family, projects, capture, terminal, themes,
+  AskService (chat runtime)
 
 PaletteRuntime     external providers
   manifest discovery, NDJSON codec, process supervision, registry
 
 PaletteApp         shell
-  AppDelegate, SearchCoordinator, SwiftUI views, prompt sheets, menu bar
+  AppDelegate, SearchController + provider rail, SwiftUI views, prompt
+  sheets, Ask window (AskWindowController + AskWindowState), settings,
+  menu bar
 ```
 
 Dependency direction:
@@ -155,6 +158,35 @@ enumeration and again in-process (for `!` re-includes). Defaults exclude
 Any executable speaking NDJSON on stdin/stdout. Long-lived, lazy-started, idle
 exited, restarted with backoff. Full protocol in [PROVIDERS.md](PROVIDERS.md).
 
+### 7.4 Launcher rail
+
+The launcher is a search capsule, a full-height provider rail, and a content
+card. `SearchController.railEntries` builds the rail as **Everything** followed
+by one row per registered provider that declares a trigger; Everything is
+pinned, the rest scroll a whole row at a time. Selecting a row writes
+`<prefix><trigger> ` into the query, so the rail and prefixes share one routing
+path. `Tab` / `⇧Tab` walk the same array. The rail is 220 pt and collapses to
+56 pt icons when the preview pane is open or the panel is narrower than 700 pt.
+
+The preview pane is opt-in per provider, not inferred from every row: `clip`,
+`snip`, `recent`, `neo`, `neof`, `proj`, `shots`, `cheat`, and `atlas` enable
+it while bound, and it appears only when the selected row carries preview
+content.
+
+### 7.5 Ask chat
+
+Ask is a window, not a provider: there is no `/ask` trigger and no rail row.
+`⌘⌥A` toggles the single `AskWindowController`; the first press creates an empty
+chat, and later presses show or hide the same window. Closing
+the window hides it and leaves the streaming task running; only Stop (or Esc
+while streaming) cancels.
+
+`AskService` is an actor that owns model choice, key lookup, the request and its
+fallback chain, and persistence. `AskWindowState` is the `@MainActor` view model
+that holds the transcript, streams deltas into at most one in-flight turn,
+buffers repaints to 50 ms, and reloads saved chats. `AskWebSearch` runs one
+DuckDuckGo lookup per turn (plus direct https fetches) before the model call.
+
 ## 8. Ranking and frecency
 
 - Path results: fzf's score and order, `--scheme=path`.
@@ -175,10 +207,23 @@ items(id TEXT PRIMARY KEY, provider TEXT, uses INTEGER, last_used REAL);
 clipboard(id TEXT PRIMARY KEY, hash TEXT UNIQUE, text TEXT, created REAL,
           pinned INTEGER DEFAULT 0);
 meta(key TEXT PRIMARY KEY, value TEXT);
+ask_chats(id TEXT PRIMARY KEY, title TEXT, model TEXT, created REAL, updated REAL);
+ask_chat_messages(id TEXT PRIMARY KEY,
+                  chat_id TEXT REFERENCES ask_chats(id) ON DELETE CASCADE,
+                  role TEXT, content TEXT, created REAL, duration_ms INTEGER,
+                  prompt_tokens INTEGER, completion_tokens INTEGER, sources TEXT);
+ask_history(id TEXT PRIMARY KEY, question TEXT, answer TEXT, model TEXT,
+            provider TEXT, created REAL, duration_ms INTEGER,
+            prompt_tokens INTEGER, completion_tokens INTEGER, error TEXT);
 ```
 
-Clipboard cap is enforced after insert. Text only in v1; images are a roadmap
-item. Frecency and clipboard writes happen off the main actor.
+Clipboard cap is enforced after insert. Text, images, and file paths are stored.
+Frecency and clipboard writes happen off the main actor.
+
+Ask writes two shapes: `ask_chats` + `ask_chat_messages` back the window's
+sidebar, transcript, and saved Sources (deleting a chat cascades its messages),
+while `ask_history` keeps the legacy one-row-per-question log. Count and
+retention limits trim `ask_history`; saved chats keep their full transcript.
 
 ## 10. Clipboard and paste
 

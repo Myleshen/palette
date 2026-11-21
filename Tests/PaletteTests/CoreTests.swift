@@ -355,7 +355,6 @@ final class CoreTests: XCTestCase {
         visible_rows = 9
         terminal_width = 1200
         preview_layout = "beside"
-        show_tabs = false
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         var loaded = ConfigLoader.load(paths: paths).config
@@ -366,18 +365,14 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(loaded.window.launcherWidth, 900)
         XCTAssertEqual(loaded.window.launcherRows, 9)
         XCTAssertEqual(loaded.window.previewLayout, .beside)
-        XCTAssertFalse(loaded.window.showTabs)
 
         // A settings save must round-trip the [window] table.
         loaded.window.scale = 1.1
-        loaded.window.askWidth = 1_000
         try ConfigWriter.render(loaded).write(to: paths.configFile, atomically: true, encoding: .utf8)
         let reloaded = ConfigLoader.load(paths: paths).config.window
         XCTAssertEqual(reloaded.scale, 1.1)
         XCTAssertEqual(reloaded.width, 900)
-        XCTAssertEqual(reloaded.askWidth, 1_000)
         XCTAssertEqual(reloaded.previewLayout, .beside)
-        XCTAssertFalse(reloaded.showTabs)
     }
 
     func testAutoPreviewLayoutFitsTheScreen() throws {

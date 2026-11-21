@@ -947,16 +947,6 @@ public final class SearchController: ObservableObject, HostBridge {
                     if let trigger = action.value.text {
                         query = registry.parser.prefix + trigger + " "
                     }
-                } else if action.id == "ask-again" {
-                    // Re-ask for real; reopening the query alone would just show
-                    // the cached answer again.
-                    if let question = action.value.text {
-                        try await registry.activate(item: item, action: action)
-                        query = registry.parser.prefix + "ask " + question
-                        scheduleSearch(debounce: false)
-                    }
-                } else if action.id == "ask-history" {
-                    query = registry.parser.prefix + "askh "
                 } else if action.id == "pin-item" {
                     try await store.pinItem(item)
                     setStatus("Pinned \(item.title)", duration: 2)
