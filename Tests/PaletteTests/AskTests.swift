@@ -219,7 +219,7 @@ final class AskTests: XCTestCase {
             environment: ["OPENCODE_GO_API_KEY": "test"],
             completer: stub
         )
-        let record = try await service.ask("hello")
+        let record = try await service.ask([user("hello")])
         XCTAssertEqual(record.answer, "fallback answer")
         XCTAssertEqual(record.model, "beam-free")
     }
@@ -240,7 +240,7 @@ final class AskTests: XCTestCase {
             environment: ["OPENCODE_GO_API_KEY": "test"],
             completer: stub
         )
-        let record = try await service.ask("hello")
+        let record = try await service.ask([user("hello")])
         XCTAssertEqual(record.answer, "second answer")
         XCTAssertEqual(record.model, "beam-free")
     }
@@ -257,7 +257,7 @@ final class AskTests: XCTestCase {
             completer: stub
         )
         do {
-            _ = try await service.ask("hello")
+            _ = try await service.ask([user("hello")])
             XCTFail("expected an empty-answer error")
         } catch {
             XCTAssertEqual(error as? AskClientError, .empty)
@@ -308,7 +308,7 @@ final class AskTests: XCTestCase {
             completer: stub
         )
         do {
-            _ = try await service.ask("hello")
+            _ = try await service.ask([user("hello")])
             XCTFail("expected invalid key")
         } catch {
             XCTAssertEqual(error as? AskClientError, .invalidKey)
@@ -331,7 +331,7 @@ final class AskTests: XCTestCase {
             completer: stub
         )
         do {
-            _ = try await service.ask("slow one")
+            _ = try await service.ask([user("slow one")])
             XCTFail("expected a timeout")
         } catch {
             XCTAssertEqual(error as? AskClientError, .http(0, "No answer after 130s — the model was too slow."))
@@ -360,7 +360,7 @@ final class AskTests: XCTestCase {
             completer: stub
         )
         do {
-            _ = try await service.ask("cancel me")
+            _ = try await service.ask([user("cancel me")])
             XCTFail("expected cancellation")
         } catch {
             XCTAssertTrue(error is CancellationError)
@@ -370,6 +370,230 @@ final class AskTests: XCTestCase {
         let history = try await store.askHistory()
         XCTAssertTrue(history.isEmpty, "cancelling must not record a failure")
     }
+
+    func testAskStreamParsesDeltasInOrder() throws {
+        var parser = AskStreamParser()
+        XCTAssertEqual(
+            parser.feed(#"data: {"choices":[{"delta":{"role":"assistant","content":"Hel"}}]}"# + "\n\n"),
+            ["Hel"]
+        )
+        XCTAssertEqual(
+            parser.feed(#"data: {"choices":[{"delta":{"reasoning_content":"thinking"},"finish_reason":null}]}"# + "\n\n"),
+            []
+        )
+        XCTAssertEqual(
+            parser.feed(#"data: {"choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}]}"# + "\n\n"),
+            ["lo"]
+        )
+        XCTAssertEqual(parser.feed("data: [DONE]\n\n"), [])
+        XCTAssertTrue(parser.finished)
+        XCTAssertEqual(parser.text, "Hello")
+        XCTAssertEqual(try parser.completion(durationMs: 9).answer, "Hello")
+    }
+
+    func testAskStreamToleratesChunksSplitMidLineAndBadLines() {
+        var parser = AskStreamParser()
+        XCTAssertEqual(parser.feed(#"data: {"choices":[{"delta":{"cont"#), [])
+        let deltas = parser.feed(#"ent":"Hi"}}]}"# + "\n\nnot sse at all\ndata: {broken\n")
+        XCTAssertEqual(deltas, ["Hi"])
+        XCTAssertEqual(parser.text, "Hi")
+    }
+
+    func testAskEmptyStreamIsEmpty() {
+        var parser = AskStreamParser()
+        XCTAssertEqual(parser.feed("data: [DONE]\n\n"), [])
+        XCTAssertThrowsError(try parser.completion(durationMs: 1)) {
+            XCTAssertEqual($0 as? AskClientError, .empty)
+        }
+    }
+
+    func testAskConversationTrimsOldestTurnsFirst() {
+        var messages: [AskMessage] = []
+        for index in 0..<30 {
+            messages.append(AskMessage(
+                role: .user,
+                content: "question \(index) " + String(repeating: "u", count: 400)
+            ))
+            messages.append(AskMessage(
+                role: .assistant,
+                content: "answer \(index) " + String(repeating: "a", count: 400)
+            ))
+        }
+        let trimmed = AskConversation.trimmed(messages, budget: 300)
+        XCTAssertGreaterThan(trimmed.count, 0)
+        XCTAssertLessThan(trimmed.count, 10)
+        XCTAssertEqual(Array(trimmed.suffix(2)), Array(messages.suffix(2)))
+        XCTAssertEqual(trimmed.first?.role, .user)
+        XCTAssertFalse(trimmed.contains(messages.first!))
+    }
+
+    func testMarkdownParsesBlocksAndInlineStyles() throws {
+        let source = """
+        # Title
+
+        A **bold** and *italic* `code` with [link](https://example.com) and ~~gone~~.
+
+        - one
+        - two
+          - nested
+
+        1. first
+        2. second
+
+        > quoted line
+
+        ---
+
+        ```swift
+        let value = 1
+        ```
+        """
+        let blocks = AskMarkdown.blocks(source)
+        XCTAssertEqual(blocks.count, 7)
+
+        guard case .heading(let level, let headingSpans) = blocks[0] else {
+            return XCTFail("expected a heading, got \(blocks[0])")
+        }
+        XCTAssertEqual(level, 1)
+        XCTAssertEqual(headingSpans.map(\.text).joined(), "Title")
+
+        guard case .paragraph(let spans) = blocks[1] else {
+            return XCTFail("expected a paragraph, got \(blocks[1])")
+        }
+        XCTAssertTrue(spans.contains { $0.text == "bold" && $0.bold })
+        XCTAssertTrue(spans.contains { $0.text == "italic" && $0.italic })
+        XCTAssertTrue(spans.contains { $0.text == "code" && $0.code })
+        XCTAssertTrue(spans.contains { $0.text == "gone" && $0.strike })
+        XCTAssertTrue(spans.contains { $0.text == "link" && $0.link == URL(string: "https://example.com") })
+
+        guard case .list(let bullets) = blocks[2] else {
+            return XCTFail("expected a list, got \(blocks[2])")
+        }
+        XCTAssertEqual(bullets.count, 3)
+        XCTAssertEqual(bullets.map(\.level), [0, 0, 1])
+        XCTAssertEqual(bullets.last?.marker, "◦")
+
+        guard case .list(let numbers) = blocks[3] else {
+            return XCTFail("expected an ordered list, got \(blocks[3])")
+        }
+        XCTAssertEqual(numbers.map(\.marker), ["1.", "2."])
+
+        guard case .quote(let quote) = blocks[4] else {
+            return XCTFail("expected a quote, got \(blocks[4])")
+        }
+        XCTAssertEqual(quote.map(\.text).joined(), "quoted line")
+
+        XCTAssertEqual(blocks[5], .rule)
+
+        guard case .code(let language, let code) = blocks[6] else {
+            return XCTFail("expected a code block, got \(blocks[6])")
+        }
+        XCTAssertEqual(language, "swift")
+        XCTAssertEqual(code, "let value = 1")
+    }
+
+    func testMarkdownKeepsMalformedSyntaxLiteral() {
+        let source = "An **unclosed bold and `unclosed code\n\n```swift\nlet value = 1"
+        let blocks = AskMarkdown.blocks(source)
+        XCTAssertEqual(blocks.count, 2)
+        guard case .paragraph(let spans) = blocks[0] else {
+            return XCTFail("expected a paragraph, got \(blocks[0])")
+        }
+        XCTAssertEqual(spans.map(\.text).joined(), "An **unclosed bold and `unclosed code")
+        XCTAssertFalse(spans.contains { $0.bold || $0.code })
+        // Unterminated fence: the code is kept verbatim instead of dropping the
+        // rest of the answer.
+        guard case .code(_, let code) = blocks[1] else {
+            return XCTFail("expected a code block, got \(blocks[1])")
+        }
+        XCTAssertEqual(code, "let value = 1")
+    }
+
+    func testMarkdownDoesNotItalicizeSnakeCase() {
+        let spans = AskMarkdown.spans("call snake_case_name today")
+        XCTAssertEqual(spans.map(\.text).joined(), "call snake_case_name today")
+        XCTAssertFalse(spans.contains { $0.italic })
+    }
+
+    func testAskPersistsOnlyTheLastUserMessage() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let stub = StubCompleter { _, _ in
+            AskCompletion(answer: "second answer", promptTokens: 3, completionTokens: 2, durationMs: 4)
+        }
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "beam-free"),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
+            completer: stub
+        )
+        let record = try await service.ask([
+            user("first question"),
+            AskMessage(role: .assistant, content: "first answer"),
+            user("  second question  "),
+        ])
+        XCTAssertEqual(record.question, "second question")
+        XCTAssertEqual(record.answer, "second answer")
+        let history = try await store.askHistory()
+        XCTAssertEqual(history.count, 1)
+        XCTAssertEqual(history.first?.question, "second question")
+        XCTAssertEqual(history.first?.answer, "second answer")
+    }
+
+    func testAskSendsTheWholeConversationToTheCompleter() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let box = MessageBox()
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "beam-free"),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
+            completer: CapturingStub(box: box)
+        )
+        _ = try await service.ask([
+            user("first question"),
+            AskMessage(role: .assistant, content: "first answer"),
+            user("second question"),
+        ])
+        XCTAssertEqual(box.value, [
+            user("first question"),
+            AskMessage(role: .assistant, content: "first answer"),
+            user("second question"),
+        ])
+    }
+
+    func testAskFallbackResetsPartiallyStreamedAnswer() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let resets = ResetCounter()
+        let stub = StreamingStub { _, model, onDelta in
+            if model == "mimo-v2.6-flash" {
+                onDelta?("half an ans")
+                throw AskClientError.empty
+            }
+            return AskCompletion(answer: "fallback answer", promptTokens: 1, completionTokens: 1, durationMs: 8)
+        }
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "mimo-v2.6-flash"),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
+            completer: stub
+        )
+        let record = try await service.ask(
+            [user("hello")],
+            onDelta: { _ in },
+            onReset: { resets.increment() }
+        )
+        XCTAssertEqual(record.answer, "fallback answer")
+        XCTAssertEqual(resets.value, 1, "a partial answer must be discarded before the fallback streams")
+    }
+}
+
+private func user(_ text: String) -> AskMessage {
+    AskMessage(role: .user, content: text)
 }
 
 private struct StubCompleter: AskCompleting {
@@ -379,12 +603,82 @@ private struct StubCompleter: AskCompleting {
         endpoint: AskEndpoint,
         model: String,
         key: String,
-        question: String,
+        messages: [AskMessage],
         maxTokens: Int,
         sessionID: String,
-        baseURL: URL?
+        baseURL: URL?,
+        onDelta: (@Sendable (String) -> Void)?
     ) async throws -> AskCompletion {
         try await handler(endpoint, model)
+    }
+}
+
+private struct StreamingStub: AskCompleting {
+    let handler: @Sendable (AskEndpoint, String, (@Sendable (String) -> Void)?) async throws -> AskCompletion
+
+    func complete(
+        endpoint: AskEndpoint,
+        model: String,
+        key: String,
+        messages: [AskMessage],
+        maxTokens: Int,
+        sessionID: String,
+        baseURL: URL?,
+        onDelta: (@Sendable (String) -> Void)?
+    ) async throws -> AskCompletion {
+        try await handler(endpoint, model, onDelta)
+    }
+}
+
+private final class ResetCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+}
+
+private final class MessageBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [AskMessage] = []
+
+    func store(_ messages: [AskMessage]) {
+        lock.lock()
+        stored = messages
+        lock.unlock()
+    }
+
+    var value: [AskMessage] {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+}
+
+private struct CapturingStub: AskCompleting {
+    let box: MessageBox
+
+    func complete(
+        endpoint: AskEndpoint,
+        model: String,
+        key: String,
+        messages: [AskMessage],
+        maxTokens: Int,
+        sessionID: String,
+        baseURL: URL?,
+        onDelta: (@Sendable (String) -> Void)?
+    ) async throws -> AskCompletion {
+        box.store(messages)
+        return AskCompletion(answer: "answer", promptTokens: 1, completionTokens: 1, durationMs: 2)
     }
 }
 

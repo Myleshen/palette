@@ -2,9 +2,9 @@ import Foundation
 import PaletteCore
 import PalettePlatform
 
-/// `/ask` is a one-shot question box. Empty query selects a model; a typed
-/// question shows a single Ask row that opens the ask window. No conversation
-/// is ever threaded.
+/// `/ask` is the entry point to the chat window. Empty query selects a model;
+/// a typed question shows a single Ask row that opens the window on its first
+/// turn.
 public final class AskProvider: PaletteProvider, @unchecked Sendable {
     public let descriptor = ProviderDescriptor(
         id: "ask",
@@ -117,14 +117,14 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
         PaletteItem(
             id: "question:\(question)",
             title: "Ask \(model.name): \(question)",
-            subtitle: "\(model.free ? "FREE" : model.costLabel) · \(model.endpoint.displayName) · ⏎ sends one request",
+            subtitle: "\(model.free ? "FREE" : model.costLabel) · \(model.endpoint.displayName) · ⏎ opens the chat",
             icon: .symbol("sparkles"),
             badge: model.free ? "FREE" : "ASK",
             score: 50_000,
             actions: [
                 PaletteAction(id: "ask", title: "Ask \(model.name)", kind: .custom, value: .text(question)),
             ],
-            preview: .text("Question\n\n\(question)\n\nModel\n\n\(model.name) · \(model.endpoint.displayName)\n\(model.costLabel)\n\nOne-shot request. The answer is saved to Ask History."),
+            preview: .text("Question\n\n\(question)\n\nModel\n\n\(model.name) · \(model.endpoint.displayName)\n\(model.costLabel)\n\nOpens the chat with this as the first turn. Answers stream in; the last turn is saved to Ask History."),
             providerID: descriptor.id,
             providerName: descriptor.name
         )

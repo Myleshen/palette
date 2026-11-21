@@ -1251,8 +1251,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.show()
     }
 
-    /// One question, one window. The panel stays up: its query is still useful
-    /// while the answer loads, and the answer window sits under it.
+    /// Opens a chat window with `question` as its first turn. The panel stays
+    /// up: its query is still useful while the answer streams, and the window
+    /// sits under it.
     private func showAskWindow(question: String, model: AskModel? = nil) {
         guard let askService else { return }
         panel?.suppressAutoHide = true
