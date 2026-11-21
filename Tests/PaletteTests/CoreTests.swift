@@ -383,6 +383,27 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(missing.diagnostics.isEmpty)
     }
 
+    func testSiriThemesAreDefaultAndCatalogued() {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("palette-themes-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let catalog = ThemeLoader.catalog(themesDirectory: directory)
+        let silver = catalog.first { $0.name == "siri-silver" }
+        let graphite = catalog.first { $0.name == "siri-graphite" }
+        XCTAssertEqual(silver?.appearance, "light")
+        XCTAssertEqual(silver?.displayName, "Siri Silver")
+        XCTAssertEqual(graphite?.appearance, "dark")
+        XCTAssertEqual(graphite?.displayName, "Siri Graphite")
+
+        XCTAssertEqual(ThemeLoader.load(name: "siri-silver", themesDirectory: directory).theme.palette.bg, "#e9ebf0")
+        XCTAssertEqual(ThemeLoader.load(name: "siri-graphite", themesDirectory: directory).theme.palette.bg, "#24262d")
+
+        let selection = PaletteConfig().theme
+        XCTAssertEqual(selection.dark, "siri-graphite")
+        XCTAssertEqual(selection.light, "siri-silver")
+    }
+
     func testWebSearchEngineBangFieldsRoundTrip() throws {
         var config = PaletteConfig()
         config.webSearchEngines[0].keyword = "goog"

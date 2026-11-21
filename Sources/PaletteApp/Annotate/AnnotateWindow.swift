@@ -1,4 +1,5 @@
 import AppKit
+import PaletteCore
 import PalettePlatform
 import SwiftUI
 import UniformTypeIdentifiers
@@ -10,8 +11,9 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     var onClose: (() -> Void)?
     var shapeCount: Int { editor.shapes.count }
 
-    init(image: NSImage, url: URL?) {
+    init(image: NSImage, url: URL?, themeManager: ThemeManager) {
         editor = AnnotationEditor(image: image, url: url)
+        let theme = themeManager.theme
 
         let size = image.size
         let maxSize = NSSize(width: 1180, height: 760)
@@ -36,21 +38,31 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.setAccessibilitySubrole(.dialog)
         window.title = url?.lastPathComponent ?? "Annotate"
-        window.appearance = NSAppearance(named: .darkAqua)
+        window.appearance = theme.nsAppearance
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .visible
-        window.backgroundColor = NSColor(white: 0.10, alpha: 1)
-        window.isOpaque = true
+        window.backgroundColor = theme.nsColor(theme.palette.bg)
+        window.isOpaque = false
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 820, height: 320)
         super.init(window: window)
         window.delegate = self
-        window.contentView = NSHostingView(rootView: AnnotateView(editor: editor, close: { [weak self] in self?.close() }))
+        window.contentView = NSHostingView(rootView: AnnotateView(
+            editor: editor,
+            themeManager: themeManager,
+            close: { [weak self] in self?.close() }
+        ))
         window.center()
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// The image canvas keeps its neutral backdrop; only the window chrome follows the theme.
+    func apply(theme: Theme) {
+        window?.appearance = theme.nsAppearance
+        window?.backgroundColor = theme.nsColor(theme.palette.bg)
     }
 
     func show() {
@@ -73,16 +85,20 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
 /// Plain capsules instead of AppKit push buttons: the stock bezel drew a
 /// white pill with invisible text inside a dark window.
 struct PillButton: ButtonStyle {
+    var theme: Theme
+
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 11, weight: .medium))
-            .foregroundColor(.white)
+            .foregroundColor(theme.color(theme.palette.fg))
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(
-                Capsule().fill(Color(white: 1, opacity: configuration.isPressed ? 0.28 : 0.14))
+                Capsule()
+                    .fill(theme.color(theme.palette.elevated).opacity(configuration.isPressed ? 0.5 : 0.85))
+                    .overlay(Capsule().strokeBorder(theme.color(theme.palette.border), lineWidth: 0.5))
             )
             .opacity(isEnabled ? 1 : 0.4)
             .contentShape(Capsule())
@@ -91,6 +107,7 @@ struct PillButton: ButtonStyle {
 
 struct AnnotateView: View {
     @ObservedObject var editor: AnnotationEditor
+    @ObservedObject var themeManager: ThemeManager
     var close: () -> Void
 
     @State private var dragStart: CGPoint?
@@ -115,6 +132,10 @@ struct AnnotateView: View {
     }
 
     private let palette: [NSColor] = [.systemRed, .systemYellow, .systemGreen, .systemBlue, .white, .black]
+    /// Image editing gets a fixed neutral backdrop; the theme must not tint it.
+    private let canvasBackdrop = Color(white: 0.10)
+
+    private var theme: Theme { themeManager.theme }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -125,7 +146,7 @@ struct AnnotateView: View {
                 let canvas = CGSize(width: base.width * zoom, height: base.height * zoom)
                 ScrollView([.horizontal, .vertical]) {
                     ZStack {
-                        Color(white: 0.10)
+                        canvasBackdrop
                         canvasView(canvas)
                     }
                     .frame(
@@ -133,7 +154,7 @@ struct AnnotateView: View {
                         height: max(canvas.height, geo.size.height)
                     )
                 }
-                .background(Color(white: 0.10))
+                .background(canvasBackdrop)
                 .overlay(alignment: .top) { toastView }
                 .task(id: toastToken) {
                     guard toast != nil else { return }
@@ -208,12 +229,12 @@ struct AnnotateView: View {
                     Text(toast).lineLimit(2)
                 }
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(theme.color(theme.palette.fg))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(
-                    Capsule().fill(Color(white: 0.16))
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.15)))
+                    Capsule().fill(theme.color(theme.palette.elevated))
+                        .overlay(Capsule().strokeBorder(theme.color(theme.palette.border)))
                 )
                 .padding(.top, 14)
                 .transition(.opacity)
@@ -237,7 +258,10 @@ struct AnnotateView: View {
                         .fill(Color(nsColor: colour))
                         .frame(width: 14, height: 14)
                         .overlay(
-                            Circle().strokeBorder(.white.opacity(editor.color == colour ? 0.9 : 0.2), lineWidth: 1.5)
+                            Circle().strokeBorder(
+                                theme.color(theme.palette.fg).opacity(editor.color == colour ? 0.9 : 0.2),
+                                lineWidth: 1.5
+                            )
                         )
                 }
                 .buttonStyle(.plain)
@@ -284,11 +308,13 @@ struct AnnotateView: View {
             Button("Done") { finish() }
                 .keyboardShortcut(.escape, modifiers: [])
         }
-        .buttonStyle(PillButton())
+        .buttonStyle(PillButton(theme: theme))
         .controlSize(.small)
         .padding(.horizontal, 10)
         .frame(height: 44)
-        .background(Color(white: 0.12))
+        .background {
+            GlassSurface(shape: Rectangle(), tint: theme.color(theme.palette.elevated).opacity(0.55))
+        }
     }
 
     private func toolButton(_ tool: AnnotateTool) -> some View {
@@ -302,7 +328,7 @@ struct AnnotateView: View {
                 .frame(width: 24, height: 22)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(editor.tool == tool ? Color.accentColor.opacity(0.25) : Color.clear)
+                        .fill(editor.tool == tool ? theme.color(theme.palette.accent).opacity(0.25) : Color.clear)
                 )
         }
         .buttonStyle(.plain)
@@ -398,7 +424,7 @@ struct AnnotateView: View {
         let padded = box.insetBy(dx: -4, dy: -4)
         context.stroke(
             Path(padded),
-            with: .color(Color.white.opacity(0.85)),
+            with: .color(.white.opacity(0.9)),
             style: StrokeStyle(lineWidth: 1, dash: [4, 3])
         )
     }

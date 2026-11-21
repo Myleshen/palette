@@ -243,7 +243,8 @@ public struct ThemeInfo: Identifiable, Equatable, Sendable {
 public enum ThemeLoader {
     public static let builtinNames = [
         "default-dark", "default-light", "catppuccin-mocha", "catppuccin-latte",
-        "gruvbox-dark", "gruvbox-light", "aetheria-pink",
+        "gruvbox-dark", "gruvbox-light", "aetheria-pink", "siri-silver",
+        "siri-graphite",
     ]
 
     public static func load(
@@ -260,9 +261,9 @@ public enum ThemeLoader {
     public static func catalog(themesDirectory: URL) -> [ThemeInfo] {
         var infos: [ThemeInfo] = []
         for name in builtinNames {
-            let appearance = name.contains("light") || name.contains("latte") ? "light" : "dark"
-            let display = name.split(separator: "-").map { $0.capitalized }.joined(separator: " ")
-            infos.append(ThemeInfo(name: name, displayName: display, appearance: appearance, isBuiltin: true))
+            var diagnostics: [Diagnostic] = []
+            let theme = resolve(name: name, themesDirectory: themesDirectory, fallback: .defaultDark, visited: [], diagnostics: &diagnostics)
+            infos.append(ThemeInfo(name: name, displayName: theme.name, appearance: theme.appearance, isBuiltin: true))
         }
 
         guard let files = try? FileManager.default.contentsOfDirectory(at: themesDirectory, includingPropertiesForKeys: nil) else {
@@ -660,6 +661,80 @@ public enum ThemeLoader {
             bg = "#33262f"
             [states.disabled]
             fg = "#a28a99"
+            """
+        case "siri-silver":
+            return """
+            name = "Siri Silver"
+            appearance = "light"
+            extends = "default-light"
+
+            [palette]
+            bg = "#e9ebf0"
+            surface = "#f5f6f9"
+            elevated = "#ffffff"
+            fg = "#1b1d23"
+            fg_muted = "#5b6170"
+            accent = "#5b7cfa"
+            accent_fg = "#ffffff"
+            selection_bg = "#d6dae3"
+            selection_fg = "#14161b"
+            match_fg = "#7a5cff"
+            border = "#c3c8d2"
+            separator = "#bfc4ce80"
+            badge_bg = "#d6dae3"
+            badge_fg = "#2a2d34"
+
+            [states.selected]
+            bg = "#d6dae3"
+            fg = "#14161b"
+            [states.hover]
+            bg = "#eef0f4"
+            [states.disabled]
+            fg = "#9aa0ab"
+
+            [window]
+            glass = true
+            glass_opacity = 0.72
+
+            [footer]
+            hint_color = "#5b6170"
+            """
+        case "siri-graphite":
+            return """
+            name = "Siri Graphite"
+            appearance = "dark"
+            extends = "default-dark"
+
+            [palette]
+            bg = "#24262d"
+            surface = "#2b2e36"
+            elevated = "#333743"
+            fg = "#e7e9ee"
+            fg_muted = "#a3a8b3"
+            accent = "#7c9cff"
+            accent_fg = "#0d0f14"
+            selection_bg = "#3a3f4a"
+            selection_fg = "#f0f2f6"
+            match_fg = "#9db4ff"
+            border = "#464b57"
+            separator = "#3a3f4a80"
+            badge_bg = "#464b57"
+            badge_fg = "#e7e9ee"
+
+            [states.selected]
+            bg = "#3a3f4a"
+            fg = "#f0f2f6"
+            [states.hover]
+            bg = "#2b2e36"
+            [states.disabled]
+            fg = "#767c88"
+
+            [window]
+            glass = true
+            glass_opacity = 0.7
+
+            [footer]
+            hint_color = "#a3a8b3"
             """
         default:
             return nil
