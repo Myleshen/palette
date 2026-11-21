@@ -740,7 +740,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(StatsProvider())
         providers.append(SSHProvider(launcher: launcher, terminalApp: configuration.terminalApp))
         providers.append(DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp))
-        providers.append(GitHubProvider(launcher: launcher, terminalApp: configuration.terminalApp))
         providers.append(UnitsProvider())
         providers.append(WindowProvider(launcher: launcher))
         providers.append(ShotsProvider(service: captureService))
@@ -776,6 +775,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(RecentProvider(store: store, launcher: launcher, editor: configuration.editorOpenWith))
         providers.append(SnippetProvider(bridge: hostProxy))
         providers.append(GitProvider(launcher: launcher, bridge: hostProxy))
+        for kind in GitHubKind.allCases {
+            providers.append(GitHubProvider(
+                kind: kind,
+                launcher: launcher,
+                bridge: hostProxy,
+                terminalApp: configuration.terminalApp,
+                terminal: configuration.terminal
+            ))
+        }
         for kind in BitwardenKind.allCases {
             providers.append(BitwardenProvider(
                 kind: kind,
