@@ -142,28 +142,6 @@ public final class SearchController: ObservableObject, HostBridge {
         panelDidShow()
     }
 
-    public func openAsk() {
-        // The terminal, scratchpad and ask panel share the content area; only
-        // one may be up, so switching modes closes the previous one.
-        if terminalActive { closeTerminalPanel() }
-        if scratchpadActive { closeScratchpad(save: true) }
-        previewEnabled = true
-        updatePreviewWidth()
-        actionsMode = false
-        actionItems = []
-        query = "\(configuration.providerPrefix)ask "
-        panelDidShow()
-    }
-
-    /// The question typed after `/ask`, for sending it straight to the window.
-    public var askQuestion: String? {
-        guard activeProviderID == "ask" else { return nil }
-        let prefix = configuration.providerPrefix + "ask"
-        guard query.hasPrefix(prefix) else { return nil }
-        let question = query.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
-        return question.isEmpty ? nil : question
-    }
-
     public func panelDidHide() {
         searchTask?.cancel()
         isSearching = false
@@ -217,8 +195,8 @@ public final class SearchController: ObservableObject, HostBridge {
         // Show the target provider immediately instead of stale global rows.
         let parsed = registry.parser.parse(query)
         // Preview is useful wherever a row has something worth showing:
-        // clipboard, Ask, snippets, and path/project providers.
-        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj", "shots", "cheat", "atlas"]
+        // clipboard, snippets, and path/project providers.
+        let previewProvider = ["clip", "snip", "recent", "neo", "neof", "proj", "shots", "cheat", "atlas"]
             .contains(parsed.providerID ?? "")
         if previewProvider {
             if !previewEnabled {
@@ -580,7 +558,7 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         for provider in registry.providers {
             guard let trigger = provider.descriptor.trigger else { continue }
-            if provider.descriptor.id == "askh" || handled.contains(provider.descriptor.id) { continue }
+            if handled.contains(provider.descriptor.id) { continue }
             tabs.append(ProviderTab(
                 id: provider.descriptor.id,
                 title: provider.descriptor.name,
@@ -594,7 +572,6 @@ public final class SearchController: ObservableObject, HostBridge {
     public var activeTabID: String {
         let provider = registry.parser.parse(query).providerID
         if provider == nil { return "apps" }
-        if provider == "askh" { return "ask" }
         for group in Self.groups where group.members.contains(provider ?? "") {
             return group.id
         }
@@ -651,14 +628,6 @@ public final class SearchController: ObservableObject, HostBridge {
         if text.hasPrefix("file") { return "files" }
         if text.hasPrefix("text") { return "text" }
         return nil
-    }
-
-    public var askHistoryMode: Bool {
-        registry.parser.parse(query).providerID == "askh"
-    }
-
-    public func setAskMode(history: Bool) {
-        query = registry.parser.prefix + (history ? "askh " : "ask ")
     }
 
     public func setClipboardFilter(_ kind: String?) {
@@ -937,19 +906,6 @@ public final class SearchController: ObservableObject, HostBridge {
                     if let entryID = action.value.text {
                         query = registry.parser.prefix + "clip transform:" + entryID
                     }
-                } else if action.id == "ask-settings" {
-                    onOpenConfig?()
-                    panel?.hide()
-                } else if action.id == "ask-again" {
-                    // Re-ask for real; reopening the query alone would just show
-                    // the cached answer again.
-                    if let question = action.value.text {
-                        try await registry.activate(item: item, action: action)
-                        query = registry.parser.prefix + "ask " + question
-                        scheduleSearch(debounce: false)
-                    }
-                } else if action.id == "ask-history" {
-                    query = registry.parser.prefix + "askh "
                 } else if action.id == "pin-item" {
                     try await store.pinItem(item)
                     setStatus("Pinned \(item.title)", duration: 2)
@@ -984,10 +940,6 @@ public final class SearchController: ObservableObject, HostBridge {
             return ["add", "remove", "shortcut", "clear-shortcut"].contains(action.id)
         case "bw", "bwu", "bwt", "bwn", "bwo":
             return ["install", "login", "unlock", "retry"].contains(action.id)
-        case "ask":
-            return ["select-model", "ask"].contains(action.id)
-        case "askh":
-            return action.id == "delete-ask"
         case "atlas":
             return ["review", "copy-path", "open-index"].contains(action.id)
         case "git":
@@ -1136,10 +1088,10 @@ public final class SearchController: ObservableObject, HostBridge {
     /// footer and the pill inset.
     private var tabChromeHeight: CGFloat {
         // The tab strip wraps, so use its measured height; add a sub-row when
-        // a mode (clipboard filters, Ask history, provider group) adds one.
+        // a mode (clipboard filters, provider group) adds one.
         // Hidden tabs contribute no strip, but their sub-row still shows.
         var tabs = windowConfig.showTabs ? max(44, tabStripHeight) : 0
-        if activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1 { tabs += 38 }
+        if activeTabID == "clip" || activeGroupMembers.count > 1 { tabs += 38 }
         let footer = themeManager.theme.footer.show ? CGFloat(28) : 0
         return tabs + footer + 22
     }

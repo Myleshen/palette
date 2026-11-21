@@ -168,7 +168,7 @@ public struct AskStreamParser {
     }
 }
 
-/// Minimal OpenAI-compatible chat-completions client. `/ask` keeps a
+/// Minimal OpenAI-compatible chat-completions client. The Ask chat keeps a
 /// conversation and renders the answer as it streams in.
 public enum AskClient {
     /// Streaming can still stall before the first token, so a generous

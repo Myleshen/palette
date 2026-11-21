@@ -92,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let screenshotHUD = ScreenshotHUD()
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
-    private var askWindows: [AskWindowController] = []
+    private var askWindow: AskWindowController?
     private var systemIsShuttingDown = false
     private var askService: AskService?
     private var startupDiagnostics: [Diagnostic] = []
@@ -364,14 +364,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     NotificationCenter.default.post(name: .paletteSettingsTab, object: index)
                 } else if step == "clipboard" {
                     self.showClipboard()
-                } else if step == "ask" {
-                    self.searchController.openAsk()
                 } else if step == "scratchpad" {
                     self.searchController.openScratchpad()
                 } else if let question = step.dropPrefix("askwindow=") {
                     self.showAskWindow(question: question)
+                } else if step == "chatwindow" {
+                    self.showAskWindow(question: "")
+                } else if let value = step.dropPrefix("chatopen="), let index = Int(value) {
+                    self.openSavedChat(at: index)
                 } else if step == "ask_cancel" {
-                    self.askWindows.last?.cancelRequest()
+                    self.askWindow?.cancelRequest()
+                } else if step == "asktoggle" {
+                    self.toggleAskWindow()
+                } else if step == "askclose" {
+                    self.askWindow?.window?.close()
                 } else if step == "quit" {
                     NSApp.terminate(nil)
                 } else if step == "exit" {
@@ -400,7 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else if let value = step.dropPrefix("snapshot=") {
                     self.writeSnapshot(to: value)
                 } else if let value = step.dropPrefix("window_snapshot=") {
-                    if let ask = self.askWindows.last?.window {
+                    if let ask = self.askWindow?.window {
                         // Include the titlebar: it is transparent, so only the
                         // frame view shows whether the title is legible.
                         self.write(view: ask.contentView?.superview ?? NSView(), to: value)
@@ -448,6 +454,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var scratchpadActive: Bool
         var terminalActive: Bool
         var askWindows: Int
+        var askStreaming: Bool
+        var askTurns: Int
+        var askChats: Int
+        var askBadge: String
         var statusMessage: String
         var items: [PaletteItem]
     }
@@ -458,6 +468,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let scriptKeys = [
         "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
         "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "askWindows",
+        "askStreaming", "askTurns", "askChats", "askBadge",
         "firstTitle", "firstProvider", "statusMessage",
     ]
 
@@ -472,7 +483,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             previewEnabled: searchController?.previewEnabled ?? false,
             scratchpadActive: searchController?.scratchpadActive ?? false,
             terminalActive: searchController?.terminalActive ?? false,
-            askWindows: askWindows.count,
+            askWindows: askWindow == nil ? 0 : 1,
+            askStreaming: askWindow?.isStreaming ?? false,
+            askTurns: askWindow?.turnCount ?? 0,
+            askChats: askWindow?.chatCount ?? 0,
+            askBadge: NSApp.dockTile.badgeLabel ?? "",
             statusMessage: searchController?.statusMessage ?? "",
             items: searchController?.items ?? []
         )
@@ -488,6 +503,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "scratchpadActive": return String(observation.scratchpadActive)
         case "terminalActive": return String(observation.terminalActive)
         case "askWindows": return String(observation.askWindows)
+        case "askStreaming": return String(observation.askStreaming)
+        case "askTurns": return String(observation.askTurns)
+        case "askChats": return String(observation.askChats)
+        case "askBadge": return observation.askBadge
         case "query": return observation.query
         case "scopeLabel": return observation.scopeLabel
         case "firstTitle": return observation.items.first?.title ?? ""
@@ -571,6 +590,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "scratchpadActive": observation.scratchpadActive,
             "terminalActive": observation.terminalActive,
             "askWindows": observation.askWindows,
+            "askStreaming": observation.askStreaming,
+            "askTurns": observation.askTurns,
+            "askChats": observation.askChats,
+            "askBadge": observation.askBadge,
             "statusMessage": observation.statusMessage,
             "items": observation.items.map {
                 ["id": $0.id, "title": $0.title, "providerID": $0.providerID]
@@ -709,11 +732,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Spotlight is off for these users, so quitting with the launcher open
         // would leave them with nothing. The first ⌘Q dismisses instead, unless
         // the system is logging out or restarting.
-        guard !systemIsShuttingDown, panel?.isVisible == true || !askWindows.isEmpty else {
+        guard !systemIsShuttingDown,
+              panel?.isVisible == true || askWindow?.window?.isVisible == true else {
             return .terminateNow
         }
         panel?.hide(activatePrevious: false)
-        for controller in askWindows { controller.close() }
+        askWindow?.close()
         Log.shared.info("Quit intercepted: dismissed the launcher instead", source: "app")
         return .terminateCancel
     }
@@ -758,11 +782,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ClipboardProvider(store: store, bridge: hostProxy))
         let askService = AskService(store: store, configuration: configuration.ask)
         self.askService = askService
-        let openAskWindow: @MainActor (String) -> Void = { [weak self] question in
-            self?.showAskWindow(question: question)
-        }
-        providers.append(AskProvider(service: askService, bridge: hostProxy, onAsk: openAskWindow))
-        providers.append(AskHistoryProvider(service: askService, bridge: hostProxy, onAsk: openAskWindow))
         providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, onChange: { [weak self] in
             await self?.exportWebApps()
         }))
@@ -1111,7 +1130,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// scanning NSApp.windows used to leave the Dock icon behind whenever any
     /// other window happened to be visible.
     private func updateActivationPolicy() {
-        let editing = !annotateWindows.isEmpty || !mediaPreviews.isEmpty || !askWindows.isEmpty
+        let askNeedsDock = askWindow?.window?.isVisible == true
+            || askWindow?.isStreaming == true
+            || (NSApp.dockTile.badgeLabel?.isEmpty == false)
+        let editing = !annotateWindows.isEmpty || !mediaPreviews.isEmpty || askNeedsDock
         let policy: NSApplication.ActivationPolicy = editing ? .regular : .accessory
         guard NSApp.activationPolicy() != policy else { return }
         NSApp.setActivationPolicy(policy)
@@ -1251,32 +1273,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.show()
     }
 
-    /// Opens a chat window with `question` as its first turn. The panel stays
-    /// up: its query is still useful while the answer streams, and the window
-    /// sits under it.
+    /// Opens the single ask chat window. A question starts a fresh chat; an
+    /// empty question re-shows the existing transcript.
     private func showAskWindow(question: String, model: AskModel? = nil) {
         guard let askService else { return }
+        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty, let existing = askWindow {
+            let panelFrame = panel?.isVisible == true ? panel?.panel.frame : nil
+            existing.show(below: panelFrame)
+            updateActivationPolicy()
+            return
+        }
+        if let existing = askWindow {
+            existing.close()
+            askWindow = nil
+        }
         panel?.suppressAutoHide = true
         Task { @MainActor [weak self] in
             guard let self else { return }
             let selected = if let model { model } else { await askService.selectedModel() }
             let controller = AskWindowController(
                 service: askService,
-                question: question,
+                question: trimmed,
                 model: selected,
                 themeManager: self.themeManager,
-                notify: self.configuration.ask.notify
+                notify: self.configuration.ask.notify,
+                webSearch: self.configuration.ask.webSearch
             )
-            controller.onClose = { [weak self, weak controller] in
-                guard let self, let controller else { return }
-                self.askWindows.removeAll { $0 === controller }
-                self.panel?.suppressAutoHide = !self.askWindows.isEmpty
+            controller.onClose = { [weak self] in
+                guard let self else { return }
+                self.panel?.suppressAutoHide = self.askWindow?.window?.isVisible == true
                 self.updateActivationPolicy()
             }
-            self.askWindows.append(controller)
+            controller.onStatusChange = { [weak self] in
+                guard let self else { return }
+                self.panel?.suppressAutoHide = self.askWindow?.window?.isVisible == true
+                self.updateActivationPolicy()
+            }
+            self.askWindow = controller
             self.updateActivationPolicy()
             let panelFrame = self.panel?.isVisible == true ? self.panel?.panel.frame : nil
             controller.show(below: panelFrame)
+        }
+    }
+
+    /// ⌘⌥A: show the existing chat or hide it. Hiding never cancels a request.
+    private func toggleAskWindow() {
+        if let controller = askWindow, let window = controller.window, window.isVisible {
+            window.orderOut(nil)
+            panel?.suppressAutoHide = false
+            updateActivationPolicy()
+            return
+        }
+        if let existing = askWindow {
+            let panelFrame = panel?.isVisible == true ? panel?.panel.frame : nil
+            existing.show(below: panelFrame)
+            updateActivationPolicy()
+            return
+        }
+        showAskWindow(question: "")
+    }
+
+    @objc private func showAskWindowFromMenu() {
+        toggleAskWindow()
+    }
+
+    /// Opens the Nth saved chat in the current ask window. Script-only hook so
+    /// the relaunch test can restore a transcript without mouse input.
+    private func openSavedChat(at index: Int) {
+        guard let askService, let controller = askWindow else { return }
+        Task { @MainActor in
+            guard let chats = try? await askService.chats(limit: 200),
+                  chats.indices.contains(index) else { return }
+            controller.open(chat: chats[index])
         }
     }
 
@@ -1287,7 +1356,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         onboardingWindow?.backgroundColor = theme.nsColor(theme.palette.bg)
         for controller in annotateWindows { controller.apply(theme: theme) }
         for controller in mediaPreviews { controller.apply(theme: theme) }
-        for controller in askWindows { controller.apply(theme: theme) }
+        askWindow?.apply(theme: theme)
     }
 
     @objc private func stopRecordingFromMenu() {
@@ -1373,7 +1442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if askHotkey == nil {
             askHotkey = HotKeyManager(hotKeyID: 5)
-            askHotkey.onPressed = { [weak self] in self?.showAsk() }
+            askHotkey.onPressed = { [weak self] in self?.toggleAskWindow() }
         }
         do {
             currentAskHotKey = try askHotkey.register(configuration.askHotkey)
@@ -1385,22 +1454,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 source: "hotkey"
             )
         }
-    }
-
-    private func showAsk() {
-        guard let panel, let controller = searchController else { return }
-        if panel.isVisible, controller.activeTabID == "ask" {
-            // A second press with a question typed sends it to the window;
-            // with nothing typed it closes the panel.
-            if let question = controller.askQuestion {
-                showAskWindow(question: question)
-            } else {
-                panel.hide()
-            }
-            return
-        }
-        panel.show()
-        controller.openAsk()
     }
 
     private func toggleTerminalPanel() {
@@ -1642,6 +1695,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
         settings.target = self
         appMenu.addItem(settings)
+        appMenu.addItem(.separator())
+        let askItem = NSMenuItem(title: "Ask…", action: #selector(showAskWindowFromMenu), keyEquivalent: "a")
+        askItem.keyEquivalentModifierMask = [.command, .option]
+        askItem.target = self
+        appMenu.addItem(askItem)
         appMenu.addItem(.separator())
 
         let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")

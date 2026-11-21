@@ -30,6 +30,67 @@ public struct RecentUse: Identifiable, Equatable, Sendable {
     public var id: String { stableID }
 }
 
+public struct AskChat: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    /// Model id, e.g. `muse-spark-1.3-contributor`.
+    public var model: String
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: String, title: String, model: String, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.title = title
+        self.model = model
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    /// One line for the sidebar, cut at ~48 characters.
+    public static func title(from question: String, limit: Int = 48) -> String {
+        let single = question
+            .split(whereSeparator: { $0.isNewline })
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard single.count > limit else { return single }
+        return String(single.prefix(limit)).trimmingCharacters(in: .whitespaces) + "…"
+    }
+}
+
+public struct AskChatMessage: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var chatID: String
+    public var role: AskMessage.Role
+    public var content: String
+    public var createdAt: Date
+    public var durationMs: Int
+    public var promptTokens: Int
+    public var completionTokens: Int
+    public var sources: [AskSource]
+
+    public init(
+        id: String,
+        chatID: String,
+        role: AskMessage.Role,
+        content: String,
+        createdAt: Date,
+        durationMs: Int = 0,
+        promptTokens: Int = 0,
+        completionTokens: Int = 0,
+        sources: [AskSource] = []
+    ) {
+        self.id = id
+        self.chatID = chatID
+        self.role = role
+        self.content = content
+        self.createdAt = createdAt
+        self.durationMs = durationMs
+        self.promptTokens = promptTokens
+        self.completionTokens = completionTokens
+        self.sources = sources
+    }
+}
+
 public actor PaletteStore {
     private var database: OpaquePointer?
 
@@ -46,6 +107,7 @@ public actor PaletteStore {
         try Self.execute("PRAGMA journal_mode=WAL;", on: handle)
         try Self.execute("PRAGMA synchronous=NORMAL;", on: handle)
         try Self.execute("PRAGMA busy_timeout=3000;", on: handle)
+        try Self.execute("PRAGMA foreign_keys=ON;", on: handle)
         try Self.migrate(handle)
     }
 
@@ -115,6 +177,29 @@ public actor PaletteStore {
         );
         CREATE INDEX IF NOT EXISTS ask_history_created ON ask_history(created DESC);
 
+        CREATE TABLE IF NOT EXISTS ask_chats (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            model TEXT NOT NULL,
+            created REAL NOT NULL,
+            updated REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ask_chats_updated ON ask_chats(updated DESC);
+
+        CREATE TABLE IF NOT EXISTS ask_chat_messages (
+            id TEXT PRIMARY KEY,
+            chat_id TEXT NOT NULL REFERENCES ask_chats(id) ON DELETE CASCADE,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created REAL NOT NULL,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            prompt_tokens INTEGER NOT NULL DEFAULT 0,
+            completion_tokens INTEGER NOT NULL DEFAULT 0,
+            sources TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ask_chat_messages_chat
+            ON ask_chat_messages(chat_id, created);
+
         CREATE TABLE IF NOT EXISTS scratch_notes (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
@@ -142,6 +227,9 @@ public actor PaletteStore {
         }
         if try !hasColumn("clipboard", "height", on: database) {
             try execute("ALTER TABLE clipboard ADD COLUMN height INTEGER NOT NULL DEFAULT 0;", on: database)
+        }
+        if try !hasColumn("ask_chat_messages", "sources", on: database) {
+            try execute("ALTER TABLE ask_chat_messages ADD COLUMN sources TEXT;", on: database)
         }
     }
 
@@ -702,6 +790,167 @@ public actor PaletteStore {
         defer { sqlite3_finalize(overflow) }
         sqlite3_bind_int(overflow, 1, Int32(max(1, maxHistory)))
         try step(overflow)
+    }
+
+    // MARK: - Saved ask chats
+
+    @discardableResult
+    public func createAskChat(
+        title: String,
+        model: String,
+        at date: Date = Date()
+    ) throws -> AskChat {
+        let chat = AskChat(
+            id: UUID().uuidString,
+            title: title,
+            model: model,
+            createdAt: date,
+            updatedAt: date
+        )
+        let statement = try prepare("""
+        INSERT INTO ask_chats (id, title, model, created, updated)
+        VALUES (?, ?, ?, ?, ?);
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, chat.id)
+        bind(statement, 2, chat.title)
+        bind(statement, 3, chat.model)
+        sqlite3_bind_double(statement, 4, chat.createdAt.timeIntervalSince1970)
+        sqlite3_bind_double(statement, 5, chat.updatedAt.timeIntervalSince1970)
+        try step(statement)
+        return chat
+    }
+
+    public func askChats(limit: Int = 200) throws -> [AskChat] {
+        let statement = try prepare("""
+        SELECT id, title, model, created, updated
+        FROM ask_chats ORDER BY updated DESC LIMIT ?;
+        """)
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int(statement, 1, Int32(max(1, limit)))
+        var chats: [AskChat] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let id = sqlite3_column_text(statement, 0),
+                  let title = sqlite3_column_text(statement, 1),
+                  let model = sqlite3_column_text(statement, 2) else { continue }
+            chats.append(AskChat(
+                id: String(cString: id),
+                title: String(cString: title),
+                model: String(cString: model),
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3)),
+                updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4))
+            ))
+        }
+        return chats
+    }
+
+    @discardableResult
+    public func appendAskChatMessage(
+        chatID: String,
+        role: AskMessage.Role,
+        content: String,
+        durationMs: Int = 0,
+        promptTokens: Int = 0,
+        completionTokens: Int = 0,
+        sources: [AskSource] = [],
+        at date: Date = Date()
+    ) throws -> AskChatMessage {
+        let message = AskChatMessage(
+            id: UUID().uuidString,
+            chatID: chatID,
+            role: role,
+            content: content,
+            createdAt: date,
+            durationMs: max(0, durationMs),
+            promptTokens: max(0, promptTokens),
+            completionTokens: max(0, completionTokens),
+            sources: sources
+        )
+        let statement = try prepare("""
+        INSERT INTO ask_chat_messages
+            (id, chat_id, role, content, created, duration_ms,
+             prompt_tokens, completion_tokens, sources)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, message.id)
+        bind(statement, 2, message.chatID)
+        bind(statement, 3, message.role.rawValue)
+        bind(statement, 4, message.content)
+        sqlite3_bind_double(statement, 5, message.createdAt.timeIntervalSince1970)
+        sqlite3_bind_int64(statement, 6, Int64(message.durationMs))
+        sqlite3_bind_int64(statement, 7, Int64(message.promptTokens))
+        sqlite3_bind_int64(statement, 8, Int64(message.completionTokens))
+        let sourcesText = message.sources.isEmpty
+            ? nil
+            : (try? JSONEncoder().encode(message.sources))
+                .flatMap { String(data: $0, encoding: .utf8) }
+        bind(statement, 9, sourcesText)
+        try step(statement)
+
+        // Each turn moves its chat to the top of the sidebar.
+        let touch = try prepare("UPDATE ask_chats SET updated = ? WHERE id = ?;")
+        defer { sqlite3_finalize(touch) }
+        sqlite3_bind_double(touch, 1, date.timeIntervalSince1970)
+        bind(touch, 2, chatID)
+        try step(touch)
+        return message
+    }
+
+    public func askChatMessages(chatID: String) throws -> [AskChatMessage] {
+        let statement = try prepare("""
+        SELECT id, chat_id, role, content, created, duration_ms,
+               prompt_tokens, completion_tokens, sources
+        FROM ask_chat_messages WHERE chat_id = ? ORDER BY created ASC;
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, chatID)
+        var messages: [AskChatMessage] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let id = sqlite3_column_text(statement, 0),
+                  let chat = sqlite3_column_text(statement, 1),
+                  let role = sqlite3_column_text(statement, 2),
+                  let content = sqlite3_column_text(statement, 3) else { continue }
+            let sources = sqlite3_column_text(statement, 8)
+                .flatMap { String(cString: $0).data(using: .utf8) }
+                .flatMap { try? JSONDecoder().decode([AskSource].self, from: $0) } ?? []
+            messages.append(AskChatMessage(
+                id: String(cString: id),
+                chatID: String(cString: chat),
+                role: AskMessage.Role(rawValue: String(cString: role)) ?? .assistant,
+                content: String(cString: content),
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
+                durationMs: Int(sqlite3_column_int64(statement, 5)),
+                promptTokens: Int(sqlite3_column_int64(statement, 6)),
+                completionTokens: Int(sqlite3_column_int64(statement, 7)),
+                sources: sources
+            ))
+        }
+        return messages
+    }
+
+    public func updateAskChat(
+        id: String,
+        model: String? = nil,
+        at date: Date = Date()
+    ) throws {
+        let statement = try prepare("""
+        UPDATE ask_chats
+        SET model = COALESCE(?, model), updated = ?
+        WHERE id = ?;
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, model)
+        sqlite3_bind_double(statement, 2, date.timeIntervalSince1970)
+        bind(statement, 3, id)
+        try step(statement)
+    }
+
+    public func deleteAskChat(id: String) throws {
+        let statement = try prepare("DELETE FROM ask_chats WHERE id = ?;")
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, id)
+        try step(statement)
     }
 
     // MARK: - Scratch notes

@@ -660,19 +660,6 @@ struct LauncherRootView: View {
                 .padding(.horizontal, isPill ? 14 : 12)
                 .padding(.top, isPill ? 8 : 6)
             }
-            if controller.activeTabID == "ask" {
-                HStack(spacing: 6) {
-                    modeChip("Ask", selected: !controller.askHistoryMode) {
-                        controller.setAskMode(history: false)
-                    }
-                    modeChip("History", selected: controller.askHistoryMode) {
-                        controller.setAskMode(history: true)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, isPill ? 14 : 12)
-                .padding(.top, isPill ? 8 : 6)
-            }
             if controller.activeGroupMembers.count > 1 {
                 HStack(spacing: 6) {
                     ForEach(controller.activeGroupMembers) { member in
@@ -704,7 +691,6 @@ struct LauncherRootView: View {
             }
             if controller.configuration.window.showTabs
                 || controller.activeTabID == "clip"
-                || controller.activeTabID == "ask"
                 || controller.activeGroupMembers.count > 1 {
                 Rectangle()
                     .fill(theme.color(theme.palette.separator).opacity(isPill ? 0.35 : 0.6))
