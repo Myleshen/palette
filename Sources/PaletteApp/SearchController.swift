@@ -992,6 +992,9 @@ public final class SearchController: ObservableObject, HostBridge {
             return ["review", "copy-path", "open-index"].contains(action.id)
         case "git":
             return ["status", "log", "stage", "commit", "pull", "push", "clear-output"].contains(action.id)
+        case "proj":
+            // Keep the list open so the new project shows up after it is registered.
+            return ["clone-repo", "new-project"].contains(action.id)
         default:
             return false
         }
