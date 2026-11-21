@@ -16,7 +16,15 @@ TOLERANCE="${TOLERANCE:-0.02}"
 RECORD=0
 [ "${1:-}" = "--record" ] && RECORD=1
 
-if [ ! -x "$APP" ]; then
+# A stale bundle silently compares old renders against the snapshots, which
+# reads as a passing check. Rebuild whenever the sources moved.
+bundle_is_stale() {
+  [ ! -x "$APP" ] && return 0
+  find Sources Resources Package.swift Package.resolved \
+    -newer "$APP" -type f 2>/dev/null | grep -q .
+}
+
+if bundle_is_stale; then
   echo "building…"
   make app >/dev/null
 fi

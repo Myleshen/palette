@@ -88,7 +88,6 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
             let name = fields[0]
             let state = fields[1]
             let image = fields[2]
-            let status = fields[3]
             let running = state == "running"
             return PaletteItem(
                 id: "docker:\(name)",

@@ -233,7 +233,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             if let raw = action.value.text,
                raw.hasPrefix("url:"),
                let url = URL(string: String(raw.dropFirst(4))) {
-                await MainActor.run { NSWorkspace.shared.open(url) }
+                _ = await MainActor.run { NSWorkspace.shared.open(url) }
             }
         }
     }

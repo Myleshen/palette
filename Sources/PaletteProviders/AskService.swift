@@ -181,7 +181,7 @@ public actor AskService {
             lastModel = model
             let streamed = DeltaFlag()
             let deltaSink: (@Sendable (String) -> Void)? = onDelta.map { emit in
-                { piece in
+                { @Sendable piece in
                     streamed.mark()
                     emit(piece)
                 }

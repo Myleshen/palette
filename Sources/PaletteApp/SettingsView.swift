@@ -982,7 +982,6 @@ struct SettingsView: View {
             .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries poll clear retention secrets"),
             .init(title: "Launcher position", tab: .launcher, anchor: "launcher-position", keywords: "top center position"),
             .init(title: "Search placeholder", tab: .launcher, anchor: "row-Placeholder", keywords: "search hint placeholder text"),
-            .init(title: "Show provider tabs", tab: .launcher, anchor: "launcher-tabs", keywords: "provider tabs chips"),
             .init(title: "App order", tab: .launcher, anchor: "launcher-tabs", keywords: "alphabetical frequent sorting"),
             .init(title: "Fit to the active screen", tab: .launcher, anchor: "launcher-tabs", keywords: "fit screen auto size"),
             .init(title: "Width", tab: .launcher, anchor: "row-Width", keywords: "launcher width size automatic"),

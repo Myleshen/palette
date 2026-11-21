@@ -354,7 +354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else if let value = step.dropPrefix("preview=") {
                     self.openMediaPreview(URL(fileURLWithPath: value))
                 } else if let value = step.dropPrefix("ui_drag=") {
-                    await self.simulateDrag(value)
+                    _ = await self.simulateDrag(value)
                 } else if step == "close_windows" {
                     self.annotateWindows.forEach { $0.close() }
                     self.mediaPreviews.forEach { $0.close() }
@@ -1598,7 +1598,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.contentViewController = NSHostingController(rootView: view)
         window.center()
         onboardingWindow = window
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
     }
@@ -2156,7 +2156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !settingsWindow.isVisible {
                 settingsWindow.contentView = makeSettingsHostingView()
             }
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             settingsWindow.makeKeyAndOrderFront(nil)
             settingsWindow.orderFrontRegardless()
             return
@@ -2185,7 +2185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.center()
         }
         settingsWindow = window
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
     }

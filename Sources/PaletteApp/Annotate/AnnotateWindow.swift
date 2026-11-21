@@ -498,7 +498,7 @@ struct AnnotateView: View {
                     dragStart = nil
                     dragCurrent = nil
                 }
-                if let moving {
+                if self.moving != nil {
                     self.moving = nil
                     let distance = hypot(value.location.x - value.startLocation.x, value.location.y - value.startLocation.y)
                     if distance > 1 { unsaved = true }
@@ -603,7 +603,7 @@ struct AnnotateView: View {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try editor.save(to: url)
+            _ = try editor.save(to: url)
             unsaved = false
             notify("Saved \(url.lastPathComponent)")
             closeAfterToast()

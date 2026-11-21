@@ -9,7 +9,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP="build/Palette.app/Contents/MacOS/Palette"
-if [ ! -x "$APP" ]; then
+# A stale bundle exercises old code and passes: rebuild whenever sources moved.
+bundle_is_stale() {
+  [ ! -x "$APP" ] && return 0
+  find Sources Resources Package.swift Package.resolved \
+    -newer "$APP" -type f 2>/dev/null | grep -q .
+}
+
+if bundle_is_stale; then
   make app
 fi
 
