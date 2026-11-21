@@ -19,13 +19,17 @@ final class AskWindowState: ObservableObject {
     @Published private(set) var phase: Phase = .asking
 
     private let service: AskService
+    private let notify: Bool
+    private let isKey: () -> Bool
     private var task: Task<Void, Never>?
     private var started = false
 
-    init(service: AskService, question: String, model: AskModel) {
+    init(service: AskService, question: String, model: AskModel, notify: Bool, isKey: @escaping () -> Bool) {
         self.service = service
         self.question = question
         self.selectedModel = model
+        self.notify = notify
+        self.isKey = isKey
     }
 
     func start() {
@@ -66,6 +70,10 @@ final class AskWindowState: ObservableObject {
                 let record = try await service.ask(question)
                 guard !Task.isCancelled else { return }
                 phase = .answered(record)
+                if notify {
+                    if !isKey() { NSSound(named: "Glass")?.play() }
+                    if !NSApp.isActive { NSApp.requestUserAttention(.informationalRequest) }
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 phase = .failed(error.localizedDescription)

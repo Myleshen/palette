@@ -33,20 +33,15 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
         var project: String
         var kind: String
         var lastSeen: String
-        var reviewedAt: Double?
         var mtime: Double
         var marked: Bool
         var preview: String?
         var relativePath: String
 
-        /// Mirrors atlas's `inbox_items`: artifacts only, re-queued by a marker,
-        /// never reviewed, or edited after review.
-        var isInbox: Bool {
-            guard kind == "artifact" else { return false }
-            if marked { return true }
-            guard let reviewedAt else { return true }
-            return mtime > reviewedAt
-        }
+        /// Mirrors atlas's `inbox_items` exactly: only artifacts that carry the
+        /// review marker. Acking a file removes the marker, so it leaves the
+        /// inbox; nothing queues by default.
+        var isInbox: Bool { kind == "artifact" && marked }
     }
 
     private struct Snapshot: Sendable {
@@ -218,7 +213,6 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
         var kind: String?
         var last_seen: String?
         var removed_on: String?
-        var reviewed_at: Double?
     }
 
     private static func load(_ config: Config) -> Snapshot {
@@ -258,7 +252,6 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
                 project: project,
                 kind: stored.kind ?? "doc",
                 lastSeen: stored.last_seen ?? "",
-                reviewedAt: stored.reviewed_at,
                 mtime: modified.timeIntervalSince1970,
                 marked: marked,
                 preview: preview,

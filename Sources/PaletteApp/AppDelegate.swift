@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
     private var askWindows: [AskWindowController] = []
+    private var systemIsShuttingDown = false
     private var askService: AskService?
     private var startupDiagnostics: [Diagnostic] = []
     private var themeObserver: NSObjectProtocol?
@@ -112,6 +113,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        // Shutdown and logout must never be blocked by the ⌘Q guard below.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleWillPowerOff),
+            name: NSWorkspace.willPowerOffNotification,
+            object: nil
+        )
         // Finder launches inherit launchd's minimal PATH. Give child CLIs
         // (devx, bw, zellij) the Homebrew directories without changing tools
         // that already use absolute paths.
@@ -364,6 +372,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.showAskWindow(question: question)
                 } else if step == "ask_cancel" {
                     self.askWindows.last?.cancelRequest()
+                } else if step == "quit" {
+                    NSApp.terminate(nil)
                 } else if step == "exit" {
                     self.finishScript()
                 } else if let value = step.dropPrefix("dump=") {
@@ -437,6 +447,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var previewEnabled: Bool
         var scratchpadActive: Bool
         var terminalActive: Bool
+        var askWindows: Int
         var statusMessage: String
         var items: [PaletteItem]
     }
@@ -446,7 +457,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private static let scriptKeys = [
         "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
-        "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive",
+        "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "askWindows",
         "firstTitle", "firstProvider", "statusMessage",
     ]
 
@@ -461,6 +472,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             previewEnabled: searchController?.previewEnabled ?? false,
             scratchpadActive: searchController?.scratchpadActive ?? false,
             terminalActive: searchController?.terminalActive ?? false,
+            askWindows: askWindows.count,
             statusMessage: searchController?.statusMessage ?? "",
             items: searchController?.items ?? []
         )
@@ -475,6 +487,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "previewEnabled": return String(observation.previewEnabled)
         case "scratchpadActive": return String(observation.scratchpadActive)
         case "terminalActive": return String(observation.terminalActive)
+        case "askWindows": return String(observation.askWindows)
         case "query": return observation.query
         case "scopeLabel": return observation.scopeLabel
         case "firstTitle": return observation.items.first?.title ?? ""
@@ -557,6 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "previewEnabled": observation.previewEnabled,
             "scratchpadActive": observation.scratchpadActive,
             "terminalActive": observation.terminalActive,
+            "askWindows": observation.askWindows,
             "statusMessage": observation.statusMessage,
             "items": observation.items.map {
                 ["id": $0.id, "title": $0.title, "providerID": $0.providerID]
@@ -685,6 +699,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let registry = self.registry
         Task { await registry?.shutdown() }
+    }
+
+    @objc private func handleWillPowerOff() {
+        systemIsShuttingDown = true
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Spotlight is off for these users, so quitting with the launcher open
+        // would leave them with nothing. The first ⌘Q dismisses instead, unless
+        // the system is logging out or restarting.
+        guard !systemIsShuttingDown, panel?.isVisible == true || !askWindows.isEmpty else {
+            return .terminateNow
+        }
+        panel?.hide(activatePrevious: false)
+        for controller in askWindows { controller.close() }
+        Log.shared.info("Quit intercepted: dismissed the launcher instead", source: "app")
+        return .terminateCancel
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -1212,11 +1243,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.show()
     }
 
-    /// One question, one window. The panel only carried the question, so it
-    /// steps aside before the window takes over.
+    /// One question, one window. The panel stays up: its query is still useful
+    /// while the answer loads, and the answer window sits under it.
     private func showAskWindow(question: String, model: AskModel? = nil) {
         guard let askService else { return }
-        panel?.hide(activatePrevious: false)
+        panel?.suppressAutoHide = true
         Task { @MainActor [weak self] in
             guard let self else { return }
             let selected = if let model { model } else { await askService.selectedModel() }
@@ -1224,16 +1255,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 service: askService,
                 question: question,
                 model: selected,
-                themeManager: self.themeManager
+                themeManager: self.themeManager,
+                notify: self.configuration.ask.notify
             )
             controller.onClose = { [weak self, weak controller] in
                 guard let self, let controller else { return }
                 self.askWindows.removeAll { $0 === controller }
+                self.panel?.suppressAutoHide = !self.askWindows.isEmpty
                 self.updateActivationPolicy()
             }
             self.askWindows.append(controller)
             self.updateActivationPolicy()
-            controller.show()
+            let panelFrame = self.panel?.isVisible == true ? self.panel?.panel.frame : nil
+            controller.show(below: panelFrame)
         }
     }
 

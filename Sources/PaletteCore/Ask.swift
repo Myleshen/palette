@@ -126,6 +126,9 @@ public struct AskConfig: Sendable, Equatable {
     public var retentionDays: Int
     public var maxTokens: Int
     public var fallback: Bool
+    /// Sound and Dock bounce when an answer lands while the window is in the
+    /// background.
+    public var notify: Bool
 
     public init(
         endpoint: AskEndpoint = .opencodeGo,
@@ -133,7 +136,8 @@ public struct AskConfig: Sendable, Equatable {
         maxHistory: Int = 200,
         retentionDays: Int = 30,
         maxTokens: Int = 8_192,
-        fallback: Bool = true
+        fallback: Bool = true,
+        notify: Bool = true
     ) {
         self.endpoint = endpoint
         self.model = model
@@ -141,6 +145,7 @@ public struct AskConfig: Sendable, Equatable {
         self.retentionDays = retentionDays
         self.maxTokens = maxTokens
         self.fallback = fallback
+        self.notify = notify
     }
 
     public var selectedModel: AskModel {

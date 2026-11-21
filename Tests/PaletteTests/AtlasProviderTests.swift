@@ -65,14 +65,14 @@ final class AtlasProviderTests: XCTestCase {
         let page = try write("page.html", "<meta name=\"atlas-review\" content=\"1\">")
         let doc = try write("README.md", "# Readme\n")
 
-        let now = Date().timeIntervalSince1970
-        // edited: reviewed before its last edit. reviewed: unchanged since review.
+        // Atlas queues only files that carry the marker; acked files have it
+        // stripped, so `reviewed` and `edited` stay out of the inbox.
         try writeState([
-            marked.path: ["title": "Marked", "kind": "artifact", "reviewed_at": NSNull()],
-            edited.path: ["title": "Edited", "kind": "artifact", "reviewed_at": now - 1_000],
-            reviewed.path: ["title": "Reviewed", "kind": "artifact", "reviewed_at": now + 1_000],
-            page.path: ["title": "Page", "kind": "artifact", "reviewed_at": now + 1_000],
-            doc.path: ["title": "Readme", "kind": "doc", "reviewed_at": NSNull()],
+            marked.path: ["title": "Marked", "kind": "artifact"],
+            edited.path: ["title": "Edited", "kind": "artifact"],
+            reviewed.path: ["title": "Reviewed", "kind": "artifact"],
+            page.path: ["title": "Page", "kind": "artifact"],
+            doc.path: ["title": "Readme", "kind": "doc"],
         ])
         // Atlas writes a wrapped GitHub-rendered preview next to the digest hash.
         try writePreview(for: marked)
@@ -84,15 +84,15 @@ final class AtlasProviderTests: XCTestCase {
         XCTAssertEqual(Set(rows.map(\.id)), [marked.path, edited.path, reviewed.path, page.path, doc.path])
         let byTitle = Dictionary(uniqueKeysWithValues: rows.map { ($0.title, $0) })
 
-        // Inbox: marked, never reviewed, edited after review, marked HTML.
+        // Inbox: only the two files that still carry the marker.
         XCTAssertEqual(byTitle["Marked"]?.badge, "review")
-        XCTAssertEqual(byTitle["Edited"]?.badge, "review")
         XCTAssertEqual(byTitle["Page"]?.badge, "review")
-        // Reviewed and unchanged, or a repo doc: not in the inbox.
+        // Acked files and repo docs are not in the inbox.
+        XCTAssertNil(byTitle["Edited"]?.badge)
         XCTAssertNil(byTitle["Reviewed"]?.badge)
         XCTAssertNil(byTitle["Readme"]?.badge)
         // Inbox rows sort first.
-        XCTAssertEqual(rows.prefix(3).compactMap(\.badge), ["review", "review", "review"])
+        XCTAssertEqual(rows.prefix(2).compactMap(\.badge), ["review", "review"])
 
         XCTAssertEqual(byTitle["Marked"]?.subtitle, "proj · proj/marked.md")
         XCTAssertEqual(byTitle["Marked"]?.group, "proj")

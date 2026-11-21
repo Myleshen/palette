@@ -14,6 +14,7 @@ final class AskTests: XCTestCase {
         config.ask.retentionDays = 9
         config.ask.maxTokens = 256
         config.ask.fallback = false
+        config.ask.notify = false
 
         let rendered = ConfigWriter.render(config)
         XCTAssertFalse(rendered.lowercased().contains("api_key"))
@@ -27,6 +28,20 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(parsed.ask.retentionDays, 9)
         XCTAssertEqual(parsed.ask.maxTokens, 256)
         XCTAssertFalse(parsed.ask.fallback)
+        XCTAssertFalse(parsed.ask.notify)
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testAskNotifyDefaultsOnAndParsesOff() throws {
+        XCTAssertTrue(AskConfig().notify)
+        XCTAssertTrue(ConfigLoader.defaultTOML().contains("notify = true"))
+        let table = try TOMLTable(string: """
+        [ask]
+        notify = false
+        """)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertFalse(parsed.ask.notify)
         XCTAssertTrue(diagnostics.isEmpty)
     }
 

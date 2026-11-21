@@ -12,6 +12,10 @@
   including Grok 4.7, GPT-6 Luna, Claude Haiku 5.5, Qwen4 Max and Hy4.
 - Web app shortcuts are registered by Palette itself, so ⌃⌥F opens your web app
   directly without Hammerspoon; the generated Lua file no longer binds keys.
+- The launcher and the answer window stay open together: the answer docks 12pt
+  under the panel, so you can keep searching while it loads.
+- A sound plays when an answer arrives, plus a Dock bounce when Palette is in the
+  background. Toggle in Settings → Ask (`[ask] notify`, default on).
 
 ### Fixed
 
@@ -19,6 +23,12 @@
 - Marking an Atlas document reviewed no longer closes the launcher.
 - `/bookmark <text>` now filters with the same fuzzy matcher as every other
   provider (it was ignoring the typed text).
+- "Mark Reviewed" clears the review badge: the inbox now follows atlas's own
+  rule (only files that still carry the marker), instead of treating every
+  artifact as unreviewed forever.
+- ⌘Q with the launcher open dismisses it instead of quitting the app, so a stray
+  ⌘Q no longer leaves you without a launcher when Spotlight is disabled. A
+  second ⌘Q quits, and logout/shutdown are never blocked.
 
 ### Changed
 
