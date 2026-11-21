@@ -158,6 +158,56 @@ public struct AskConfig: Sendable, Equatable {
     public var selectionSignature: String { "\(endpoint.rawValue)|\(model)" }
 }
 
+/// One turn of an `/ask` conversation. The chat window sends the whole
+/// transcript so answers can refer back; history stores only question + answer.
+public struct AskMessage: Sendable, Equatable, Codable {
+    public enum Role: String, Sendable, Codable {
+        case system
+        case user
+        case assistant
+    }
+
+    public var role: Role
+    public var content: String
+
+    public init(role: Role, content: String) {
+        self.role = role
+        self.content = content
+    }
+}
+
+public enum AskConversation {
+    /// Context budget for the history sent with a request, estimated at four
+    /// characters per token. Newest turns win: old ones are dropped first.
+    public static let historyTokenBudget = 24_000
+
+    public static func estimateTokens(_ message: AskMessage) -> Int {
+        max(1, message.content.utf8.count / 4 + 4)
+    }
+
+    public static func trimmed(
+        _ messages: [AskMessage],
+        budget: Int = historyTokenBudget
+    ) -> [AskMessage] {
+        guard messages.count > 1 else { return messages }
+        var kept: [AskMessage] = []
+        var used = 0
+        for message in messages.reversed() {
+            let cost = estimateTokens(message)
+            if !kept.isEmpty, used + cost > budget { break }
+            kept.append(message)
+            used += cost
+        }
+        kept.reverse()
+        // A reply without its question confuses the model, so the oldest kept
+        // turn must be a user message.
+        while kept.count > 1, kept.first?.role != .user {
+            kept.removeFirst()
+        }
+        return kept
+    }
+}
+
 public struct AskRecord: Identifiable, Equatable, Sendable, Codable {
     public var id: String
     public var question: String

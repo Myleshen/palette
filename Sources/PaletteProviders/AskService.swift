@@ -3,8 +3,8 @@ import PaletteCore
 import PalettePlatform
 
 /// Shared runtime for the two `/ask` tabs. It owns model choice, key lookup,
-/// the one-shot request, and history persistence. Neither provider keeps a
-/// conversation: every answer is independent.
+/// the request, and history persistence. The chat window keeps the
+/// conversation; a request replays the trimmed transcript.
 public actor AskService {
     private let store: PaletteStore
     private let configuration: AskConfig
@@ -69,12 +69,26 @@ public actor AskService {
         if lastAnswer?.id == id { lastAnswer = nil }
     }
 
-    public func ask(_ question: String) async throws -> AskRecord {
-        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw AskClientError.empty }
+    /// Sends a conversation and returns the completed turn. `onDelta` receives
+    /// streamed answer text; if a model fails after streaming and the loop
+    /// falls back, `onReset` asks the UI to discard that partial bubble.
+    public func ask(
+        _ conversation: [AskMessage],
+        onDelta: (@Sendable (String) -> Void)? = nil,
+        onReset: (@Sendable () -> Void)? = nil
+    ) async throws -> AskRecord {
+        let messages = conversation.filter {
+            !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard let question = messages.last(where: { $0.role == .user })?
+            .content.trimmingCharacters(in: .whitespacesAndNewlines),
+              !question.isEmpty else {
+            throw AskClientError.empty
+        }
         let selected = await selectedModel()
         let candidates = candidateModels(selected: selected)
         let sessionID = await sessionIdentifier()
+        let trimmedMessages = AskConversation.trimmed(messages)
         let started = Date()
         var lastError: Error = AskClientError.missingKey
         var lastModel: AskModel?
@@ -93,18 +107,26 @@ public actor AskService {
             }
             attempts += 1
             lastModel = model
+            let streamed = DeltaFlag()
+            let deltaSink: (@Sendable (String) -> Void)? = onDelta.map { emit in
+                { piece in
+                    streamed.mark()
+                    emit(piece)
+                }
+            }
             do {
                 let completion = try await completer.complete(
                     endpoint: model.endpoint,
                     model: model.id,
                     key: key,
-                    question: trimmed,
+                    messages: trimmedMessages,
                     maxTokens: configuration.maxTokens,
                     sessionID: sessionID,
-                    baseURL: baseURLOverride
+                    baseURL: baseURLOverride,
+                    onDelta: deltaSink
                 )
                 let record = try await store.insertAsk(
-                    question: trimmed,
+                    question: question,
                     answer: completion.answer,
                     model: model.id,
                     provider: model.endpoint.rawValue,
@@ -117,16 +139,21 @@ public actor AskService {
                 lastAnswer = record
                 return record
             } catch let error as AskClientError {
-                lastError = error
-                Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
+                if Task.isCancelled { throw CancellationError() }
+                // A rejected key rejects that whole endpoint; do not burn the
+                // remaining fallback attempts on the same account.
                 if error == .invalidKey {
-                    // One rejected key rejects that whole endpoint; do not burn
-                    // the remaining fallback attempts on the same account.
                     rejectedEndpoints.insert(model.endpoint)
                 }
+                // The next model starts a fresh answer, so the UI must not
+                // append it to the failed model's partial text.
+                if streamed.take() { onReset?() }
+                lastError = error
+                Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
                 if !error.allowsFallback { break }
             } catch {
                 if Task.isCancelled || error is CancellationError { throw CancellationError() }
+                if streamed.take() { onReset?() }
                 lastError = error
                 Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
             }
@@ -136,12 +163,12 @@ public actor AskService {
             throw AskClientError.missingKey
         }
         // A failed re-ask must not keep showing the cached answer for it.
-        if lastAnswer?.question == trimmed { lastAnswer = nil }
+        if lastAnswer?.question == question { lastAnswer = nil }
         if let lastModel {
             // Keep failures next to answers (the error column) so a timeout is
             // diagnosable from Ask History as well as the log.
             _ = try? await store.insertAsk(
-                question: trimmed,
+                question: question,
                 answer: "",
                 model: lastModel.id,
                 provider: lastModel.endpoint.rawValue,
@@ -188,5 +215,26 @@ public actor AskService {
         try? await store.setMeta("ask.session", value: value)
         cachedSessionID = value
         return value
+    }
+}
+
+/// Sendable latch so the fallback loop can ask whether a model streamed
+/// anything before it failed, without trusting the closure's thread.
+private final class DeltaFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    func mark() {
+        lock.lock()
+        value = true
+        lock.unlock()
+    }
+
+    func take() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let seen = value
+        value = false
+        return seen
     }
 }
