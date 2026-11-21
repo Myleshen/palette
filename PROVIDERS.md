@@ -289,13 +289,11 @@ on the roadmap.
 | `cmd` | `cmd` | native | manifest commands from commands.toml |
 | `proj` | `proj` | native | devx projects/worktrees, ~/dev fallback |
 | `git` | `git` | native | repository status and safe Git actions |
-| `ask` | `ask` | native | one-shot OpenCode Go Q&A; free models first, cheapest paid next |
 | `term` | `term` | native | embedded SwiftTerm login shell |
 | `awake` | `awake` | native | keep-awake durations and lid-closed clamshell guard |
 | `scratch` | `scratch` | native | named, searchable scratch notes and in-panel editor |
 | `recent` | `recent` | native | recently opened projects and files |
 | `snip` | `snip` | native | snippets from snippets.toml with safe placeholder expansion |
-| `askh` | `askh` | native | retained Ask history with fuzzy search and metadata |
 | `web` | `web` | native | web apps with optional Hammerspoon shortcuts, in the default allowlist |
 | `bookmark` | `bookmark` | native | bookmarks from `bookmarks.toml`, opened in a normal browser window, in the default allowlist |
 | `emoji` | `emoji` | native | full Unicode emoji catalog with name search |

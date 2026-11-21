@@ -1330,6 +1330,7 @@ struct SettingsView: View {
                            in: 32...8_192, step: 32)
                 Toggle("Fall back to free or small models when quota runs out", isOn: $config.ask.fallback)
                 Toggle("Play a sound when an answer arrives", isOn: $config.ask.notify)
+                Toggle("Search the web once per turn (DuckDuckGo)", isOn: $config.ask.webSearch)
             } header: {
                 Text("Model").searchTarget("ask-model")
             } footer: {
@@ -1372,7 +1373,7 @@ struct SettingsView: View {
             } header: {
                 Text("API key")
             } footer: {
-                settingsFooter("Keys can also come from OPENCODE_API_KEY, OPENCODE_GO_API_KEY, or OPENAI_API_KEY for a shell-launched build. The app never logs a key.")
+                settingsFooter("Keys can also come from OPENCODE_GO_API_KEY or NVIDIA_API_KEY for a shell-launched build. The app never logs a key.")
             }
 
             Section {
@@ -1383,7 +1384,7 @@ struct SettingsView: View {
             } header: {
                 Text("History")
             } footer: {
-                settingsFooter("Ask History is the History sub-tab under /ask. Rows show the model, endpoint, age, duration, and token count.")
+                settingsFooter("Older question and answer rows are trimmed automatically. Saved chats keep their full transcript.")
             }
         }
         .formStyle(.grouped)

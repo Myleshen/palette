@@ -184,8 +184,6 @@ trigger word:
 | `/awake` | keep the Mac awake; timed or clamshell mode |
 | `/recent` | recently used projects and files |
 | `/snip <query>` | snippets with placeholder expansion |
-| `/ask <question>` | one-shot OpenCode Go answer |
-| `/askh <query>` | search retained Ask questions and answers |
 | `/web <query>` | saved web apps; type a domain to add one |
 | `/bookmark <query>` | bookmarks from `bookmarks.toml`, opened as normal browser windows |
 | `/emoji <query>` | emoji picker |
@@ -250,31 +248,51 @@ Search URL · `!keyword` · Browser · Open in web app.
 
 ### Ask
 
-`/ask` sends one quick question to an OpenAI-compatible endpoint and stores the
-answer. It is deliberately one-shot: there is no conversation thread, so every
-question is independent.
+`⌘⌥A` opens the Ask chat window (also **Palette → Ask…**). The launcher has no
+Ask tab; the window is the only surface. Ask is Q&A only: one prompt, one
+answer, no tools, shell, or file access.
 
-Supported endpoint:
+Each turn sends the conversation to an OpenAI-compatible endpoint. Answers
+stream in and render markdown (headings, lists, tables, fenced code with a Copy
+button, links, and https images). Stop cancels; closing the window or pressing
+`⌘⌥A` again does not — the answer keeps streaming, is saved, and badges the Dock
+until you reopen the window.
+
+Supported endpoints:
 
 - **OpenCode Go** (`https://opencode.ai/inference/go/openai/v1`) — every
-  OpenAI-compatible Go chat model, ordered cheapest output price first. A Go
-  key is required.
+  OpenAI-compatible Go chat model, free models first, paid models cheapest
+  output first. A Go key is required.
+- **NVIDIA** (`https://integrate.api.nvidia.com/v1`) — a curated set of NIM
+  chat models on the free tier, all marked `FREE`. An NVIDIA key is required.
+  Keys come from `NVIDIA_API_KEY` or the encrypted local key file.
 
-Type `/ask` with no question to choose a model. Free Go models are listed first
-and marked `FREE`; paid models show their input/output price per million tokens
-and are ordered cheapest first. `/ask what is 2+2` asks the selected model
-directly. Answers can be copied, asked again, or found later in history.
+The model picker groups models by endpoint. Fallback only tries endpoints that
+have a key: free models first, then the cheapest paid OpenCode Go models.
 
-The **Ask History** sub-tab (or `/askh`) searches retained questions and answers.
-Each row shows the model, endpoint, age, latency, and token usage. Ask history is
-kept up to the count and age configured in Settings and can be deleted per row.
+Chats are saved in Palette's SQLite database, not `config.toml`. The sidebar
+lists them newest first with the title (first question), model, and age; search
+appears as the list grows. Opening a chat restores the transcript, sources, and
+model, with the composer ready for another turn. New chat is `⌘N`; delete a chat
+from its hover button or context menu (with confirmation). The legacy
+`ask_history` table is still written, but the window's saved chats are the
+history surface.
+
+The composer's globe enables one web lookup for the turn (default in
+**Settings → Ask → Search the web once per turn**, off by default). Without the
+toggle, a message that contains an `https://` link still fetches that page. A
+search runs once on DuckDuckGo HTML, reads up to four result pages in parallel,
+and sends the text to the model as an untrusted source note. The answer shows a
+numbered **Sources** list (click opens the browser), and the sources are saved
+with the chat. If search or a page fetch fails, the answer continues and shows
+`Search unavailable`.
 
 API keys are stored in an encrypted user-only file under Palette's config
-directory, not in `config.toml`. A key is visible in the Settings
-field only before you save it; afterward Palette shows “Key saved in the macOS
-local key file” and never displays the value again. Keys are never written to
-`config.toml`, logs, or history. `OPENCODE_API_KEY`, `OPENCODE_GO_API_KEY`, and
-`OPENAI_API_KEY` are also accepted as environment fallbacks.
+directory, not in `config.toml`. A key is visible in the Settings field only
+before you save it; afterward Palette shows that a key exists and never displays
+the value again. Keys are never written to `config.toml`, logs, or history.
+`OPENCODE_GO_API_KEY` and `NVIDIA_API_KEY` are also accepted as environment
+fallbacks.
 
 ### Settings
 

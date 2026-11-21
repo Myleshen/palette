@@ -1,5 +1,6 @@
 import AppKit
 import PaletteCore
+import PalettePlatform
 import PaletteProviders
 import SwiftUI
 
@@ -21,15 +22,30 @@ final class AskWindowState: ObservableObject {
         var answer = ""
         var blocks: [AskMarkdownBlock] = []
         var status: Status = .streaming
+        /// A restored turn already exists in `ask_chat_messages`, so Retry must
+        /// not append the question a second time.
+        var userSaved = false
+        /// Search is a per-turn choice captured when the turn is sent.
+        var webSearch = false
+        /// Transient status while searching/reading, then nil.
+        var progress: String?
+        /// Kept after a degraded search so the answer explains the gap.
+        var searchNote: String?
     }
 
     @Published private(set) var turns: [Turn] = []
     @Published private(set) var selectedModel: AskModel
     @Published private(set) var streaming = false
+    @Published private(set) var chats: [AskChat] = []
+    /// Nil until the first send creates the row, or a saved chat is opened.
+    @Published private(set) var chatID: String?
+    @Published private(set) var loadingChat = false
+    @Published var webSearch: Bool
 
     private let service: AskService
     private let notify: Bool
     private let isKey: () -> Bool
+    var onStatusChange: () -> Void
     private var task: Task<Void, Never>?
     private var started = false
     /// Deltas arrive much faster than a frame; this buffers them and republishes
@@ -38,17 +54,31 @@ final class AskWindowState: ObservableObject {
     private var streamedTurn: UUID?
     private var lastParse = Date.distantPast
 
-    init(service: AskService, question: String, model: AskModel, notify: Bool, isKey: @escaping () -> Bool) {
+    init(
+        service: AskService,
+        question: String,
+        model: AskModel,
+        notify: Bool,
+        webSearch: Bool = false,
+        isKey: @escaping () -> Bool,
+        onStatusChange: @escaping () -> Void = {}
+    ) {
         self.service = service
         self.selectedModel = model
         self.notify = notify
+        self.webSearch = webSearch
         self.isKey = isKey
-        self.turns = [Turn(question: question)]
+        self.onStatusChange = onStatusChange
+        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        var first = Turn(question: trimmed)
+        first.webSearch = webSearch
+        self.turns = trimmed.isEmpty ? [] : [first]
     }
 
     func start() {
         guard !started else { return }
         started = true
+        Task { await refreshChats() }
         guard let first = turns.first else { return }
         run(turnID: first.id)
     }
@@ -57,7 +87,8 @@ final class AskWindowState: ObservableObject {
     func send(_ text: String) {
         let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !streaming else { return }
-        let turn = Turn(question: question)
+        var turn = Turn(question: question)
+        turn.webSearch = webSearch
         turns.append(turn)
         run(turnID: turn.id)
     }
@@ -82,6 +113,7 @@ final class AskWindowState: ObservableObject {
             flushStream(into: index)
             turns[index].status = .stopped
         }
+        onStatusChange()
     }
 
     /// Closing the window abandons the request without touching the transcript.
@@ -91,11 +123,13 @@ final class AskWindowState: ObservableObject {
         streaming = false
         streamedText = ""
         streamedTurn = nil
+        onStatusChange()
     }
 
     func newChat() {
         cancel()
         turns.removeAll()
+        chatID = nil
     }
 
     /// A model picked here applies to subsequent turns only; changing it does
@@ -103,7 +137,104 @@ final class AskWindowState: ObservableObject {
     func select(key: String) {
         guard let picked = AskModel.find(key: key), picked.key != selectedModel.key else { return }
         selectedModel = picked
-        Task { try? await service.selectModel(picked) }
+        let chatID = chatID
+        Task {
+            try? await service.selectModel(picked)
+            if let chatID {
+                try? await service.updateChatModel(chatID: chatID, model: picked)
+                await refreshChats()
+            }
+        }
+    }
+
+    // MARK: - Saved chats
+
+    func openChat(_ chat: AskChat) {
+        cancel()
+        chatID = chat.id
+        if let stored = AskModel.find(id: chat.model) {
+            selectedModel = stored
+        }
+        loadingChat = true
+        Task {
+            let messages = (try? await service.messages(chatID: chat.id)) ?? []
+            var restored: [Turn] = []
+            var current: Turn?
+            for message in messages {
+                switch message.role {
+                case .user:
+                    if let unanswered = current {
+                        var pending = unanswered
+                        pending.status = .failed("No answer was saved for this turn.")
+                        restored.append(pending)
+                    }
+                    var turn = Turn(question: message.content)
+                    turn.userSaved = true
+                    current = turn
+                case .assistant:
+                    guard var turn = current else { continue }
+                    let record = AskRecord(
+                        id: message.id,
+                        question: turn.question,
+                        answer: message.content,
+                        model: chat.model,
+                        provider: AskModel.find(id: chat.model)?.endpoint.rawValue ?? "",
+                        createdAt: message.createdAt,
+                        durationMs: message.durationMs,
+                        promptTokens: message.promptTokens,
+                        completionTokens: message.completionTokens,
+                        sources: message.sources
+                    )
+                    turn.answer = message.content
+                    turn.blocks = AskMarkdown.blocks(message.content)
+                    turn.status = .answered(record)
+                    restored.append(turn)
+                    current = nil
+                case .system:
+                    continue
+                }
+            }
+            if var pending = current {
+                pending.status = .failed("No answer was saved for this turn.")
+                restored.append(pending)
+            }
+            turns = restored
+            loadingChat = false
+        }
+    }
+
+    func deleteChat(_ chat: AskChat) {
+        Task {
+            try? await service.deleteChat(id: chat.id)
+            if chatID == chat.id {
+                cancel()
+                chatID = nil
+                turns.removeAll()
+            }
+            await refreshChats()
+        }
+    }
+
+    private func refreshChats() async {
+        chats = (try? await service.chats(limit: 200)) ?? chats
+    }
+
+    /// Creates the row on the first send. Returns nil when persistence fails;
+    /// the chat itself still works in memory.
+    private func ensureChat(question: String, model: AskModel) async -> String? {
+        if let chatID {
+            try? await service.updateChatModel(chatID: chatID, model: model)
+            return chatID
+        }
+        do {
+            let chat = try await service.createChat(title: AskChat.title(from: question), model: model)
+            chatID = chat.id
+            await refreshChats()
+            return chat.id
+        } catch {
+            Log.shared.warn("ask chat create failed: \(error.localizedDescription)", source: "ask")
+            return nil
+        }
     }
 
     private func run(turnID: UUID) {
@@ -118,6 +249,7 @@ final class AskWindowState: ObservableObject {
         messages.append(AskMessage(role: .user, content: turns[index].question))
 
         streaming = true
+        onStatusChange()
         turns[index].answer = ""
         turns[index].blocks = []
         turns[index].status = .streaming
@@ -125,13 +257,34 @@ final class AskWindowState: ObservableObject {
         streamedTurn = turnID
         lastParse = .distantPast
         let chosen = selectedModel
+        let question = turns[index].question
+        let wantsSearch = turns[index].webSearch
         task = Task { [weak self] in
             guard let self else { return }
+            let savedChatID = await ensureChat(question: question, model: chosen)
             do {
+                guard !Task.isCancelled else { return }
                 // Persisting the choice keeps the panel's model picker honest.
                 try? await service.selectModel(chosen)
+                if let savedChatID,
+                   let current = turns.firstIndex(where: { $0.id == turnID }),
+                   !turns[current].userSaved {
+                    _ = try? await service.appendMessage(
+                        chatID: savedChatID,
+                        role: .user,
+                        content: question
+                    )
+                    if let updated = turns.firstIndex(where: { $0.id == turnID }) {
+                        turns[updated].userSaved = true
+                    }
+                    await refreshChats()
+                }
                 let record = try await service.ask(
                     messages,
+                    webSearch: wantsSearch,
+                    onProgress: { [weak self] text in
+                        Task { @MainActor in self?.setProgress(text, for: turnID) }
+                    },
                     onDelta: { [weak self] piece in
                         Task { @MainActor in self?.append(piece, to: turnID) }
                     },
@@ -146,9 +299,30 @@ final class AskWindowState: ObservableObject {
                 turns[index].answer = record.answer
                 turns[index].blocks = AskMarkdown.blocks(record.answer)
                 turns[index].status = .answered(record)
+                turns[index].progress = nil
                 streaming = false
-                if notify {
-                    if !isKey() { NSSound(named: "Glass")?.play() }
+                let unseen = !isKey()
+                if unseen {
+                    NSApp.dockTile.badgeLabel = "1"
+                    Log.shared.info("Ask answer ready unseen; badge set", source: "ask")
+                }
+                onStatusChange()
+                // Persist the completed answer once, not per delta.
+                if let savedChatID {
+                    _ = try? await service.appendMessage(
+                        chatID: savedChatID,
+                        role: .assistant,
+                        content: record.answer,
+                        durationMs: record.durationMs,
+                        promptTokens: record.promptTokens,
+                        completionTokens: record.completionTokens,
+                        sources: record.sources
+                    )
+                    await refreshChats()
+                }
+                if notify, unseen {
+                    Log.shared.info("Ask completion notification: sound + Dock bounce", source: "ask")
+                    NSSound(named: "Glass")?.play()
                     if !NSApp.isActive { NSApp.requestUserAttention(.informationalRequest) }
                 }
             } catch {
@@ -157,12 +331,14 @@ final class AskWindowState: ObservableObject {
                 flushStream(into: index)
                 streamedText = ""
                 streamedTurn = nil
+                turns[index].progress = nil
                 if error is CancellationError {
                     turns[index].status = .stopped
                 } else {
                     turns[index].status = .failed(error.localizedDescription)
                 }
                 streaming = false
+                onStatusChange()
             }
         }
     }
@@ -172,6 +348,7 @@ final class AskWindowState: ObservableObject {
               let index = turns.firstIndex(where: { $0.id == id }),
               turns[index].status == .streaming else { return }
         streamedText += piece
+        turns[index].progress = nil
         let now = Date()
         guard now.timeIntervalSince(lastParse) >= 0.05 else { return }
         lastParse = now
@@ -183,6 +360,17 @@ final class AskWindowState: ObservableObject {
     private func flushStream(into index: Int) {
         turns[index].answer = streamedText
         turns[index].blocks = AskMarkdown.blocks(streamedText)
+    }
+
+    private func setProgress(_ text: String, for id: UUID) {
+        guard let index = turns.firstIndex(where: { $0.id == id }),
+              turns[index].status == .streaming else { return }
+        if text == "Search unavailable" {
+            turns[index].searchNote = text
+            turns[index].progress = nil
+        } else {
+            turns[index].progress = text
+        }
     }
 
     private func resetAnswer(_ id: UUID) {
@@ -205,29 +393,52 @@ struct AskWindowView: View {
     @State private var pinned = true
     @State private var lastOffset: CGFloat = 0
     @State private var escapedAt = Date.distantPast
+    @State private var showSidebar = true
+    @State private var chatSearch = ""
+    @State private var hoveredChat: String?
+    @State private var deletingChat: AskChat?
     @FocusState private var composerFocused: Bool
 
     private var theme: Theme { themeManager.theme }
 
+    private var filteredChats: [AskChat] {
+        let query = chatSearch.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return state.chats }
+        return state.chats.filter {
+            $0.title.localizedCaseInsensitiveContains(query)
+                || $0.model.localizedCaseInsensitiveContains(query)
+        }
+    }
+
     /// A config can name a model that has since left the catalog; showing it
     /// beats an empty picker.
     private var modelChoices: [AskModel] {
-        var choices = AskModel.fallbackOrder
+        var choices = AskModel.catalog
         if !choices.contains(where: { $0.key == state.selectedModel.key }) {
-            choices.insert(state.selectedModel, at: 0)
+            choices.append(state.selectedModel)
         }
         return choices
     }
 
+    private func modelChoices(for endpoint: AskEndpoint) -> [AskModel] {
+        modelChoices.filter { $0.endpoint == endpoint }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            transcript
-            Divider()
-            composer
+        HStack(spacing: 0) {
+            if showSidebar {
+                sidebar
+                Divider()
+            }
+            VStack(spacing: 0) {
+                header
+                Divider()
+                transcript
+                Divider()
+                composer
+            }
         }
-        .frame(minWidth: 520, minHeight: 420)
+        .frame(minWidth: 700, minHeight: 460)
         .background(theme.color(theme.palette.bg))
         .onExitCommand { escape() }
         .task {
@@ -236,10 +447,162 @@ struct AskWindowView: View {
             try? await Task.sleep(for: .milliseconds(120))
             composerFocused = true
         }
+        .confirmationDialog(
+            "Delete this chat?",
+            isPresented: Binding(
+                get: { deletingChat != nil },
+                set: { if !$0 { deletingChat = nil } }
+            ),
+            presenting: deletingChat
+        ) { chat in
+            Button("Delete", role: .destructive) {
+                state.deleteChat(chat)
+                deletingChat = nil
+            }
+            Button("Cancel", role: .cancel) { deletingChat = nil }
+        } message: { chat in
+            Text(chat.title)
+        }
+    }
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Chats")
+                    .font(theme.font(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.color(theme.palette.fg))
+                Spacer()
+                Button {
+                    newChat()
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .foregroundStyle(theme.color(theme.palette.fgMuted))
+                }
+                .buttonStyle(.plain)
+                .help("New chat (⌘N)")
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+
+            if state.chats.count > 5 {
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10))
+                        .foregroundStyle(theme.color(theme.palette.fgMuted))
+                    TextField("Search chats", text: $chatSearch)
+                        .textFieldStyle(.plain)
+                        .font(theme.font(size: 11))
+                        .foregroundStyle(theme.color(theme.palette.fg))
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(theme.color(theme.palette.elevated).opacity(0.55))
+                )
+                .padding(.horizontal, 10)
+            }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(filteredChats) { chat in
+                        chatRow(chat)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 10)
+            }
+
+            if state.chats.isEmpty {
+                Text("No saved chats yet")
+                    .font(theme.font(size: 10))
+                    .foregroundStyle(theme.color(theme.palette.fgMuted))
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 10)
+            } else if filteredChats.isEmpty {
+                Text("No matches")
+                    .font(theme.font(size: 10))
+                    .foregroundStyle(theme.color(theme.palette.fgMuted))
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 10)
+            }
+        }
+        .frame(width: 220)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(theme.color(theme.palette.bg))
+    }
+
+    private func chatRow(_ chat: AskChat) -> some View {
+        let selected = state.chatID == chat.id
+        return HStack(alignment: .top, spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(chat.title.isEmpty ? "Untitled" : chat.title)
+                    .font(theme.font(size: 11, weight: selected ? .medium : .regular))
+                    .foregroundStyle(theme.color(theme.palette.fg))
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(modelName(chat.model))
+                        .lineLimit(1)
+                    Text("·")
+                    Text(relative(chat.updatedAt))
+                }
+                .font(theme.font(size: max(8, theme.typography.size - 4)))
+                .foregroundStyle(theme.color(theme.palette.fgMuted))
+            }
+            Spacer(minLength: 0)
+            if hoveredChat == chat.id {
+                Button {
+                    deletingChat = chat
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundStyle(theme.color(theme.palette.fgMuted))
+                }
+                .buttonStyle(.plain)
+                .help("Delete chat")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(selected ? theme.color(theme.palette.accent).opacity(0.18) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { state.openChat(chat) }
+        .onHover { inside in
+            if inside {
+                hoveredChat = chat.id
+            } else if hoveredChat == chat.id {
+                hoveredChat = nil
+            }
+        }
+        .contextMenu {
+            Button("Delete", role: .destructive) { deletingChat = chat }
+        }
+    }
+
+    private func modelName(_ id: String) -> String {
+        AskModel.find(id: id)?.name ?? id
+    }
+
+    private func relative(_ date: Date) -> String {
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 { return "just now" }
+        if seconds < 3_600 { return "\(seconds / 60)m ago" }
+        if seconds < 86_400 { return "\(seconds / 3_600)h ago" }
+        return "\(seconds / 86_400)d ago"
     }
 
     private var header: some View {
         HStack(spacing: 10) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { showSidebar.toggle() }
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .foregroundStyle(theme.color(theme.palette.fgMuted))
+            }
+            .buttonStyle(.plain)
+            .help(showSidebar ? "Hide saved chats" : "Show saved chats")
             Text("Ask")
                 .font(theme.font(size: theme.typography.size, weight: .semibold))
                 .foregroundStyle(theme.color(theme.palette.fg))
@@ -247,14 +610,20 @@ struct AskWindowView: View {
                 get: { state.selectedModel.key },
                 set: { state.select(key: $0) }
             )) {
-                ForEach(modelChoices) { model in
-                    Text(model.free ? "\(model.name) · Free" : model.name)
-                        .tag(model.key)
+                ForEach([AskEndpoint.opencodeGo, .nvidia], id: \.self) { endpoint in
+                    if !modelChoices(for: endpoint).isEmpty {
+                        Section(endpoint.displayName) {
+                            ForEach(modelChoices(for: endpoint)) { model in
+                                Text(model.free ? "\(model.name) · Free" : model.name)
+                                    .tag(model.key)
+                            }
+                        }
+                    }
                 }
             }
             .labelsHidden()
             .controlSize(.small)
-            .frame(minWidth: 200, maxWidth: 320)
+            .frame(minWidth: 180, maxWidth: 300)
             Spacer()
             Button(copiedAll ? "Copied" : "Copy all") { copyAll() }
                 .disabled(!state.turns.contains { !$0.answer.isEmpty })
@@ -275,6 +644,9 @@ struct AskWindowView: View {
                         ForEach(state.turns) { turn in
                             row(turn).id(turn.id)
                         }
+                        Color.clear
+                            .frame(height: 1)
+                            .id("transcript-bottom")
                     }
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -303,11 +675,15 @@ struct AskWindowView: View {
                     lastOffset = metrics.offset
                 }
                 .onChange(of: state.turns) { _, turns in
-                    guard pinned, let last = turns.last else { return }
+                    guard pinned, !turns.isEmpty else { return }
                     // scrollTo during onChange still sees the previous layout;
-                    // hop once so it targets the new answer height.
+                    // the bottom marker sits after the last row (sources, meta)
+                    // so two hops always land on the true end.
                     DispatchQueue.main.async {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                        proxy.scrollTo("transcript-bottom", anchor: .bottom)
+                        DispatchQueue.main.async {
+                            proxy.scrollTo("transcript-bottom", anchor: .bottom)
+                        }
                     }
                 }
                 .overlay {
@@ -353,10 +729,19 @@ struct AskWindowView: View {
             } else if turn.status == .streaming {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Asking \(state.selectedModel.name)…")
+                    Text(turn.progress ?? "Asking \(state.selectedModel.name)…")
                         .font(theme.font(size: theme.typography.subtitleSize))
                         .foregroundStyle(theme.color(theme.palette.fgMuted))
                 }
+            }
+
+            if let note = turn.searchNote {
+                HStack(spacing: 5) {
+                    Image(systemName: "wifi.exclamationmark")
+                    Text(note)
+                }
+                .font(theme.font(size: max(9, theme.typography.size - 3)))
+                .foregroundStyle(theme.color(theme.palette.fgMuted))
             }
 
             switch turn.status {
@@ -371,6 +756,9 @@ struct AskWindowView: View {
                     }
                 }
             case .answered(let record):
+                if !record.sources.isEmpty {
+                    sourcesView(record.sources)
+                }
                 HStack(spacing: 8) {
                     Text(record.metaLine)
                         .font(theme.font(size: metaSize))
@@ -417,6 +805,36 @@ struct AskWindowView: View {
         )
     }
 
+    private func sourcesView(_ sources: [AskSource]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Sources")
+                .font(theme.font(size: max(9, theme.typography.size - 4), weight: .semibold))
+                .foregroundStyle(theme.color(theme.palette.fgMuted))
+            ForEach(Array(sources.enumerated()), id: \.offset) { index, source in
+                Button {
+                    NSWorkspace.shared.open(source.url)
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text("[\(index + 1)]")
+                            .foregroundStyle(theme.color(theme.palette.accent))
+                        Text(source.title)
+                            .foregroundStyle(theme.color(theme.palette.fg))
+                            .lineLimit(1)
+                        if let host = source.url.host {
+                            Text(host)
+                                .foregroundStyle(theme.color(theme.palette.fgMuted))
+                                .lineLimit(1)
+                        }
+                    }
+                    .font(theme.font(size: max(9, theme.typography.size - 3)))
+                }
+                .buttonStyle(.plain)
+                .help(source.url.absoluteString)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
     @ViewBuilder
     private func copyButton(_ turn: AskWindowState.Turn) -> some View {
         if !turn.answer.isEmpty {
@@ -433,6 +851,30 @@ struct AskWindowView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 10) {
+            Button {
+                state.webSearch.toggle()
+            } label: {
+                Image(systemName: "globe")
+                    .font(.system(size: 13))
+                    .foregroundStyle(
+                        state.webSearch
+                            ? theme.color(theme.palette.bg)
+                            : theme.color(theme.palette.fgMuted)
+                    )
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Capsule().fill(
+                            state.webSearch
+                                ? theme.color(theme.palette.accent)
+                                : theme.color(theme.palette.elevated).opacity(0.6)
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .help("Search the web for the next turn (⇧⌘G)")
+            .accessibilityLabel("Web search")
+
             TextField(
                 state.streaming ? "Waiting for the answer…" : "Message",
                 text: $draft,

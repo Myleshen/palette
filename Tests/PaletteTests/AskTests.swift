@@ -15,6 +15,7 @@ final class AskTests: XCTestCase {
         config.ask.maxTokens = 256
         config.ask.fallback = false
         config.ask.notify = false
+        config.ask.webSearch = true
 
         let rendered = ConfigWriter.render(config)
         XCTAssertFalse(rendered.lowercased().contains("api_key"))
@@ -29,6 +30,7 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(parsed.ask.maxTokens, 256)
         XCTAssertFalse(parsed.ask.fallback)
         XCTAssertFalse(parsed.ask.notify)
+        XCTAssertTrue(parsed.ask.webSearch)
         XCTAssertTrue(diagnostics.isEmpty)
     }
 
@@ -60,19 +62,52 @@ final class AskTests: XCTestCase {
 
     func testAskModelsPutFreeOptionsFirst() {
         let ordered = AskModel.fallbackOrder
-        XCTAssertEqual(ordered.prefix(2).filter(\.free).count, 2)
-        XCTAssertTrue(ordered.allSatisfy { $0.endpoint == .opencodeGo })
+        let freeCount = AskModel.catalog.filter(\.free).count
+        XCTAssertEqual(freeCount, 20)
+        XCTAssertEqual(ordered.prefix(freeCount).filter(\.free).count, freeCount)
+        XCTAssertTrue(ordered.prefix(freeCount).allSatisfy(\.free))
+        XCTAssertTrue(ordered.suffix(from: freeCount).allSatisfy { !$0.free })
         XCTAssertEqual(AskModel.defaultModel.endpoint, .opencodeGo)
         XCTAssertTrue(AskModel.defaultModel.free)
     }
 
-    func testAskModelListIsGoOnly() {
+    func testAskModelListCoversBothEndpoints() {
         let models = AskModel.models(for: .opencodeGo)
         XCTAssertFalse(models.isEmpty)
         XCTAssertTrue(models.allSatisfy { $0.endpoint == .opencodeGo })
         XCTAssertEqual(models.filter(\.free).count, 4)
         XCTAssertTrue(models.contains { $0.id == "grok-4.7" })
         XCTAssertTrue(models.contains { $0.id == "gpt-6-luna" })
+    }
+
+    func testAskNvidiaCatalogIsCuratedAndFree() {
+        let models = AskModel.models(for: .nvidia)
+        XCTAssertEqual(models.count, 16)
+        XCTAssertTrue(models.allSatisfy {
+            $0.endpoint == .nvidia && $0.free && $0.inputCost == 0 && $0.outputCost == 0
+        })
+        XCTAssertEqual(models.first?.id, "nvidia/nemotron-3-ultra-550b-a55b")
+        XCTAssertTrue(models.contains { $0.id == "moonshotai/kimi-k3.1-pro" && $0.name == "Kimi K3.1 Pro" })
+        XCTAssertEqual(AskEndpoint.nvidia.baseURL.absoluteString, "https://integrate.api.nvidia.com/v1")
+        XCTAssertEqual(AskEndpoint.nvidia.keyEnvironment, ["NVIDIA_API_KEY"])
+        XCTAssertEqual(
+            AskKeychain.resolve(endpoint: .nvidia, environment: ["NVIDIA_API_KEY": " nvapi-x "]),
+            "nvapi-x"
+        )
+        XCTAssertEqual(AskEndpoint.allCases.count, 2)
+    }
+
+    func testAskWebSearchDefaultsOffAndParsesOn() throws {
+        XCTAssertFalse(AskConfig().webSearch)
+        XCTAssertTrue(ConfigLoader.defaultTOML().contains("web_search = false"))
+        let table = try TOMLTable(string: """
+        [ask]
+        web_search = true
+        """)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertTrue(parsed.ask.webSearch)
+        XCTAssertTrue(diagnostics.isEmpty)
     }
 
     func testAskKeyFileRoundTrip() throws {
@@ -515,6 +550,261 @@ final class AskTests: XCTestCase {
         XCTAssertFalse(spans.contains { $0.italic })
     }
 
+    func testMarkdownParsesTableWithAlignment() throws {
+        let source = """
+        | Name | Count | Note |
+        |:-----|:-----:|-----:|
+        | **a** | 1 | `x` |
+        | b | 22 | y |
+        """
+        let blocks = AskMarkdown.blocks(source)
+        XCTAssertEqual(blocks.count, 1)
+        guard case .table(let table) = blocks[0] else {
+            return XCTFail("expected a table, got \(blocks[0])")
+        }
+        XCTAssertEqual(table.header.count, 3)
+        XCTAssertEqual(table.header.map { $0.map(\.text).joined() }, ["Name", "Count", "Note"])
+        XCTAssertEqual(table.alignments, [.left, .center, .right])
+        XCTAssertEqual(table.rows.count, 2)
+        XCTAssertEqual(table.rows[0][0].first?.text, "a")
+        XCTAssertEqual(table.rows[0][0].first?.bold, true)
+        XCTAssertEqual(table.rows[0][2].first?.code, true)
+    }
+
+    func testMarkdownRejectsMismatchedTableColumnsAsText() {
+        let source = """
+        | a | b | c |
+        |---|---|---|
+        | 1 | 2 |
+        """
+        let blocks = AskMarkdown.blocks(source)
+        XCTAssertEqual(blocks.count, 1)
+        XCTAssertFalse(blocks.contains {
+            if case .table = $0 { return true }
+            return false
+        })
+        guard case .paragraph(let spans) = blocks[0] else {
+            return XCTFail("expected text, got \(blocks[0])")
+        }
+        XCTAssertTrue(spans.map(\.text).joined().contains("|"))
+    }
+
+    func testMarkdownSplitsImagesAndBlocksUnsafeSchemes() {
+        let blocks = AskMarkdown.blocks("Before ![logo](https://example.com/a.png) after")
+        XCTAssertEqual(blocks.count, 3)
+        guard case .image(let alt, let url) = blocks[1] else {
+            return XCTFail("expected an image, got \(blocks[1])")
+        }
+        XCTAssertEqual(alt, "logo")
+        XCTAssertEqual(url.absoluteString, "https://example.com/a.png")
+        guard case .paragraph(let before) = blocks[0] else { return XCTFail("expected text") }
+        XCTAssertEqual(before.map(\.text).joined(), "Before")
+
+        let unsafe = AskMarkdown.blocks("![secret](file:///etc/passwd)")
+        XCTAssertEqual(unsafe.count, 1)
+        guard case .paragraph(let text) = unsafe[0] else {
+            return XCTFail("unsafe images must stay text, got \(unsafe[0])")
+        }
+        let rendered = text.map(\.text).joined()
+        XCTAssertTrue(rendered.contains("secret"))
+        XCTAssertTrue(rendered.contains("file:///etc/passwd"))
+
+        XCTAssertTrue(AskMarkdown.isSafeImageURL(URL(string: "https://example.com/a.png")!))
+        XCTAssertFalse(AskMarkdown.isSafeImageURL(URL(string: "http://example.com/a.png")!))
+        XCTAssertFalse(AskMarkdown.isSafeImageURL(URL(string: "file:///etc/passwd")!))
+        XCTAssertFalse(AskMarkdown.isSafeImageURL(URL(string: "data:image/png;base64,abc")!))
+    }
+
+    func testAskFallbackUsesOnlyEndpointsWithKeys() async throws {
+        let configDir = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-keys-\(UUID().uuidString)")
+        setenv("PALETTE_CONFIG_DIR", configDir.path, 1)
+        defer {
+            unsetenv("PALETTE_CONFIG_DIR")
+            try? FileManager.default.removeItem(at: configDir)
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let box = ModelBox()
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "hy3"),
+            environment: ["NVIDIA_API_KEY": "test"],
+            completer: StubModelCompleter(box: box)
+        )
+        let record = try await service.ask([user("hello")])
+        XCTAssertEqual(AskModel.find(id: record.model)?.endpoint, .nvidia)
+        XCTAssertEqual(box.value, record.model)
+    }
+
+    func testAskWebSearchParsesDuckDuckGoResultsAndCapsAtFour() {
+        var html = ""
+        for index in 1...6 {
+            html += """
+            <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2F\(index)&amp;rut=x">Result <b>\(index)</b></a>
+            <a class="result__snippet" href="//x">Snippet &amp; \(index)</a>
+            """
+        }
+        let results = AskWebSearch.results(fromHTML: html)
+        XCTAssertEqual(results.count, 4)
+        XCTAssertEqual(results[0].url.absoluteString, "https://example.com/1")
+        XCTAssertEqual(results[0].title, "Result 1")
+        XCTAssertEqual(results[0].snippet, "Snippet & 1")
+    }
+
+    func testAskWebSearchDecodesUddgAndRejectsUnsafeSchemes() {
+        XCTAssertEqual(
+            AskWebSearch.decodeResultURL("//duckduckgo.com/l/?uddg=https%3A%2F%2Fswift.org%2Fblog&rut=a")?.absoluteString,
+            "https://swift.org/blog"
+        )
+        XCTAssertNil(AskWebSearch.decodeResultURL("javascript:alert(1)"))
+        XCTAssertNil(AskWebSearch.decodeResultURL("//duckduckgo.com/l/?uddg=file%3A%2F%2F%2Fetc%2Fpasswd"))
+    }
+
+    func testAskWebSearchStripsHTMLAndEntities() {
+        let html = """
+        <html><head><title>T</title><style>bad{}</style></head><body>
+        <nav>menu</nav><header>head</header><script>alert(1)</script>
+        <p>Hello &amp; welcome&nbsp;friend &#39;x&#39; &lt;tag&gt;</p>
+        <footer>foot</footer></body></html>
+        """
+        let text = AskWebSearch.text(fromHTML: html)
+        XCTAssertFalse(text.contains("menu"))
+        XCTAssertFalse(text.contains("foot"))
+        XCTAssertFalse(text.contains("alert"))
+        XCTAssertFalse(text.contains("bad{}"))
+        XCTAssertTrue(text.contains("Hello & welcome friend 'x' <tag>"))
+        XCTAssertEqual(AskWebSearch.decodeEntities("What&#x27;s new &#x2F; here"), "What's new / here")
+        XCTAssertEqual(
+            AskWebSearch.text(fromHTML: String(repeating: "a", count: 3_000)),
+            String(repeating: "a", count: 2_000)
+        )
+    }
+
+    func testAskWebSearchSystemNoteMarksContentUntrusted() {
+        let note = AskWebSearch.systemNote(
+            question: "what is new?",
+            sources: [AskSource(title: "Example", url: URL(string: "https://example.com")!, snippet: "page text")]
+        )
+        XCTAssertTrue(note.contains("untrusted"))
+        XCTAssertTrue(note.contains("what is new?"))
+        XCTAssertTrue(note.contains("Sources:"))
+        XCTAssertTrue(note.contains("[1] Example — https://example.com"))
+        XCTAssertTrue(note.contains("page text"))
+    }
+
+    func testAskChatSourcesRoundTrip() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let chat = try await store.createAskChat(title: "sources", model: "beam-free")
+        let source = AskSource(
+            title: "Swift Blog",
+            url: URL(string: "https://swift.org/blog")!,
+            snippet: "release notes"
+        )
+        _ = try await store.appendAskChatMessage(
+            chatID: chat.id,
+            role: .assistant,
+            content: "answer",
+            sources: [source]
+        )
+        let messages = try await store.askChatMessages(chatID: chat.id)
+        XCTAssertEqual(messages.last?.sources, [source])
+    }
+
+    func testAskChatRoundTrip() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let chat = try await store.createAskChat(
+            title: "first chat",
+            model: "beam-free",
+            at: Date(timeIntervalSince1970: 100)
+        )
+        _ = try await store.appendAskChatMessage(
+            chatID: chat.id,
+            role: .user,
+            content: "hello",
+            at: Date(timeIntervalSince1970: 101)
+        )
+        _ = try await store.appendAskChatMessage(
+            chatID: chat.id,
+            role: .assistant,
+            content: "hi there",
+            durationMs: 42,
+            promptTokens: 3,
+            completionTokens: 5,
+            at: Date(timeIntervalSince1970: 102)
+        )
+
+        let chats = try await store.askChats()
+        XCTAssertEqual(chats.count, 1)
+        XCTAssertEqual(chats.first?.id, chat.id)
+        XCTAssertEqual(chats.first?.title, "first chat")
+        XCTAssertEqual(chats.first?.model, "beam-free")
+        XCTAssertEqual(chats.first?.updatedAt, Date(timeIntervalSince1970: 102))
+
+        let messages = try await store.askChatMessages(chatID: chat.id)
+        XCTAssertEqual(messages.map(\.role), [.user, .assistant])
+        XCTAssertEqual(messages.map(\.content), ["hello", "hi there"])
+        XCTAssertEqual(messages.last?.durationMs, 42)
+        XCTAssertEqual(messages.last?.promptTokens, 3)
+        XCTAssertEqual(messages.last?.completionTokens, 5)
+    }
+
+    func testAskChatDeleteCascadesMessages() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let chat = try await store.createAskChat(title: "doomed", model: "beam-free")
+        _ = try await store.appendAskChatMessage(chatID: chat.id, role: .user, content: "hello")
+
+        try await store.deleteAskChat(id: chat.id)
+
+        let chats = try await store.askChats()
+        let messages = try await store.askChatMessages(chatID: chat.id)
+        XCTAssertTrue(chats.isEmpty)
+        XCTAssertTrue(messages.isEmpty)
+    }
+
+    func testAskChatTitleIsSingleLineAndTruncated() {
+        let long = "first line\nsecond line " + String(repeating: "x", count: 80)
+        let title = AskChat.title(from: long)
+        XCTAssertFalse(title.contains("\n"))
+        XCTAssertTrue(title.hasSuffix("…"))
+        XCTAssertLessThanOrEqual(title.count, 49)
+        XCTAssertEqual(AskChat.title(from: "  short  "), "short")
+    }
+
+    func testAskChatsAreNewestFirst() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let older = try await store.createAskChat(
+            title: "older",
+            model: "beam-free",
+            at: Date(timeIntervalSince1970: 100)
+        )
+        _ = try await store.createAskChat(
+            title: "newer",
+            model: "beam-free",
+            at: Date(timeIntervalSince1970: 200)
+        )
+        let newestFirst = try await store.askChats().map(\.title)
+        XCTAssertEqual(newestFirst, ["newer", "older"])
+
+        // A turn bumps the older chat to the top.
+        _ = try await store.appendAskChatMessage(
+            chatID: older.id,
+            role: .user,
+            content: "again",
+            at: Date(timeIntervalSince1970: 300)
+        )
+        let afterTurn = try await store.askChats().map(\.title)
+        XCTAssertEqual(afterTurn, ["older", "newer"])
+    }
+
     func testAskPersistsOnlyTheLastUserMessage() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -594,6 +884,41 @@ final class AskTests: XCTestCase {
 
 private func user(_ text: String) -> AskMessage {
     AskMessage(role: .user, content: text)
+}
+
+private struct StubModelCompleter: AskCompleting {
+    let box: ModelBox
+
+    func complete(
+        endpoint: AskEndpoint,
+        model: String,
+        key: String,
+        messages: [AskMessage],
+        maxTokens: Int,
+        sessionID: String,
+        baseURL: URL?,
+        onDelta: (@Sendable (String) -> Void)?
+    ) async throws -> AskCompletion {
+        box.store(model)
+        return AskCompletion(answer: "ok", promptTokens: 1, completionTokens: 1, durationMs: 1)
+    }
+}
+
+private final class ModelBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored = ""
+
+    func store(_ model: String) {
+        lock.lock()
+        stored = model
+        lock.unlock()
+    }
+
+    var value: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
 }
 
 private struct StubCompleter: AskCompleting {

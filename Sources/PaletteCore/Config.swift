@@ -841,8 +841,11 @@ public enum ConfigLoader {
             if let notify = askTable.bool("notify") {
                 ask.notify = notify
             }
+            if let webSearch = askTable.bool("web_search") {
+                ask.webSearch = webSearch
+            }
             if AskModel.find(id: ask.model)?.endpoint != ask.endpoint {
-                ask.model = AskModel.defaultModel.id
+                ask.model = AskModel.models(for: ask.endpoint).first?.id ?? AskModel.defaultModel.id
             }
             config.ask = ask
         }
@@ -1018,16 +1021,17 @@ public enum ConfigLoader {
         font = ""                      # empty = kitty font, then theme mono
         font_size = 0                  # 0 = kitty size, then 13
 
-        # One-shot AI answers (/ask). The API key is never written here; it
-        # lives in an encrypted local file and is entered in Settings > Ask.
+        # Ask chat (⌘⌥A). The API key is never written here; it lives in an
+        # encrypted local file and is entered in Settings > Ask.
         [ask]
-        provider = "opencode-go"       # OpenCode Go (requires a Go key)
+        provider = "opencode-go"       # opencode-go | nvidia
         model = "beam-free"
         max_history = 200
         retention_days = 30
         max_tokens = 8192
         fallback = true                # use free/cheap models when quota runs out
         notify = true                  # sound and Dock bounce when an answer arrives
+        web_search = false             # one web lookup per turn (composer toggle)
 
         # Global web search. Add or remove engines as you like; {query} is
         # replaced with the URL-encoded search text. app_mode = true opens
@@ -1194,6 +1198,7 @@ public enum ConfigWriter {
         out.append("max_tokens = \(config.ask.maxTokens)")
         out.append("fallback = \(config.ask.fallback)")
         out.append("notify = \(config.ask.notify)")
+        out.append("web_search = \(config.ask.webSearch)")
         out.append("")
         out.append("[theme]")
         out.append("mode = \(quote(config.theme.mode.rawValue))")

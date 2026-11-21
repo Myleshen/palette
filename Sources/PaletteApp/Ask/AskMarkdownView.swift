@@ -55,11 +55,132 @@ struct AskMarkdownView: View {
                     .foregroundStyle(theme.color(theme.palette.fgMuted))
                     .textSelection(.enabled)
             }
+        case .table(let table):
+            tableBlock(table)
+        case .image(let alt, let url):
+            imageBlock(alt: alt, url: url)
         case .rule:
             Rectangle()
                 .fill(theme.color(theme.palette.separator))
                 .frame(height: 1)
                 .padding(.vertical, 2)
+        }
+    }
+
+    @ViewBuilder
+    private func imageBlock(alt: String, url: URL) -> some View {
+        if AskMarkdown.isSafeImageURL(url) {
+            AskImageView(alt: alt, url: url, theme: theme)
+        } else {
+            // The parser already turns unsafe images into text; keep the guard
+            // here so a future block source cannot fetch a non-https URL.
+            Text("\(alt.isEmpty ? "Image" : alt) — \(url.absoluteString)")
+                .font(theme.font(size: bodySize))
+                .foregroundStyle(theme.color(theme.palette.fgMuted))
+                .textSelection(.enabled)
+        }
+    }
+
+    /// A real grid: equal flexible columns, so six columns wrap at 520pt
+    /// instead of overflowing horizontally.
+    private func tableBlock(_ table: AskTable) -> some View {
+        let columns = table.header.count
+        let rowCount = table.rows.count + 1
+        let grid = Array(
+            repeating: GridItem(.flexible(minimum: 0), spacing: 0),
+            count: max(1, columns)
+        )
+        return LazyVGrid(columns: grid, spacing: 0) {
+            // A flat cell list; nested ForEach groups can be laid out as one
+            // cell by LazyVGrid, which left the body blank.
+            ForEach(0..<(rowCount * columns), id: \.self) { index in
+                let rowIndex = index / columns
+                let column = index % columns
+                if rowIndex == 0 {
+                    tableCell(
+                        table.header[column],
+                        alignment: table.alignments[column],
+                        header: true,
+                        row: 0,
+                        column: column,
+                        columnCount: columns,
+                        rowCount: rowCount
+                    )
+                } else {
+                    let body = table.rows[rowIndex - 1]
+                    tableCell(
+                        column < body.count ? body[column] : [],
+                        alignment: table.alignments[column],
+                        header: false,
+                        row: rowIndex,
+                        column: column,
+                        columnCount: columns,
+                        rowCount: rowCount
+                    )
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(theme.color(theme.palette.elevated).opacity(0.3))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(theme.color(theme.palette.border).opacity(0.7), lineWidth: 0.5)
+        )
+    }
+
+    private func tableCell(
+        _ spans: [AskInlineSpan],
+        alignment: AskTableAlignment,
+        header: Bool,
+        row: Int,
+        column: Int,
+        columnCount: Int,
+        rowCount: Int
+    ) -> some View {
+        plainText(spans, size: tableSize, weight: header ? .semibold : .regular)
+            .multilineTextAlignment(textAlignment(alignment))
+            .textSelection(.enabled)
+            .lineLimit(nil)
+            .frame(maxWidth: .infinity, alignment: frameAlignment(alignment))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 3)
+            .background(
+                header
+                    ? theme.color(theme.palette.elevated).opacity(0.6)
+                    : Color.clear
+            )
+            .overlay(alignment: .trailing) {
+                if column < columnCount - 1 {
+                    Rectangle()
+                        .fill(theme.color(theme.palette.separator).opacity(0.7))
+                        .frame(width: 0.5)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if row < rowCount - 1 {
+                    Rectangle()
+                        .fill(theme.color(theme.palette.separator).opacity(0.7))
+                        .frame(height: 0.5)
+                }
+            }
+    }
+
+    private func frameAlignment(_ alignment: AskTableAlignment) -> Alignment {
+        switch alignment {
+        case .left: return .leading
+        case .center: return .center
+        case .right: return .trailing
+        }
+    }
+
+    private func textAlignment(_ alignment: AskTableAlignment) -> TextAlignment {
+        switch alignment {
+        case .left: return .leading
+        case .center: return .center
+        case .right: return .trailing
         }
     }
 
@@ -139,6 +260,10 @@ struct AskMarkdownView: View {
 
     private var bodySize: Double {
         theme.typography.size
+    }
+
+    private var tableSize: Double {
+        max(9, bodySize - 2)
     }
 
     private func headingSize(_ level: Int) -> Double {
