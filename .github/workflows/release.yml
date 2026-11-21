@@ -66,7 +66,7 @@ jobs:
         run: Scripts/restore-build-timestamps.sh
 
       - name: Test
-        run: swift test
+        run: swift test -c release
 
       - name: Build, zip
         env:
