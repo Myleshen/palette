@@ -109,6 +109,18 @@ run_flow cheatsheets \
   'show; wait=0.7; query=/cheat; wait_until=itemCount>0;timeout=5; assert=firstProvider=cheat; dump=%DIR%/state.json; exit' \
   '%DIR%/state.json' prep_cheatsheets
 
+# ⌘Q with the launcher open dismisses it instead of quitting: Spotlight is off
+# for these users, so a stray ⌘Q would leave them with no launcher. Reaching the
+# dump/exit proves the process survived the terminate request.
+run_flow quit-intercepted \
+  'show; wait=0.6; quit; wait=0.4; assert=panelVisible=false; dump=%DIR%/state.json; exit' \
+  '%DIR%/state.json'
+
+# Asking must not tear the launcher down: both stay on screen together.
+run_flow ask-window-coexists \
+  'show; wait=0.6; askwindow=hello; wait=1.0; assert=panelVisible=true; assert=askWindows=1; dump=%DIR%/state.json; exit' \
+  '%DIR%/state.json'
+
 if [ "$failed" -ne 0 ]; then
   echo "e2e failed"
   exit 1

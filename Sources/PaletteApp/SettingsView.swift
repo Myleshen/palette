@@ -1329,6 +1329,7 @@ struct SettingsView: View {
                 numericRow("Max answer tokens", value: $config.ask.maxTokens,
                            in: 32...8_192, step: 32)
                 Toggle("Fall back to free or small models when quota runs out", isOn: $config.ask.fallback)
+                Toggle("Play a sound when an answer arrives", isOn: $config.ask.notify)
             } header: {
                 Text("Model").searchTarget("ask-model")
             } footer: {

@@ -84,6 +84,9 @@ final class BookmarkTests: XCTestCase {
 
         let filtered = try await provider.search(SearchRequest(text: "code", isBound: false))
         XCTAssertEqual(filtered.map(\.title), ["GitHub"])
+
+        let boundFiltered = try await provider.search(SearchRequest(text: "code", isBound: true))
+        XCTAssertEqual(boundFiltered.map(\.title), ["GitHub"])
     }
 
     func testProviderSetupRowOnlyWhenEmptyAndBound() async throws {

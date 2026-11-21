@@ -59,22 +59,37 @@ public struct AskModel: Identifiable, Equatable, Sendable {
     /// Model ids and prices come from the live endpoint, so this list can
     /// drift as the provider adds or retires models.
     public static let catalog: [AskModel] = [
-        .init(id: "beam-free", name: "Beam", endpoint: .opencodeGo, free: true),
-        .init(id: "iceman-contributor-free", name: "Iceman Contributor", endpoint: .opencodeGo, free: true),
-        .init(id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.14, outputCost: 0.28),
+        .init(id: "beam-free", name: "Beam Free", endpoint: .opencodeGo, free: true),
+        .init(id: "hy4-flash-free", name: "Hy4 flash Free", endpoint: .opencodeGo, free: true),
+        .init(id: "iceman-contributor-free", name: "Iceman Contributor Free", endpoint: .opencodeGo, free: true),
+        .init(id: "longcat-2.5-free", name: "LongCat 2.5 Free", endpoint: .opencodeGo, free: true),
+        .init(id: "muse-spark-1.2-contributor", name: "Muse Spark 1.2 Contributor", endpoint: .opencodeGo, free: false, inputCost: 0.1, outputCost: 0.2),
+        .init(id: "muse-spark-1.3-contributor", name: "Muse Spark 1.3 Contributor", endpoint: .opencodeGo, free: false, inputCost: 0.1, outputCost: 0.2),
+        .init(id: "mimo-v2.6-flash", name: "MiMo-V2.6-Flash", endpoint: .opencodeGo, free: false, inputCost: 0.14, outputCost: 0.28),
+        .init(id: "qwen3.8-flash", name: "Qwen3.8 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.47),
+        .init(id: "claude-haiku-5-5", name: "Claude Haiku 5.5", endpoint: .opencodeGo, free: false, inputCost: 0.1, outputCost: 0.5),
+        .init(id: "gpt-6-luna", name: "GPT-6 Luna", endpoint: .opencodeGo, free: false, inputCost: 0.1, outputCost: 0.5),
+        .init(id: "glm-5.3-flash", name: "GLM-5.3-Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.5),
         .init(id: "hy3", name: "Hy3", endpoint: .opencodeGo, free: false, inputCost: 0.14, outputCost: 0.58),
-        .init(id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.60),
-        .init(id: "minimax-m3.1-flash", name: "MiniMax M3.1 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.60),
-        .init(id: "glm-5.3-flash", name: "GLM 5.3 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.50),
-        .init(id: "longcat-2.0", name: "LongCat 2.0", endpoint: .opencodeGo, free: false, inputCost: 0.30, outputCost: 1.20),
-        .init(id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro", endpoint: .opencodeGo, free: false, inputCost: 0.435, outputCost: 0.87),
+        .init(id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash 1017", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.6),
+        .init(id: "minimax-m3.1-flash", name: "MiniMax M3.1 Flash", endpoint: .opencodeGo, free: false, inputCost: 0.15, outputCost: 0.6),
+        .init(id: "mimo-v2.6-pro", name: "MiMo-V2.6-Pro", endpoint: .opencodeGo, free: false, inputCost: 0.435, outputCost: 0.87),
+        .init(id: "gpt-5.6-luna", name: "GPT-5.6 Luna", endpoint: .opencodeGo, free: false, inputCost: 0.2, outputCost: 1.2),
+        .init(id: "longcat-2.0", name: "LongCat-2.0", endpoint: .opencodeGo, free: false, inputCost: 0.3, outputCost: 1.2),
+        .init(id: "minimax-m3", name: "MiniMax-M3", endpoint: .opencodeGo, free: false, inputCost: 0.3, outputCost: 1.2),
+        .init(id: "qwen3.7-plus", name: "Qwen3.7 Plus", endpoint: .opencodeGo, free: false, inputCost: 0.4, outputCost: 1.6),
         .init(id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", endpoint: .opencodeGo, free: false, inputCost: 0.66, outputCost: 1.98),
-        .init(id: "hy4-preview", name: "Hy4 Preview", endpoint: .opencodeGo, free: false, inputCost: 0.834, outputCost: 2.501),
-        .init(id: "kimi-k2.7-code", name: "Kimi K2.7 Code", endpoint: .opencodeGo, free: false, inputCost: 0.95, outputCost: 4.00),
-        .init(id: "glm-5.3", name: "GLM 5.3", endpoint: .opencodeGo, free: false, inputCost: 1.40, outputCost: 4.40),
-        .init(id: "step-5-preview", name: "Step 5 Preview", endpoint: .opencodeGo, free: false, inputCost: 1.00, outputCost: 2.70),
-        .init(id: "kimi-k3.1-pro", name: "Kimi K3.1 Pro", endpoint: .opencodeGo, free: false, inputCost: 2.00, outputCost: 10.00),
-        .init(id: "kimi-k3", name: "Kimi K3", endpoint: .opencodeGo, free: false, inputCost: 3.00, outputCost: 15.00),
+        .init(id: "hy4", name: "Hy4", endpoint: .opencodeGo, free: false, inputCost: 0.834, outputCost: 2.501),
+        .init(id: "hy4-preview", name: "Hy4 preview", endpoint: .opencodeGo, free: false, inputCost: 0.834, outputCost: 2.501),
+        .init(id: "step-5-preview", name: "Step 5 Preview", endpoint: .opencodeGo, free: false, inputCost: 1, outputCost: 2.7),
+        .init(id: "kimi-k2.7-code", name: "Kimi K2.7 Code", endpoint: .opencodeGo, free: false, inputCost: 0.95, outputCost: 4),
+        .init(id: "glm-5.3", name: "GLM-5.3", endpoint: .opencodeGo, free: false, inputCost: 1.4, outputCost: 4.4),
+        .init(id: "qwen4-max", name: "Qwen4 Max", endpoint: .opencodeGo, free: false, inputCost: 1.5, outputCost: 4.5),
+        .init(id: "grok-4.7", name: "Grok 4.7", endpoint: .opencodeGo, free: false, inputCost: 2, outputCost: 6),
+        .init(id: "qwen3.8-max", name: "Qwen3.8 Max", endpoint: .opencodeGo, free: false, inputCost: 2, outputCost: 6),
+        .init(id: "gemini-4-argon", name: "Gemini 4 Argon", endpoint: .opencodeGo, free: false, inputCost: 2, outputCost: 10),
+        .init(id: "kimi-k3.1-pro", name: "Kimi K3.1 Pro", endpoint: .opencodeGo, free: false, inputCost: 2, outputCost: 10),
+        .init(id: "kimi-k3", name: "Kimi K3", endpoint: .opencodeGo, free: false, inputCost: 3, outputCost: 15),
     ]
 
     /// Free models first, then the cheap/small fallbacks. Keeping this stable
@@ -111,6 +126,9 @@ public struct AskConfig: Sendable, Equatable {
     public var retentionDays: Int
     public var maxTokens: Int
     public var fallback: Bool
+    /// Sound and Dock bounce when an answer lands while the window is in the
+    /// background.
+    public var notify: Bool
 
     public init(
         endpoint: AskEndpoint = .opencodeGo,
@@ -118,7 +136,8 @@ public struct AskConfig: Sendable, Equatable {
         maxHistory: Int = 200,
         retentionDays: Int = 30,
         maxTokens: Int = 8_192,
-        fallback: Bool = true
+        fallback: Bool = true,
+        notify: Bool = true
     ) {
         self.endpoint = endpoint
         self.model = model
@@ -126,6 +145,7 @@ public struct AskConfig: Sendable, Equatable {
         self.retentionDays = retentionDays
         self.maxTokens = maxTokens
         self.fallback = fallback
+        self.notify = notify
     }
 
     public var selectedModel: AskModel {
@@ -172,5 +192,13 @@ public struct AskRecord: Identifiable, Equatable, Sendable, Codable {
         self.promptTokens = promptTokens
         self.completionTokens = completionTokens
         self.error = error
+    }
+
+    /// One line under an answer: what answered, how long it took, how big it was.
+    public var metaLine: String {
+        var parts = [model, "\(durationMs) ms"]
+        let tokens = promptTokens + completionTokens
+        if tokens > 0 { parts.append("\(tokens) tokens") }
+        return parts.joined(separator: " · ")
     }
 }
