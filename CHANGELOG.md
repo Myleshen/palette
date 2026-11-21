@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.13.1 — 2026-11-21
+
+### Fixed
+
+- Switching between the scratchpad, the ask panel and the terminal now closes the
+  other one instead of overlaying (e.g. ⌘S then ⌘A no longer leaves the scratchpad
+  on top of the ask panel).
+- An empty model reply (e.g. the Hy3 model) now falls back to the next model, and a
+  reasoning-only reply is used instead of discarded.
+- `/ask` `max_tokens` defaults to 8192 so answers are no longer truncated.
+
 ## 2.13.0 — 2026-11-21
 
 ### Changed

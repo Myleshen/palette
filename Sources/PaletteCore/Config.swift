@@ -1022,7 +1022,7 @@ public enum ConfigLoader {
         model = "beam-free"
         max_history = 200
         retention_days = 30
-        max_tokens = 2048
+        max_tokens = 8192
         fallback = true                # use free/cheap models when quota runs out
 
         # Global web search. Add or remove engines as you like; {query} is

@@ -117,7 +117,7 @@ public struct AskConfig: Sendable, Equatable {
         model: String = AskModel.defaultModel.id,
         maxHistory: Int = 200,
         retentionDays: Int = 30,
-        maxTokens: Int = 2_048,
+        maxTokens: Int = 8_192,
         fallback: Bool = true
     ) {
         self.endpoint = endpoint

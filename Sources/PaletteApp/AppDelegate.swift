@@ -353,6 +353,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     NotificationCenter.default.post(name: .paletteSettingsTab, object: index)
                 } else if step == "clipboard" {
                     self.showClipboard()
+                } else if step == "ask" {
+                    self.searchController.openAsk()
+                } else if step == "scratchpad" {
+                    self.searchController.openScratchpad()
                 } else if step == "exit" {
                     self.finishScript()
                 } else if let value = step.dropPrefix("dump=") {
@@ -420,6 +424,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var itemCount: Int
         var actionsMode: Bool
         var previewEnabled: Bool
+        var scratchpadActive: Bool
+        var terminalActive: Bool
         var statusMessage: String
         var items: [PaletteItem]
     }
@@ -429,7 +435,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private static let scriptKeys = [
         "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
-        "actionsMode", "previewEnabled", "firstTitle", "firstProvider", "statusMessage",
+        "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive",
+        "firstTitle", "firstProvider", "statusMessage",
     ]
 
     private func scriptObservation() -> ScriptObservation {
@@ -441,6 +448,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             itemCount: searchController?.items.count ?? 0,
             actionsMode: searchController?.actionsMode ?? false,
             previewEnabled: searchController?.previewEnabled ?? false,
+            scratchpadActive: searchController?.scratchpadActive ?? false,
+            terminalActive: searchController?.terminalActive ?? false,
             statusMessage: searchController?.statusMessage ?? "",
             items: searchController?.items ?? []
         )
@@ -453,6 +462,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "itemCount": return String(observation.itemCount)
         case "actionsMode": return String(observation.actionsMode)
         case "previewEnabled": return String(observation.previewEnabled)
+        case "scratchpadActive": return String(observation.scratchpadActive)
+        case "terminalActive": return String(observation.terminalActive)
         case "query": return observation.query
         case "scopeLabel": return observation.scopeLabel
         case "firstTitle": return observation.items.first?.title ?? ""
@@ -476,7 +487,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "actionsMode", "previewEnabled":
+        case "panelVisible", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -533,6 +544,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "itemCount": observation.itemCount,
             "actionsMode": observation.actionsMode,
             "previewEnabled": observation.previewEnabled,
+            "scratchpadActive": observation.scratchpadActive,
+            "terminalActive": observation.terminalActive,
             "statusMessage": observation.statusMessage,
             "items": observation.items.map {
                 ["id": $0.id, "title": $0.title, "providerID": $0.providerID]

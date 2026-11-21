@@ -90,16 +90,22 @@ final class AskTests: XCTestCase {
     }
 
     func testAskDefaultsAllowLongerAnswers() {
-        XCTAssertEqual(AskConfig().maxTokens, 2_048)
+        XCTAssertEqual(AskConfig().maxTokens, 8_192)
         XCTAssertEqual(AskClient.timeout, 120)
         XCTAssertGreaterThanOrEqual(AskClient.deadline, AskClient.timeout)
+    }
+
+    func testAskTemplateUsesNewTokenBudget() {
+        XCTAssertTrue(ConfigLoader.defaultTOML().contains("max_tokens = 8192"))
     }
 
     func testAskTimeoutAllowsFallback() {
         XCTAssertTrue(AskClientError.http(0, "timed out").allowsFallback)
         XCTAssertTrue(AskClientError.http(429, "").allowsFallback)
+        XCTAssertTrue(AskClientError.empty.allowsFallback)
         XCTAssertFalse(AskClientError.http(400, "bad request").allowsFallback)
         XCTAssertFalse(AskClientError.malformed("nope").allowsFallback)
+        XCTAssertFalse(AskClientError.missingKey.allowsFallback)
     }
 
     func testAskTruncatedAnswerIsMarked() throws {
@@ -140,6 +146,20 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(message, "Free usage limit reached")
     }
 
+    func testAskEmptyContentUsesReasoning() throws {
+        let reasoningContent = try AskClient.parse(Data("""
+        {"choices":[{"message":{"role":"assistant","content":"","reasoning_content":"  the answer  "},
+         "finish_reason":"stop"}]}
+        """.utf8), durationMs: 1)
+        XCTAssertEqual(reasoningContent.answer, "the answer")
+
+        let reasoning = try AskClient.parse(Data("""
+        {"choices":[{"message":{"role":"assistant","reasoning":"from reasoning"},
+         "finish_reason":"stop"}]}
+        """.utf8), durationMs: 1)
+        XCTAssertEqual(reasoning.answer, "from reasoning")
+    }
+
     func testAskFallbackMovesPastQuota() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -159,6 +179,47 @@ final class AskTests: XCTestCase {
         let record = try await service.ask("hello")
         XCTAssertEqual(record.answer, "fallback answer")
         XCTAssertEqual(record.model, "beam-free")
+    }
+
+    func testAskEmptyAnswerFallsBackToNextModel() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let stub = StubCompleter { _, model in
+            if model == "mimo-v2.6-flash" {
+                throw AskClientError.empty
+            }
+            return AskCompletion(answer: "second answer", promptTokens: 1, completionTokens: 2, durationMs: 3)
+        }
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "mimo-v2.6-flash"),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
+            completer: stub
+        )
+        let record = try await service.ask("hello")
+        XCTAssertEqual(record.answer, "second answer")
+        XCTAssertEqual(record.model, "beam-free")
+    }
+
+    func testAskAllEmptyAnswersSurfaceAnError() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let stub = StubCompleter { _, _ in throw AskClientError.empty }
+        let service = AskService(
+            store: store,
+            configuration: AskConfig(endpoint: .opencodeGo, model: "hy3", fallback: false),
+            environment: ["OPENCODE_GO_API_KEY": "test"],
+            completer: stub
+        )
+        do {
+            _ = try await service.ask("hello")
+            XCTFail("expected an empty-answer error")
+        } catch {
+            XCTAssertEqual(error as? AskClientError, .empty)
+            XCTAssertEqual(error.localizedDescription, "The model returned an empty answer.")
+        }
     }
 
     func testSettingsModelWinsOverAStaleRuntimeChoice() async throws {

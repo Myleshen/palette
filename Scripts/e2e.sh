@@ -88,6 +88,14 @@ run_flow terminal-tab \
   'settings; wait=0.8; settings_tab=10; wait=0.9; settings_snapshot=%DIR%/settings-terminal.png; exit' \
   '%DIR%/settings-terminal.png'
 
+# The scratchpad, ask, terminal and preview panels share one content area:
+# opening a mode must close the previous one.
+run_flow mode-exclusive \
+  'show; wait=0.6; scratchpad; wait=0.4; assert=scratchpadActive=true; ask; wait=0.4; assert=previewEnabled=true; assert=scratchpadActive=false; assert=terminalActive=false; dump=%DIR%/state.json; exit'
+
+run_flow mode-exclusive-reverse \
+  'show; wait=0.6; ask; wait=0.4; assert=previewEnabled=true; scratchpad; wait=0.4; assert=scratchpadActive=true; assert=previewEnabled=false; assert=terminalActive=false; dump=%DIR%/state.json; exit'
+
 # A folder declared in the flow's own config must reach /cheat.
 prep_cheatsheets() {
   local dir="$1" sheets="$1/sheets"
