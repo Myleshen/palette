@@ -79,6 +79,9 @@ public enum ItemPreview: Equatable, Sendable, Codable {
     case text(String)
     case image(base64: String, width: Int, height: Int)
     case files(paths: [String])
+    /// A document on disk, rendered with QuickLook. `kind` is a hint for the
+    /// host: pdf, html, markdown, text or image.
+    case document(url: String, kind: String)
 }
 
 public struct PaletteItem: Identifiable, Equatable, Sendable, Codable {

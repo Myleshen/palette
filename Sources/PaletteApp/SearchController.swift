@@ -45,7 +45,14 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public var scratchpadText = ""
     @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
-    public var terminalSession: TerminalSessionConfig { configuration.terminalSession }
+    /// Per-invocation multiplexer session name (e.g. `ssh-host`); nil uses the
+    /// configured session.
+    private var terminalSessionName: String?
+    public var terminalSession: TerminalSessionConfig {
+        var session = configuration.terminalSession
+        if let terminalSessionName { session.name = terminalSessionName }
+        return session
+    }
 
     public var panel: PanelController?
     public var onReload: (() -> Void)?
@@ -123,7 +130,7 @@ public final class SearchController: ObservableObject, HostBridge {
     public func openClipboard() {
         previewEnabled = true
         clipboardFilter = nil
-        panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
+        updatePreviewWidth()
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)clip "
@@ -132,7 +139,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openAsk() {
         previewEnabled = true
-        panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
+        updatePreviewWidth()
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)ask "
@@ -159,6 +166,7 @@ public final class SearchController: ObservableObject, HostBridge {
         previewEnabled = false
         previewFocused = false
         terminalActive = false
+        terminalSessionName = nil
         panel?.suppressAutoHide = false
         panel?.widthOverride = nil
     }
@@ -192,14 +200,12 @@ public final class SearchController: ObservableObject, HostBridge {
         let parsed = registry.parser.parse(query)
         // Preview is useful wherever a row has something worth showing:
         // clipboard, Ask, snippets, and path/project providers.
-        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj", "shots"]
+        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj", "shots", "cheat"]
             .contains(parsed.providerID ?? "")
         if previewProvider {
             if !previewEnabled {
                 previewEnabled = true
-                panel?.widthOverride = previewLayout == .beside
-                    ? CGFloat(windowConfig.clipboardWidth(for: screenSize))
-                    : nil
+                updatePreviewWidth()
             }
         } else if previewEnabled {
             previewEnabled = false
@@ -388,12 +394,14 @@ public final class SearchController: ObservableObject, HostBridge {
         if option, characters == "p", previewEnabled {
             previewFocused.toggle()
             panel?.suppressAutoHide = previewFocused
+            updatePanelHeight()
             return true
         }
         if previewFocused {
             if keyCode == 53 {
                 previewFocused = false
                 panel?.suppressAutoHide = false
+                updatePanelHeight()
                 return true
             }
             if control {
@@ -816,7 +824,9 @@ public final class SearchController: ObservableObject, HostBridge {
                 }
 
             case .pasteImage:
-                if let id = action.value.text, let image = try await store.clipboardImage(id: id) {
+                // Clipboard rows carry a DB id; /shots rows pass a file path.
+                if let id = action.value.text,
+                   let image = try await store.clipboardImage(id: id) ?? NSImage(contentsOfFile: id)?.pngData() {
                     if !pasteboard.isAccessibilityTrusted {
                         pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
                         pasteboard.requestAccessibility()
@@ -856,13 +866,16 @@ public final class SearchController: ObservableObject, HostBridge {
             case .custom:
                 if action.id == "term-open" {
                     openTerminalPanel()
-                } else if action.id == "cmd-run-panel" {
+                } else if action.id == "cmd-run-panel" || action.id == "connect-panel" {
                     if let value = action.value.object,
                        let executable = value["executable"] {
                         let parts = [executable] + (value["args"] ?? "").split(separator: "\u{1F}").map(String.init)
                         let line = parts.map(Self.shellQuote).joined(separator: " ")
                         let cwd = value["cwd"].flatMap { $0.isEmpty ? nil : $0 }
-                        openTerminalPanel(command: cwd.map { "cd \(Self.shellQuote($0)) && \(line)" } ?? line)
+                        openTerminalPanel(
+                            command: cwd.map { "cd \(Self.shellQuote($0)) && \(line)" } ?? line,
+                            sessionName: value["session"]
+                        )
                     }
                 } else if action.id == "scratch-open" {
                     openScratchpad(noteID: nil, seed: action.value.text == "new" ? "" : nil)
@@ -1048,29 +1061,16 @@ public final class SearchController: ObservableObject, HostBridge {
     public func updatePanelHeight() {
         guard let panel else { return }
         let theme = themeManager.theme
-        // The tab strip wraps, so use its measured height; add a sub-row when
-        // a mode (clipboard filters, Ask history, provider group) adds one.
-        // Hidden tabs contribute no strip, but their sub-row still shows.
-        var tabs = windowConfig.showTabs ? max(44, tabStripHeight) : 0
-        if activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1 { tabs += 38 }
-        let footer = theme.footer.show ? CGFloat(28) : 0
-        let pillExtra: CGFloat = 22
-
+        let chrome = tabChromeHeight
         if scratchpadActive {
-            panel.setContentHeight(CGFloat(theme.search.height) + 500 + tabs + footer + pillExtra)
+            panel.setContentHeight(CGFloat(theme.search.height) + 500 + chrome)
             return
         }
         if terminalActive {
-            panel.setContentHeight(660 + tabs + footer + pillExtra)
+            panel.setContentHeight(660 + chrome)
             return
         }
 
-        let row = CGFloat(theme.effectiveRowHeight)
-        let spacing: CGFloat = 6
-        // The configured row count is the panel's fixed height: a short list
-        // does not shrink it and a long one does not grow it.
-        let visible = CGFloat(panel.effectiveRows())
-        let listHeight = visible * row + (visible - 1) * spacing + 8
         var content: CGFloat
         if prompt != nil {
             content = 136
@@ -1080,18 +1080,71 @@ public final class SearchController: ObservableObject, HostBridge {
             content = listHeight
         }
         if previewEnabled {
-            if previewLayout == .beside {
-                panel.widthOverride = CGFloat(windowConfig.previewWidth(for: screenSize))
-            } else {
-                panel.widthOverride = nil
-                content += 240
+            updatePreviewWidth()
+            if previewLayout == .below {
+                // 20pt covers the separator and padding around the pane.
+                content += previewPaneHeight + 20
             }
         }
-        panel.setContentHeight(CGFloat(theme.search.height) + content + tabs + footer + pillExtra)
+        panel.setContentHeight(CGFloat(theme.search.height) + content + chrome)
     }
 
-    public func openTerminalPanel(command: String? = nil) {
+    /// Height of the panel around the list: tab strip (plus a mode sub-row),
+    /// footer and the pill inset.
+    private var tabChromeHeight: CGFloat {
+        // The tab strip wraps, so use its measured height; add a sub-row when
+        // a mode (clipboard filters, Ask history, provider group) adds one.
+        // Hidden tabs contribute no strip, but their sub-row still shows.
+        var tabs = windowConfig.showTabs ? max(44, tabStripHeight) : 0
+        if activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1 { tabs += 38 }
+        let footer = themeManager.theme.footer.show ? CGFloat(28) : 0
+        return tabs + footer + 22
+    }
+
+    /// The configured row count is the panel's fixed height: a short list
+    /// does not shrink it and a long one does not grow it.
+    private var listHeight: CGFloat {
+        let row = CGFloat(themeManager.theme.effectiveRowHeight)
+        let spacing: CGFloat = 6
+        let visible = CGFloat(panel?.effectiveRows() ?? windowConfig.launcherRows)
+        return visible * row + (visible - 1) * spacing + 8
+    }
+
+    /// Width of the beside-list preview pane. ⌥P grows it, and the panel
+    /// grows by the same amount so the list keeps its width.
+    public var previewPaneWidth: CGFloat {
+        guard previewLayout == .beside, previewFocused else { return 300 }
+        return max(300, min(640, screenSize.width - 420))
+    }
+
+    /// Height of the below-list preview pane. ⌥P takes the room the max
+    /// panel height leaves after the list, so nothing is pushed out of view.
+    public var previewPaneHeight: CGFloat {
+        guard previewLayout == .below, previewFocused else { return 220 }
+        let base = CGFloat(themeManager.theme.search.height) + tabChromeHeight + listHeight
+        return max(220, min(520, CGFloat(themeManager.theme.window.maxHeight) - base))
+    }
+
+    /// One width rule for previews: `preview_width` beside, launcher width
+    /// below, and a wider panel while focused. Clipboard's own width key must
+    /// not fight this, or the panel jumps between opens and searches.
+    private func updatePreviewWidth() {
+        guard let panel else { return }
+        guard previewEnabled, previewLayout == .beside else {
+            panel.widthOverride = nil
+            return
+        }
+        guard previewFocused else {
+            panel.widthOverride = CGFloat(windowConfig.previewWidth(for: screenSize))
+            return
+        }
+        let normal = CGFloat(windowConfig.previewWidth(for: screenSize))
+        panel.widthOverride = min(normal + previewPaneWidth - 300, screenSize.width - 24)
+    }
+
+    public func openTerminalPanel(command: String? = nil, sessionName: String? = nil) {
         terminalInitialCommand = command
+        terminalSessionName = sessionName
         terminalActive = true
         scratchpadActive = false
         previewEnabled = false
@@ -1105,6 +1158,7 @@ public final class SearchController: ObservableObject, HostBridge {
     public func closeTerminalPanel() {
         guard terminalActive else { return }
         terminalActive = false
+        terminalSessionName = nil
         panel?.widthOverride = nil
         NotificationCenter.default.post(name: .paletteTerminalStop, object: nil)
         resetting = true

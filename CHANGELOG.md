@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.11.0 — 2026-11-21
+
+### Added
+
+- **Cheatsheets / Reference** — a `cheat` provider lists PDF, HTML, Markdown,
+  text and image files from folders you configure (Settings → Cheatsheets) and
+  previews them in the launcher via QuickLook; press ⌥P to enlarge.
+- **`/ssh` in the embedded terminal** — SSH hosts run `ssh <alias>` in your shell
+  inside the embedded terminal, each in its own session, so re-running reattaches
+  to the same connection. The external terminal stays as a secondary action.
+- **`/shots` "Paste image"** — a new ⌘K action pastes the selected screenshot into
+  the previously-focused app.
+
+### Changed
+
+- The preview pane's ⌥P enlarge now actually resizes (beside pane up to 640 pt).
+- New **Cheatsheets** Settings tab (folder + extension config).
+
+### Security
+
+- **GitHub release hardening**: tags-only release workflow (no `workflow_dispatch`),
+  a "tag must be on `main`" check, SHA-pinned actions, build provenance + a
+  `SHA256SUMS` asset, draft-first publish, and a post-release smoke job.
+- Server-side: immutable `v*` tag ruleset, a `release` environment restricted to
+  `v*` tags, immutable releases, a GitHub-owned-only action allowlist with SHA
+  pinning, and Dependabot alerts / security updates / private vulnerability
+  reporting enabled.
+- CI now builds `main` pushes with a timeout, concurrency and a SwiftPM cache.
+
 ## 2.10.0 — 2026-11-21
 
 ### Added

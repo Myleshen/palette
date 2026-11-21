@@ -289,6 +289,17 @@ public struct CaptureConfig: Sendable, Equatable {
     public init() {}
 }
 
+/// Folders `/cheat` lists, one level deep, filtered by extension.
+public struct CheatsheetConfig: Sendable, Equatable {
+    public var folders: [String] = []
+    public var extensions: [String] = ["pdf", "html", "htm", "md", "markdown", "txt", "png", "jpg", "jpeg"]
+
+    public init(folders: [String] = [], extensions: [String] = ["pdf", "html", "htm", "md", "markdown", "txt", "png", "jpg", "jpeg"]) {
+        self.folders = folders
+        self.extensions = extensions
+    }
+}
+
 public struct TimerConfig: Sendable, Equatable {
     /// Preset durations in minutes, shown as rows in /timer.
     public var presets: [Int] = [5, 10, 15, 25, 30, 45, 60]
@@ -296,6 +307,15 @@ public struct TimerConfig: Sendable, Equatable {
     public var notify = true
 
     public init() {}
+}
+
+/// Built-in provider aliases. Settings shows these even when removed so they
+/// can be re-enabled, and "Reset to defaults" restores them.
+public enum ProviderAliases {
+    public static let defaults: [String: [String]] = [
+        "neo": ["neo", "editor"],
+        "neof": ["neof", "folders"],
+    ]
 }
 
 public struct PaletteConfig: Sendable, Equatable {
@@ -332,6 +352,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var terminalSession: TerminalSessionConfig
     public var timer: TimerConfig
     public var capture: CaptureConfig
+    public var cheatsheets: CheatsheetConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -360,16 +381,14 @@ public struct PaletteConfig: Sendable, Equatable {
         appSort: AppSort = .alphabetical,
         ask: AskConfig = AskConfig(),
         typography: TypographyConfig = TypographyConfig(),
-        providerAliases: [String: [String]] = [
-            "neo": ["neo", "editor"],
-            "neof": ["neof", "folders"],
-        ],
+        providerAliases: [String: [String]] = ProviderAliases.defaults,
         providerOrder: [String] = [],
         disabledProviders: [String] = [],
         globalProviders: [String] = ["system", "timer", "awake"],
         terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
         timer: TimerConfig = TimerConfig(),
-        capture: CaptureConfig = CaptureConfig()
+        capture: CaptureConfig = CaptureConfig(),
+        cheatsheets: CheatsheetConfig = CheatsheetConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -403,6 +422,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.terminalSession = terminalSession
         self.timer = timer
         self.capture = capture
+        self.cheatsheets = cheatsheets
     }
 }
 
@@ -657,6 +677,19 @@ public enum ConfigLoader {
             }
         }
 
+        if let cheatsheets = table.table("cheatsheets") {
+            config.cheatsheets.folders = (cheatsheets.strArray("folders") ?? config.cheatsheets.folders)
+                .map { ($0 as NSString).expandingTildeInPath }
+                .filter { !$0.isEmpty }
+            if let extensions = cheatsheets.strArray("extensions") {
+                let cleaned = extensions
+                    .map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
+                    .map { $0.hasPrefix(".") ? String($0.dropFirst()) : $0 }
+                    .filter { !$0.isEmpty }
+                if !cleaned.isEmpty { config.cheatsheets.extensions = cleaned }
+            }
+        }
+
         if let timer = table.table("timer") {
             if let presets = timer["presets"]?.array {
                 let values = presets.compactMap { $0.int }.filter { $0 > 0 && $0 <= 24 * 60 }
@@ -685,7 +718,8 @@ public enum ConfigLoader {
                     let cleaned = values
                         .map { $0.trimmingCharacters(in: .whitespaces) }
                         .filter { !$0.isEmpty }
-                    if !cleaned.isEmpty { parsed[key] = cleaned }
+                    // An explicit empty list suppresses a built-in default.
+                    parsed[key] = cleaned
                 }
                 config.providerAliases = parsed
             }
@@ -892,6 +926,11 @@ public enum ConfigLoader {
         edit_after_capture = false         # open the annotate window
         preview_recording = true           # player after a recording stops
 
+        # Folders /cheat lists, one level deep, with a QuickLook preview.
+        [cheatsheets]
+        folders = []
+        extensions = ["pdf", "html", "htm", "md", "markdown", "txt", "png", "jpg", "jpeg"]
+
         # Timer presets (minutes), and what happens when one finishes.
         [timer]
         presets = [5, 10, 15, 25, 30, 45, 60]
@@ -1055,6 +1094,10 @@ public enum ConfigWriter {
         out.append("recording_microphone = \(quote(config.capture.recordingMicrophone))")
         out.append("gallery = \(quote(config.capture.gallery))")
         out.append("")
+        out.append("[cheatsheets]")
+        out.append("folders = [\(config.cheatsheets.folders.map(quote).joined(separator: ", "))]")
+        out.append("extensions = [\(config.cheatsheets.extensions.map(quote).joined(separator: ", "))]")
+        out.append("")
         out.append("[timer]")
         out.append("presets = [\(config.timer.presets.map(String.init).joined(separator: ", "))]")
         out.append("sound = \(config.timer.sound)")
@@ -1073,7 +1116,7 @@ public enum ConfigWriter {
         out.append("")
         out.append("[providers.aliases]")
         for id in config.providerAliases.keys.sorted() {
-            guard let aliases = config.providerAliases[id], !aliases.isEmpty else { continue }
+            let aliases = config.providerAliases[id] ?? []
             out.append("\(quote(id)) = [\(aliases.map(quote).joined(separator: ", "))]")
         }
         out.append("")

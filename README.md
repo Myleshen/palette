@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.10.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.11.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -63,6 +63,18 @@ the PR, then push a `v<version>` tag. Tagging is the release: CI runs the tests,
 builds the zip, publishes it with the CHANGELOG entry as the notes, and updates
 the cask in `Myleshen/homebrew-tap`. See `CONTRIBUTING.md` and
 `packaging/homebrew/README.md`.
+
+### Release integrity
+
+Releases are published as a draft first, carry GitHub build provenance, and
+include a `SHA256SUMS` asset; a post-release job downloads them back and checks
+the checksum and signature. To verify a download yourself, grab the zip and
+`SHA256SUMS` from the release page, then run:
+
+```sh
+gh attestation verify Palette-<version>.zip --repo Myleshen/palette
+shasum -a 256 -c SHA256SUMS
+```
 
 ## Uninstall
 
@@ -183,6 +195,7 @@ trigger word:
 | `/timer <duration>` | countdown timer: `25m`, `1h30m`, `1:30`, or stop |
 | `/shot` | screenshot the screen, a region, or a window |
 | `/shots` | browse screenshots and recordings from the capture directory |
+| `/cheat <query>` | cheatsheets (PDF, HTML, Markdown, text, images) from your configured folders |
 | `/rec` | start or stop a screen recording |
 | `/color` | pick a colour and copy its hex |
 | `/win <query>` | switch to any open window |
@@ -262,14 +275,16 @@ local key file” and never displays the value again. Keys are never written to
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window with eleven tabs:
+`⌘,` (or the menu-bar icon) opens a native Settings window with twelve tabs:
 **General**, **Launcher**, **Appearance**, **Shortcuts**, **Clipboard**,
-**Search**, **Capture**, **Ask**, **Providers**, **Advanced**, and **Terminal**.
-General holds shortcuts, the terminal/editor apps used by providers, permissions,
-and the **Keep Awake** and timer toggles; Launcher holds where the panel opens,
-app order, `Show provider tabs`, and the panel size; Appearance holds themes and
-typography; Capture holds screenshot and recording options; **Terminal** holds
-the embedded session, shell, and font that used to live in General.
+**Search**, **Capture**, **Ask**, **Providers**, **Advanced**, **Terminal**, and
+**Cheatsheets**. General holds shortcuts, the terminal/editor apps used by
+providers, permissions, and the **Keep Awake** and timer toggles; Launcher holds
+where the panel opens, app order, `Show provider tabs`, and the panel size;
+Appearance holds themes and typography; Capture holds screenshot and recording
+options; **Terminal** holds the embedded session, shell, and font that used to
+live in General; **Cheatsheets** holds the folders and extensions `/cheat`
+reads.
 **Clipboard**, **Search**, and **Ask** cover their own features. **Providers**
 picks which provider tabs are visible. **Advanced** has config/theme/log links,
 backup, diagnostics, and version information. The **Ask** tab selects the
@@ -346,9 +361,11 @@ A capture plays a shutter sound and shows a thumbnail for a couple of seconds
 (both toggles in Settings → Capture), so it is obvious that it worked. `/shots`
 lists everything in the capture directory, newest first and grouped by day —
 screenshots and recordings together — with a thumbnail (a poster frame for
-videos) on every row and in the preview pane, plus open, annotate, copy image
-and reveal. Thumbnails are generated once per file and cached by path and
-modification date, so the rows reuse the same cache as the preview.
+videos) on every row and in the preview pane, plus open, annotate, copy image,
+paste image and reveal. **Paste image** puts the selected screenshot on the
+pasteboard and pastes it into the app you came from. Thumbnails are generated
+once per file and cached by path and modification date, so the rows reuse the
+same cache as the preview.
 
 Recordings can target the whole screen, a single display, or a fixed region, and
 optionally include audio from the system default input or a chosen microphone
@@ -370,6 +387,19 @@ Recordings open in a player window when they stop: play, scrub, reveal in
 Finder, or copy the path. Both behaviours are toggles in Settings → Capture
 (`edit_after_capture`, `preview_recording`), and the first capture asks for
 Screen Recording permission once per build.
+
+### Cheatsheets
+
+`/cheat` lists PDF, HTML, Markdown, text and image files from the folders you add
+in Settings → **Cheatsheets**, one level deep. Selecting a row previews it with
+QuickLook inside the launcher; `⌥P` enlarges the preview. Rows also open the file
+and reveal it in Finder. Folders and extensions are ordinary config:
+
+```toml
+[cheatsheets]
+folders = ["~/Documents/cheatsheets", "~/dev/handbook"]
+extensions = ["pdf", "html", "htm", "md", "markdown", "txt", "png", "jpg", "jpeg"]
+```
 
 ### Bitwarden
 
@@ -449,6 +479,11 @@ to tmux, then a plain shell. Closing the panel detaches the client; the session
 and any long-running command keep running, and the next `/term` reattaches.
 `⌘W` closes the panel. `/cmd` items also expose **Run in Panel**, which runs the
 command in that same shell.
+
+`/ssh <query>` lists hosts from `~/.ssh/config`; `⏎` runs `ssh <alias>` in the
+embedded terminal, one session per host, so re-running the same host reattaches
+to the existing connection. **Open in the external terminal** stays available as
+the secondary action.
 
 `[terminal_session]` controls this:
 
@@ -649,6 +684,10 @@ name = "Palette"
 shell = ""
 font = ""
 font_size = 0
+
+[cheatsheets]
+folders = []                   # /cheat lists these one level deep
+extensions = ["pdf", "html", "htm", "md", "markdown", "txt", "png", "jpg", "jpeg"]
 
 [web_search]
 enabled = true

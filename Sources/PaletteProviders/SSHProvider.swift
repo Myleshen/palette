@@ -54,15 +54,33 @@ public final class SSHProvider: PaletteProvider, @unchecked Sendable {
                 group: "Hosts",
                 score: 9_000,
                 actions: [
-                    PaletteAction(id: "connect", title: "Connect to \(host.alias)", kind: .custom, value: .text("ssh:\(host.alias)")),
+                    PaletteAction(
+                        id: "connect-panel",
+                        title: "Connect in Panel",
+                        kind: .custom,
+                        value: .object([
+                            "executable": "ssh",
+                            "args": host.alias,
+                            "cwd": "",
+                            "session": "ssh-" + Self.sessionName(for: host.alias),
+                        ])
+                    ),
+                    PaletteAction(id: "connect", title: "Open in \(terminalApp)", kind: .custom, value: .text("ssh:\(host.alias)")),
                 ],
-                preview: .text("ssh \(host.destination)\n\nOpens in \(terminalApp)."),
+                preview: .text("Runs `ssh \(host.alias)` in the embedded terminal; re-running reattaches."),
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )
         }
         guard !query.isEmpty else { return items }
         return items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
+    }
+
+    /// zellij and tmux reject `:` and other punctuation in session names.
+    static func sessionName(for alias: String) -> String {
+        let allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+        let cleaned = String(alias.map { allowed.contains($0) ? $0 : "-" })
+        return cleaned.isEmpty ? "host" : cleaned
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {

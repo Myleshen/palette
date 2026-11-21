@@ -102,6 +102,17 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(result.config.scopes["projects"]?.roots.count, 2)
     }
 
+    func testEmptyProviderAliasListDisablesDefaults() throws {
+        var config = PaletteConfig()
+        config.providerAliases = ["neo": []]
+        let table = try TOMLTable(string: ConfigWriter.render(config))
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.providerAliases["neo"], [])
+        XCTAssertEqual(parsed.providerAliases["neof"], ProviderAliases.defaults["neof"])
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
     func testLegacyRootVisibleRowsStillClamps() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-rows-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
@@ -514,8 +525,8 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(diagnostics.isEmpty)
         XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))
         XCTAssertTrue(ThemeLoader.builtinNames.contains("aetheria-pink"))
-        XCTAssertEqual(parsed.providerAliases["neo"], ["neo", "editor"])
-        XCTAssertEqual(parsed.providerAliases["neof"], ["neof", "folders"])
+        XCTAssertEqual(parsed.providerAliases["neo"], ProviderAliases.defaults["neo"])
+        XCTAssertEqual(parsed.providerAliases["neof"], ProviderAliases.defaults["neof"])
 
         var disabled = config
         disabled.terminalHotkey = ""

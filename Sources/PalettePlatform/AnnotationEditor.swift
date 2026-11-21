@@ -393,7 +393,7 @@ extension NSImage {
         return image
     }
 
-    fileprivate func pngData() -> Data? {
+    public func pngData() -> Data? {
         guard let tiff = tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
         return rep.representation(using: .png, properties: [:])
     }
