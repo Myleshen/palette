@@ -9,10 +9,12 @@ import PaletteRuntime
 final class DeveloperWorkflowTests: XCTestCase {
     private final class StubProvider: PaletteProvider, @unchecked Sendable {
         let descriptor: ProviderDescriptor
-        init(id: String, trigger: String?, priority: Int = 0) {
+        let items: [PaletteItem]
+        init(id: String, trigger: String?, priority: Int = 0, items: [PaletteItem] = []) {
             descriptor = ProviderDescriptor(id: id, name: id, trigger: trigger, isGlobal: false, priority: priority)
+            self.items = items
         }
-        func search(_ request: SearchRequest) async throws -> [PaletteItem] { [] }
+        func search(_ request: SearchRequest) async throws -> [PaletteItem] { items }
     }
 
     func testClipboardTransforms() {
@@ -42,6 +44,7 @@ final class DeveloperWorkflowTests: XCTestCase {
         config.providerAliases = ["apps": ["a", "launch"], "clip": ["cb"]]
         config.providerOrder = ["clip", "apps"]
         config.disabledProviders = ["port"]
+        config.globalProviders = ["timer"]
         config.terminalSession = TerminalSessionConfig(multiplexer: .tmux, name: "Work", shell: "fish")
         let table = try TOMLTable(string: ConfigWriter.render(config))
         var diagnostics: [Diagnostic] = []
@@ -50,6 +53,7 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertEqual(parsed.providerAliases["apps"] ?? [], ["a", "launch"])
         XCTAssertEqual(parsed.providerOrder, ["clip", "apps"])
         XCTAssertEqual(parsed.disabledProviders, ["port"])
+        XCTAssertEqual(parsed.globalProviders, ["timer"])
         XCTAssertEqual(parsed.terminalSession, config.terminalSession)
         XCTAssertTrue(diagnostics.isEmpty)
     }
@@ -61,6 +65,20 @@ final class DeveloperWorkflowTests: XCTestCase {
         let registry = ProviderRegistry(providers: [apps, clip, port], prefix: "/", disabled: ["port"])
         XCTAssertEqual(registry.providers.map(\.descriptor.id), ["apps", "clip"])
         XCTAssertEqual(registry.parser.parse("/port 3000").scope, .global)
+    }
+
+    func testRegistrySearchesConfiguredGlobalProvidersUnprefixed() async {
+        let apps = StubProvider(id: "apps", trigger: "apps", priority: 100)
+        let timer = StubProvider(id: "timer", trigger: "timer", priority: 5, items: [
+            PaletteItem(id: "timer:1", title: "5 minutes", providerID: "timer"),
+        ])
+        let registry = ProviderRegistry(providers: [apps, timer], prefix: "/", global: ["timer"])
+        XCTAssertTrue(registry.diagnostics.isEmpty)
+        let result = await registry.search(raw: "5")
+        XCTAssertEqual(result.items.map(\.id), ["timer:1"])
+
+        let unknown = ProviderRegistry(providers: [apps], prefix: "/", global: ["nope"])
+        XCTAssertTrue(unknown.diagnostics.contains { $0.level == .warning && $0.message.contains("nope") })
     }
 
     func testRegistryAliasesAndConfiguredOrder() {

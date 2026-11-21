@@ -51,26 +51,145 @@ public struct PathsProviderConfiguration: Sendable, Equatable {
     }
 }
 
+/// One scope's paths, ready to rank: the flat list plus the directory flags
+/// captured during the walk.
+private struct PathSnapshot: Sendable {
+    let paths: [String]
+    let directories: Set<String>
+    /// True when the rows came from a live walk, which already validated them.
+    let verified: Bool
+
+    init(entries: [PathEntry], verified: Bool) {
+        var paths: [String] = []
+        paths.reserveCapacity(entries.count)
+        var directories: Set<String> = []
+        for entry in entries {
+            paths.append(entry.path)
+            if entry.isDirectory { directories.insert(entry.path) }
+        }
+        self.paths = paths
+        self.directories = directories
+        self.verified = verified
+    }
+}
+
 private actor PathCache {
     private struct Entry {
         var date: Date
-        var paths: [String]
+        var snapshot: PathSnapshot
+    }
+
+    private struct InFlight {
+        let id: UUID
+        let task: Task<PathSnapshot, Error>
     }
 
     private var entries: [String: Entry] = [:]
+    private var inFlight: [String: InFlight] = [:]
     private let ttl: TimeInterval = 60
 
-    func paths(for key: String) -> [String]? {
+    func snapshot(for key: String) -> PathSnapshot? {
         guard let entry = entries[key], Date().timeIntervalSince(entry.date) < ttl else { return nil }
-        return entry.paths
+        return entry.snapshot
     }
 
-    func store(_ paths: [String], for key: String) {
-        entries[key] = Entry(date: Date(), paths: paths)
+    /// One walk per key: a keystroke that lands mid-scan joins the running task
+    /// instead of cancelling it. The walk is an unstructured task, so a
+    /// cancelled caller only abandons its wait.
+    func snapshot(
+        for key: String,
+        loading load: @Sendable @escaping () async throws -> PathSnapshot
+    ) async throws -> PathSnapshot {
+        if let cached = snapshot(for: key) { return cached }
+        if let running = inFlight[key] { return try await running.task.value }
+
+        let id = UUID()
+        let task = Task { [weak self] () throws -> PathSnapshot in
+            do {
+                let snapshot = try await load()
+                await self?.store(snapshot, key: key, id: id)
+                return snapshot
+            } catch {
+                await self?.clear(key: key, id: id)
+                throw error
+            }
+        }
+        inFlight[key] = InFlight(id: id, task: task)
+        return try await task.value
     }
 
-    func removeAll() {
-        entries.removeAll()
+    private func store(_ snapshot: PathSnapshot, key: String, id: UUID) {
+        entries[key] = Entry(date: Date(), snapshot: snapshot)
+        if inFlight[key]?.id == id { inFlight[key] = nil }
+    }
+
+    private func clear(key: String, id: UUID) {
+        if inFlight[key]?.id == id { inFlight[key] = nil }
+    }
+}
+
+/// Persists one enumeration per scope signature so the first bound query after
+/// a launch doesn't pay for the cold `fd` walk. A file is ignored once it is
+/// 24 h old; the next search then rescans and rewrites it.
+public struct PathDiskCache: Sendable {
+    public static let maxAge: TimeInterval = 24 * 60 * 60
+    private static let version = 1
+    private static let maxEntries = 100_000
+    private static let maxBytes = 64 * 1024 * 1024
+
+    private struct File: Codable {
+        var version: Int
+        var signature: String
+        var created: Date
+        var directories: [String]
+        var files: [String]
+    }
+
+    public let directory: URL
+
+    public init(directory: URL) {
+        self.directory = directory
+    }
+
+    public func load(signature: String, now: Date = Date()) -> [PathEntry]? {
+        guard let data = try? Data(contentsOf: url(for: signature)),
+              data.count <= Self.maxBytes,
+              let file = try? JSONDecoder().decode(File.self, from: data),
+              file.version == Self.version,
+              file.signature == signature,
+              now.timeIntervalSince(file.created) < Self.maxAge,
+              file.directories.count + file.files.count <= Self.maxEntries else {
+            return nil
+        }
+        return file.directories.map { PathEntry(path: $0, isDirectory: true) }
+            + file.files.map { PathEntry(path: $0, isDirectory: false) }
+    }
+
+    public func save(_ entries: [PathEntry], signature: String) {
+        guard !entries.isEmpty, entries.count <= Self.maxEntries else { return }
+        let file = File(
+            version: Self.version,
+            signature: signature,
+            created: Date(),
+            directories: entries.lazy.filter(\.isDirectory).map(\.path),
+            files: entries.lazy.filter { !$0.isDirectory }.map(\.path)
+        )
+        guard let data = try? JSONEncoder().encode(file) else { return }
+        let url = url(for: signature)
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        // shortcut: a failed write only means the next launch rescans
+        try? data.write(to: url, options: .atomic)
+    }
+
+    private func url(for signature: String) -> URL {
+        // FNV-1a: `hashValue` is seeded per process and would miss every launch.
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in signature.utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x100_0000_01b3
+        }
+        return directory
+            .appendingPathComponent("Paths", isDirectory: true)
+            .appendingPathComponent("\(String(hash, radix: 16)).json")
     }
 }
 
@@ -82,18 +201,21 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
     private let enumerator: any PathEnumerating
     private let ranker: any FuzzyPathRanking
     private let launcher: LauncherService
+    private let diskCache: PathDiskCache
     private let cache = PathCache()
 
     public init(
         configuration: PathsProviderConfiguration,
         scope: Scope,
         launcher: LauncherService,
+        cacheDirectory: URL,
         enumerator: any PathEnumerating = FDEnumerator(),
         ranker: any FuzzyPathRanking = FzfRanker()
     ) {
         self.configuration = configuration
         self.scope = scope
         self.launcher = launcher
+        self.diskCache = PathDiskCache(directory: cacheDirectory)
         self.enumerator = enumerator
         self.ranker = ranker
         self.descriptor = ProviderDescriptor(
@@ -113,35 +235,69 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
             return [installRow(missing: missing)]
         }
 
-        let key = "\(configuration.scopeName):\(configuration.kind.rawValue)"
         if let browsed = try await browseItems(for: request.text, limit: request.limit) {
             return browsed
         }
 
-        var paths = await cache.paths(for: key)
-        if paths == nil {
-            let enumerated = try await enumerator.enumerate(scope: scope, kind: configuration.kind)
-            try Task.checkCancellation()
-            await cache.store(enumerated, for: key)
-            paths = enumerated
-        }
-
-        guard let paths, !paths.isEmpty else {
+        let snapshot = try await snapshot()
+        guard !snapshot.paths.isEmpty else {
             return freeformItems(for: request.text)
         }
         let ranked = try await ranker.rank(
-            paths: paths,
+            paths: snapshot.paths,
             query: request.text,
             limit: min(configuration.maxResults, max(1, request.limit))
         )
 
         var items = ranked.enumerated().map { index, path in
-            item(for: path, rank: index)
+            item(
+                for: path,
+                rank: index,
+                isDirectory: snapshot.verified ? snapshot.directories.contains(path) : nil
+            )
         }
         for extra in freeformItems(for: request.text) where !items.contains(where: { $0.id == extra.id }) {
             items.insert(extra, at: 0)
         }
         return items
+    }
+
+    /// Loads the disk cache or walks the scope now. Called at launch so the
+    /// first bound query is warm.
+    public func prewarm() async {
+        guard ToolLocator.shared.path(for: "fd") != nil else { return }
+        _ = try? await snapshot()
+    }
+
+    private var cacheKey: String { "\(configuration.scopeName):\(configuration.kind.rawValue)" }
+
+    /// Identifies the walk: every field that changes which paths `fd` sees.
+    private var scopeSignature: String {
+        [
+            configuration.kind.rawValue,
+            scope.roots.joined(separator: ","),
+            scope.exclude.joined(separator: ","),
+            scope.include.joined(separator: ","),
+            "hidden:\(scope.includeHidden)",
+            "depth:\(scope.maxDepth)",
+            "gitignore:\(scope.respectGitignore)",
+        ].joined(separator: "|")
+    }
+
+    private func snapshot() async throws -> PathSnapshot {
+        let signature = scopeSignature
+        let disk = diskCache
+        let enumerator = self.enumerator
+        let scope = self.scope
+        let kind = configuration.kind
+        return try await cache.snapshot(for: cacheKey) {
+            if let cached = disk.load(signature: signature) {
+                return PathSnapshot(entries: cached, verified: false)
+            }
+            let entries = try await enumerator.enumerateEntries(scope: scope, kind: kind)
+            disk.save(entries, signature: signature)
+            return PathSnapshot(entries: entries, verified: true)
+        }
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -159,10 +315,17 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         }
     }
 
-    private func item(for path: String, rank: Int) -> PaletteItem {
-        let manager = FileManager.default
-        var isDirectory: ObjCBool = false
-        manager.fileExists(atPath: path, isDirectory: &isDirectory)
+    /// `known` comes straight from the enumeration, which already stat'ed the
+    /// path; browse and freeform rows pass nil and get one stat.
+    private func item(for path: String, rank: Int, isDirectory known: Bool? = nil) -> PaletteItem {
+        let isDirectory: Bool
+        if let known {
+            isDirectory = known
+        } else {
+            var flag: ObjCBool = false
+            FileManager.default.fileExists(atPath: path, isDirectory: &flag)
+            isDirectory = flag.boolValue
+        }
         let name = (path as NSString).lastPathComponent
         let trimmed = displayPath(path)
         let ext = (path as NSString).pathExtension
@@ -191,7 +354,7 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         if !actions.contains(where: { $0.kind == .copyText }) {
             actions.append(PaletteAction(id: "copy-extra", title: "Copy Path", kind: .copyText, value: .text(path)))
         }
-        let terminalPath = isDirectory.boolValue ? path : (path as NSString).deletingLastPathComponent
+        let terminalPath = isDirectory ? path : (path as NSString).deletingLastPathComponent
         actions.append(PaletteAction(
             id: "term-here",
             title: "Open in Embedded Terminal",
@@ -203,8 +366,8 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
             id: path,
             title: name,
             subtitle: trimmed,
-            icon: isDirectory.boolValue ? .symbol("folder.fill") : .file(path),
-            badge: isDirectory.boolValue ? "folder" : (ext.isEmpty ? nil : ext.uppercased()),
+            icon: isDirectory ? .symbol("folder.fill") : .file(path),
+            badge: isDirectory ? "folder" : (ext.isEmpty ? nil : ext.uppercased()),
             score: 1_000 - Double(rank),
             actions: actions,
             preview: .files(paths: [path]),

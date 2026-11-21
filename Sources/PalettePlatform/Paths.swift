@@ -3,30 +3,57 @@ import PaletteCore
 
 public protocol PathEnumerating: Sendable {
     func enumerate(scope: Scope, kind: PathKind) async throws -> [String]
+    /// Same walk, but carries the directory flag so callers don't stat again.
+    func enumerateEntries(scope: Scope, kind: PathKind) async throws -> [PathEntry]
+}
+
+public extension PathEnumerating {
+    func enumerateEntries(scope: Scope, kind: PathKind) async throws -> [PathEntry] {
+        let paths = try await enumerate(scope: scope, kind: kind)
+        return paths.compactMap { path in
+            guard let isDirectory = PathFilter.inspect(path, expected: kind) else { return nil }
+            return PathEntry(path: path, isDirectory: isDirectory)
+        }
+    }
+}
+
+public struct PathEntry: Sendable, Hashable {
+    public let path: String
+    public let isDirectory: Bool
+
+    public init(path: String, isDirectory: Bool) {
+        self.path = path
+        self.isDirectory = isDirectory
+    }
 }
 
 /// Drops entries no launcher should offer: punctuation-only names such as `[`
 /// or `]`, control characters, broken symlinks, and the wrong file kind.
 public enum PathFilter {
-    public static func isUsable(_ path: String, expected: PathKind = .any) -> Bool {
+    /// One stat: returns whether the path is a directory, or nil when unusable.
+    public static func inspect(_ path: String, expected: PathKind = .any) -> Bool? {
         let name = (path as NSString).lastPathComponent
-        guard !name.isEmpty, name != ".", name != ".." else { return false }
+        guard !name.isEmpty, name != ".", name != ".." else { return nil }
         guard name.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) }) else {
-            return false
+            return nil
         }
-        guard name.rangeOfCharacter(from: .controlCharacters) == nil else { return false }
+        guard name.rangeOfCharacter(from: .controlCharacters) == nil else { return nil }
         // Shell artifacts such as "[flags]" and "]" are not browsable paths.
-        guard !name.hasPrefix("["), !name.hasSuffix("]") else { return false }
+        guard !name.hasPrefix("["), !name.hasSuffix("]") else { return nil }
 
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
-            return false
+            return nil
         }
         switch expected {
-        case .directories: return isDirectory.boolValue
-        case .files: return !isDirectory.boolValue
-        case .any: return true
+        case .directories: return isDirectory.boolValue ? true : nil
+        case .files: return isDirectory.boolValue ? nil : false
+        case .any: return isDirectory.boolValue
         }
+    }
+
+    public static func isUsable(_ path: String, expected: PathKind = .any) -> Bool {
+        inspect(path, expected: expected) != nil
     }
 }
 
@@ -34,12 +61,16 @@ public final class FDEnumerator: PathEnumerating {
     public init() {}
 
     public func enumerate(scope: Scope, kind: PathKind) async throws -> [String] {
+        try await enumerateEntries(scope: scope, kind: kind).map(\.path)
+    }
+
+    public func enumerateEntries(scope: Scope, kind: PathKind) async throws -> [PathEntry] {
         guard let fd = ToolLocator.shared.path(for: "fd") else {
             throw ProviderError.toolMissing("fd")
         }
 
         let matcher = scope.matcher
-        var results: [String] = []
+        var results: [PathEntry] = []
         var seen = Set<String>()
         let limit = 100_000
 
@@ -90,10 +121,10 @@ public final class FDEnumerator: PathEnumerating {
                 guard !path.isEmpty else { continue }
                 guard path.hasPrefix(canonicalRoot + "/") else { continue }
                 guard matcher.allows(path: path, isDirectory: kind != .files, root: canonicalRoot) else { continue }
-                guard PathFilter.isUsable(path, expected: kind) else { continue }
+                guard let isDirectory = PathFilter.inspect(path, expected: kind) else { continue }
                 guard !seen.contains(path) else { continue }
                 seen.insert(path)
-                results.append(path)
+                results.append(PathEntry(path: path, isDirectory: isDirectory))
                 if results.count >= limit { return results }
             }
         }

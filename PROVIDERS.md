@@ -39,6 +39,20 @@ lexicographically first `id` wins.
 A provider with no `trigger` and `global = false` is unreachable and warned
 about. `global = true` without a trigger is valid for ambient providers.
 
+`global = true` is part of the manifest. Providers you cannot edit (bundled
+ones, third-party providers) join plain search through `config.toml`:
+
+```toml
+[providers]
+global = ["system", "timer", "awake"]   # default
+```
+
+Every id in that list answers unprefixed queries in addition to the built-in
+global providers (`apps`, `calc`, `pins`, `zj`, `search`, `web`, `bookmark`).
+`/trigger` still targets a single provider; the list only widens plain search.
+The default applies when the key is absent; `global = []` drops the extras but
+keeps the built-in ones, and an unknown id logs a warning.
+
 ## 2. Paths providers
 
 ```toml

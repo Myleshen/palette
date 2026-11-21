@@ -9,6 +9,7 @@ public enum ManifestProviderFactory {
         configuration: PaletteConfig,
         launcher: LauncherService,
         host: HostBridge,
+        cacheDirectory: URL,
         diagnostics: inout [Diagnostic]
     ) -> (any PaletteProvider)? {
         if manifest.engine == "paths", let paths = manifest.paths {
@@ -37,7 +38,12 @@ public enum ManifestProviderFactory {
                 terminalApp: configuration.terminalApp,
                 freeform: paths.freeform
             )
-            return PathsProvider(configuration: config, scope: scope, launcher: launcher)
+            return PathsProvider(
+                configuration: config,
+                scope: scope,
+                launcher: launcher,
+                cacheDirectory: cacheDirectory
+            )
         }
 
         if !manifest.command.isEmpty {

@@ -44,8 +44,10 @@ PALETTE_SCRIPT='show; query=Safari; wait=1.2; actions; \
   build/Palette.app/Contents/MacOS/Palette
 ```
 
-Supported steps: `show`, `hide`, `toggle`, `actions`, `exit`,
-`query=<text>`, `snapshot=<path>`, `wait=<seconds>`, and
+Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
+`query=<text>`, `snapshot=<path>`, `shot`, `settings_tab=<index>`,
+`settings_snapshot=<path>`, `wait=<seconds>`, `dump=<path>`, `assert=<cond>`,
+`wait_until=<cond>[;timeout=<s>]`, and
 `key=<token>` where token is `up`, `down`, `enter`, `esc`, `tab`, `space`,
 `comma`, `k`, `r`, `w`, `1`…`9`, optionally prefixed with `cmd+`, `opt+`, or
 `shift+` (for example `key=cmd+k`). `snapshot` writes the panel content without
@@ -58,10 +60,35 @@ and `PALETTE_ACTIONS`.
 The harness calls the same `SearchController` keyboard path as the panel, but
 it does not test Carbon hotkey delivery or real typing. Check those manually.
 
+## E2E flows
+
+```sh
+make e2e           # Scripts/e2e.sh; builds build/Palette.app if it is missing
+```
+
+`Scripts/e2e.sh` runs one flow per launch, each with its own temp config, state,
+and cache directory, and fails on a non-zero exit, a missing `SCRIPT OK` in the
+log, or a missing artifact:
+
+| Flow | What it asserts |
+|---|---|
+| `empty-query-reset` | hiding and reshowing resets the query and selection to the first row |
+| `screenshot-keeps-panel` | a capture leaves the panel visible |
+| `universal-search` | an unprefixed query returns rows from the default global providers (`system`, `timer`, `awake`) |
+| `terminal-tab` | the Terminal Settings tab renders, via `settings_snapshot=` |
+
+The capture flow asserts panel visibility only: a real capture needs Screen
+Recording TCC, which CI does not grant.
+
+Three steps make a script verifiable: `dump=<path>` writes the observable
+state as JSON, `assert=<condition>` records a failure when the condition is
+false, and `wait_until=<condition>;timeout=<seconds>` polls until it holds
+(5 s default). Any failure makes the process exit non-zero.
+
 ## Layout check
 
 Unit tests cannot see a clipped label or a squashed stepper. `make layout-check`
-renders all ten Settings sections headlessly and compares each with the
+renders all eleven Settings sections headlessly and compares each with the
 reference in `Tests/Snapshots/`:
 
 ```sh
@@ -146,7 +173,7 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 
 Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
 
-- `swift test` — 81 tests, 0 failures (including ordered NDJSON delivery,
+- `swift test` — 150 tests, 0 failures (including ordered NDJSON delivery,
   web-app URL normalization, shortcut parsing, store dedupe, text/image/file
   clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
   `search_position`, and `web_app_browser`, emoji catalog and Apple names,

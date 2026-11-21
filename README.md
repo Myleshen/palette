@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.8.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.10.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -196,8 +196,11 @@ A trailing slash browses a directory breadth-first: `/edit ~/dev/` shows the
 direct children of `~/dev` first, then the next level.
 
 Unprefixed queries search apps, web apps, zellij sessions, pinned items, web
-search engines, and any provider marked `global = true`. `= 2+2` and bare
-arithmetic also work.
+search engines, any provider marked `global = true`, and every provider in
+`[providers] global` (default `system`, `timer`, `awake`). Settings → Search →
+**Search without a prefix** edits that list, so a plain query also matches sleep,
+timers and keep-awake rows. `/trigger` still targets one provider. `= 2+2` and
+bare arithmetic also work, and the calculator always participates.
 
 ### Search matching
 
@@ -259,16 +262,18 @@ local key file” and never displays the value again. Keys are never written to
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window with ten tabs:
+`⌘,` (or the menu-bar icon) opens a native Settings window with eleven tabs:
 **General**, **Launcher**, **Appearance**, **Shortcuts**, **Clipboard**,
-**Search**, **Capture**, **Ask**, **Providers**, and **Advanced**. General holds
-shortcuts, the terminal/editor used by providers, permissions, and the
-**Keep Awake** and timer toggles; Launcher holds where the panel opens, app order,
-`Show provider tabs`, and the panel size; Appearance holds themes and typography;
-Capture holds screenshot and recording options. **Clipboard**, **Search**, and
-**Ask** cover their own features. **Providers** picks which provider tabs are
-visible. **Advanced** has config/theme/log links, backup, diagnostics, and version
-information. The **Ask** tab selects the endpoint and model,
+**Search**, **Capture**, **Ask**, **Providers**, **Advanced**, and **Terminal**.
+General holds shortcuts, the terminal/editor apps used by providers, permissions,
+and the **Keep Awake** and timer toggles; Launcher holds where the panel opens,
+app order, `Show provider tabs`, and the panel size; Appearance holds themes and
+typography; Capture holds screenshot and recording options; **Terminal** holds
+the embedded session, shell, and font that used to live in General.
+**Clipboard**, **Search**, and **Ask** cover their own features. **Providers**
+picks which provider tabs are visible. **Advanced** has config/theme/log links,
+backup, diagnostics, and version information. The **Ask** tab selects the
+endpoint and model,
 saves a local API key, toggles automatic fallback, and controls how many Q&A
 entries and how many days of history are kept.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
@@ -559,16 +564,18 @@ mono_size = 13
 
 ### Provider aliases, order, and visibility
 
-`[providers]` stores tab order, extra trigger words, and providers you want to
-hide. Turn providers on or off in Settings → Advanced; the tab bar and Tab
-cycling only include enabled providers. Order with the up/down buttons; aliases
-are comma-separated. The canonical trigger never changes. Duplicate aliases or
-triggers are rejected when saving.
+`[providers]` stores tab order, extra trigger words, the providers that also
+answer plain queries, and providers you want to hide. Turn providers on or off
+in Settings → Advanced; the tab bar and Tab cycling only include enabled
+providers. Order with the up/down buttons; aliases are comma-separated. The
+canonical trigger never changes. Duplicate aliases or triggers are rejected
+when saving.
 
 ```toml
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]
 disabled = []
+global = ["system", "timer", "awake"]
 
 [providers.aliases]
 apps = ["launch", "a"]
@@ -631,6 +638,7 @@ mono_size = 0
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]
 disabled = []
+global = ["system", "timer", "awake"]  # also answer plain, unprefixed queries
 
 [providers.aliases]
 apps = ["launch"]
@@ -719,6 +727,7 @@ them automatically when a manifest changes, and `⌘R` forces a full reload.
 ```sh
 swift build
 swift test
+make e2e           # end-to-end flows against build/Palette.app
 make run
 ```
 

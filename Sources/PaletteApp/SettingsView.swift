@@ -10,10 +10,12 @@ struct ProviderSettingsInfo: Identifiable, Equatable {
     var id: String
     var name: String
     var trigger: String?
+    var isGlobal: Bool
 }
 
 private enum SettingsTab: Int, CaseIterable, Identifiable {
-    case general, launcher, appearance, shortcuts, clipboard, search, capture, ask, providers, advanced
+    // Appended last: raw values are a public contract (settings_tab=<index>).
+    case general, launcher, appearance, shortcuts, clipboard, search, capture, ask, providers, advanced, terminal
 
     var id: Int { rawValue }
     var title: String {
@@ -28,6 +30,7 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
         case .ask: return "Ask"
         case .providers: return "Providers"
         case .advanced: return "Advanced"
+        case .terminal: return "Terminal"
         }
     }
     var icon: String {
@@ -42,6 +45,7 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
         case .ask: return "sparkles"
         case .providers: return "square.stack.3d.up"
         case .advanced: return "gearshape.2"
+        case .terminal: return "apple.terminal"
         }
     }
     /// Fixed tile colours like System Settings, deliberately not read from the
@@ -58,6 +62,7 @@ private enum SettingsTab: Int, CaseIterable, Identifiable {
         case .ask: return Color(red: 0.72, green: 0.38, blue: 0.95)
         case .providers: return Color(red: 0.61, green: 0.44, blue: 0.31)
         case .advanced: return Color(red: 0.42, green: 0.45, blue: 0.50)
+        case .terminal: return Color(red: 0.06, green: 0.62, blue: 0.52)
         }
     }
 }
@@ -72,7 +77,7 @@ private extension SettingsTab {
     static let sidebarGroups: [SettingsTabGroup] = [
         SettingsTabGroup(title: "General", tabs: [.general, .launcher, .appearance]),
         SettingsTabGroup(title: "Features", tabs: [.shortcuts, .clipboard, .search, .capture, .ask]),
-        SettingsTabGroup(title: "System", tabs: [.providers, .advanced]),
+        SettingsTabGroup(title: "System", tabs: [.providers, .advanced, .terminal]),
     ]
 }
 
@@ -186,6 +191,7 @@ struct SettingsView: View {
     @State private var providerOrder: [String]
     @State private var aliases: [String: String]
     @State private var disabledProviders: [String]
+    @State private var globalProviders: [String]
     @State private var bookmarks: [Bookmark] = []
     @State private var bookmarksLoaded = false
     @State private var terminalShellChoice: String
@@ -231,6 +237,7 @@ struct SettingsView: View {
         }
         _aliases = State(initialValue: aliasState)
         _disabledProviders = State(initialValue: config.disabledProviders.filter { $0 != "apps" })
+        _globalProviders = State(initialValue: config.globalProviders)
         let configuredShell = config.terminalSession.shell.trimmingCharacters(in: .whitespaces)
         let shellName = (configuredShell as NSString).lastPathComponent.lowercased()
         _terminalShellChoice = State(initialValue: configuredShell.isEmpty
@@ -477,6 +484,7 @@ struct SettingsView: View {
         case .ask: ask
         case .providers: providerSettings
         case .advanced: advanced
+        case .terminal: terminal
         }
     }
 
@@ -491,7 +499,7 @@ struct SettingsView: View {
             .init(title: "Power and keep awake", tab: .general, anchor: "general-power", keywords: "awake clamshell lid sleep power"),
             .init(title: "Notifications and timers", tab: .general, anchor: "general-notifications", keywords: "timer sound notification finish"),
             .init(title: "Apps and editor", tab: .general, anchor: "general-apps", keywords: "terminal editor neovide kitty external app detect reset"),
-            .init(title: "Embedded terminal", tab: .general, anchor: "general-terminal", keywords: "terminal session zellij tmux fish shell font"),
+            .init(title: "Embedded terminal", tab: .terminal, anchor: "terminal-embedded", keywords: "terminal session zellij tmux fish zsh shell font size"),
             .init(title: "Launcher position and tabs", tab: .launcher, anchor: "launcher-tabs", keywords: "top center app order alphabetical frequent provider tabs chips show"),
             .init(title: "Launcher size", tab: .launcher, anchor: "launcher-size", keywords: "width rows scale preview layout fit screen"),
             .init(title: "Command prefix", tab: .launcher, anchor: "launcher-commands", keywords: "prefix provider command slash"),
@@ -500,6 +508,7 @@ struct SettingsView: View {
             .init(title: "Global shortcuts", tab: .shortcuts, anchor: "shortcuts-global", keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record screen region window"),
             .init(title: "Clipboard history", tab: .clipboard, anchor: "clipboard-history", keywords: "clipboard history entries poll clear retention secrets"),
             .init(title: "Web search", tab: .search, anchor: "search-web", keywords: "web search engine google duckduckgo github youtube"),
+            .init(title: "Search without a prefix", tab: .search, anchor: "search-global", keywords: "global unprefixed plain query provider system timer awake"),
             .init(title: "Search engines and bangs", tab: .search, anchor: "search-engines", keywords: "engine url keyword bang !g"),
             .init(title: "Bookmarks", tab: .search, anchor: "search-bookmarks", keywords: "bookmark url keywords browser"),
             .init(title: "Web app browser", tab: .search, anchor: "search-webapps", keywords: "browser helium chrome chromium web app"),
@@ -812,7 +821,12 @@ struct SettingsView: View {
             } footer: {
                 settingsFooter("Used by projects, commands, Zellij, and Bitwarden. Examples: neovide, Visual Studio Code, Cursor, kitty, Terminal. Reset also restores the theme, Ask, and terminal-session defaults.")
             }
+        }
+        .formStyle(.grouped)
+    }
 
+    private var terminal: some View {
+        Form {
             Section {
                 Picker("Session", selection: $config.terminalSession.multiplexer) {
                     Text("Auto").tag(TerminalMultiplexer.auto)
@@ -837,7 +851,7 @@ struct SettingsView: View {
                 numericRow("Font size", value: $config.terminalSession.fontSize,
                            in: 0...48, step: 1, unit: "pt")
             } header: {
-                Text("Embedded terminal").searchTarget("general-terminal")
+                Text("Embedded terminal").searchTarget("terminal-embedded")
             } footer: {
                 settingsFooter("Auto uses Zellij, then tmux, then a plain shell; plain shell sessions end when the panel closes. Empty font and a size of 0 auto-detect Kitty's font, then the theme mono font. Use a Nerd Font for icons.")
             }
@@ -985,6 +999,31 @@ struct SettingsView: View {
 
     private var search: some View {
         Form {
+            Section {
+                ForEach(providers) { provider in
+                    if provider.isGlobal {
+                        Toggle(provider.name, isOn: .constant(true))
+                            .disabled(true)
+                    } else {
+                        Toggle(provider.name, isOn: Binding(
+                            get: { globalProviders.contains(provider.id.lowercased()) },
+                            set: { enabled in
+                                let id = provider.id.lowercased()
+                                if enabled {
+                                    if !globalProviders.contains(id) { globalProviders.append(id) }
+                                } else {
+                                    globalProviders.removeAll { $0 == id }
+                                }
+                            }
+                        ))
+                    }
+                }
+            } header: {
+                Text("Search without a prefix").searchTarget("search-global")
+            } footer: {
+                settingsFooter("Plain queries search these providers in addition to the built-in ones; /trigger still targets one provider.")
+            }
+
             Section {
                 Toggle("Show web results in search", isOn: $config.webSearchEnabled)
             } header: {
@@ -1521,6 +1560,7 @@ struct SettingsView: View {
         config.providerAliases = aliasMap
         config.providerOrder = providerOrder
         config.disabledProviders = disabledProviders.filter { $0 != "apps" }
+        config.globalProviders = globalProviders
         switch terminalShellChoice {
         case "auto": config.terminalSession.shell = ""
         case "fish", "zsh": config.terminalSession.shell = terminalShellChoice
