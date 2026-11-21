@@ -42,7 +42,9 @@ public final class RecentProvider: PaletteProvider, @unchecked Sendable {
                Ranking.score(query: query, candidate: "\(title) \(path) \(use.provider)") == nil {
                 continue
             }
-            var actions: [PaletteAction] = [
+            // Enter opens the way Finder would; the editor is the second choice.
+            let actions: [PaletteAction] = [
+                PaletteAction(id: "open-default", title: "Open", kind: .openPath, value: .text(path)),
                 PaletteAction(
                     id: "open",
                     title: "Open with \(editor)",
@@ -57,16 +59,10 @@ public final class RecentProvider: PaletteProvider, @unchecked Sendable {
                     value: .object(["path": isDirectory(path) ? path : (path as NSString).deletingLastPathComponent])
                 ),
             ]
-            actions.append(PaletteAction(
-                id: "open-default",
-                title: "Open",
-                kind: .openPath,
-                value: .text(path)
-            ))
             items.append(PaletteItem(
                 id: "recent:\(use.stableID)",
                 title: title,
-                subtitle: "\(use.provider) · \(relative(use.lastUsed)) · \(path)",
+                subtitle: "\(compact(path)) · \(relative(use.lastUsed))",
                 icon: .symbol(isDirectory(path) ? "folder.fill" : "doc.text"),
                 badge: "RECENT",
                 score: 1_000 - Double(items.count),
@@ -93,6 +89,13 @@ public final class RecentProvider: PaletteProvider, @unchecked Sendable {
         }
         guard value.hasPrefix("/") || value.hasPrefix("~") else { return nil }
         return PathExpansion.expand(value)
+    }
+
+    /// Keeps the tail of a long path, which is the part that identifies it.
+    private func compact(_ path: String, limit: Int = 44) -> String {
+        let display = PathsProvider.displayPath(path)
+        guard display.count > limit else { return display }
+        return "…" + display.suffix(limit - 1)
     }
 
     private func isDirectory(_ path: String) -> Bool {

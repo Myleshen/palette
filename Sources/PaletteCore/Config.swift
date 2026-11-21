@@ -164,14 +164,12 @@ public struct WindowConfig: Sendable, Equatable {
     /// Size to the screen under the cursor instead of one fixed size.
     public var autoSize: Bool = true
     /// Show the row of provider chips above the list.
-    public var showTabs: Bool = true
     /// Points. 0 means "use the default times scale".
     public var width: Double = 0
     public var maxHeight: Double = 0
     /// Rows before scrolling. 0 means "use the default times scale".
     public var visibleRows: Int = 0
     public var clipboardWidth: Double = 0
-    public var askWidth: Double = 0
     public var previewWidth: Double = 0
     public var terminalWidth: Double = 0
     public var scratchpadWidth: Double = 0
@@ -239,9 +237,6 @@ public struct WindowConfig: Sendable, Equatable {
     public func clipboardWidth(for visible: CGSize) -> Double {
         panelWidth(clipboardWidth, Self.defaultPanelWidth, for: visible)
     }
-    public func askWidth(for visible: CGSize) -> Double {
-        panelWidth(askWidth, Self.defaultPanelWidth, for: visible)
-    }
     public func previewWidth(for visible: CGSize) -> Double {
         panelWidth(previewWidth, Self.defaultPanelWidth, for: visible)
     }
@@ -262,7 +257,6 @@ public struct WindowConfig: Sendable, Equatable {
     }
 
     public var clipboardPanelWidth: Double { size(clipboardWidth, Self.defaultPanelWidth) }
-    public var askPanelWidth: Double { size(askWidth, Self.defaultPanelWidth) }
     public var previewPanelWidth: Double { size(previewWidth, Self.defaultPanelWidth) }
     public var terminalPanelWidth: Double { size(terminalWidth, Self.defaultTerminalWidth) }
     public var scratchpadPanelWidth: Double { size(scratchpadWidth, Self.defaultPanelWidth) }
@@ -350,6 +344,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var windowScreenshotHotkey: String
     public var recordingHotkey: String
     public var providerPrefix: String
+    /// Overrides the theme's search-field placeholder; empty inherits it.
+    public var searchPlaceholder: String
     public var toolsPath: [String]
     public var terminal: String
     public var terminalApp: String
@@ -395,6 +391,7 @@ public struct PaletteConfig: Sendable, Equatable {
         windowScreenshotHotkey: String = "cmd+shift+6",
         recordingHotkey: String = "cmd+shift+5",
         providerPrefix: String = "/",
+        searchPlaceholder: String = "",
         toolsPath: [String] = [],
         terminal: String = "kitty",
         terminalApp: String = "kitty",
@@ -429,6 +426,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.windowScreenshotHotkey = windowScreenshotHotkey
         self.recordingHotkey = recordingHotkey
         self.providerPrefix = providerPrefix
+        self.searchPlaceholder = searchPlaceholder
         self.toolsPath = toolsPath
         self.terminal = terminal
         self.terminalApp = terminalApp
@@ -615,6 +613,9 @@ public enum ConfigLoader {
         if let prefix = table.str("provider_prefix"), !prefix.isEmpty {
             config.providerPrefix = prefix
         }
+        if let placeholder = table.str("search_placeholder") {
+            config.searchPlaceholder = placeholder.trimmingCharacters(in: .whitespaces)
+        }
         if let tools = table.strArray("tools_path") {
             config.toolsPath = tools
         }
@@ -645,7 +646,6 @@ public enum ConfigLoader {
         }
         if let window = table.table("window") {
             config.window.autoSize = window.bool("auto_size") ?? config.window.autoSize
-            config.window.showTabs = window.bool("show_tabs") ?? config.window.showTabs
             if let value = window.number("scale"), value > 0 { config.window.scale = value }
             if let value = window.number("width"), value > 0 { config.window.width = value }
             if let value = window.number("max_height"), value > 0 { config.window.maxHeight = value }
@@ -653,7 +653,6 @@ public enum ConfigLoader {
                 config.window.visibleRows = min(10, max(5, value))
             }
             if let value = window.number("clipboard_width"), value > 0 { config.window.clipboardWidth = value }
-            if let value = window.number("ask_width"), value > 0 { config.window.askWidth = value }
             if let value = window.number("preview_width"), value > 0 { config.window.previewWidth = value }
             if let value = window.number("terminal_width"), value > 0 { config.window.terminalWidth = value }
             if let value = window.number("scratchpad_width"), value > 0 { config.window.scratchpadWidth = value }
@@ -841,8 +840,11 @@ public enum ConfigLoader {
             if let notify = askTable.bool("notify") {
                 ask.notify = notify
             }
+            if let webSearch = askTable.bool("web_search") {
+                ask.webSearch = webSearch
+            }
             if AskModel.find(id: ask.model)?.endpoint != ask.endpoint {
-                ask.model = AskModel.defaultModel.id
+                ask.model = AskModel.models(for: ask.endpoint).first?.id ?? AskModel.defaultModel.id
             }
             config.ask = ask
         }
@@ -946,13 +948,11 @@ public enum ConfigLoader {
         # 0 means "use the default times scale".
         [window]
         auto_size = true               # size to the screen under the cursor
-        show_tabs = true               # provider chip strip above the list
         scale = 1.0                    # 0.8 - 1.6
         width = 0                      # points, 0 = 680 * scale
         max_height = 0                 # points, 0 = 720 * scale
         visible_rows = 0               # 5-10, 0 = 7 * scale
         clipboard_width = 0            # 0 = 880 * scale
-        ask_width = 0
         preview_width = 0
         terminal_width = 0             # 0 = 1000 * scale
         scratchpad_width = 0
@@ -1018,16 +1018,17 @@ public enum ConfigLoader {
         font = ""                      # empty = kitty font, then theme mono
         font_size = 0                  # 0 = kitty size, then 13
 
-        # One-shot AI answers (/ask). The API key is never written here; it
-        # lives in an encrypted local file and is entered in Settings > Ask.
+        # Ask chat (⌘⌥A). The API key is never written here; it lives in an
+        # encrypted local file and is entered in Settings > Ask.
         [ask]
-        provider = "opencode-go"       # OpenCode Go (requires a Go key)
+        provider = "opencode-go"       # opencode-go | nvidia
         model = "beam-free"
         max_history = 200
         retention_days = 30
         max_tokens = 8192
         fallback = true                # use free/cheap models when quota runs out
         notify = true                  # sound and Dock bounce when an answer arrives
+        web_search = false             # one web lookup per turn (composer toggle)
 
         # Global web search. Add or remove engines as you like; {query} is
         # replaced with the URL-encoded search text. app_mode = true opens
@@ -1110,6 +1111,7 @@ public enum ConfigWriter {
         out.append("window_screenshot_hotkey = \(quote(config.windowScreenshotHotkey))")
         out.append("recording_hotkey = \(quote(config.recordingHotkey))")
         out.append("provider_prefix = \(quote(config.providerPrefix))")
+        out.append("search_placeholder = \(quote(config.searchPlaceholder))")
         out.append("tools_path = [\(config.toolsPath.map(quote).joined(separator: ", "))]")
         out.append("terminal = \(quote(config.terminal))")
         out.append("terminal_app = \(quote(config.terminalApp))")
@@ -1120,13 +1122,11 @@ public enum ConfigWriter {
         out.append("")
         out.append("[window]")
         out.append("auto_size = \(config.window.autoSize)")
-        out.append("show_tabs = \(config.window.showTabs)")
         out.append("scale = \(config.window.scale)")
         if config.window.width > 0 { out.append("width = \(config.window.width)") }
         if config.window.maxHeight > 0 { out.append("max_height = \(config.window.maxHeight)") }
         if config.window.visibleRows > 0 { out.append("visible_rows = \(config.window.visibleRows)") }
         if config.window.clipboardWidth > 0 { out.append("clipboard_width = \(config.window.clipboardWidth)") }
-        if config.window.askWidth > 0 { out.append("ask_width = \(config.window.askWidth)") }
         if config.window.previewWidth > 0 { out.append("preview_width = \(config.window.previewWidth)") }
         if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
         if config.window.scratchpadWidth > 0 { out.append("scratchpad_width = \(config.window.scratchpadWidth)") }
@@ -1194,6 +1194,7 @@ public enum ConfigWriter {
         out.append("max_tokens = \(config.ask.maxTokens)")
         out.append("fallback = \(config.ask.fallback)")
         out.append("notify = \(config.ask.notify)")
+        out.append("web_search = \(config.ask.webSearch)")
         out.append("")
         out.append("[theme]")
         out.append("mode = \(quote(config.theme.mode.rawValue))")

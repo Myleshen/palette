@@ -253,9 +253,45 @@ public enum ThemeLoader {
         fallback: Theme = .defaultDark
     ) -> ThemeLoadResult {
         var diagnostics: [Diagnostic] = []
-        let theme = resolve(name: name, themesDirectory: themesDirectory, fallback: fallback, visited: [], diagnostics: &diagnostics)
+        var theme = resolve(name: name, themesDirectory: themesDirectory, fallback: fallback, visited: [], diagnostics: &diagnostics)
+        correctContrast(&theme, diagnostics: &diagnostics)
         validate(theme, diagnostics: &diagnostics)
         return ThemeLoadResult(theme: theme, diagnostics: diagnostics)
+    }
+
+    /// Authored foreground values are kept when they pass; otherwise the pair
+    /// is repaired instead of shipping text nobody can read. Black or white
+    /// always clears 4.5:1 on an opaque colour, so one correction is enough.
+    private static func correctContrast(_ theme: inout Theme, diagnostics: inout [Diagnostic]) {
+        ensureContrast(on: theme.palette.accent, &theme.palette.accentFg, label: "accent_fg", theme: theme.name, diagnostics: &diagnostics)
+        ensureContrast(on: theme.palette.selectionBg, &theme.palette.selectionFg, label: "selection_fg", theme: theme.name, diagnostics: &diagnostics)
+        ensureContrast(on: theme.palette.badgeBg, &theme.palette.badgeFg, label: "badge_fg", theme: theme.name, diagnostics: &diagnostics)
+        if let background = theme.states.selected.bg, var foreground = theme.states.selected.fg {
+            ensureContrast(on: background, &foreground, label: "states.selected.fg", theme: theme.name, diagnostics: &diagnostics)
+            theme.states.selected.fg = foreground
+        }
+    }
+
+    private static func ensureContrast(
+        on background: String,
+        _ foreground: inout String,
+        label: String,
+        theme name: String,
+        diagnostics: inout [Diagnostic]
+    ) {
+        guard let backdrop = RGBA(hex: background) else { return }
+        if let current = RGBA(hex: foreground), current.contrast(with: backdrop) >= 4.5 { return }
+        let dark = RGBA(red: 17.0 / 255, green: 17.0 / 255, blue: 17.0 / 255)
+        let light = RGBA(red: 1, green: 1, blue: 1)
+        let replacement = light.contrast(with: backdrop) > dark.contrast(with: backdrop)
+            ? "#ffffff"
+            : "#111111"
+        diagnostics.append(Diagnostic(
+            .info,
+            "Theme '\(name)': \(label) \(foreground) had low contrast on \(background); using \(replacement).",
+            source: "theme"
+        ))
+        foreground = replacement
     }
 
     public static func catalog(themesDirectory: URL) -> [ThemeInfo] {
@@ -437,7 +473,11 @@ public enum ThemeLoader {
         }
         if table.table("palette")?.str("accent_fg") == nil {
             if let accent = RGBA(hex: theme.palette.accent) {
-                theme.palette.accentFg = accent.luminance > 0.5 ? "#111111" : "#ffffff"
+                // Contrast, not a luminance guess: mid-tone accents need dark text.
+                theme.palette.accentFg = accent.contrast(with: RGBA(red: 1, green: 1, blue: 1))
+                    > accent.contrast(with: RGBA(red: 17.0 / 255, green: 17.0 / 255, blue: 17.0 / 255))
+                    ? "#ffffff"
+                    : "#111111"
             }
         }
 
@@ -477,10 +517,29 @@ public enum ThemeLoader {
         if background.contrast(with: foreground) < 4.5 {
             diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low body text contrast.", source: "theme"))
         }
+        if let muted = RGBA(hex: theme.palette.fgMuted),
+           background.contrast(with: muted) < 3 {
+            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low muted text contrast.", source: "theme"))
+        }
+        if let accent = RGBA(hex: theme.palette.accent),
+           let accentFg = RGBA(hex: theme.palette.accentFg),
+           accent.contrast(with: accentFg) < 4.5 {
+            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low accent contrast.", source: "theme"))
+        }
         if let selectionBg = RGBA(hex: theme.palette.selectionBg),
            let selectionFg = RGBA(hex: theme.palette.selectionFg),
            selectionBg.contrast(with: selectionFg) < 4.5 {
             diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low selection contrast.", source: "theme"))
+        }
+        if let badgeBg = RGBA(hex: theme.palette.badgeBg),
+           let badgeFg = RGBA(hex: theme.palette.badgeFg),
+           badgeBg.contrast(with: badgeFg) < 4.5 {
+            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low badge contrast.", source: "theme"))
+        }
+        if let selectedBg = theme.states.selected.bg.flatMap(RGBA.init(hex:)),
+           let selectedFg = theme.states.selected.fg.flatMap(RGBA.init(hex:)),
+           selectedBg.contrast(with: selectedFg) < 4.5 {
+            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low selected-row contrast.", source: "theme"))
         }
     }
 

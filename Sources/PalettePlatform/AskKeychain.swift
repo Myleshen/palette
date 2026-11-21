@@ -3,7 +3,7 @@ import Foundation
 import PaletteCore
 import Security
 
-/// API keys for `/ask` live in a user-only encrypted file, not the login
+/// Ask API keys live in a user-only encrypted file, not the login
 /// Keychain. Ad-hoc development builds change signature constantly, which made
 /// Keychain ACL prompts appear on every rebuild. The file is encrypted with a
 /// random 32-byte key stored beside it; both are mode 0600. Nothing in this type

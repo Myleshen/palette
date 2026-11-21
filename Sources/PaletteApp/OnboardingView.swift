@@ -41,7 +41,7 @@ struct OnboardingView: View {
             case .everything:
                 return ["clip", "snip", "recent", "calc", "system", "theme",
                         "neo", "neof", "proj", "cmd", "git", "port", "term",
-                        "ask", "askh", "bw", "bwu", "bwt", "bwn", "bwo",
+                        "bw", "bwu", "bwt", "bwn", "bwo",
                         "zj", "web", "awake"]
             }
         }

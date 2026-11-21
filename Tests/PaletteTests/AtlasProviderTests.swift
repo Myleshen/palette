@@ -140,7 +140,8 @@ final class AtlasProviderTests: XCTestCase {
     }
 
     func testReviewActionValue() async throws {
-        let file = try write("note.md", "# Note\n")
+        // Only inbox artifacts (review: true) can be marked reviewed.
+        let file = try write("note.md", "---\nreview: true\n---\n# Note\n")
         try writeState([file.path: ["title": "Note", "kind": "artifact"]])
         let provider = AtlasProvider(bridge: nil, stateFile: stateFile, previewDirectory: previewDir, home: home.path)
         let rows = try await provider.search(SearchRequest(text: "", isBound: true))
@@ -148,6 +149,14 @@ final class AtlasProviderTests: XCTestCase {
         XCTAssertEqual(review.kind, .custom)
         XCTAssertEqual(review.value.text, "review:\(file.path)")
         XCTAssertEqual(rows.first?.actions.first?.kind, .openPath)
+    }
+
+    func testReviewedArtifactsDropTheReviewAction() async throws {
+        let file = try write("plain.md", "# Plain\n")
+        try writeState([file.path: ["title": "Plain", "kind": "artifact"]])
+        let provider = AtlasProvider(bridge: nil, stateFile: stateFile, previewDirectory: previewDir, home: home.path)
+        let rows = try await provider.search(SearchRequest(text: "", isBound: true))
+        XCTAssertNil(rows.first?.actions.first { $0.id == "review" })
     }
 
     // MARK: - Fixtures

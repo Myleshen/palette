@@ -134,8 +134,28 @@ Numbers are points unless stated otherwise.
 | `badge_bg` / `badge_fg` | accessory badges |
 
 Derived values: if `selection_fg` is omitted it falls back to `fg`; if
-`accent_fg` is omitted it is computed from accent luminance. Contrast below 4.5:1
-for body text emits a warning.
+`accent_fg` is omitted it is computed from accent contrast. Every resolved theme
+is then measured and repaired where needed (see Contrast, below).
+
+### Contrast
+
+Pairs are checked after `extends` resolution and derived values:
+
+| Pair | Minimum |
+|---|---|
+| `fg` on `bg` (body text) | 4.5:1 |
+| `accent` / `accent_fg` | 4.5:1 |
+| `selection_bg` / `selection_fg` | 4.5:1 |
+| `badge_bg` / `badge_fg` | 4.5:1 |
+| `states.selected.bg` / `states.selected.fg` | 4.5:1 |
+| `fg_muted` on `bg` | 3.0:1 |
+
+A failing foreground is repaired rather than shipped: `accent_fg`,
+`selection_fg`, `badge_fg`, and `states.selected.fg` are replaced with
+`#111111` or `#ffffff`, whichever contrasts more with the background, and an
+info diagnostic records the old and new value. Body and muted text only produce
+a warning, because `bg` belongs to the theme. `states.selected` takes part in
+both the check and the repair.
 
 ### Metrics
 
@@ -174,7 +194,7 @@ typography, match emphasis, motion, footer hints. Grid `columns` is reserved for
 a later release.
 
 Not controlled by themes: panel width, panel height, visible rows, and the
-clipboard/Ask/preview/terminal/scratchpad widths. Those are in `config.toml`
+clipboard/preview/terminal/scratchpad widths. Those are in `config.toml`
 under `[window]`.
 
 Not controlled: the order of results, provider behavior, arbitrary views, custom
@@ -214,8 +234,8 @@ token vocabulary are designed so they land without changing themes.
 - System text size is respected as a floor; a theme may increase but not shrink
   below the accessibility setting.
 - Fonts fall back to the system font when the requested family is unavailable.
-- Contrast warnings are written to the diagnostic log and shown by
-  `⌘R` if the theme is invalid or low-contrast.
+- Contrast failures are repaired or warned as described under Contrast, and the
+  result is written to the diagnostic log.
 
 These overrides always win over theme values.
 

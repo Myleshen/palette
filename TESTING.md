@@ -15,7 +15,7 @@ provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
 | `StorageTests` | SQLite migrations, frecency round-trip, metadata, clipboard dedupe/cap |
 | `PathsEngineTests` | fd enumeration, excludes, fzf ranking, weird filenames |
 | `ManifestTests` | provider manifest parsing and validation diagnostics |
-| `AskTests` | Ask config round-trip without secrets, free-first model order, endpoint scoping, response/error parsing, quota fallback, invalid-key endpoint skipping, Settings model precedence |
+| `AskTests` | Ask config round-trip without secrets, free-first model order, endpoint scoping, response/error parsing, quota fallback, invalid-key endpoint skipping, Settings model precedence, streaming, saved chats and sources, markdown blocks/tables/images, web-search parsing and the untrusted system note |
 | `KeepAwakeTests` | keep-awake start/stop, timed expiry, provider rows/actions, clamshell toggle independence, clamshell flag cleanup, AC/battery guard transitions |
 | `ExternalProviderTests` | NDJSON round-trip against the hello example |
 
@@ -46,7 +46,11 @@ PALETTE_SCRIPT='show; query=Safari; wait=1.2; actions; \
 
 Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `query=<text>`, `snapshot=<path>`, `shot`, `settings_tab=<index>`,
-`settings_snapshot=<path>`, `wait=<seconds>`, `dump=<path>`, `assert=<cond>`,
+`settings_size=<w>x<h>`, `settings_edit=<field>=<value>`,
+`settings_clear_search`, `awake=<seconds>`, `settings_snapshot=<path>`,
+`window_snapshot=<path>`, `askwindow=<question>`, `chatwindow`,
+`chatopen=<index>`, `ask_cancel`, `asktoggle`, `askclose`,
+`wait=<seconds>`, `dump=<path>`, `assert=<cond>`,
 `wait_until=<cond>[;timeout=<s>]`, and
 `key=<token>` where token is `up`, `down`, `enter`, `esc`, `tab`, `space`,
 `comma`, `k`, `r`, `w`, `1`…`9`, optionally prefixed with `cmd+`, `opt+`, or
@@ -55,7 +59,8 @@ screen-recording permission, so it works on a locked display.
 
 Other hooks: `PALETTE_QUERY`, `PALETTE_SHOW_ON_LAUNCH`,
 `PALETTE_SNAPSHOT`, `PALETTE_SNAPSHOT_DELAY`, `PALETTE_EXIT_AFTER_SNAPSHOT`,
-and `PALETTE_ACTIONS`.
+and `PALETTE_ACTIONS`. `dump` also exposes the Ask window as `askWindows`,
+`askStreaming`, `askTurns`, `askChats`, and `askBadge`.
 
 The harness calls the same `SearchController` keyboard path as the panel, but
 it does not test Carbon hotkey delivery or real typing. Check those manually.
@@ -75,7 +80,9 @@ log, or a missing artifact:
 | `empty-query-reset` | hiding and reshowing resets the query and selection to the first row |
 | `screenshot-keeps-panel` | a capture leaves the panel visible |
 | `universal-search` | an unprefixed query returns rows from the default global providers (`system`, `timer`, `awake`) |
-| `terminal-tab` | the Terminal Settings tab renders, via `settings_snapshot=` |
+| `launcher-tab` | the Launcher Settings tab renders, via `settings_snapshot=` |
+| `ask-window-not-modal` | the Ask window opens while the scratchpad stays active |
+| `ask-window-coexists` | the Ask window and the launcher are both visible |
 | `cheatsheets` | a temp `[cheatsheets] folders` entry reaches `/cheat`, which returns rows from the `cheat` provider |
 
 The capture flow asserts panel visibility only: a real capture needs Screen
@@ -94,7 +101,7 @@ false, and `wait_until=<condition>;timeout=<seconds>` polls until it holds
 ## Layout check
 
 Unit tests cannot see a clipped label or a squashed stepper. `make layout-check`
-renders all twelve Settings sections headlessly and compares each with the
+renders all seven Settings panes headlessly and compares each with the
 reference in `Tests/Snapshots/`:
 
 ```sh
@@ -106,10 +113,6 @@ Snapshots are normalised to 900 px wide, so a different display scale does not
 produce noise, and differences below a 6% channel delta are ignored. A focused
 text field used to make the numbers wobble; the capture resigns first responder
 before rendering. Run it after any change to `SettingsView`.
-
-The Advanced pane shows the running version, so re-record with
-`Scripts/layout-check.sh --record` after each version bump; otherwise section 9
-trips the tolerance for the right reason but the wrong cause.
 
 ## Release integrity
 
@@ -168,6 +171,45 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
       an error, correct password reveals items.
 - [ ] Searching returns logins; `⏎` copies the password and clears after 30 s.
 - [ ] No secret appears in the log or process arguments.
+
+**Ask chat**
+- [ ] `⌘⌥A` opens the Ask window; with nothing streaming, `Esc` closes it.
+- [ ] `⏎` sends and the answer streams in; **Stop** (or `Esc`) stops it and the
+      partial answer stays with a **Stopped** note and **Retry**.
+- [ ] Close the window mid-answer; the answer completes, the Dock badge appears,
+      and reopening shows the answer and clears the badge.
+- [ ] A markdown answer renders a table with aligned columns and a fenced code
+      block whose **Copy** button copies the code.
+- [ ] The globe (`⇧⌘G`) on for a current question produces a numbered
+      **Sources** list; a source opens in the browser.
+- [ ] The sidebar lists the chat; **New chat** (`⌘N`) starts an empty transcript,
+      and delete asks for confirmation.
+- [ ] Quit and relaunch: the chat is still listed and opens with its transcript,
+      sources, and model.
+
+**GitHub**
+- [ ] `/gha` outside a repository shows **Pick a repository** (`SETUP`);
+      `/gha owner/repo` lists runs.
+- [ ] A run offers **View Log** in the panel, **Re-run Failed Jobs** behind a
+      confirmation, and **Cancel Run** while it is not completed.
+- [ ] `/ghn` lists notifications, shows `EMPTY` for a clear inbox, and shows
+      `SCOPE` with **Run gh auth refresh** when the token lacks the scope.
+- [ ] `/ghr` offers **Clone into …** for the first devx root, plus **Copy slug**.
+- [ ] `/proj` with an empty query offers **Clone a repository…** and
+      **New project…**; without `devx` the clone row reports the missing tool.
+
+**Provider rail**
+- [ ] The rail shows Everything first, then one row per provider; clicking a row
+      opens its prefix and `Tab` / `⇧Tab` cycle the same rows.
+- [ ] Opening `/clip` with a preview narrows the rail to icons and shows the
+      preview pane.
+
+**Settings**
+- [ ] Changing a value updates `config.toml` and the footer reports **Saved**;
+      there is no Save or Cancel.
+- [ ] `⌘F` finds a pane or section; **Reset `<pane>`…** restores only that pane.
+- [ ] Clearing an optional shortcut disables it; a duplicate shows an inline
+      error and a footer count.
 
 **Themes**
 - [ ] Themes list under `/theme`; selecting one updates the UI immediately.
@@ -252,7 +294,8 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   `/git` listed clean and dirty repositories; `/proj` listed `~/dev`
   projects; `/cmd` loaded a manifest command; Settings exposes typography and
   provider order/aliases.
-- v1.8.0 checks: `/ask` listed only the selected endpoint's models with free
+- v1.8.0 checks (the `/ask` and `/askh` providers were removed in 2.15.0; Ask
+  is a window now): `/ask` listed only the selected endpoint's models with free
   options first, selecting a model persisted it, and a mock OpenAI-compatible
   endpoint answered `/ask hello openai` in 0.35 s. The Q&A row included model,
   provider, latency, and tokens; `/askh` found it with fuzzy search and preview.

@@ -1,5 +1,53 @@
 # Changelog
 
+## 2.15.0 — 2026-11-22
+
+### Added
+
+- **Ask is a chat.** ⌘⌥A opens a real conversation window with token streaming,
+  multi-turn context, a saved-chats sidebar that survives relaunches, and Stop.
+  Closing the window no longer cancels: the answer finishes in the background,
+  the Dock badge appears, and the sound plays when it lands.
+- **Markdown answers** — headings, lists, quotes, links, fenced code with a Copy
+  button, GFM tables, and images (https only), all selectable and theme-styled.
+- **Web search** — an optional single search per turn (DuckDuckGo), with the
+  fetched pages injected as untrusted context and a numbered Sources list.
+- **NVIDIA NIM endpoint** alongside OpenCode Go: 16 free chat models, key from
+  `NVIDIA_API_KEY` or the Settings key field, fallback only to endpoints that
+  have a key.
+- **GitHub providers** — `ghr` repositories (clone into `~/dev` via devx),
+  `ghp` pull requests (authored / review requested), `ghi` issues, `gha` Actions
+  runs (view log, re-run, cancel) and `ghn` notifications.
+- **`/proj` can start work** — clone a repository through `devx project clone`,
+  or create a new project directory and register it.
+- **Provider rail** — a full-height left rail listing every provider, with
+  Everything pinned on top; it narrows to icons when the preview pane is open or
+  the panel is tight.
+
+### Changed
+
+- **Settings is rebuilt**: 12 panes folded into 7 (General, Launcher, Appearance,
+  Shortcuts, Search, Ask, Providers), auto-applied instead of Save/Cancel, one
+  left-aligned 640pt column, ⌘F search across panes, section-scoped resets, file
+  pickers instead of typed paths, and an inline error instead of a silent revert.
+- Theme contrast is measured and enforced: accent, selection, badge and muted
+  pairs must clear their thresholds, and failing pairs are corrected
+  (Gruvbox Light 3.3 → 5.0, Siri Silver 3.7 → 5.1).
+- CI caches per job and per commit; the end-to-end job dropped from ~7 min to
+  under 2.
+
+### Fixed
+
+- `/gh` works outside a git repository instead of claiming auth was broken.
+- Confirm dialogs show each provider's warning instead of "cannot be undone".
+- `/recent` opens the file, not Neovide; `/stats cpu` and `/stats ram` work.
+- `/proj`, `/recent` and `/git` previews show real information (or nothing)
+  instead of repeating the row.
+- Copies confirm with a status; `/scratch` deletes ask first; `/zj` no longer
+  creates a session on Enter; `/theme` shows the active theme.
+- The footer bar, cards and gaps share one spacing scale, and the panel never
+  paints a transparent footer.
+
 ## 2.14.0 — 2026-11-21
 
 ### Added

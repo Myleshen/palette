@@ -10,7 +10,7 @@ public final class SSHProvider: PaletteProvider, @unchecked Sendable {
         trigger: "ssh",
         isGlobal: false,
         priority: 48,
-        icon: "symbol:network",
+        icon: "symbol:lock.shield",
         keywords: ["ssh", "host", "server", "remote", "shell", "config"]
     )
 
@@ -67,7 +67,6 @@ public final class SSHProvider: PaletteProvider, @unchecked Sendable {
                     ),
                     PaletteAction(id: "connect", title: "Open in \(terminalApp)", kind: .custom, value: .text("ssh:\(host.alias)")),
                 ],
-                preview: .text("Runs `ssh \(host.alias)` in the embedded terminal; re-running reattaches."),
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )

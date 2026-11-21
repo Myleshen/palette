@@ -14,6 +14,7 @@ public final class ThemeManager: ObservableObject {
     public var selection: ThemeSelection
     public var typography = TypographyConfig()
     public var window = WindowConfig()
+    public var searchPlaceholder = ""
     public var onChange: ((Theme) -> Void)?
 
     private let store: PaletteStore?
@@ -35,14 +36,9 @@ public final class ThemeManager: ObservableObject {
         self.diagnostics = result.diagnostics
     }
 
-    public var currentThemeID: String {
-        if let overrideName { return overrideName }
-        switch selection.mode {
-        case .dark: return selection.dark
-        case .light: return selection.light
-        case .auto: return ""
-        }
-    }
+    /// The theme actually on screen: resolves `.auto` to the theme it picked
+    /// and a previewed theme to itself, so `/theme` can mark it.
+    public var currentThemeID: String { theme.name }
 
     public func restore() async {
         guard let store else { return }
@@ -115,6 +111,9 @@ public final class ThemeManager: ObservableObject {
             if !Self.fontExists(typography.monoFamily) {
                 diagnostics.append(Diagnostic(.warning, "Mono font '\(typography.monoFamily)' is not installed; using the system font.", source: "theme"))
             }
+        }
+        if !searchPlaceholder.isEmpty {
+            resolved.search.placeholder = searchPlaceholder
         }
         if typography.uiSize > 0 {
             resolved.typography.size = typography.uiSize

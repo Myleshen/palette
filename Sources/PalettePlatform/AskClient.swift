@@ -65,10 +65,11 @@ public protocol AskCompleting: Sendable {
         endpoint: AskEndpoint,
         model: String,
         key: String,
-        question: String,
+        messages: [AskMessage],
         maxTokens: Int,
         sessionID: String,
-        baseURL: URL?
+        baseURL: URL?,
+        onDelta: (@Sendable (String) -> Void)?
     ) async throws -> AskCompletion
 }
 
@@ -79,28 +80,99 @@ public struct LiveAskCompleter: AskCompleting {
         endpoint: AskEndpoint,
         model: String,
         key: String,
-        question: String,
+        messages: [AskMessage],
         maxTokens: Int,
         sessionID: String,
-        baseURL: URL?
+        baseURL: URL?,
+        onDelta: (@Sendable (String) -> Void)?
     ) async throws -> AskCompletion {
         try await AskClient.complete(
             endpoint: endpoint,
             model: model,
             key: key,
-            question: question,
+            messages: messages,
             maxTokens: maxTokens,
             sessionID: sessionID,
-            baseURL: baseURL
+            baseURL: baseURL,
+            onDelta: onDelta
         )
     }
 }
 
-/// Minimal OpenAI-compatible chat-completions client. `/ask` is deliberately
-/// one-shot and non-streaming: quick answers are easier to persist and render
-/// when the whole reply arrives at once.
+/// Parses an OpenAI-compatible SSE stream into answer deltas. `feed` accepts
+/// arbitrary fragments, so a chunk split mid-line is safe; malformed lines and
+/// non-answer fields (`reasoning_content`, comments, usage) are ignored.
+public struct AskStreamParser {
+    /// The answer text accumulated so far, exactly as the model sent it.
+    public private(set) var text = ""
+    /// Set by the `[DONE]` terminator.
+    public private(set) var finished = false
+    public private(set) var promptTokens = 0
+    public private(set) var completionTokens = 0
+
+    private var finishReason: String?
+    private var buffer = ""
+
+    public init() {}
+
+    /// Feed a fragment of the response body; returns the answer pieces it completed.
+    public mutating func feed(_ fragment: String) -> [String] {
+        buffer += fragment
+        var deltas: [String] = []
+        while let newline = buffer.firstIndex(of: "\n") {
+            let line = String(buffer[..<newline])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            buffer = String(buffer[buffer.index(after: newline)...])
+            if let delta = consume(line) { deltas.append(delta) }
+        }
+        return deltas
+    }
+
+    /// The finished reply. An empty stream is `.empty`, which allows fallback.
+    public func completion(durationMs: Int) throws -> AskCompletion {
+        let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reply.isEmpty else { throw AskClientError.empty }
+        // A length stop means the model was cut off mid-answer; never present
+        // that as a complete reply.
+        let truncated = finishReason == "length"
+        return AskCompletion(
+            answer: truncated ? reply + "\n\n…(truncated — raise max_tokens)" : reply,
+            promptTokens: promptTokens,
+            completionTokens: completionTokens,
+            durationMs: durationMs
+        )
+    }
+
+    private mutating func consume(_ line: String) -> String? {
+        guard !finished, line.hasPrefix("data:") else { return nil }
+        let payload = line.dropFirst("data:".count).trimmingCharacters(in: .whitespaces)
+        if payload == "[DONE]" {
+            finished = true
+            return nil
+        }
+        guard let data = payload.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        if let usage = root["usage"] as? [String: Any] {
+            promptTokens = usage["prompt_tokens"] as? Int ?? promptTokens
+            completionTokens = usage["completion_tokens"] as? Int ?? completionTokens
+        }
+        guard let choice = (root["choices"] as? [[String: Any]])?.first else { return nil }
+        if let reason = choice["finish_reason"] as? String { finishReason = reason }
+        guard let delta = choice["delta"] as? [String: Any],
+              let piece = delta["content"] as? String,
+              !piece.isEmpty else { return nil }
+        text += piece
+        return piece
+    }
+}
+
+/// Minimal OpenAI-compatible chat-completions client. The Ask chat keeps a
+/// conversation and renders the answer as it streams in.
 public enum AskClient {
-    /// Non-streaming full generation is slow, so a generous per-request budget.
+    /// Streaming can still stall before the first token, so a generous
+    /// per-request budget.
     public static let timeout: TimeInterval = 120
     /// Hard ceiling on the whole call, a little above `timeout`, so a stalled
     /// connection cannot sit in the fallback loop forever.
@@ -119,11 +191,12 @@ public enum AskClient {
         endpoint: AskEndpoint,
         model: String,
         key: String,
-        question: String,
+        messages: [AskMessage],
         maxTokens: Int,
         sessionID: String,
         baseURL: URL? = nil,
-        session: URLSession? = nil
+        session: URLSession? = nil,
+        onDelta: (@Sendable (String) -> Void)? = nil
     ) async throws -> AskCompletion {
         let session = session ?? defaultSession
         let base = baseURL ?? endpoint.baseURL
@@ -133,49 +206,23 @@ public enum AskClient {
         request.timeoutInterval = timeout
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("Palette/1.8 (macOS)", forHTTPHeaderField: "User-Agent")
         request.setValue(sessionID, forHTTPHeaderField: "x-opencode-session")
         let body: [String: Any] = [
             "model": model,
-            "messages": [["role": "user", "content": question]],
+            "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] },
             "max_tokens": max(32, maxTokens),
-            "stream": false,
+            "stream": true,
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let started = Date()
-        let data: Data
-        let status: Int
-        do {
-            (data, status) = try await send(request, session: session)
-        } catch let error as AskClientError {
-            throw error
-        } catch {
-            throw AskClientError.http(0, error.localizedDescription)
-        }
-        let duration = Int(Date().timeIntervalSince(started) * 1_000)
-        guard status == 200 else {
-            let message = errorMessage(from: data)
-            switch status {
-            case 401, 403: throw AskClientError.invalidKey
-            case 429: throw AskClientError.quota(message)
-            default: throw AskClientError.http(status, message)
-            }
-        }
-        return try parse(data, durationMs: duration)
-    }
-
-    /// Races the request against `deadline` so a hung connection fails with a
-    /// readable error instead of blocking `/ask`.
-    private static func send(
-        _ request: URLRequest,
-        session: URLSession
-    ) async throws -> (Data, Int) {
-        try await withThrowingTaskGroup(of: (Data, Int).self) { group in
+        // Races the stream against `deadline` so a hung connection fails with
+        // a readable error instead of blocking the chat.
+        return try await withThrowingTaskGroup(of: AskCompletion.self) { group in
             group.addTask {
-                let (data, response) = try await session.data(for: request)
-                return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
+                try await stream(request, session: session, started: started, onDelta: onDelta)
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(deadline * 1_000_000_000))
@@ -187,6 +234,78 @@ public enum AskClient {
             }
             return first
         }
+    }
+
+    private static func stream(
+        _ request: URLRequest,
+        session: URLSession,
+        started: Date,
+        onDelta: (@Sendable (String) -> Void)?
+    ) async throws -> AskCompletion {
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await session.bytes(for: request)
+        } catch {
+            if error is CancellationError || Task.isCancelled { throw CancellationError() }
+            throw AskClientError.http(0, error.localizedDescription)
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else {
+            let data = (try? await collect(bytes, limit: 8_000)) ?? Data()
+            let message = errorMessage(from: data)
+            switch status {
+            case 401, 403: throw AskClientError.invalidKey
+            case 429: throw AskClientError.quota(message)
+            default: throw AskClientError.http(status, message)
+            }
+        }
+
+        var parser = AskStreamParser()
+        var raw = Data()
+        var isSSE = true
+        var decided = false
+        do {
+            for try await line in bytes.lines {
+                if Task.isCancelled { throw CancellationError() }
+                if !decided {
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    guard !trimmed.isEmpty else { continue }
+                    decided = true
+                    // Some OpenAI-compatible endpoints ignore `stream` and send
+                    // one JSON document; buffer it and parse it at EOF.
+                    isSSE = !trimmed.hasPrefix("{")
+                }
+                guard isSSE else {
+                    raw.append(contentsOf: line.utf8)
+                    raw.append(0x0A)
+                    continue
+                }
+                for delta in parser.feed(line + "\n") { onDelta?(delta) }
+                if parser.finished { break }
+            }
+        } catch let error as AskClientError {
+            throw error
+        } catch {
+            if error is CancellationError || Task.isCancelled { throw CancellationError() }
+            throw AskClientError.http(0, error.localizedDescription)
+        }
+
+        let duration = Int(Date().timeIntervalSince(started) * 1_000)
+        if !isSSE, !raw.isEmpty { return try parse(raw, durationMs: duration) }
+        return try parser.completion(durationMs: duration)
+    }
+
+    private static func collect(
+        _ bytes: URLSession.AsyncBytes,
+        limit: Int
+    ) async throws -> Data {
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count >= limit { break }
+        }
+        return data
     }
 
     public static func parse(_ data: Data, durationMs: Int) throws -> AskCompletion {

@@ -2,6 +2,55 @@ import Foundation
 import PaletteCore
 import PalettePlatform
 
+/// The `[[roots]]` blocks of devx's config, read without a TOML dependency.
+public enum DevxConfig {
+    public struct Root: Equatable {
+        public var name: String
+        public var path: String
+
+        public init(name: String, path: String) {
+            self.name = name
+            self.path = path
+        }
+    }
+
+    public static func roots(from toml: String) -> [Root] {
+        var roots: [Root] = []
+        var current: Root?
+        let finish: () -> Void = {
+            if let current, !current.name.isEmpty, !current.path.isEmpty { roots.append(current) }
+        }
+        for line in toml.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[[roots]]") {
+                finish()
+                current = Root(name: "", path: "")
+            } else if trimmed.hasPrefix("[") {
+                finish()
+                current = nil
+            } else if current != nil, let equals = trimmed.firstIndex(of: "=") {
+                let key = trimmed[..<equals].trimmingCharacters(in: .whitespaces)
+                let value = trimmed[trimmed.index(after: equals)...]
+                    .trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                if key == "name" { current?.name = value }
+                if key == "path" { current?.path = value }
+            }
+        }
+        finish()
+        return roots
+    }
+}
+
+/// A single path component safe to `mkdir` under a devx root.
+public enum ProjectName {
+    public static func validate(_ raw: String) -> String? {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !name.contains("/"), !name.contains("..") else { return nil }
+        return name
+    }
+}
+
 /// Fast project switcher. Mutations go through devx when it is installed, so
 /// its worktree and overlay safety checks stay authoritative.
 public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
@@ -20,6 +69,25 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         var isWorktree: Bool
     }
 
+    /// What the preview pane shows for a project. One shell round trip per
+    /// project, cached with the project list.
+    struct GitState: Sendable {
+        var branch: String
+        var lastCommit: String
+        var worktrees: [String]
+        var changes: Int
+
+        var preview: String {
+            var lines = ["Branch \(branch)"]
+            if !lastCommit.isEmpty { lines.append("Last commit \(lastCommit)") }
+            lines.append("Changes \(changes)")
+            if worktrees.count > 1 {
+                lines.append("Worktrees \(worktrees.joined(separator: ", "))")
+            }
+            return lines.joined(separator: "\n")
+        }
+    }
+
     private let launcher: LauncherService
     private let bridge: HostBridge
     private let terminal: String
@@ -27,8 +95,39 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         var projects: [Project] = []
         var at = Date.distantPast
         func update(_ projects: [Project]) { self.projects = projects; at = Date() }
+        func invalidate() { at = .distantPast }
     }
     private let cache = Cache()
+
+    private actor GitCache {
+        private var states: [String: (state: GitState, at: Date)] = [:]
+
+        func states(for paths: [String]) async -> [String: GitState] {
+            let now = Date()
+            var result: [String: GitState] = [:]
+            var stale: [String] = []
+            for path in paths {
+                if let cached = states[path], now.timeIntervalSince(cached.at) < 15 {
+                    result[path] = cached.state
+                } else {
+                    stale.append(path)
+                }
+            }
+            guard !stale.isEmpty else { return result }
+            await withTaskGroup(of: (String, GitState?).self) { group in
+                for path in stale {
+                    group.addTask { (path, await ProjectProvider.gitState(path: path)) }
+                }
+                for await (path, state) in group {
+                    guard let state else { continue }
+                    states[path] = (state, now)
+                    result[path] = state
+                }
+            }
+            return result
+        }
+    }
+    private let gitCache = GitCache()
 
     public init(launcher: LauncherService, bridge: HostBridge, terminal: String = "kitty") {
         self.launcher = launcher
@@ -47,16 +146,25 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
             await cache.update(projects)
         }
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return projects.compactMap { project in
-            if !query.isEmpty,
-               Ranking.score(query: query, candidate: "\(project.name) \(project.path)") == nil {
-                return nil
-            }
-            return item(project)
+        let visible = projects.filter { project in
+            query.isEmpty
+                || Ranking.score(query: query, candidate: "\(project.name) \(project.path)") != nil
         }
+        let git = await gitCache.states(for: visible.map(\.path))
+        let rows = visible.map { item($0, git: git[$0.path]) }
+        guard query.isEmpty else { return rows }
+        return actionItems() + rows
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
+        if action.id == "clone-repo" {
+            try await cloneRepository()
+            return
+        }
+        if action.id == "new-project" {
+            try await newProject()
+            return
+        }
         guard let value = action.value.object, let name = value["name"], let path = value["path"] else { return }
         let devx = ToolLocator.shared.path(for: "devx")
         switch action.id {
@@ -113,7 +221,136 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         }
     }
 
-    private func item(_ project: Project) -> PaletteItem {
+    private func actionItems() -> [PaletteItem] {
+        [
+            PaletteItem(
+                id: "clone-repo",
+                title: "Clone a repository…",
+                subtitle: "devx project clone into a scan root",
+                icon: .symbol("arrow.down.circle"),
+                badge: "new",
+                score: 9_000,
+                actions: [PaletteAction(id: "clone-repo", title: "Clone a repository", kind: .custom)],
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            ),
+            PaletteItem(
+                id: "new-project",
+                title: "New project…",
+                subtitle: "Create a git repository and register it with devx",
+                icon: .symbol("plus.circle"),
+                badge: "new",
+                score: 8_900,
+                actions: [PaletteAction(id: "new-project", title: "New project", kind: .custom)],
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            ),
+        ]
+    }
+
+    private func cloneRepository() async throws {
+        guard let devx = ToolLocator.shared.path(for: "devx") else {
+            await bridge.notify("Install devx to clone repositories")
+            return
+        }
+        guard let entered = await bridge.prompt(
+            kind: .text,
+            title: "Clone a repository",
+            placeholder: "github.com/owner/repo"
+        ) else { return }
+        let url = entered.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else {
+            await bridge.notify("A repository URL is required")
+            return
+        }
+
+        let roots = Self.devxRoots()
+        guard let fallback = roots.first else {
+            await bridge.notify("No devx scan roots configured; run devx project add-root")
+            return
+        }
+        var selected = fallback.name
+        if roots.count > 1 {
+            guard let entered = await bridge.prompt(
+                kind: .text,
+                title: "Clone into which devx root?",
+                placeholder: fallback.name
+            ) else { return }
+            selected = entered.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard roots.contains(where: { $0.name == selected }) else {
+                await bridge.notify("Unknown devx root \(selected)")
+                return
+            }
+        }
+        let root = selected
+
+        try await MainActor.run {
+            try launcher.openTerminal(
+                command: "\(Self.shellQuote(devx)) project clone \(Self.shellQuote(root)) \(Self.shellQuote(url))",
+                app: terminal
+            )
+        }
+        await bridge.notify("Cloning \(url) into \(root)")
+    }
+
+    private func newProject() async throws {
+        guard let devx = ToolLocator.shared.path(for: "devx") else {
+            await bridge.notify("Install devx to create projects")
+            return
+        }
+        guard let entered = await bridge.prompt(
+            kind: .text,
+            title: "New project name",
+            placeholder: "my-new-project"
+        ) else { return }
+        guard let name = ProjectName.validate(entered) else {
+            await bridge.notify("Use a single folder name without / or ..")
+            return
+        }
+        guard let root = Self.devxRoots().first else {
+            await bridge.notify("No devx scan roots configured; run devx project add-root")
+            return
+        }
+        let path = PathExpansion.expand(root.path) + "/" + name
+
+        do {
+            let mkdir = try await ProcessRunner.run(["/bin/mkdir", "-p", path], timeout: 10)
+            guard mkdir.status == 0 else {
+                await bridge.notify("Could not create \(path): \(Self.firstLine(mkdir.stderrString))")
+                return
+            }
+            let initResult = try await ProcessRunner.run(["git", "init", path], timeout: 20)
+            guard initResult.status == 0 else {
+                await bridge.notify("git init failed: \(Self.firstLine(initResult.stderrString))")
+                return
+            }
+            let add = try await ProcessRunner.run([devx, "project", "add", path], timeout: 20)
+            guard add.status == 0 else {
+                await bridge.notify("devx project add failed: \(Self.firstLine(add.stderrString))")
+                return
+            }
+        } catch {
+            await bridge.notify("Could not create \(name): \(error.localizedDescription)")
+            return
+        }
+
+        await cache.invalidate()
+        await bridge.notify("Created \(name) in \(path)")
+    }
+
+    static func devxRoots() -> [DevxConfig.Root] {
+        let path = PathExpansion.expand("~/.config/devx/config.toml")
+        guard let toml = try? String(contentsOfFile: path, encoding: .utf8) else { return [] }
+        return DevxConfig.roots(from: toml)
+    }
+
+    private static func firstLine(_ text: String) -> String {
+        text.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? "unknown error"
+    }
+
+    private func item(_ project: Project, git: GitState?) -> PaletteItem {
         let value = ["name": project.name, "path": project.path]
         var actions: [PaletteAction] = [
             PaletteAction(id: "neovide", title: "Open in Neovide", kind: .custom, value: .object(value)),
@@ -122,6 +359,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
             PaletteAction(id: "workspace", title: "Open devx Workspace", kind: .custom, value: .object(value)),
             PaletteAction(id: "apply-config", title: "Apply devx Config", kind: .custom, value: .object(value)),
             PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .custom, value: .object(value)),
+            PaletteAction(id: "copy-path", title: "Copy Path", kind: .copyText, value: .text(project.path)),
         ]
         if project.isWorktree {
             actions.insert(PaletteAction(id: "remove-worktree", title: "Remove Worktree…", kind: .custom, value: .object(value)), at: 3)
@@ -132,14 +370,62 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         return PaletteItem(
             id: "proj:\(project.path)",
             title: project.name,
-            subtitle: project.path,
+            subtitle: PathsProvider.displayPath(project.path),
             icon: .symbol(project.isWorktree ? "arrow.triangle.branch" : "folder"),
             badge: project.isWorktree ? "WORKTREE" : "PROJECT",
             score: 1_000,
             actions: actions,
-            preview: .files(paths: [project.path]),
+            preview: git.map { .text($0.preview) } ?? .files(paths: [project.path]),
             providerID: descriptor.id,
             providerName: descriptor.name
+        )
+    }
+
+    /// Branch, last commit, worktrees and dirty count in one round trip.
+    static func gitState(path: String) async -> GitState? {
+        let quoted = shellQuote(path)
+        let script = [
+            "echo B", "git -C \(quoted) rev-parse --abbrev-ref HEAD 2>/dev/null",
+            "echo C", "git -C \(quoted) log -1 --format='%h %s (%cr)' 2>/dev/null",
+            "echo W", "git -C \(quoted) worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p'",
+            "echo N", "git -C \(quoted) status --porcelain 2>/dev/null | wc -l",
+        ].joined(separator: "; ")
+        guard let result = try? await ProcessRunner.run(["/bin/sh", "-c", script], timeout: 6) else {
+            return nil
+        }
+        return parseGitState(result.stdoutString)
+    }
+
+    static func parseGitState(_ output: String) -> GitState? {
+        var branch = ""
+        var lastCommit = ""
+        var worktrees: [String] = []
+        var changes = 0
+        var section = ""
+        for raw in output.split(separator: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            switch line {
+            case "B": section = "branch"; continue
+            case "C": section = "commit"; continue
+            case "W": section = "worktree"; continue
+            case "N": section = "changes"; continue
+            default: break
+            }
+            switch section {
+            case "branch": if branch.isEmpty { branch = line }
+            case "commit": if lastCommit.isEmpty { lastCommit = line }
+            case "worktree":
+                if !line.isEmpty { worktrees.append((line as NSString).lastPathComponent) }
+            case "changes": changes = Int(line) ?? changes
+            default: break
+            }
+        }
+        guard !branch.isEmpty else { return nil }
+        return GitState(
+            branch: branch,
+            lastCommit: lastCommit,
+            worktrees: worktrees,
+            changes: changes
         )
     }
 
@@ -185,7 +471,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    private static func shellQuote(_ value: String) -> String {
+    static func shellQuote(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.13.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.15.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -25,6 +25,7 @@ your files and drive other apps.
 | `zellij` | `/zj` sessions | `brew install zellij` |
 | `kitty` | terminal used by `/zj` | `brew install --cask kitty` |
 | `bw` | Bitwarden provider | `brew install bitwarden-cli` |
+| `gh` | `/gh`, `/ghr`, `/ghp`, `/ghi`, `/gha`, `/ghn` | `brew install gh` |
 
 Only `fd` and `fzf` are needed for the core file workflows. Missing tools are
 surfaced as an install row inside the launcher; nothing is installed silently.
@@ -141,7 +142,7 @@ Caches live in `~/Library/Caches/Palette`.
 | `⌘⏎` | secondary action (usually paste, or reveal for paths) |
 | `⌘K` | action list for the selection |
 | `⌘1`…`⌘9` | open the nth result |
-| `Tab` / `⇧Tab` | cycle provider tabs (`/web`, `/zj`, `/bw`, …) |
+| `Tab` / `⇧Tab` | cycle providers in the rail (`/web`, `/zj`, `/bw`, …) |
 | `Esc` | clear the query, then dismiss |
 | `⌘,` | open Settings |
 | `⌘R` | reload config, themes, and providers after manual file edits |
@@ -149,14 +150,14 @@ Caches live in `~/Library/Caches/Palette`.
 Application rows expose Open, Show in Finder, Copy Bundle ID, and Copy Path in
 `⌘K`; files and folders expose their own open/reveal/copy actions.
 
-### Provider tabs
+### Provider rail
 
-A tab strip under the search field shows Apps plus every provider that declares
-a trigger. It starts on **Apps**; clicking a tab opens that provider with an
-empty query. `Tab` and `⇧Tab` cycle through them without reaching for the
-mouse, so `/web`, `/zj`, `/bw`, `/clip`, and the rest are one key away. Set
-`[window] show_tabs = false` to hide the strip; prefixes and Tab cycling keep
-working.
+A full-height rail sits on the left of the search field and cards. **Everything**
+is pinned at the top and is the plain-query scope; below it is one row per
+provider that declares a trigger. Clicking a row opens that provider with an
+empty query, and `Tab` / `⇧Tab` cycle the same rows from the keyboard. The rail
+narrows to icons when the preview pane is open or the panel is under 700 pt
+wide, and scrolls a whole row at a time. Prefixes work with or without the rail.
 
 ### Prefixes
 
@@ -177,15 +178,13 @@ trigger word:
 | `/clip <query>` | clipboard history, text/images/files |
 | `/port <query>` | listening TCP ports, with process and PID |
 | `/cmd <query>` | commands from `~/.config/palette/commands.toml` |
-| `/proj <query>` | devx projects and worktrees, or `~/dev` fallback |
+| `/proj <query>` | devx projects and worktrees; clone a repository, create a project |
 | `/git <query>` | repositories with managed Git actions and panel output |
 | `/term` | embedded terminal shell |
 | `/scratch` | scratch notes and the editor |
 | `/awake` | keep the Mac awake; timed or clamshell mode |
 | `/recent` | recently used projects and files |
 | `/snip <query>` | snippets with placeholder expansion |
-| `/ask <question>` | one-shot OpenCode Go answer |
-| `/askh <query>` | search retained Ask questions and answers |
 | `/web <query>` | saved web apps; type a domain to add one |
 | `/bookmark <query>` | bookmarks from `bookmarks.toml`, opened as normal browser windows |
 | `/emoji <query>` | emoji picker |
@@ -203,7 +202,12 @@ trigger word:
 | `/stats` | disk, memory, load, battery, uptime |
 | `/ssh <query>` | hosts from `~/.ssh/config` |
 | `/docker <query>` | containers: start, stop, restart, logs |
-| `/gh <query>` | pull requests and issues through the `gh` CLI |
+| `/gh <query>` | current repo, explicit `owner/repo`, or your open PRs |
+| `/ghr <query>` | your repositories; open, clone, copy slug |
+| `/ghp <query>` | pull requests you authored or that await your review |
+| `/ghi <query>` | issues assigned to you |
+| `/gha <query>` | workflow runs for the current repo or `owner/repo` |
+| `/ghn <query>` | your GitHub notification inbox |
 | `/atlas <query>` | atlas artifacts and docs, inbox first |
 
 A trailing slash browses a directory breadth-first: `/edit ~/dev/` shows the
@@ -211,8 +215,8 @@ direct children of `~/dev` first, then the next level.
 
 Unprefixed queries search apps (always) plus exactly the providers listed in
 `[providers] global` (default `calc`, `search`, `web`, `win`, `unit`, `zj`,
-`bookmark`, `pins`, `system`, `timer`, `awake`). Settings → Providers →
-**Default** edits that allowlist, so you can add a provider or drop one — for
+`bookmark`, `pins`, `system`, `timer`, `awake`, `cheat`). Settings → Providers →
+**Plain queries** edits that allowlist, so you can add a provider or drop one — for
 example remove `calc`. `/trigger` still targets one provider. `= 2+2` and bare
 arithmetic also work while `calc` is on the list.
 
@@ -245,67 +249,88 @@ browser when one is set: `!gh palette launcher`. A bang opens a normal browser
 window, unless the engine has **Open in web app** on, which sends that search to
 the web-app browser (SSB) instead; that needs a Chromium-based web-app browser,
 set per engine or under **Web apps**. Type `!` on its own to list every engine
-that has a keyword. Settings → Search edits each engine as a card: Name ·
-Search URL · `!keyword` · Browser · Open in web app.
+that has a keyword. Settings → Search edits each engine as a row: Name ·
+`!keyword` · Search URL · Browser · Open in web app.
 
 ### Ask
 
-`/ask` sends one quick question to an OpenAI-compatible endpoint and stores the
-answer. It is deliberately one-shot: there is no conversation thread, so every
-question is independent.
+`⌘⌥A` opens the Ask chat window (also **Palette → Ask…**). The launcher has no
+Ask tab and no `/ask` provider; the window is the only surface. Ask is chat
+only: a multi-turn transcript where each turn sends the conversation so far,
+with no tools, shell, or file access.
 
-Supported endpoint:
+`⏎` sends and `⇧⏎` adds a line. Each turn sends the conversation to an
+OpenAI-compatible endpoint. Answers stream in and render markdown (headings,
+lists, tables, fenced code with a Copy button, links, and https images). Stop
+cancels; closing the window or pressing `⌘⌥A` again does not — the answer keeps
+streaming, is saved, and badges the Dock until you reopen the window.
+
+Supported endpoints:
 
 - **OpenCode Go** (`https://opencode.ai/inference/go/openai/v1`) — every
-  OpenAI-compatible Go chat model, ordered cheapest output price first. A Go
-  key is required.
+  OpenAI-compatible Go chat model, free models first, paid models cheapest
+  output first. A Go key is required.
+- **NVIDIA** (`https://integrate.api.nvidia.com/v1`) — a curated set of NIM
+  chat models on the free tier, all marked `FREE`. An NVIDIA key is required.
+  Keys come from `NVIDIA_API_KEY` or the encrypted local key file.
 
-Type `/ask` with no question to choose a model. Free Go models are listed first
-and marked `FREE`; paid models show their input/output price per million tokens
-and are ordered cheapest first. `/ask what is 2+2` asks the selected model
-directly. Answers can be copied, asked again, or found later in history.
+The model picker groups models by endpoint. Fallback only tries endpoints that
+have a key: free models first, then the cheapest paid OpenCode Go models.
 
-The **Ask History** sub-tab (or `/askh`) searches retained questions and answers.
-Each row shows the model, endpoint, age, latency, and token usage. Ask history is
-kept up to the count and age configured in Settings and can be deleted per row.
+Chats are saved in Palette's SQLite database, not `config.toml`. The sidebar
+lists them newest first with the title (first question, cut at about 48
+characters), model, and age; a search field appears once there are more than
+five. Opening a chat restores the transcript, sources, and
+model, with the composer ready for another turn. New chat is `⌘N`; delete a chat
+from its hover button or context menu (with confirmation). The legacy
+`ask_history` table is still written, but the window's saved chats are the
+history surface.
+
+The composer's globe enables one web lookup for the turn (default in
+**Settings → Ask → Search the web once per turn**, off by default). Without the
+toggle, a message that contains an `https://` link still fetches that page. A
+search runs once on DuckDuckGo HTML, reads up to four result pages in parallel,
+and sends the text to the model as an untrusted source note. The answer shows a
+numbered **Sources** list (click opens the browser), and the sources are saved
+with the chat. If search or a page fetch fails, the answer continues and shows
+`Search unavailable`.
 
 API keys are stored in an encrypted user-only file under Palette's config
-directory, not in `config.toml`. A key is visible in the Settings
-field only before you save it; afterward Palette shows “Key saved in the macOS
-local key file” and never displays the value again. Keys are never written to
-`config.toml`, logs, or history. `OPENCODE_API_KEY`, `OPENCODE_GO_API_KEY`, and
-`OPENAI_API_KEY` are also accepted as environment fallbacks.
+directory, not in `config.toml`. A key is visible in the Settings field only
+before you save it; afterward Palette shows that a key exists and never displays
+the value again. Keys are never written to `config.toml`, logs, or history.
+`OPENCODE_GO_API_KEY` and `NVIDIA_API_KEY` are also accepted as environment
+fallbacks.
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window with twelve tabs in
-three sidebar groups. The General group holds **General**, **Launcher**, and
-**Appearance**; Features holds **Shortcuts**, **Clipboard**, **Search**,
-**Capture**, **Terminal**, **Ask**, and **Cheatsheets**; System holds
-**Providers** and **Advanced**. The General tab holds shortcuts, the
-terminal/editor apps used by providers, permissions, and the **Keep Awake** and
-timer toggles; Launcher holds where the panel opens, app order,
-`Show provider tabs`, and the panel size; Appearance holds themes and
-typography; Capture holds screenshot and recording options; **Terminal** holds
-the embedded session, shell, and font; **Cheatsheets** holds the folders and
-extensions `/cheat` reads.
-**Clipboard**, **Search**, and **Ask** cover their own features. **Search**
-holds the web-results toggle, one card per engine (Name · Search URL ·
-`!keyword` · Browser · Open in web app), bookmarks, and the web-app browser.
-**Providers** is one table per provider — enable, the **Default** checkbox for
-plain-query search, name, trigger, aliases, and tab order in the same row.
-**Advanced** has config/theme/log links, backup, diagnostics, and
-version information. The **Ask** tab selects the endpoint and model, saves a
-local API key, toggles automatic fallback, and controls how many Q&A entries and
-how many days of history are kept.
+`⌘,` (or the menu-bar icon) opens a native Settings window with seven panes in
+three sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
+and **Shortcuts**; Features holds **Search** and **Ask**; System holds
+**Providers**. General holds startup, permissions, power, notifications, the
+editor/terminal apps used by providers, and clipboard history; Launcher holds
+where the panel opens, the search placeholder, app order, and the panel size;
+Appearance holds themes, typography, and glass; Shortcuts holds every global
+shortcut, including capture and recording. **Search** holds the web-results
+toggle, one card per engine (Name · Search URL · `!keyword` · Browser · Open in
+web app), bookmarks, cheatsheets, the web-app browser, and the screenshot and
+recording options. **Ask** selects the endpoint and model, saves a local API
+key, toggles fallback, sound, and the per-turn web search, and controls how many
+Q&A rows and how many days of history are kept. **Providers** is one table with
+a row per provider — enable, the **Plain queries** checkbox, name,
+trigger, aliases, and order in the same row. Appearance links the themes folder;
+**Providers** also links the providers and commands files, config, log, and
+crash log, exports a backup, and lists startup diagnostics.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
 session event tap, so macOS-reserved combinations such as `⌘Space` are captured
 instead of being swallowed by the system; it stops as soon as Settings loses
-focus. Accessibility permission is needed for reserved-key capture. Saving
-validates every shortcut, rejects duplicates, and refuses a browser that is not
-installed. The search field at the top of Settings jumps directly to a matching
-section. Changes apply immediately. Editing files by hand still works, then
-press `⌘R`.
+focus. Accessibility permission is needed for reserved-key capture. Shortcuts
+are checked as you set them: an invalid or duplicate value shows an inline error,
+the footer counts it, and the file keeps the last valid value. A browser that is
+not installed is not written. Changes apply immediately — there is no Save or Cancel;
+the footer reports **Saved** or the failure, and **Reset `<pane>`…** restores that
+pane's defaults. `⌘F` searches panes and sections. Editing files by hand still
+works, then press `⌘R`.
 
 ### Search position
 
@@ -314,8 +339,8 @@ keeps the top-first layout but opens the panel in the middle of the screen.
 The older `bottom` value is accepted for compatibility and now maps to
 `center`.
 
-The launcher is always the two-surface pill: a floating search capsule above a
-rounded content card. There is no alternate classic layout.
+The launcher is always the same pill layout: a floating search capsule above a
+provider rail and a content card. There is no alternate classic layout.
 
 ### Preview layout
 
@@ -373,7 +398,7 @@ menu-bar **Stop recording · m:ss** item shows while a recording runs. All four
 live in Settings → **Shortcuts** and can be cleared or rebound.
 
 A capture plays a shutter sound and shows a thumbnail for a couple of seconds
-(both toggles in Settings → Capture), so it is obvious that it worked. `/shots`
+(both toggles in Settings → Search → Screenshots), so it is obvious that it worked. `/shots`
 lists everything in the capture directory, newest first and grouped by day —
 screenshots and recordings together — with a thumbnail (a poster frame for
 videos) on every row and in the preview pane, plus open, annotate, copy image,
@@ -384,7 +409,7 @@ same cache as the preview.
 
 Recordings can target the whole screen, a single display, or a fixed region, and
 optionally include audio from the system default input or a chosen microphone
-(`[capture] recording_microphone`), set under Settings → Capture or per row in
+(`[capture] recording_microphone`), set under Settings → Search → Recordings or per row in
 `/rec`, which lists every active display by name and resolution.
 `[capture] gallery = "all" | "palette"` decides whether `/shots` lists everything
 in the folder or only Palette's own `shot-*` and `rec-*` files.
@@ -399,14 +424,14 @@ while zoomed. Marks are stored as fractions of the image, so they look the same
 at any window size, and cropping remaps them instead of dropping them.
 
 Recordings open in a player window when they stop: play, scrub, reveal in
-Finder, or copy the path. Both behaviours are toggles in Settings → Capture
+Finder, or copy the path. Both behaviours are toggles in Settings → Search → Screenshots
 (`edit_after_capture`, `preview_recording`), and the first capture asks for
 Screen Recording permission once per build.
 
 ### Cheatsheets
 
 `/cheat` lists PDF, HTML, Markdown, text and image files from the folders you add
-in Settings → **Cheatsheets**, one level deep. Selecting a row previews it with
+in Settings → **Search → Cheatsheets**, one level deep. Selecting a row previews it with
 QuickLook inside the launcher; `⌥P` enlarges the preview. Rows also open the file
 and reveal it in Finder. Folders and extensions are ordinary config:
 
@@ -423,7 +448,7 @@ artifacts and docs, each shown as `project · path`. Inbox items sort first and
 carry a **review** badge. `⏎` opens a row, Markdown and HTML rows preview in the
 pane, and **Mark Reviewed** in `⌘K` runs `atlas review <path>`. The provider
 only reads atlas's data and derives the marker, modification time and preview
-path the same way atlas does, so atlas itself needs no change. Tick **Default**
+path the same way atlas does, so atlas itself needs no change. Tick **Plain queries**
 in Settings → Providers to let it answer unprefixed queries too.
 
 ### Bitwarden
@@ -479,7 +504,7 @@ keywords = ["code", "repos"]
 
 A bookmark opens the URL as a **normal browser window**, not the `/web` app
 mode, and in the browser you pick. Edit rows in Settings → Search → Bookmarks;
-they are written back to the file when you press Save.
+they are written back to the file as you edit.
 
 ### Clipboard transforms
 
@@ -570,7 +595,7 @@ template, or opens the expansion in the scratchpad. Supported placeholders:
 
 ### Keep awake
 
-`/awake` (or the **Keep Awake** provider tab) keeps the Mac awake for 15
+`/awake` (or the **Keep Awake** rail row) keeps the Mac awake for 15
 minutes, 30 minutes, 1, 2, 4, or 8 hours, or until you stop it. It also has a
 **Clamshell Mode (Lid Closed)** toggle and a menu-bar **Keep Awake** submenu.
 
@@ -587,7 +612,10 @@ few seconds. Never leave an awake, closed MacBook in a bag.
 
 - `/proj` lists devx projects and worktrees when devx is installed, with Open in
   Neovide, Open Terminal, Open Workspace, New/Remove Worktree, and Apply Config.
-  Without devx it falls back to Git repositories directly under `~/dev`.
+  With an empty query it also offers **Clone a repository…** (`devx project
+  clone` into a scan root) and **New project…** (create a directory, `git init`,
+  and `devx project add`). Without devx it falls back to Git repositories
+  directly under `~/dev`.
 - `/port` lists listening TCP ports with process, PID, user, and working
   directory. Open `localhost:PORT`, copy the port/PID, or terminate with SIGTERM
   and explicitly force-kill with SIGKILL; both kills require confirmation.
@@ -596,6 +624,13 @@ few seconds. Never leave an awake, closed MacBook in a bag.
   and mutations run as managed subprocesses and return their output to the
   panel; only **Open LazyGit** launches a terminal. Complex Git work still
   belongs in LazyGit; Palette never force-pushes or rewrites history.
+- `/gh` shows the current checkout's PRs and issues, an explicit `owner/repo`,
+  or your open PRs when there is no repository. `/ghr` lists your repositories
+  with **Clone into …** through devx and **Copy slug**; `/ghp` separates PRs you
+  authored from ones awaiting your review; `/ghi` lists issues assigned to you;
+  `/gha` lists workflow runs with **View Log**, **Re-run Failed Jobs**, and
+  **Cancel Run**; `/ghn` is the notification inbox with **Mark Done**. The
+  family needs the `gh` CLI and `gh auth login`.
 
 ### App and file actions
 
@@ -624,13 +659,14 @@ mono_size = 13
 
 ### Provider aliases, order, and visibility
 
-`[providers]` stores tab order, extra trigger words, the allowlist of providers
+`[providers]` stores rail order, extra trigger words, the allowlist of providers
 that answer plain queries, and providers you want to hide. Settings → Providers
-is a single table per provider: enable it, tick **Default** to include it in
-plain search, see its trigger, edit aliases, and set tab order in the same row.
-The tab bar and Tab cycling only include enabled
+is one table with a row per provider: enable it, tick **Plain queries** to
+include it in plain search, see its trigger, edit aliases, and set order in the
+same row.
+The rail and Tab cycling only include enabled
 providers. Aliases are added as words in that row; the canonical trigger never
-changes. Duplicate aliases or triggers are rejected when saving.
+changes. Duplicate aliases or triggers are rejected as you set them.
 
 ```toml
 [providers]
@@ -674,13 +710,12 @@ app_sort = "alphabetical"      # alphabetical | frequent
 
 [window]
 auto_size = true               # size to the screen under the cursor
-show_tabs = true               # provider chip strip above the list
+show_tabs = true               # parsed for compatibility; the rail always shows
 scale = 1.0                    # 0.8-1.6; multiplies every size below, like rem
 width = 0                      # points; 0 = 680 * scale
 max_height = 0                 # points; 0 = 720 * scale
 visible_rows = 0               # 5-10; 0 = 7 * scale, sets the panel height
 clipboard_width = 0            # 0 = follow the panel width
-ask_width = 0
 preview_width = 0
 terminal_width = 0             # 0 = 1000 * scale
 scratchpad_width = 0

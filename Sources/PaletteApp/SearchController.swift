@@ -31,6 +31,9 @@ public final class SearchController: ObservableObject, HostBridge {
     private var allActions: [PaletteAction] = []
     private var queryBeforeActions = ""
     @Published public var actionIndex = 0
+    /// The rail has keyboard focus after a click; arrows move providers then,
+    /// while the search field keeps the actual typing focus.
+    @Published public var railFocused = false
     @Published public private(set) var prompt: PromptState?
     @Published public var promptValue = ""
     @Published public private(set) var focusToken = 0
@@ -100,6 +103,12 @@ public final class SearchController: ObservableObject, HostBridge {
         return items[selectionIndex]
     }
 
+    /// The pane only exists when there is a row and that row has preview
+    /// content; setup and empty rows are not worth widening the panel for.
+    public var previewVisible: Bool {
+        previewEnabled && !items.isEmpty && selectedItem?.preview != nil
+    }
+
     public func replace(registry: ProviderRegistry, configuration: PaletteConfig) {
         self.registry = registry
         self.configuration = configuration
@@ -142,28 +151,6 @@ public final class SearchController: ObservableObject, HostBridge {
         panelDidShow()
     }
 
-    public func openAsk() {
-        // The terminal, scratchpad and ask panel share the content area; only
-        // one may be up, so switching modes closes the previous one.
-        if terminalActive { closeTerminalPanel() }
-        if scratchpadActive { closeScratchpad(save: true) }
-        previewEnabled = true
-        updatePreviewWidth()
-        actionsMode = false
-        actionItems = []
-        query = "\(configuration.providerPrefix)ask "
-        panelDidShow()
-    }
-
-    /// The question typed after `/ask`, for sending it straight to the window.
-    public var askQuestion: String? {
-        guard activeProviderID == "ask" else { return nil }
-        let prefix = configuration.providerPrefix + "ask"
-        guard query.hasPrefix(prefix) else { return nil }
-        let question = query.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
-        return question.isEmpty ? nil : question
-    }
-
     public func panelDidHide() {
         searchTask?.cancel()
         isSearching = false
@@ -183,6 +170,7 @@ public final class SearchController: ObservableObject, HostBridge {
         highlightTerms = []
         previewEnabled = false
         previewFocused = false
+        railFocused = false
         terminalActive = false
         terminalSessionName = nil
         panel?.suppressAutoHide = false
@@ -217,8 +205,8 @@ public final class SearchController: ObservableObject, HostBridge {
         // Show the target provider immediately instead of stale global rows.
         let parsed = registry.parser.parse(query)
         // Preview is useful wherever a row has something worth showing:
-        // clipboard, Ask, snippets, and path/project providers.
-        let previewProvider = ["clip", "ask", "askh", "snip", "recent", "neo", "neof", "proj", "shots", "cheat", "atlas"]
+        // clipboard, snippets, and path/project providers.
+        let previewProvider = ["clip", "snip", "recent", "neo", "neof", "proj", "shots", "cheat", "atlas"]
             .contains(parsed.providerID ?? "")
         if previewProvider {
             if !previewEnabled {
@@ -310,7 +298,7 @@ public final class SearchController: ObservableObject, HostBridge {
         // never unpinned web apps, sessions, or search suggestions.
         let isEmptySearch = !result.parsed.isBound
             && result.parsed.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let visible: [PaletteItem]
+        var visible: [PaletteItem]
         if isEmptySearch {
             // Pinned snapshots keep their original provider id (so their
             // normal actions still work); the unpin action marks them.
@@ -338,6 +326,18 @@ public final class SearchController: ObservableObject, HostBridge {
             visible = pins + apps
         } else {
             visible = merged
+        }
+
+        // Provider discovery belongs to plain searches only: typing "atlas"
+        // should offer the Atlas source instead of a similarly named app.
+        if !result.parsed.isBound {
+            let providerRows = providerMatches(query: result.parsed.text)
+            if !providerRows.isEmpty {
+                visible = (visible + providerRows).sorted {
+                    if $0.score != $1.score { return $0.score > $1.score }
+                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+            }
         }
 
         items = visible
@@ -440,6 +440,27 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
 
+        if railFocused {
+            switch keyCode {
+            case 125:
+                moveRail(by: 1)
+                return true
+            case 126:
+                moveRail(by: -1)
+                return true
+            case 53:
+                selectRail("everything")
+                railFocused = false
+                return true
+            case 36, 76, 48:
+                railFocused = false
+                // Tab falls through to the normal provider cycle below.
+                if keyCode != 48 { return true }
+            default:
+                break
+            }
+        }
+
         if prompt != nil {
             switch keyCode {
             case 53:
@@ -480,6 +501,7 @@ public final class SearchController: ObservableObject, HostBridge {
                 return true
             default:
                 if let number = Int(characters), (1...9).contains(number) {
+                    if selectModeChip(at: number - 1) { return true }
                     let index = number - 1
                     if items.indices.contains(index) {
                         selectionIndex = index
@@ -532,117 +554,84 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         guard !items.isEmpty else { return }
         selectionIndex = (selectionIndex + delta + items.count) % items.count
+        if previewEnabled { updatePanelHeight() }
     }
 
-    private func completeTrigger() {
-        cycleTab(by: 1)
-    }
+    // MARK: - Provider rail
 
-    // MARK: - Provider tabs
-
-    public struct ProviderTab: Identifiable, Equatable {
+    public struct RailEntry: Identifiable, Equatable {
         public var id: String
         public var title: String
         public var trigger: String?
         public var icon: String?
-        public var memberIDs: [String] = []
     }
 
-    public struct ProviderMember: Identifiable, Equatable {
-        public var id: String
-        public var title: String
-    }
-
-    private static let groups: [(id: String, title: String, icon: String, members: [String])] = [
-        ("editor", "Editor", "symbol:folder", ["neo", "neof"]),
-        ("bitwarden", "Bitwarden", "symbol:key.fill", ["bw", "bwu", "bwt", "bwn", "bwo"]),
-    ]
-
-    public var providerTabs: [ProviderTab] {
-        var tabs: [ProviderTab] = [
-            ProviderTab(id: "apps", title: "Apps", trigger: nil, icon: "symbol:square.grid.2x2"),
+    /// Everything first, then one row per provider in registry order. `askh`
+    /// shares the Ask row; the rail has no grouped chips.
+    public var railEntries: [RailEntry] {
+        var entries: [RailEntry] = [
+            RailEntry(id: "everything", title: "Everything", trigger: nil, icon: "symbol:square.grid.2x2"),
         ]
-        var handled = Set<String>()
-        for group in Self.groups {
-            let members = group.members.filter { id in
-                registry.providers.contains { $0.descriptor.id == id }
-            }
-            guard !members.isEmpty else { continue }
-            handled.formUnion(members)
-            let first = registry.providers.first { $0.descriptor.id == members[0] }
-            tabs.append(ProviderTab(
-                id: group.id,
-                title: group.title,
-                trigger: first?.descriptor.trigger,
-                icon: group.icon,
-                memberIDs: members
-            ))
-        }
         for provider in registry.providers {
-            guard let trigger = provider.descriptor.trigger else { continue }
-            if provider.descriptor.id == "askh" || handled.contains(provider.descriptor.id) { continue }
-            tabs.append(ProviderTab(
-                id: provider.descriptor.id,
-                title: provider.descriptor.name,
+            let descriptor = provider.descriptor
+            guard let trigger = descriptor.trigger, descriptor.id != "askh" else { continue }
+            entries.append(RailEntry(
+                id: descriptor.id,
+                title: descriptor.name,
                 trigger: trigger,
-                icon: provider.descriptor.icon
+                icon: descriptor.icon
             ))
         }
-        return tabs
+        return entries
+    }
+
+    /// The rail row for the current scope; a plain query is Everything.
+    public var activeRailID: String {
+        let provider = registry.parser.parse(query).providerID
+        if provider == nil || provider == "apps" { return "everything" }
+        if provider == "askh" { return "ask" }
+        return provider ?? "everything"
+    }
+
+    public func selectRail(_ id: String) {
+        guard let entry = railEntries.first(where: { $0.id == id }) else { return }
+        if let trigger = entry.trigger {
+            query = registry.parser.prefix + trigger + " "
+        } else {
+            resetting = true
+            query = ""
+            resetting = false
+            previewEnabled = false
+            clipboardFilter = nil
+            panel?.widthOverride = nil
+            scheduleSearch(debounce: false)
+        }
+    }
+
+    public func moveRail(by delta: Int) {
+        let entries = railEntries
+        guard !entries.isEmpty else { return }
+        let current = entries.firstIndex(where: { $0.id == activeRailID }) ?? 0
+        let next = ((current + delta) % entries.count + entries.count) % entries.count
+        selectRail(entries[next].id)
     }
 
     public var activeTabID: String {
-        let provider = registry.parser.parse(query).providerID
-        if provider == nil { return "apps" }
-        if provider == "askh" { return "ask" }
-        for group in Self.groups where group.members.contains(provider ?? "") {
-            return group.id
-        }
-        return provider ?? "apps"
+        activeRailID == "everything" ? "apps" : activeRailID
     }
 
     public var activeProviderID: String {
         registry.parser.parse(query).providerID ?? "apps"
     }
 
-    public var activeGroupMembers: [ProviderMember] {
-        guard let tab = providerTabs.first(where: { $0.id == activeTabID }),
-              tab.memberIDs.count > 1 else { return [] }
-        return tab.memberIDs.compactMap { id in
-            guard let provider = registry.providers.first(where: { $0.descriptor.id == id }) else { return nil }
-            let name = provider.descriptor.name
-                .replacingOccurrences(of: "Bitwarden ", with: "")
-                .replacingOccurrences(of: "Neovide ", with: "")
-                .replacingOccurrences(of: "Editor ", with: "")
-            return ProviderMember(id: id, title: name)
-        }
-    }
-
-    public func selectTab(_ id: String) {
-        if id == "apps" {
-            query = ""
-            return
-        }
-        let selectedID = Self.groupMembers(for: id)?.first(where: { member in
-            registry.providers.contains { $0.descriptor.id == member }
-        }) ?? id
-        guard let provider = registry.providers.first(where: { $0.descriptor.id == selectedID }),
-              let trigger = provider.descriptor.trigger else { return }
-        query = registry.parser.prefix + trigger + " "
-    }
-
-    private static func groupMembers(for id: String) -> [String]? {
-        groups.first(where: { $0.id == id })?.members
-    }
-
     public func cycleTab(by delta: Int) {
         guard !actionsMode else { return }
-        let tabs = providerTabs
-        guard tabs.count > 1 else { return }
-        let current = tabs.firstIndex(where: { $0.id == activeTabID }) ?? 0
-        let count = tabs.count
+        let entries = railEntries
+        guard entries.count > 1 else { return }
+        let current = entries.firstIndex(where: { $0.id == activeRailID }) ?? 0
+        let count = entries.count
         let next = ((current + delta) % count + count) % count
-        selectTab(tabs[next].id)
+        selectRail(entries[next].id)
     }
 
     public var effectiveClipboardFilter: String? {
@@ -653,17 +642,22 @@ public final class SearchController: ObservableObject, HostBridge {
         return nil
     }
 
-    public var askHistoryMode: Bool {
-        registry.parser.parse(query).providerID == "askh"
-    }
-
-    public func setAskMode(history: Bool) {
-        query = registry.parser.prefix + (history ? "askh " : "ask ")
-    }
-
     public func setClipboardFilter(_ kind: String?) {
         clipboardFilter = kind
         query = "/clip" + (kind.map { " " + $0 } ?? " ")
+    }
+
+    /// ⌘1/⌘2 (and ⌘3/⌘4 for clipboard filters) pick a visible mode chip.
+    private func selectModeChip(at index: Int) -> Bool {
+        switch activeTabID {
+        case "clip":
+            let filters: [String?] = [nil, "text", "image", "files"]
+            guard filters.indices.contains(index) else { return false }
+            setClipboardFilter(filters[index])
+            return true
+        default:
+            return false
+        }
     }
 
     private func cycleScope() {
@@ -684,7 +678,9 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func select(_ index: Int) {
         guard actionsMode == false, items.indices.contains(index) else { return }
+        railFocused = false
         selectionIndex = index
+        if previewEnabled { updatePanelHeight() }
     }
 
     public func activate(_ index: Int) {
@@ -940,16 +936,17 @@ public final class SearchController: ObservableObject, HostBridge {
                 } else if action.id == "ask-settings" {
                     onOpenConfig?()
                     panel?.hide()
-                } else if action.id == "ask-again" {
-                    // Re-ask for real; reopening the query alone would just show
-                    // the cached answer again.
-                    if let question = action.value.text {
-                        try await registry.activate(item: item, action: action)
-                        query = registry.parser.prefix + "ask " + question
-                        scheduleSearch(debounce: false)
+                } else if action.id == "open-settings" {
+                    onOpenConfig?()
+                    panel?.hide()
+                } else if action.id == "retry" {
+                    // Re-run the current query, e.g. currency rates after a
+                    // dropped connection; the panel stays where it is.
+                    scheduleSearch(debounce: false)
+                } else if action.id == "enter-provider" {
+                    if let trigger = action.value.text {
+                        query = registry.parser.prefix + trigger + " "
                     }
-                } else if action.id == "ask-history" {
-                    query = registry.parser.prefix + "askh "
                 } else if action.id == "pin-item" {
                     try await store.pinItem(item)
                     setStatus("Pinned \(item.title)", duration: 2)
@@ -974,6 +971,40 @@ public final class SearchController: ObservableObject, HostBridge {
         }
     }
 
+    /// One row per provider whose name or trigger matches the query. Bound
+    /// searches never see these.
+    private func providerMatches(query: String) -> [PaletteItem] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return registry.providers.compactMap { provider in
+            let descriptor = provider.descriptor
+            guard let trigger = descriptor.trigger,
+                  let score = Ranking.score(query: trimmed, candidate: "\(descriptor.name) \(trigger)")
+            else { return nil }
+            let icon = descriptor.icon.flatMap { raw -> IconSpec? in
+                guard raw.hasPrefix("symbol:") else { return nil }
+                return .symbol(String(raw.dropFirst("symbol:".count)))
+            }
+            return PaletteItem(
+                id: "provider:\(descriptor.id)",
+                title: descriptor.name,
+                subtitle: "/\(trigger)",
+                icon: icon ?? .symbol("square.grid.2x2"),
+                badge: "PROVIDER",
+                group: "Providers",
+                score: score,
+                actions: [PaletteAction(
+                    id: "enter-provider",
+                    title: "Open \(descriptor.name)",
+                    kind: .custom,
+                    value: .text(trigger)
+                )],
+                providerID: "providers",
+                providerName: "Palette"
+            )
+        }
+    }
+
     private func keepsPanelOpen(item: PaletteItem, action: PaletteAction) -> Bool {
         switch item.providerID {
         case "theme", "clip":
@@ -984,14 +1015,17 @@ public final class SearchController: ObservableObject, HostBridge {
             return ["add", "remove", "shortcut", "clear-shortcut"].contains(action.id)
         case "bw", "bwu", "bwt", "bwn", "bwo":
             return ["install", "login", "unlock", "retry"].contains(action.id)
-        case "ask":
-            return ["select-model", "ask"].contains(action.id)
-        case "askh":
-            return action.id == "delete-ask"
         case "atlas":
             return ["review", "copy-path", "open-index"].contains(action.id)
         case "git":
             return ["status", "log", "stage", "commit", "pull", "push", "clear-output"].contains(action.id)
+        case "proj":
+            // Keep the list open so the new project shows up after it is registered.
+            return ["clone-repo", "new-project"].contains(action.id)
+        case "gha":
+            return ["rerun", "cancel"].contains(action.id)
+        case "ghn":
+            return action.id == "mark-done"
         default:
             return false
         }
@@ -1089,15 +1123,6 @@ public final class SearchController: ObservableObject, HostBridge {
         }
     }
 
-    /// Measured height of the wrapping provider tab strip.
-    public private(set) var tabStripHeight: CGFloat = 44
-
-    public func setTabStripHeight(_ height: CGFloat) {
-        guard height > 0, abs(height - tabStripHeight) > 0.5 else { return }
-        tabStripHeight = height
-        updatePanelHeight()
-    }
-
     public func updatePanelHeight() {
         guard let panel else { return }
         let theme = themeManager.theme
@@ -1117,37 +1142,70 @@ public final class SearchController: ObservableObject, HostBridge {
         } else if actionsMode {
             content = 38 + listHeight
         } else {
-            content = listHeight
+            content = modeHeaderHeight + listHeight
         }
         if previewEnabled {
+            // Clearing the width override matters as much as setting it: an
+            // empty result hides the pane and must not leave the panel wide.
             updatePreviewWidth()
-            if previewLayout == .below {
-                // 20pt covers the separator and padding around the pane.
-                content += previewPaneHeight + 20
-            }
+        }
+        if previewVisible, previewLayout == .below {
+            // The preview is its own card with one card gap under the list.
+            content += previewPaneHeight + LauncherMetrics.cardGap
         }
         panel.setContentHeight(CGFloat(theme.search.height) + content + chrome)
     }
 
-    /// Height of the panel around the list: tab strip (plus a mode sub-row),
-    /// footer and the pill inset.
+    /// Everything around the list: both outer insets, the card gaps and the
+    /// footer. The rail is a sibling card, so it reserves no list height.
     private var tabChromeHeight: CGFloat {
-        // The tab strip wraps, so use its measured height; add a sub-row when
-        // a mode (clipboard filters, Ask history, provider group) adds one.
-        // Hidden tabs contribute no strip, but their sub-row still shows.
-        var tabs = windowConfig.showTabs ? max(44, tabStripHeight) : 0
-        if activeTabID == "clip" || activeTabID == "ask" || activeGroupMembers.count > 1 { tabs += 38 }
-        let footer = themeManager.theme.footer.show ? CGFloat(28) : 0
-        return tabs + footer + 22
+        let footer = themeManager.theme.footer.show ? LauncherMetrics.footerHeight : 0
+        let gaps = themeManager.theme.footer.show ? LauncherMetrics.cardGap * 2 : LauncherMetrics.cardGap
+        return LauncherMetrics.outerInset * 2 + gaps + footer
+    }
+
+    /// The optional Ask/History or clipboard filter row inside the list card.
+    private var modeHeaderHeight: CGFloat {
+        activeTabID == "clip" || activeTabID == "ask" ? 40 : 0
     }
 
     /// The configured row count is the panel's fixed height: a short list
-    /// does not shrink it and a long one does not grow it.
+    /// does not shrink it and a long one does not grow it. Rows that wrap to
+    /// two title lines get 16pt more, and the viewport is sized from those
+    /// exact heights so no row is cut at the bottom.
     private var listHeight: CGFloat {
         let row = CGFloat(themeManager.theme.effectiveRowHeight)
         let spacing: CGFloat = 6
-        let visible = CGFloat(panel?.effectiveRows() ?? windowConfig.launcherRows)
-        return visible * row + (visible - 1) * spacing + 8
+        let visible = Int(panel?.effectiveRows() ?? windowConfig.launcherRows)
+        let rows = Array(items.prefix(visible))
+        let heights = rows.map { row + (titleWraps($0) ? 16 : 0) }
+        let used = heights.isEmpty ? row * CGFloat(visible) : heights.reduce(0, +)
+        let count = max(1, heights.isEmpty ? CGFloat(visible) : CGFloat(heights.count))
+        // Only the headers among the rows that fit take vertical space; a
+        // later group must not inflate the viewport and reveal a partial row.
+        let visibleGroups = Set(rows.compactMap(\.group)).count
+        let groups = min(4, visibleGroups)
+        // Header: 11pt line + 8pt top pad + the 6pt stack gap.
+        let headerRoom = CGFloat(groups) * 25
+        return used + (count - 1) * spacing + LauncherMetrics.innerPadding * 2 + headerRoom
+    }
+
+    /// Width left for a result title after the rail, card/row insets, icon,
+    /// badge and spacer. Err narrow so a long title is predicted to wrap.
+    private var titleColumnWidth: CGFloat {
+        let panelWidth = panel?.widthOverride ?? CGFloat(windowConfig.launcherWidth(for: screenSize))
+        let rail: CGFloat = (previewVisible || panelWidth < 700) ? 56 : 220
+        return max(120, panelWidth - LauncherMetrics.outerInset * 2 - rail
+            - LauncherMetrics.cardGap - LauncherMetrics.innerPadding * 4 - 20 - 10 - 8 - 80)
+    }
+
+    /// True when the title cannot fit on one line at the current width; the
+    /// row then renders two lines and reserves the extra height.
+    public func titleWraps(_ item: PaletteItem) -> Bool {
+        let width = (item.title as NSString).size(
+            withAttributes: [.font: themeManager.theme.nsFont(size: themeManager.theme.typography.size)]
+        ).width
+        return width > titleColumnWidth
     }
 
     /// Width of the beside-list preview pane. ⌥P grows it, and the panel
@@ -1170,7 +1228,7 @@ public final class SearchController: ObservableObject, HostBridge {
     /// not fight this, or the panel jumps between opens and searches.
     private func updatePreviewWidth() {
         guard let panel else { return }
-        guard previewEnabled, previewLayout == .beside else {
+        guard previewVisible, previewLayout == .beside else {
             panel.widthOverride = nil
             return
         }

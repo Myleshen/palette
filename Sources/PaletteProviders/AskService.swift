@@ -2,9 +2,9 @@ import Foundation
 import PaletteCore
 import PalettePlatform
 
-/// Shared runtime for the two `/ask` tabs. It owns model choice, key lookup,
-/// the one-shot request, and history persistence. Neither provider keeps a
-/// conversation: every answer is independent.
+/// Shared runtime for the Ask chat and saved chats. It owns model choice, key lookup,
+/// the request, and history persistence. The chat window keeps the
+/// conversation; a request replays the trimmed transcript.
 public actor AskService {
     private let store: PaletteStore
     private let configuration: AskConfig
@@ -69,13 +69,99 @@ public actor AskService {
         if lastAnswer?.id == id { lastAnswer = nil }
     }
 
-    public func ask(_ question: String) async throws -> AskRecord {
-        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw AskClientError.empty }
+    // MARK: - Saved chats
+
+    public func chats(limit: Int = 200) async throws -> [AskChat] {
+        try await store.askChats(limit: limit)
+    }
+
+    public func messages(chatID: String) async throws -> [AskChatMessage] {
+        try await store.askChatMessages(chatID: chatID)
+    }
+
+    @discardableResult
+    public func createChat(title: String, model: AskModel) async throws -> AskChat {
+        try await store.createAskChat(title: title, model: model.id)
+    }
+
+    @discardableResult
+    public func appendMessage(
+        chatID: String,
+        role: AskMessage.Role,
+        content: String,
+        durationMs: Int = 0,
+        promptTokens: Int = 0,
+        completionTokens: Int = 0,
+        sources: [AskSource] = []
+    ) async throws -> AskChatMessage {
+        try await store.appendAskChatMessage(
+            chatID: chatID,
+            role: role,
+            content: content,
+            durationMs: durationMs,
+            promptTokens: promptTokens,
+            completionTokens: completionTokens,
+            sources: sources
+        )
+    }
+
+    public func updateChatModel(chatID: String, model: AskModel) async throws {
+        try await store.updateAskChat(id: chatID, model: model.id)
+    }
+
+    public func deleteChat(id: String) async throws {
+        try await store.deleteAskChat(id: id)
+    }
+
+    /// Sends a conversation and returns the completed turn. `onDelta` receives
+    /// streamed answer text; if a model fails after streaming and the loop
+    /// falls back, `onReset` asks the UI to discard that partial bubble.
+    public func ask(
+        _ conversation: [AskMessage],
+        webSearch: Bool = false,
+        onProgress: (@Sendable (String) -> Void)? = nil,
+        onDelta: (@Sendable (String) -> Void)? = nil,
+        onReset: (@Sendable () -> Void)? = nil
+    ) async throws -> AskRecord {
+        let messages = conversation.filter {
+            !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard let question = messages.last(where: { $0.role == .user })?
+            .content.trimmingCharacters(in: .whitespacesAndNewlines),
+              !question.isEmpty else {
+            throw AskClientError.empty
+        }
         let selected = await selectedModel()
         let candidates = candidateModels(selected: selected)
         let sessionID = await sessionIdentifier()
+        let trimmedMessages = AskConversation.trimmed(messages)
         let started = Date()
+
+        // One lookup per turn, before the model. No keys means no point
+        // searching; the missing-key error is cheaper and clearer.
+        var sources: [AskSource] = []
+        if !candidates.isEmpty {
+            do {
+                sources = try await AskWebSearch.sources(
+                    for: question,
+                    webSearch: webSearch,
+                    onProgress: onProgress
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                if Task.isCancelled { throw CancellationError() }
+                onProgress?("Search unavailable")
+                sources = []
+            }
+        }
+        let modelMessages: [AskMessage]
+        if sources.isEmpty {
+            modelMessages = trimmedMessages
+        } else {
+            let note = AskWebSearch.systemNote(question: question, sources: sources)
+            modelMessages = [AskMessage(role: .system, content: note)] + trimmedMessages
+        }
         var lastError: Error = AskClientError.missingKey
         var lastModel: AskModel?
         var attempts = 0
@@ -93,18 +179,26 @@ public actor AskService {
             }
             attempts += 1
             lastModel = model
+            let streamed = DeltaFlag()
+            let deltaSink: (@Sendable (String) -> Void)? = onDelta.map { emit in
+                { piece in
+                    streamed.mark()
+                    emit(piece)
+                }
+            }
             do {
                 let completion = try await completer.complete(
                     endpoint: model.endpoint,
                     model: model.id,
                     key: key,
-                    question: trimmed,
+                    messages: modelMessages,
                     maxTokens: configuration.maxTokens,
                     sessionID: sessionID,
-                    baseURL: baseURLOverride
+                    baseURL: baseURLOverride,
+                    onDelta: deltaSink
                 )
-                let record = try await store.insertAsk(
-                    question: trimmed,
+                var record = try await store.insertAsk(
+                    question: question,
                     answer: completion.answer,
                     model: model.id,
                     provider: model.endpoint.rawValue,
@@ -114,19 +208,25 @@ public actor AskService {
                     maxHistory: configuration.maxHistory,
                     retentionDays: configuration.retentionDays
                 )
+                record.sources = sources
                 lastAnswer = record
                 return record
             } catch let error as AskClientError {
-                lastError = error
-                Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
+                if Task.isCancelled { throw CancellationError() }
+                // A rejected key rejects that whole endpoint; do not burn the
+                // remaining fallback attempts on the same account.
                 if error == .invalidKey {
-                    // One rejected key rejects that whole endpoint; do not burn
-                    // the remaining fallback attempts on the same account.
                     rejectedEndpoints.insert(model.endpoint)
                 }
+                // The next model starts a fresh answer, so the UI must not
+                // append it to the failed model's partial text.
+                if streamed.take() { onReset?() }
+                lastError = error
+                Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
                 if !error.allowsFallback { break }
             } catch {
                 if Task.isCancelled || error is CancellationError { throw CancellationError() }
+                if streamed.take() { onReset?() }
                 lastError = error
                 Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
             }
@@ -136,12 +236,12 @@ public actor AskService {
             throw AskClientError.missingKey
         }
         // A failed re-ask must not keep showing the cached answer for it.
-        if lastAnswer?.question == trimmed { lastAnswer = nil }
+        if lastAnswer?.question == question { lastAnswer = nil }
         if let lastModel {
             // Keep failures next to answers (the error column) so a timeout is
             // diagnosable from Ask History as well as the log.
             _ = try? await store.insertAsk(
-                question: trimmed,
+                question: question,
                 answer: "",
                 model: lastModel.id,
                 provider: lastModel.endpoint.rawValue,
@@ -160,19 +260,28 @@ public actor AskService {
         return URL(string: raw)
     }
 
-    /// The selected model first, then a short free-first fallback chain. The
-    /// cap keeps a quota-exhausted account from turning every question into a
-    /// minute of repeated requests.
+    /// The selected model first, then free models from endpoints with a key,
+    /// then paid models from endpoints with a key. The caps keep a quota-
+    /// exhausted account from turning every question into minutes of retries,
+    /// and keyless endpoints are never candidates.
     private func candidateModels(selected: AskModel) -> [AskModel] {
-        guard configuration.fallback else { return [selected] }
-        var result = [selected]
-        var keys = Set([selected.key])
-        let free = AskModel.fallbackOrder.filter(\.free)
-        for model in free where result.count < 4 {
+        let keyed = Set(AskEndpoint.allCases.filter { hasKey(for: $0) })
+        guard !keyed.isEmpty else { return [] }
+        guard configuration.fallback else {
+            return keyed.contains(selected.endpoint) ? [selected] : []
+        }
+        var result: [AskModel] = []
+        var keys = Set<String>()
+        if keyed.contains(selected.endpoint) {
+            keys.insert(selected.key)
+            result.append(selected)
+        }
+        for model in AskModel.fallbackOrder where model.free && keyed.contains(model.endpoint) {
+            guard result.count < 6 else { break }
             if keys.insert(model.key).inserted { result.append(model) }
         }
-        let paid = AskModel.fallbackOrder.filter { !$0.free }
-        for model in paid where result.count < 12 {
+        for model in AskModel.fallbackOrder where !model.free && keyed.contains(model.endpoint) {
+            guard result.count < 14 else { break }
             if keys.insert(model.key).inserted { result.append(model) }
         }
         return result
@@ -188,5 +297,26 @@ public actor AskService {
         try? await store.setMeta("ask.session", value: value)
         cachedSessionID = value
         return value
+    }
+}
+
+/// Sendable latch so the fallback loop can ask whether a model streamed
+/// anything before it failed, without trusting the closure's thread.
+private final class DeltaFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    func mark() {
+        lock.lock()
+        value = true
+        lock.unlock()
+    }
+
+    func take() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let seen = value
+        value = false
+        return seen
     }
 }

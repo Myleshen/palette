@@ -4,6 +4,12 @@ import PaletteCore
 import PalettePlatform
 import PaletteProviders
 
+private actor SilentBridge: HostBridge {
+    func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String? { nil }
+    func notify(_ message: String) async {}
+    func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {}
+}
+
 final class StorageTests: XCTestCase {
     private func makeStore() throws -> (PaletteStore, URL) {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-store-\(UUID().uuidString).sqlite")
@@ -207,7 +213,7 @@ final class StorageTests: XCTestCase {
         let (store, url) = try makeStore()
         defer { try? FileManager.default.removeItem(at: url) }
         let launcher = await MainActor.run { LauncherService() }
-        let scratch = ScratchpadProvider(store: store)
+        let scratch = ScratchpadProvider(store: store, bridge: SilentBridge())
         _ = try await store.saveScratchNote(title: "Build notes", text: "gradle build")
         let scratchRows = try await scratch.search(SearchRequest(text: "", limit: 20, isBound: true))
         XCTAssertTrue(scratchRows.contains { $0.title == "New Scratch Note" })
