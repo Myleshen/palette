@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
 
       # The toolchain is part of the cache key: build products are tied to the
       # Swift module format, and restoring them after a runner image change
@@ -33,9 +35,14 @@ jobs:
           path: |
             .build
             ~/.cache/org.swift.swiftpm
-          key: ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          key: ${{ runner.os }}-build-${{ github.job }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-
+
+      # See Scripts/restore-build-timestamps.sh: without this a restored cache
+      # still rebuilds everything, because checkout stamps sources with "now".
+      - name: Warm the build cache
+        run: Scripts/restore-build-timestamps.sh
 
       - name: Test
         run: swift test ${{ github.event_name == 'push' && '--enable-code-coverage' || '' }}
@@ -53,7 +60,7 @@ jobs:
           # xccov cannot read SPM's LLVM JSON on every toolchain, so fall back
           # to llvm-cov instead of losing the report.
           xcrun xccov view --report "$report" && exit 0
-          bundle="$(find -H .build/debug -maxdepth 2 -name '*.xctest' -type d | head -n 1)"
+          bundle="$(find -H .build/debug -maxdepth 3 -name '*.xctest' -type d | head -n 1)"
           xcrun llvm-cov report "$bundle/Contents/MacOS/$(ls "$bundle/Contents/MacOS" | head -n 1)" \
             -instr-profile=.build/debug/codecov/default.profdata \
             -ignore-filename-regex='\.build/checkouts|/Tests/'
@@ -71,6 +78,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
 
       - name: Swift version
         id: swift
@@ -82,9 +91,14 @@ jobs:
           path: |
             .build
             ~/.cache/org.swift.swiftpm
-          key: ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          key: ${{ runner.os }}-build-${{ github.job }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-
+
+      # See Scripts/restore-build-timestamps.sh: without this a restored cache
+      # still rebuilds everything, because checkout stamps sources with "now".
+      - name: Warm the build cache
+        run: Scripts/restore-build-timestamps.sh
 
       - name: End-to-end flows
         run: make e2e
