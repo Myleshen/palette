@@ -24,6 +24,7 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         guard ToolLocator.shared.path(for: "zellij") != nil else {
+            guard request.isBound else { return [] }
             return [PaletteItem(
                 id: "install",
                 title: "Install zellij",
@@ -36,6 +37,7 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
             )]
         }
         guard ToolLocator.shared.path(for: terminal) != nil || ToolLocator.shared.appPath(named: terminal) != nil else {
+            guard request.isBound else { return [] }
             return [PaletteItem(
                 id: "install-terminal",
                 title: "Install \(terminal)",

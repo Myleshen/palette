@@ -232,6 +232,7 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let missing = ["fd", "fzf"].filter { ToolLocator.shared.path(for: $0) == nil }
         if !missing.isEmpty {
+            guard request.isBound else { return [] }
             return [installRow(missing: missing)]
         }
 

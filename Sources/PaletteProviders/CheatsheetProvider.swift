@@ -28,7 +28,9 @@ public final class CheatsheetProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
-        guard !config.folders.isEmpty else { return [setupRow] }
+        // Global providers run on every search: only offer the setup row when
+        // the user asked for cheatsheets explicitly.
+        guard !config.folders.isEmpty else { return request.isBound ? [setupRow] : [] }
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let entries = Self.entries(in: config)
         let matches = query.isEmpty
@@ -41,6 +43,7 @@ public final class CheatsheetProvider: PaletteProvider, @unchecked Sendable {
             .sorted { $0.1 > $1.1 }
             .map(\.0)
         guard !matches.isEmpty else {
+            guard request.isBound else { return [] }
             return [emptyRow(
                 title: entries.isEmpty ? "No cheatsheets found" : "No cheatsheets match \"\(query)\"",
                 subtitle: "Looked in \(config.folders.count) folder\(config.folders.count == 1 ? "" : "s") for \(config.extensions.joined(separator: ", "))"

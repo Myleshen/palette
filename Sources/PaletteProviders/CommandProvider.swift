@@ -47,6 +47,7 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let commands = Self.load(from: fileURL)
         guard !commands.isEmpty else {
+            guard request.isBound else { return [] }
             return [PaletteItem(
                 id: "cmd:setup",
                 title: "Add a command shortcut",

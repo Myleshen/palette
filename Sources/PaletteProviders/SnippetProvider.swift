@@ -33,7 +33,7 @@ public final class SnippetProvider: PaletteProvider, @unchecked Sendable {
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let snippets = Self.load(from: fileURL)
-        guard !snippets.isEmpty else { return [setupItem()] }
+        guard !snippets.isEmpty else { return request.isBound ? [setupItem()] : [] }
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         return snippets.compactMap { snippet in
             let haystack = ([snippet.title] + snippet.keywords + [snippet.text]).joined(separator: " ")
