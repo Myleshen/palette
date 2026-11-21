@@ -45,6 +45,23 @@ final class CheatsheetTests: XCTestCase {
         XCTAssertEqual(setup.map(\.title), ["Set up cheatsheets"])
     }
 
+    func testSetupAndEmptyRowsOnlyShowInProviderScope() async throws {
+        let unconfigured = CheatsheetProvider(config: CheatsheetConfig())
+        let globalWithoutFolders = try await unconfigured.search(SearchRequest(text: "settings", isBound: false))
+        XCTAssertTrue(globalWithoutFolders.isEmpty)
+        let boundWithoutFolders = try await unconfigured.search(SearchRequest(text: "settings", isBound: true))
+        XCTAssertEqual(boundWithoutFolders.map(\.id), ["cheat:setup"])
+
+        let configured = CheatsheetProvider(config: CheatsheetConfig(folders: [folder.path], extensions: ["md"]))
+        let globalMatches = try await configured.search(SearchRequest(text: "vim", isBound: false))
+        XCTAssertEqual(globalMatches.map(\.title), ["vim.md"])
+
+        let globalMiss = try await configured.search(SearchRequest(text: "zebra", isBound: false))
+        XCTAssertTrue(globalMiss.isEmpty)
+        let boundMiss = try await configured.search(SearchRequest(text: "zebra", isBound: true))
+        XCTAssertEqual(boundMiss.map(\.id), ["cheat:empty"])
+    }
+
     func testConfigRoundTripsThroughRender() throws {
         var config = PaletteConfig()
         config.cheatsheets.folders = ["~/docs/cheats"]

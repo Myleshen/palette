@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.11.1 — 2026-11-21
+
+### Fixed
+
+- Provider "setup" and "empty" rows no longer leak into global search. A plain
+  query such as `settings` no longer shows "Set up cheatsheets" or other
+  install/setup hints from providers that aren't in scope; those rows now appear
+  only inside their own `/trigger` scope. Affects Cheatsheets, Zellij, paths
+  (`fd`/`fzf`), snippets, commands and captures.
+
 ## 2.11.0 — 2026-11-21
 
 ### Added

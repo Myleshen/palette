@@ -39,6 +39,7 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
             entries = entries.filter { Self.isPaletteCapture($0.url) }
         }
         guard !entries.isEmpty else {
+            guard request.isBound else { return [] }
             return [emptyRow(
                 title: "No captures yet",
                 subtitle: "Press ⌘⇧3 or run /shot; files land in \(directory)"
@@ -48,6 +49,7 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
             ? entries
             : entries.filter { $0.url.lastPathComponent.lowercased().contains(query) }
         guard !filtered.isEmpty else {
+            guard request.isBound else { return [] }
             return [emptyRow(title: "No captures match \"\(query)\"", subtitle: "\(entries.count) captures in \(directory)")]
         }
         var items: [PaletteItem] = []
