@@ -1180,20 +1180,42 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     /// The configured row count is the panel's fixed height: a short list
-    /// does not shrink it and a long one does not grow it. Group headers and
-    /// the bottom fade get their own room, so seven rows are fully drawn and
-    /// the fade never sits on top of a row.
+    /// does not shrink it and a long one does not grow it. Rows that wrap to
+    /// two title lines get 16pt more, and the viewport is sized from those
+    /// exact heights so no row is cut at the bottom.
     private var listHeight: CGFloat {
         let row = CGFloat(themeManager.theme.effectiveRowHeight)
         let spacing: CGFloat = 6
-        let visible = CGFloat(panel?.effectiveRows() ?? windowConfig.launcherRows)
+        let visible = Int(panel?.effectiveRows() ?? windowConfig.launcherRows)
+        let rows = Array(items.prefix(visible))
+        let heights = rows.map { row + (titleWraps($0) ? 16 : 0) }
+        let used = heights.isEmpty ? row * CGFloat(visible) : heights.reduce(0, +)
+        let count = max(1, heights.isEmpty ? CGFloat(visible) : CGFloat(heights.count))
         // Only the headers among the rows that fit take vertical space; a
         // later group must not inflate the viewport and reveal a partial row.
-        let visibleGroups = Set(items.prefix(Int(visible)).compactMap(\.group)).count
+        let visibleGroups = Set(rows.compactMap(\.group)).count
         let groups = min(4, visibleGroups)
         // Header: 11pt line + 8pt top pad + the 6pt stack gap.
         let headerRoom = CGFloat(groups) * 25
-        return visible * row + (visible - 1) * spacing + LauncherMetrics.innerPadding * 2 + headerRoom
+        return used + (count - 1) * spacing + LauncherMetrics.innerPadding * 2 + headerRoom
+    }
+
+    /// Width left for a result title after the rail, card/row insets, icon,
+    /// badge and spacer. Err narrow so a long title is predicted to wrap.
+    private var titleColumnWidth: CGFloat {
+        let panelWidth = panel?.widthOverride ?? CGFloat(windowConfig.launcherWidth(for: screenSize))
+        let rail: CGFloat = (previewVisible || panelWidth < 700) ? 56 : 220
+        return max(120, panelWidth - LauncherMetrics.outerInset * 2 - rail
+            - LauncherMetrics.cardGap - LauncherMetrics.innerPadding * 4 - 20 - 10 - 8 - 80)
+    }
+
+    /// True when the title cannot fit on one line at the current width; the
+    /// row then renders two lines and reserves the extra height.
+    public func titleWraps(_ item: PaletteItem) -> Bool {
+        let width = (item.title as NSString).size(
+            withAttributes: [.font: themeManager.theme.nsFont(size: themeManager.theme.typography.size)]
+        ).width
+        return width > titleColumnWidth
     }
 
     /// Width of the beside-list preview pane. ⌥P grows it, and the panel
