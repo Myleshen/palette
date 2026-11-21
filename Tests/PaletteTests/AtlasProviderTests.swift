@@ -121,6 +121,8 @@ final class AtlasProviderTests: XCTestCase {
 
         let filtered = try await provider.search(SearchRequest(text: "borrow", isBound: false))
         XCTAssertEqual(filtered.map(\.title), ["Ownership"])
+        let bound = try await provider.search(SearchRequest(text: "borrow", isBound: true))
+        XCTAssertEqual(bound.map(\.title), ["Ownership"])
         let byPath = try await provider.search(SearchRequest(text: "go/goroutines", isBound: false))
         XCTAssertEqual(byPath.map(\.title), ["Goroutines"])
         XCTAssertEqual(byPath.first?.subtitle, "go · go/goroutines.md")

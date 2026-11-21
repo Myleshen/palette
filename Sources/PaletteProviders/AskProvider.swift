@@ -3,8 +3,8 @@ import PaletteCore
 import PalettePlatform
 
 /// `/ask` is a one-shot question box. Empty query selects a model; a typed
-/// question shows a single Ask row, and the answer is stored in Ask History.
-/// No conversation is ever threaded.
+/// question shows a single Ask row that opens the ask window. No conversation
+/// is ever threaded.
 public final class AskProvider: PaletteProvider, @unchecked Sendable {
     public let descriptor = ProviderDescriptor(
         id: "ask",
@@ -17,10 +17,14 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
 
     private let service: AskService
     private let bridge: HostBridge
+    /// Opens the ask window; answering in place would put the answer in the
+    /// preview pane, which is exactly where it should not be.
+    private let onAsk: @MainActor (String) -> Void
 
-    public init(service: AskService, bridge: HostBridge) {
+    public init(service: AskService, bridge: HostBridge, onAsk: @escaping @MainActor (String) -> Void) {
         self.service = service
         self.bridge = bridge
+        self.onAsk = onAsk
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
@@ -50,10 +54,7 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
             await bridge.notify("Ask model: \(model.name)")
         case "ask", "ask-again":
             guard let question = action.value.text else { return }
-            let model = await service.selectedModel()
-            await bridge.beginProgress("Asking \(model.name)…")
-            let record = try await service.ask(question)
-            await bridge.notify("Answered with \(record.model)")
+            await onAsk(question)
         case "ask-settings":
             await bridge.notify("Add a key in Settings → Ask")
         case "ask-history":
@@ -189,10 +190,12 @@ public final class AskHistoryProvider: PaletteProvider, @unchecked Sendable {
 
     private let service: AskService
     private let bridge: HostBridge
+    private let onAsk: @MainActor (String) -> Void
 
-    public init(service: AskService, bridge: HostBridge) {
+    public init(service: AskService, bridge: HostBridge, onAsk: @escaping @MainActor (String) -> Void) {
         self.service = service
         self.bridge = bridge
+        self.onAsk = onAsk
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
@@ -229,10 +232,7 @@ public final class AskHistoryProvider: PaletteProvider, @unchecked Sendable {
             await bridge.notify("Deleted from Ask History")
         case "ask-again":
             guard let question = action.value.text else { return }
-            let model = await service.selectedModel()
-            await bridge.beginProgress("Asking \(model.name)…")
-            let record = try await service.ask(question)
-            await bridge.notify("Answered with \(record.model)")
+            await onAsk(question)
         default:
             break
         }

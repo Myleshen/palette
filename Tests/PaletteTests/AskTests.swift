@@ -55,7 +55,9 @@ final class AskTests: XCTestCase {
         let models = AskModel.models(for: .opencodeGo)
         XCTAssertFalse(models.isEmpty)
         XCTAssertTrue(models.allSatisfy { $0.endpoint == .opencodeGo })
-        XCTAssertEqual(models.filter(\.free).count, 2)
+        XCTAssertEqual(models.filter(\.free).count, 4)
+        XCTAssertTrue(models.contains { $0.id == "grok-4.7" })
+        XCTAssertTrue(models.contains { $0.id == "gpt-6-luna" })
     }
 
     func testAskKeyFileRoundTrip() throws {
@@ -87,6 +89,32 @@ final class AskTests: XCTestCase {
         XCTAssertTrue(paid.contains { $0.id == "longcat-2.0" })
         XCTAssertTrue(paid.contains { $0.id == "glm-5.3" })
         XCTAssertFalse(paid.contains { $0.id == "glm-5.2" })
+    }
+
+    func testAskRecordMetaLineShowsModelAndUsage() {
+        let record = AskRecord(
+            id: "1",
+            question: "q",
+            answer: "a",
+            model: "hy3",
+            provider: "opencode-go",
+            createdAt: Date(),
+            durationMs: 1_250,
+            promptTokens: 30,
+            completionTokens: 12
+        )
+        XCTAssertEqual(record.metaLine, "hy3 · 1250 ms · 42 tokens")
+
+        let untokened = AskRecord(
+            id: "2",
+            question: "q",
+            answer: "",
+            model: "beam-free",
+            provider: "opencode-go",
+            createdAt: Date(),
+            error: "boom"
+        )
+        XCTAssertEqual(untokened.metaLine, "beam-free · 0 ms")
     }
 
     func testAskDefaultsAllowLongerAnswers() {

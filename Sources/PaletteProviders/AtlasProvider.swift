@@ -106,11 +106,9 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
             // when the user asked for atlas explicitly.
             return request.isBound ? [setupItem()] : []
         }
-        // Bound to /atlas the query is the prefix only, so list everything.
-        let terms = request.isBound ? [] : request.terms
         let matched = snapshot.entries.compactMap { entry -> (Entry, Double)? in
             let haystack = "\(entry.title) \(entry.relativePath) \(entry.summary)"
-            guard let score = Ranking.score(terms: terms, candidate: haystack) else { return nil }
+            guard let score = Ranking.score(terms: request.terms, candidate: haystack) else { return nil }
             return (entry, score)
         }
         // Inbox first, then newest: the review queue is the point of the provider.

@@ -86,11 +86,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentScratchpadHotKey: HotKeySpec?
     private var askHotkey: HotKeyManager!
     private var currentAskHotKey: HotKeySpec?
+    private var webAppHotkeys: [HotKeyManager] = []
     private var recordingMenuItem: NSMenuItem?
     private var recordingTicker: Timer?
     private let screenshotHUD = ScreenshotHUD()
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
+    private var askWindows: [AskWindowController] = []
+    private var askService: AskService?
     private var startupDiagnostics: [Diagnostic] = []
     private var themeObserver: NSObjectProtocol?
     private var watcherTimer: Timer?
@@ -716,8 +719,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(PinProvider(store: store, bridge: hostProxy))
         providers.append(ClipboardProvider(store: store, bridge: hostProxy))
         let askService = AskService(store: store, configuration: configuration.ask)
-        providers.append(AskProvider(service: askService, bridge: hostProxy))
-        providers.append(AskHistoryProvider(service: askService, bridge: hostProxy))
+        self.askService = askService
+        let openAskWindow: @MainActor (String) -> Void = { [weak self] question in
+            self?.showAskWindow(question: question)
+        }
+        providers.append(AskProvider(service: askService, bridge: hostProxy, onAsk: openAskWindow))
+        providers.append(AskHistoryProvider(service: askService, bridge: hostProxy, onAsk: openAskWindow))
         providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, onChange: { [weak self] in
             await self?.exportWebApps()
         }))
@@ -1057,7 +1064,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// scanning NSApp.windows used to leave the Dock icon behind whenever any
     /// other window happened to be visible.
     private func updateActivationPolicy() {
-        let editing = !annotateWindows.isEmpty || !mediaPreviews.isEmpty
+        let editing = !annotateWindows.isEmpty || !mediaPreviews.isEmpty || !askWindows.isEmpty
         let policy: NSApplication.ActivationPolicy = editing ? .regular : .accessory
         guard NSApp.activationPolicy() != policy else { return }
         NSApp.setActivationPolicy(policy)
@@ -1197,6 +1204,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.show()
     }
 
+    /// One question, one window. The panel only carried the question, so it
+    /// steps aside before the window takes over.
+    private func showAskWindow(question: String, model: AskModel? = nil) {
+        guard let askService else { return }
+        panel?.hide(activatePrevious: false)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let selected = if let model { model } else { await askService.selectedModel() }
+            let controller = AskWindowController(
+                service: askService,
+                question: question,
+                model: selected,
+                themeManager: self.themeManager
+            )
+            controller.onClose = { [weak self, weak controller] in
+                guard let self, let controller else { return }
+                self.askWindows.removeAll { $0 === controller }
+                self.updateActivationPolicy()
+            }
+            self.askWindows.append(controller)
+            self.updateActivationPolicy()
+            controller.show()
+        }
+    }
+
     /// Capture windows outlive theme changes; their SwiftUI content observes the
     /// theme manager, but the AppKit window chrome needs this nudge.
     private func applyThemeToCaptureWindows(_ theme: Theme) {
@@ -1204,6 +1236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         onboardingWindow?.backgroundColor = theme.nsColor(theme.palette.bg)
         for controller in annotateWindows { controller.apply(theme: theme) }
         for controller in mediaPreviews { controller.apply(theme: theme) }
+        for controller in askWindows { controller.apply(theme: theme) }
     }
 
     @objc private func stopRecordingFromMenu() {
@@ -1306,7 +1339,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func showAsk() {
         guard let panel, let controller = searchController else { return }
         if panel.isVisible, controller.activeTabID == "ask" {
-            panel.hide()
+            // A second press with a question typed sends it to the window;
+            // with nothing typed it closes the panel.
+            if let question = controller.askQuestion {
+                showAskWindow(question: question)
+            } else {
+                panel.hide()
+            }
             return
         }
         panel.show()
@@ -1812,11 +1851,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func exportWebApps() async {
         do {
             let apps = try await store.webApps()
+            registerWebAppHotkeys(apps)
             if let url = try HammerspoonExport.write(apps, browser: configuration.webAppBrowser) {
                 Log.shared.info("Exported \(apps.count) web app(s) to \(url.path)", source: "hammerspoon")
             }
         } catch {
             Log.shared.warn("Could not export web apps to Hammerspoon: \(error.localizedDescription)", source: "hammerspoon")
+        }
+    }
+
+    /// Web app shortcuts are registered here, not by Hammerspoon: mixing both
+    /// would fail to register (Carbon rejects a duplicate hotkey pair).
+    private func registerWebAppHotkeys(_ apps: [WebApp]) {
+        webAppHotkeys.forEach { $0.unregister() }
+        webAppHotkeys.removeAll()
+        // 1–9 belong to the app hotkeys; 100+ is the web app range.
+        var nextID: UInt32 = 100
+        for app in apps {
+            guard let raw = app.shortcut, let spec = HotKeySpec.parse(raw) else { continue }
+            let browser = configuration.webAppBrowser
+            let manager = HotKeyManager(hotKeyID: nextID)
+            manager.onPressed = { [weak self] in
+                self?.launcher.openWebApp(app.url, browser: browser)
+            }
+            do {
+                try manager.register(raw)
+                webAppHotkeys.append(manager)
+                Log.shared.info("Web app hotkey registered: \(spec.prettyDisplay) → \(app.name)", source: "hotkey")
+                nextID += 1
+            } catch {
+                Log.shared.warn(
+                    "Web app shortcut \(spec.prettyDisplay) for \(app.name) is unavailable: \(error.localizedDescription)",
+                    source: "hotkey"
+                )
+            }
         }
     }
 

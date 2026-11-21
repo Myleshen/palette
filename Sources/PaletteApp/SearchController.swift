@@ -155,6 +155,15 @@ public final class SearchController: ObservableObject, HostBridge {
         panelDidShow()
     }
 
+    /// The question typed after `/ask`, for sending it straight to the window.
+    public var askQuestion: String? {
+        guard activeProviderID == "ask" else { return nil }
+        let prefix = configuration.providerPrefix + "ask"
+        guard query.hasPrefix(prefix) else { return nil }
+        let question = query.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+        return question.isEmpty ? nil : question
+    }
+
     public func panelDidHide() {
         searchTask?.cancel()
         isSearching = false
@@ -979,6 +988,8 @@ public final class SearchController: ObservableObject, HostBridge {
             return ["select-model", "ask"].contains(action.id)
         case "askh":
             return action.id == "delete-ask"
+        case "atlas":
+            return ["review", "copy-path", "open-index"].contains(action.id)
         case "git":
             return ["status", "log", "stage", "commit", "pull", "push", "clear-output"].contains(action.id)
         default:

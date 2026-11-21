@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.14.0 — 2026-11-21
+
+### Added
+
+- `/ask` opens a dedicated answer window: one question, one answer, with an
+  "Asking <model>…" state, a selectable answer, Copy, Ask Again and a model
+  picker. Esc cancels a request in flight. Still single-shot — no sessions.
+- The ask model list now mirrors the live OpenCode Go endpoint: all 31 models,
+  including Grok 4.7, GPT-6 Luna, Claude Haiku 5.5, Qwen4 Max and Hy4.
+- Web app shortcuts are registered by Palette itself, so ⌃⌥F opens your web app
+  directly without Hammerspoon; the generated Lua file no longer binds keys.
+
+### Fixed
+
+- `/atlas <query>` now filters the index fuzzily instead of listing everything.
+- Marking an Atlas document reviewed no longer closes the launcher.
+- `/bookmark <text>` now filters with the same fuzzy matcher as every other
+  provider (it was ignoring the typed text).
+
+### Changed
+
+- CI caches build products keyed on the Swift toolchain version and only
+  collects coverage on `main`, so warm PR runs finish in minutes.
+
 ## 2.13.1 — 2026-11-21
 
 ### Fixed
