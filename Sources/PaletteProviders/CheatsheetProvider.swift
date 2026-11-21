@@ -78,9 +78,10 @@ public final class CheatsheetProvider: PaletteProvider, @unchecked Sendable {
             title: "Set up cheatsheets",
             subtitle: "Add folders in Settings → Cheatsheets",
             icon: .symbol("doc.badge.plus"),
+            badge: "SETUP",
             group: "Cheatsheets",
             score: 1_000,
-            actions: [],
+            actions: [PaletteAction(id: "open-settings", title: "Open Settings", kind: .custom, value: .none)],
             providerID: descriptor.id,
             providerName: descriptor.name
         )
@@ -92,6 +93,7 @@ public final class CheatsheetProvider: PaletteProvider, @unchecked Sendable {
             title: title,
             subtitle: subtitle,
             icon: .symbol("book"),
+            badge: "EMPTY",
             group: "Cheatsheets",
             score: 1_000,
             actions: [],

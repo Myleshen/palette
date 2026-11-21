@@ -41,24 +41,28 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let catalog = ThemeLoader.catalog(themesDirectory: themesDirectory)
         let current = await MainActor.run { currentName?() ?? "" }
+        // `current` is the resolved theme's display name, so `.auto` and a live
+        // preview both mark the theme that is actually on screen.
         var items: [PaletteItem] = catalog.compactMap { info in
+            let isCurrent = info.name == current || info.displayName == current
             let score: Double
             if request.text.isEmpty {
-                score = info.name == current ? 100 : 0
+                score = isCurrent ? 100 : 0
             } else if let value = Ranking.score(query: request.text, candidate: "\(info.displayName) \(info.name) \(info.appearance)") {
-                score = value + (info.name == current ? 50 : 0)
+                score = value + (isCurrent ? 50 : 0)
             } else {
                 return nil
             }
             return PaletteItem(
                 id: info.name,
                 title: info.displayName,
-                subtitle: "\(info.isBuiltin ? "Built-in" : "User theme") · \(info.appearance)\(info.name == current ? " · current" : "")",
+                subtitle: "\(info.isBuiltin ? "Built-in" : "User theme") · \(info.appearance)\(isCurrent ? " · current" : "")",
                 icon: .symbol(info.appearance == "light" ? "sun.max" : "moon"),
-                badge: info.name == current ? "active" : nil,
+                badge: isCurrent ? "ACTIVE" : nil,
                 score: score,
                 actions: [
-                    PaletteAction(id: "select", title: "Apply Theme", kind: .custom, value: .text(info.name)),
+                    // A pick is live-only; config stays authoritative on launch.
+                    PaletteAction(id: "select", title: "Preview Theme", kind: .custom, value: .text(info.name)),
                 ],
                 providerID: descriptor.id,
                 providerName: descriptor.name

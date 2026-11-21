@@ -32,9 +32,15 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
                 title: "Docker is not installed",
                 subtitle: "Install Docker Desktop or colima, then reload Palette",
                 icon: .symbol("shippingbox"),
+                badge: "SETUP",
                 group: "Docker",
                 score: 1_000,
-                actions: [],
+                actions: [PaletteAction(
+                    id: "install",
+                    title: "Install Docker Desktop",
+                    kind: .openURL,
+                    value: .text("https://www.docker.com/products/docker-desktop/")
+                )],
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )]
@@ -49,6 +55,7 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
                 title: "Docker is not running",
                 subtitle: "Start Docker Desktop or the daemon, then reload",
                 icon: .symbol("shippingbox"),
+                badge: "SETUP",
                 group: "Docker",
                 score: 1_000,
                 actions: [PaletteAction(id: "open-app", title: "Open Docker", kind: .custom, value: .text("open-app"))],
@@ -68,6 +75,7 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
                 title: "No containers",
                 subtitle: "docker ps shows nothing on this machine",
                 icon: .symbol("shippingbox"),
+                badge: "EMPTY",
                 group: "Docker",
                 score: 1_000,
                 actions: [],
@@ -95,13 +103,19 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
                     PaletteAction(id: "restart", title: "Restart \(name)", kind: .custom, value: .text("restart:\(name)")),
                     PaletteAction(id: "logs", title: "Follow logs", kind: .custom, value: .text("logs:\(name)")),
                 ],
-                preview: .text("\(name)\n\(status)\nImage: \(image)\n\nEnter toggles the container. ⌘K for restart or logs."),
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )
         }
         if !query.isEmpty {
-            items = items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
+            items = items.compactMap { item in
+                guard let score = Ranking.score(query: query, candidate: "\(item.title) \(item.subtitle ?? "")") else {
+                    return nil
+                }
+                var item = item
+                item.score = score
+                return item
+            }
         }
         return items
     }

@@ -56,7 +56,6 @@ public final class BookmarkProvider: PaletteProvider, @unchecked Sendable {
             badge: "SETUP",
             score: 10_000,
             actions: [PaletteAction(id: "open", title: "Open Bookmarks File", kind: .openPath, value: .text(fileURL.path))],
-            preview: .text(Self.example),
             providerID: descriptor.id,
             providerName: descriptor.name
         )
@@ -71,7 +70,6 @@ public final class BookmarkProvider: PaletteProvider, @unchecked Sendable {
             badge: "BOOKMARK",
             score: 1_000,
             actions: [Self.openAction(for: bookmark)],
-            preview: .text(bookmark.url),
             providerID: descriptor.id,
             providerName: descriptor.name
         )

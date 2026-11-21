@@ -15,23 +15,26 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
         keywords: ["stats", "disk", "memory", "ram", "load", "cpu", "battery", "uptime", "space", "system"]
     )
 
-    public init() {}
+    private let bridge: HostBridge
+
+    public init(bridge: HostBridge) {
+        self.bridge = bridge
+    }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         var items = await rows()
         guard !query.isEmpty else { return items }
+        // Groups carry the words people type (`cpu`, `ram`), not just titles.
         items = items.filter {
-            "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased())
+            Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "") \($0.group ?? "")") != nil
         }
         return items
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         guard let value = action.value.text else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(value, forType: .string)
+        await bridge.copyToClipboard(value, concealed: false, clearAfterMs: nil)
     }
 
     private func rows() async -> [PaletteItem] {
@@ -67,7 +70,7 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("internaldrive"),
             group: "Storage",
             score: 9_000,
-            actions: [PaletteAction(id: "copy", title: "Copy", kind: .custom, value: .text("\(free) free of \(size) on /"))],
+            actions: [PaletteAction(id: "copy", title: "Copy free space", kind: .custom, value: .text("\(free) free of \(size) on /"))],
             providerID: "stats",
             providerName: "System Stats"
         )
@@ -93,7 +96,7 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("memorychip"),
             group: "Memory",
             score: 8_900,
-            actions: [PaletteAction(id: "copy", title: "Copy", kind: .custom, value: .text("\(format(available)) available, \(format(wired)) wired, \(format(compressed)) compressed"))],
+            actions: [PaletteAction(id: "copy", title: "Copy memory usage", kind: .custom, value: .text("\(format(available)) available, \(format(wired)) wired, \(format(compressed)) compressed"))],
             providerID: "stats",
             providerName: "System Stats"
         )
@@ -112,7 +115,7 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("cpu"),
             group: "CPU",
             score: 8_800,
-            actions: [PaletteAction(id: "copy", title: "Copy", kind: .custom, value: .text(values.joined(separator: " ")))],
+            actions: [PaletteAction(id: "copy", title: "Copy load average", kind: .custom, value: .text(values.joined(separator: " ")))],
             providerID: "stats",
             providerName: "System Stats"
         )
@@ -131,7 +134,7 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("battery.100"),
             group: "Power",
             score: 8_700,
-            actions: [PaletteAction(id: "copy", title: "Copy", kind: .custom, value: .text("Battery \(percent)%, \(state)"))],
+            actions: [PaletteAction(id: "copy", title: "Copy battery status", kind: .custom, value: .text("Battery \(percent)%, \(state)"))],
             providerID: "stats",
             providerName: "System Stats"
         )
@@ -149,7 +152,7 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("clock.arrow.circlepath"),
             group: "System",
             score: 8_600,
-            actions: [PaletteAction(id: "copy", title: "Copy", kind: .custom, value: .text(label))],
+            actions: [PaletteAction(id: "copy", title: "Copy uptime", kind: .custom, value: .text(label))],
             providerID: "stats",
             providerName: "System Stats"
         )

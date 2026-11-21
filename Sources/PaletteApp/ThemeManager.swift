@@ -35,14 +35,9 @@ public final class ThemeManager: ObservableObject {
         self.diagnostics = result.diagnostics
     }
 
-    public var currentThemeID: String {
-        if let overrideName { return overrideName }
-        switch selection.mode {
-        case .dark: return selection.dark
-        case .light: return selection.light
-        case .auto: return ""
-        }
-    }
+    /// The theme actually on screen: resolves `.auto` to the theme it picked
+    /// and a previewed theme to itself, so `/theme` can mark it.
+    public var currentThemeID: String { theme.name }
 
     public func restore() async {
         guard let store else { return }

@@ -328,7 +328,7 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
             isDirectory = flag.boolValue
         }
         let name = (path as NSString).lastPathComponent
-        let trimmed = displayPath(path)
+        let trimmed = Self.displayPath(path)
         let ext = (path as NSString).pathExtension
 
         var actions: [PaletteAction] = [
@@ -449,7 +449,8 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         return [item(for: expanded, rank: -1_000)]
     }
 
-    private func displayPath(_ path: String) -> String {
+    /// `~`-abbreviated path, shared by every provider that shows one.
+    static func displayPath(_ path: String) -> String {
         let home = NSHomeDirectory()
         if path.hasPrefix(home + "/") {
             return "~" + path.dropFirst(home.count)

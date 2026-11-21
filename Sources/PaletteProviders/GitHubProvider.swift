@@ -21,6 +21,18 @@ public enum GitHubRepoRef {
     public static func cloneURL(for slug: String) -> String {
         "https://github.com/\(slug).git"
     }
+
+    /// Accepts the clone forms git prints, e.g. `git@github.com:owner/repo.git`
+    /// and `https://github.com/owner/repo.git`.
+    public static func slug(fromRemote remote: String) -> String? {
+        var value = remote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        value = value.replacingOccurrences(of: ":", with: "/")
+        if value.hasSuffix(".git") { value.removeLast(4) }
+        let parts = value.split(separator: "/")
+        guard parts.count >= 2 else { return nil }
+        return slug(from: parts.suffix(2).joined(separator: "/"))
+    }
 }
 
 /// The GitHub family, one provider per trigger so `/ghr` never pays for a
@@ -31,6 +43,10 @@ public enum GitHubKind: String, Sendable, CaseIterable {
     case repos
     case pulls
     case issues
+    /// Workflow runs for the current repo or an explicit `owner/repo`.
+    case actions
+    /// The account's notification inbox.
+    case notifications
 
     public var trigger: String {
         switch self {
@@ -38,6 +54,8 @@ public enum GitHubKind: String, Sendable, CaseIterable {
         case .repos: return "ghr"
         case .pulls: return "ghp"
         case .issues: return "ghi"
+        case .actions: return "gha"
+        case .notifications: return "ghn"
         }
     }
 
@@ -47,6 +65,8 @@ public enum GitHubKind: String, Sendable, CaseIterable {
         case .repos: return "GitHub Repositories"
         case .pulls: return "GitHub Pull Requests"
         case .issues: return "GitHub Issues"
+        case .actions: return "GitHub Actions"
+        case .notifications: return "GitHub Notifications"
         }
     }
 
@@ -56,11 +76,56 @@ public enum GitHubKind: String, Sendable, CaseIterable {
         case .repos: return "folder"
         case .pulls: return "arrow.triangle.pull"
         case .issues: return "exclamationmark.circle"
+        case .actions: return "play.rectangle"
+        case .notifications: return "bell"
+        }
+    }
+
+    /// Kind-specific terms, so `/gha` is findable by "workflow" and `/ghn` by
+    /// "inbox" without advertising either from every other kind.
+    var keywords: [String] {
+        switch self {
+        case .actions:
+            return ["github", "actions", "workflow", "runs", "ci", trigger]
+        case .notifications:
+            return ["github", "notifications", "inbox", "unread", trigger]
+        default:
+            return ["github", "pr", "pull request", "issue", "review", trigger]
         }
     }
 
     /// The context provider keeps its historical id so frecency survives.
     var id: String { self == .context ? "github" : trigger }
+}
+
+/// Notification subject URLs come back as API URLs; the browser needs the web
+/// one. Issues and pull requests share the `/issues/<n>` path, which GitHub
+/// redirects to the pull request.
+public enum GitHubNotification {
+    public static func webURL(subjectType: String?, subjectURL: String?, repository: String?) -> String? {
+        guard let repository, !repository.isEmpty else { return nil }
+        guard let type = subjectType,
+              type == "Issue" || type == "PullRequest",
+              let number = trailingNumber(subjectURL) else { return nil }
+        return "https://github.com/\(repository)/issues/\(number)"
+    }
+
+    /// `.../issues/42` and `.../pulls/42` both end in the number.
+    public static func trailingNumber(_ url: String?) -> String? {
+        guard let url else { return nil }
+        let trimmed = url.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        guard let last = trimmed.split(separator: "/").last,
+              !last.isEmpty,
+              last.allSatisfy(\.isNumber) else { return nil }
+        return String(last)
+    }
+
+    /// A failed notification call usually means the token needs the scope, not
+    /// that GitHub is down. Match both gh's wording and the HTTP status.
+    public static func isScopeError(_ message: String) -> Bool {
+        let lower = message.lowercased()
+        return lower.contains("scope") || lower.contains("403") || lower.contains("forbidden")
+    }
 }
 
 /// Pull requests and issues via the `gh` CLI, split by what the user is
@@ -98,7 +163,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             isGlobal: false,
             priority: kind == .context ? 44 : 43,
             icon: "symbol:\(kind.icon)",
-            keywords: ["github", "pr", "pull request", "issue", "review", kind.trigger]
+            keywords: kind.keywords
         )
     }
 
@@ -120,6 +185,8 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         case .repos: return await repositoryItems(gh, query: query)
         case .pulls: return await pullRequestItems(gh, query: query)
         case .issues: return await issueItems(gh, query: query)
+        case .actions: return await actionRunItems(gh, query: query)
+        case .notifications: return await notificationItems(gh, query: query)
         }
     }
 
@@ -139,6 +206,29 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             let dir = action.value.object?["dir"]
             let cd = dir.map { "cd \(ProjectProvider.shellQuote($0)) && " } ?? ""
             try await openTerminal("\(cd)\(ProjectProvider.shellQuote(gh)) pr checkout \(number)", app: terminal)
+        case "rerun":
+            guard let gh = ghPath,
+                  let id = action.value.object?["id"],
+                  let repo = action.value.object?["repo"] else { return }
+            guard await bridge.prompt(
+                kind: .confirm,
+                title: "Re-run failed jobs for “\(item.title)”?",
+                placeholder: "Only the failed jobs run again."
+            ) != nil else { return }
+            await runGh(gh, ["run", "rerun", id, "--repo", repo, "--failed"], done: "Re-run started")
+        case "cancel":
+            guard let gh = ghPath,
+                  let id = action.value.object?["id"],
+                  let repo = action.value.object?["repo"] else { return }
+            guard await bridge.prompt(
+                kind: .confirm,
+                title: "Cancel “\(item.title)”?",
+                placeholder: "The running jobs are stopped."
+            ) != nil else { return }
+            await runGh(gh, ["run", "cancel", id, "--repo", repo], done: "Run cancelled")
+        case "mark-done":
+            guard let gh = ghPath, let id = action.value.text else { return }
+            await runGh(gh, ["api", "-X", "DELETE", "notifications/threads/\(id)"], done: "Marked done")
         default:
             if let raw = action.value.text,
                raw.hasPrefix("url:"),
@@ -467,6 +557,216 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         }
     }
 
+    // MARK: - `gha`: workflow runs
+
+    private func actionRunItems(_ gh: String, query: String) async -> [PaletteItem] {
+        let explicit = GitHubRepoRef.slug(from: query)
+        let detected = explicit == nil ? await repositorySlug(gh) : nil
+        guard let repo = explicit ?? detected else {
+            return [infoRow(
+                id: "gha-setup",
+                title: "Pick a repository",
+                subtitle: "Run /gha inside a repository, or type /gha owner/repo",
+                action: nil
+            )]
+        }
+        let args = [
+            "run", "list", "--repo", repo, "--limit", "30",
+            "--json", "databaseId,displayTitle,workflowName,headBranch,status,conclusion,createdAt,url",
+        ]
+        switch await json(gh, args) {
+        case .failure(let error):
+            return [infoRow(id: "gha-error", title: "Actions are not available", subtitle: error.message, action: nil)]
+        case .success(let entries):
+            let items: [PaletteItem] = entries.compactMap { entry in
+                guard let id = entry["databaseId"] as? Int,
+                      let url = entry["url"] as? String else { return nil }
+                let workflow = entry["workflowName"] as? String ?? "Workflow"
+                let branch = entry["headBranch"] as? String ?? ""
+                let status = entry["status"] as? String ?? ""
+                let conclusion = (entry["conclusion"] as? String ?? "")
+                    .trimmingCharacters(in: .whitespaces)
+                let title = (entry["displayTitle"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? workflow
+                var actions = [
+                    openAction(url),
+                    PaletteAction(
+                        id: "cmd-run-panel",
+                        title: "View Log",
+                        kind: .custom,
+                        value: .object([
+                            "executable": gh,
+                            "args": ["view", "\(id)", "--repo", repo, "--log"].joined(separator: "\u{1F}"),
+                            "cwd": "",
+                        ])
+                    ),
+                    PaletteAction(
+                        id: "rerun",
+                        title: "Re-run Failed Jobs",
+                        kind: .custom,
+                        value: .object(["id": "\(id)", "repo": repo])
+                    ),
+                ]
+                if status != "completed" {
+                    actions.append(PaletteAction(
+                        id: "cancel",
+                        title: "Cancel Run",
+                        kind: .custom,
+                        value: .object(["id": "\(id)", "repo": repo])
+                    ))
+                }
+                let outcome = conclusion.isEmpty ? status : conclusion
+                return PaletteItem(
+                    id: "run:\(repo)#\(id)",
+                    title: title,
+                    subtitle: "\(workflow) · \(branch)",
+                    icon: .symbol("play.rectangle"),
+                    badge: outcome.isEmpty ? nil : outcome.uppercased(),
+                    group: workflow,
+                    score: 9_000,
+                    actions: actions,
+                    preview: .text("\(title)\n\n\(workflow) · \(branch)\n\(outcome.capitalized)\n\(url)"),
+                    providerID: descriptor.id,
+                    providerName: descriptor.name
+                )
+            }
+            return Self.filtered(items, query: explicit == nil ? query : "")
+        }
+    }
+
+    /// `gh repo view` knows the current checkout; the origin remote covers a
+    /// tree that is not a full clone.
+    private func repositorySlug(_ gh: String) async -> String? {
+        let cwd = FileManager.default.currentDirectoryPath
+        if let result = try? await ProcessRunner.run(
+            [gh, "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+            cwd: cwd,
+            timeout: 5
+        ), result.status == 0 {
+            let slug = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+            if GitHubRepoRef.slug(from: slug) != nil { return slug }
+        }
+        guard let root = await repositoryRoot(),
+              let remote = try? await ProcessRunner.run(
+                ["git", "-C", root, "remote", "get-url", "origin"],
+                timeout: 3
+              ), remote.status == 0 else { return nil }
+        return GitHubRepoRef.slug(fromRemote: remote.stdoutString)
+    }
+
+    private func runGh(_ gh: String, _ args: [String], done: String) async {
+        guard let result = try? await ProcessRunner.run([gh] + args, timeout: 30) else {
+            await bridge.notify("gh could not run")
+            return
+        }
+        if result.status == 0 {
+            await bridge.notify(done)
+            return
+        }
+        let line = result.stderrString
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty }
+        await bridge.notify(line ?? "gh exited with status \(result.status)")
+    }
+
+    // MARK: - `ghn`: notifications
+
+    private func notificationItems(_ gh: String, query: String) async -> [PaletteItem] {
+        switch await jsonPages(gh, ["api", "notifications", "--paginate", "--slurp"]) {
+        case .failure(let error):
+            if GitHubNotification.isScopeError(error.message) {
+                return [scopeItem(gh)]
+            }
+            // Never surface gh's JSON blob as a row subtitle.
+            return [infoRow(
+                id: "ghn-error",
+                title: "Notifications are unavailable",
+                subtitle: "gh could not read your notifications",
+                action: nil
+            )]
+        case .success(let entries):
+            guard !entries.isEmpty else {
+                return [PaletteItem(
+                    id: "ghn-empty",
+                    title: "No notifications",
+                    subtitle: "Your GitHub inbox is clear",
+                    icon: .symbol("bell"),
+                    badge: "EMPTY",
+                    group: kind.name,
+                    score: 1_000,
+                    actions: [openAction("https://github.com/notifications")],
+                    providerID: descriptor.id,
+                    providerName: descriptor.name
+                )]
+            }
+            let items: [PaletteItem] = entries.compactMap { entry in
+                guard let subject = entry["subject"] as? [String: Any] else { return nil }
+                let title = subject["title"] as? String ?? "(untitled)"
+                let reason = entry["reason"] as? String ?? "notification"
+                let repository = entry["repository"] as? [String: Any]
+                let repo = repository?["full_name"] as? String
+                    ?? repository?["nameWithOwner"] as? String
+                    ?? ""
+                let unread = entry["unread"] as? Bool ?? false
+                let threadID = (entry["id"] as? String) ?? (entry["id"] as? Int).map(String.init)
+                let web = GitHubNotification.webURL(
+                    subjectType: subject["type"] as? String,
+                    subjectURL: subject["url"] as? String,
+                    repository: repo.isEmpty ? nil : repo
+                ) ?? (repository?["html_url"] as? String)
+                    ?? (repo.isEmpty ? "https://github.com/notifications" : "https://github.com/\(repo)")
+                var actions = [openAction(web)]
+                if let threadID {
+                    actions.append(PaletteAction(
+                        id: "mark-done",
+                        title: "Mark Done",
+                        kind: .custom,
+                        value: .text(threadID)
+                    ))
+                }
+                return PaletteItem(
+                    id: "notification:\(threadID ?? web)",
+                    title: title,
+                    subtitle: repo.isEmpty ? reason : "\(repo) · \(reason)",
+                    icon: .symbol(unread ? "bell.badge" : "bell"),
+                    badge: unread ? "UNREAD" : nil,
+                    group: repo.isEmpty ? kind.name : repo,
+                    score: 9_000,
+                    actions: actions,
+                    providerID: descriptor.id,
+                    providerName: descriptor.name
+                )
+            }
+            return Self.filtered(items, query: query)
+        }
+    }
+
+    /// A token without the `notifications` scope can be widened once, in the
+    /// embedded terminal, without leaving the launcher.
+    private func scopeItem(_ gh: String) -> PaletteItem {
+        PaletteItem(
+            id: "ghn-scope",
+            title: "Notifications need the notifications scope",
+            subtitle: "Authorise gh once to read your GitHub inbox",
+            icon: .symbol("bell.slash"),
+            badge: "SCOPE",
+            group: kind.name,
+            score: 10_000,
+            actions: [PaletteAction(
+                id: "cmd-run-panel",
+                title: "Run gh auth refresh",
+                kind: .custom,
+                value: .object([
+                    "executable": gh,
+                    "args": ["auth", "refresh", "-s", "notifications"].joined(separator: "\u{1F}"),
+                    "cwd": "",
+                ])
+            )],
+            providerID: descriptor.id,
+            providerName: descriptor.name
+        )
+    }
+
     // MARK: - Shared
 
     /// The first `<devx root>/<repo name>` that is an actual git clone.
@@ -521,12 +821,40 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         return .success(parsed)
     }
 
+    /// `gh api --paginate --slurp` wraps every page in one array, so a response
+    /// arrives as `[[object]]`; a single object list is accepted too.
+    static func flattenPages(_ parsed: Any) -> [[String: Any]]? {
+        if let entries = parsed as? [[String: Any]] { return entries }
+        if let pages = parsed as? [[[String: Any]]] { return pages.flatMap { $0 } }
+        return nil
+    }
+
+    private func jsonPages(_ gh: String, _ args: [String]) async -> Result<[[String: Any]], ErrorLine> {
+        guard let result = try? await ProcessRunner.run([gh] + args, timeout: 20) else {
+            return .failure(ErrorLine(message: "gh could not run"))
+        }
+        guard result.status == 0 else {
+            let line = result.stderrString
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .first { !$0.isEmpty }
+            return .failure(ErrorLine(message: line ?? "gh exited with status \(result.status)"))
+        }
+        guard let data = result.stdoutString.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data),
+              let entries = Self.flattenPages(parsed) else {
+            return .failure(ErrorLine(message: "Unexpected gh output"))
+        }
+        return .success(entries)
+    }
+
     private func infoRow(id: String, title: String, subtitle: String, action: String?) -> PaletteItem {
         PaletteItem(
             id: id,
             title: title,
             subtitle: subtitle,
             icon: .symbol(kind.icon),
+            badge: "SETUP",
             group: kind.name,
             score: 1_000,
             actions: action.map { [PaletteAction(id: "auth", title: "Run gh auth login", kind: .custom, value: .text($0))] } ?? [],

@@ -228,7 +228,10 @@ struct AskWindowView: View {
         .padding(.horizontal, 12)
         .frame(height: 44)
         .background {
-            GlassSurface(shape: Rectangle(), tint: theme.color(theme.palette.elevated).opacity(0.55))
+            ZStack {
+                theme.color(theme.palette.bg)
+                GlassSurface(shape: Rectangle(), tint: theme.color(theme.palette.elevated).opacity(0.55))
+            }
         }
     }
 }

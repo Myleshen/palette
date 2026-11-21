@@ -147,13 +147,20 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
 
     private func item(_ entry: Entry) -> PaletteItem {
         let path = entry.path
-        let actions = [
+        var actions = [
             PaletteAction(id: "open", title: "Open", kind: .openPath, value: .text(path)),
-            PaletteAction(id: "review", title: "Mark Reviewed", kind: .custom, value: .text("review:\(path)")),
             PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .reveal, value: .text(path)),
             PaletteAction(id: "copy-path", title: "Copy Path", kind: .copyText, value: .text(path)),
             PaletteAction(id: "open-index", title: "Open Atlas Index", kind: .openPath, value: .text(Self.indexFile)),
         ]
+        // Only the review inbox carries the marker; acked files have nothing
+        // to mark, and atlas would refuse the round trip.
+        if entry.isInbox {
+            actions.insert(
+                PaletteAction(id: "review", title: "Mark Reviewed", kind: .custom, value: .text("review:\(path)")),
+                at: 1
+            )
+        }
         return PaletteItem(
             id: path,
             title: entry.title,

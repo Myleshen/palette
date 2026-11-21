@@ -69,6 +69,25 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         var isWorktree: Bool
     }
 
+    /// What the preview pane shows for a project. One shell round trip per
+    /// project, cached with the project list.
+    struct GitState: Sendable {
+        var branch: String
+        var lastCommit: String
+        var worktrees: [String]
+        var changes: Int
+
+        var preview: String {
+            var lines = ["Branch \(branch)"]
+            if !lastCommit.isEmpty { lines.append("Last commit \(lastCommit)") }
+            lines.append("Changes \(changes)")
+            if worktrees.count > 1 {
+                lines.append("Worktrees \(worktrees.joined(separator: ", "))")
+            }
+            return lines.joined(separator: "\n")
+        }
+    }
+
     private let launcher: LauncherService
     private let bridge: HostBridge
     private let terminal: String
@@ -79,6 +98,36 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         func invalidate() { at = .distantPast }
     }
     private let cache = Cache()
+
+    private actor GitCache {
+        private var states: [String: (state: GitState, at: Date)] = [:]
+
+        func states(for paths: [String]) async -> [String: GitState] {
+            let now = Date()
+            var result: [String: GitState] = [:]
+            var stale: [String] = []
+            for path in paths {
+                if let cached = states[path], now.timeIntervalSince(cached.at) < 15 {
+                    result[path] = cached.state
+                } else {
+                    stale.append(path)
+                }
+            }
+            guard !stale.isEmpty else { return result }
+            await withTaskGroup(of: (String, GitState?).self) { group in
+                for path in stale {
+                    group.addTask { (path, await ProjectProvider.gitState(path: path)) }
+                }
+                for await (path, state) in group {
+                    guard let state else { continue }
+                    states[path] = (state, now)
+                    result[path] = state
+                }
+            }
+            return result
+        }
+    }
+    private let gitCache = GitCache()
 
     public init(launcher: LauncherService, bridge: HostBridge, terminal: String = "kitty") {
         self.launcher = launcher
@@ -97,13 +146,12 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
             await cache.update(projects)
         }
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rows: [PaletteItem] = projects.compactMap { project in
-            if !query.isEmpty,
-               Ranking.score(query: query, candidate: "\(project.name) \(project.path)") == nil {
-                return nil
-            }
-            return item(project)
+        let visible = projects.filter { project in
+            query.isEmpty
+                || Ranking.score(query: query, candidate: "\(project.name) \(project.path)") != nil
         }
+        let git = await gitCache.states(for: visible.map(\.path))
+        let rows = visible.map { item($0, git: git[$0.path]) }
         guard query.isEmpty else { return rows }
         return actionItems() + rows
     }
@@ -302,7 +350,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
             .first { !$0.isEmpty } ?? "unknown error"
     }
 
-    private func item(_ project: Project) -> PaletteItem {
+    private func item(_ project: Project, git: GitState?) -> PaletteItem {
         let value = ["name": project.name, "path": project.path]
         var actions: [PaletteAction] = [
             PaletteAction(id: "neovide", title: "Open in Neovide", kind: .custom, value: .object(value)),
@@ -311,6 +359,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
             PaletteAction(id: "workspace", title: "Open devx Workspace", kind: .custom, value: .object(value)),
             PaletteAction(id: "apply-config", title: "Apply devx Config", kind: .custom, value: .object(value)),
             PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .custom, value: .object(value)),
+            PaletteAction(id: "copy-path", title: "Copy Path", kind: .copyText, value: .text(project.path)),
         ]
         if project.isWorktree {
             actions.insert(PaletteAction(id: "remove-worktree", title: "Remove Worktree…", kind: .custom, value: .object(value)), at: 3)
@@ -321,14 +370,62 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         return PaletteItem(
             id: "proj:\(project.path)",
             title: project.name,
-            subtitle: project.path,
+            subtitle: PathsProvider.displayPath(project.path),
             icon: .symbol(project.isWorktree ? "arrow.triangle.branch" : "folder"),
             badge: project.isWorktree ? "WORKTREE" : "PROJECT",
             score: 1_000,
             actions: actions,
-            preview: .files(paths: [project.path]),
+            preview: git.map { .text($0.preview) } ?? .files(paths: [project.path]),
             providerID: descriptor.id,
             providerName: descriptor.name
+        )
+    }
+
+    /// Branch, last commit, worktrees and dirty count in one round trip.
+    static func gitState(path: String) async -> GitState? {
+        let quoted = shellQuote(path)
+        let script = [
+            "echo B", "git -C \(quoted) rev-parse --abbrev-ref HEAD 2>/dev/null",
+            "echo C", "git -C \(quoted) log -1 --format='%h %s (%cr)' 2>/dev/null",
+            "echo W", "git -C \(quoted) worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p'",
+            "echo N", "git -C \(quoted) status --porcelain 2>/dev/null | wc -l",
+        ].joined(separator: "; ")
+        guard let result = try? await ProcessRunner.run(["/bin/sh", "-c", script], timeout: 6) else {
+            return nil
+        }
+        return parseGitState(result.stdoutString)
+    }
+
+    static func parseGitState(_ output: String) -> GitState? {
+        var branch = ""
+        var lastCommit = ""
+        var worktrees: [String] = []
+        var changes = 0
+        var section = ""
+        for raw in output.split(separator: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            switch line {
+            case "B": section = "branch"; continue
+            case "C": section = "commit"; continue
+            case "W": section = "worktree"; continue
+            case "N": section = "changes"; continue
+            default: break
+            }
+            switch section {
+            case "branch": if branch.isEmpty { branch = line }
+            case "commit": if lastCommit.isEmpty { lastCommit = line }
+            case "worktree":
+                if !line.isEmpty { worktrees.append((line as NSString).lastPathComponent) }
+            case "changes": changes = Int(line) ?? changes
+            default: break
+            }
+        }
+        guard !branch.isEmpty else { return nil }
+        return GitState(
+            branch: branch,
+            lastCommit: lastCommit,
+            worktrees: worktrees,
+            changes: changes
         )
     }
 

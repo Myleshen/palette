@@ -56,7 +56,6 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
                 badge: "SETUP",
                 score: 10_000,
                 actions: [PaletteAction(id: "open", title: "Open Commands File", kind: .openPath, value: .text(fileURL.path))],
-                preview: .text(Self.example),
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )]
@@ -113,7 +112,6 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
                     value: .object(["path": PathExpansion.expand(command.workingDirectory ?? "~")])
                 ),
             ],
-            preview: .text("\(subtitle)\n\nWorking directory: \(command.workingDirectory ?? "current")"),
             providerID: descriptor.id,
             providerName: descriptor.name
         )

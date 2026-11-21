@@ -138,7 +138,7 @@ public final class GitProvider: PaletteProvider, @unchecked Sendable {
         PaletteItem(
             id: "git-output:\(output.path)",
             title: output.title,
-            subtitle: output.path,
+            subtitle: PathsProvider.displayPath(output.path),
             icon: .symbol("terminal"),
             badge: "OUTPUT",
             score: 10_000,
@@ -156,8 +156,9 @@ public final class GitProvider: PaletteProvider, @unchecked Sendable {
         let value: [String: String] = ["path": repo.path]
         let actions: [PaletteAction] = [
             PaletteAction(id: "status", title: "Show Status", kind: .custom, value: .object(value)),
-            PaletteAction(id: "stage", title: "Stage All Changes", kind: .custom, value: .object(value)),
             PaletteAction(id: "commit", title: "Commit…", kind: .custom, value: .object(value)),
+            // ⌘⏎ is the commit row, not a blanket `git add -A`.
+            PaletteAction(id: "stage", title: "Stage All Changes", kind: .custom, value: .object(value)),
             PaletteAction(id: "pull", title: "Pull (Fast-Forward Only)", kind: .custom, value: .object(value)),
             PaletteAction(id: "push", title: "Push", kind: .custom, value: .object(value)),
             PaletteAction(id: "log", title: "Recent Log", kind: .custom, value: .object(value)),
@@ -169,7 +170,7 @@ public final class GitProvider: PaletteProvider, @unchecked Sendable {
         return PaletteItem(
             id: "git:\(repo.path)",
             title: repo.name,
-            subtitle: "\(repo.branch) · \(repo.changes == 0 ? "clean" : "\(repo.changes) change\(repo.changes == 1 ? "" : "s")") · \(repo.path)",
+            subtitle: "\(repo.branch) · \(repo.changes == 0 ? "clean" : "\(repo.changes) change\(repo.changes == 1 ? "" : "s")") · \(PathsProvider.displayPath(repo.path))",
             icon: .symbol("arrow.triangle.branch"),
             badge: repo.changes == 0 ? "GIT" : "DIRTY",
             score: 1_000,

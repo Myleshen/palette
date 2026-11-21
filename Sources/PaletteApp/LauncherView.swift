@@ -211,6 +211,54 @@ struct GlassSurface<S: Shape>: View {
     }
 }
 
+/// One spacing scale for the whole launcher. Every card edge, gutter and text
+/// column is derived from these, so the search pill, list card, preview card
+/// and footer line up instead of each carrying its own inset.
+enum LauncherMetrics {
+    /// Window edge to every card.
+    static let outerInset: CGFloat = 12
+    /// Between the search pill and the content row, and between cards.
+    static let cardGap: CGFloat = 10
+    /// Radius shared by the list and preview cards.
+    static let cardRadius: CGFloat = 16
+    /// Content inset inside every card.
+    static let innerPadding: CGFloat = 12
+    /// Selection highlight radius.
+    static let rowRadius: CGFloat = 10
+    static let footerHeight: CGFloat = 44
+}
+
+/// The glass + theme fill + hairline used by every launcher card. Cards share
+/// one radius, so the shape is not a parameter.
+private struct CardSurface: ViewModifier {
+    var theme: Theme
+    var background: String?
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: LauncherMetrics.cardRadius, style: .continuous)
+    }
+
+    /// Every card paints its own palette colour; glass only ever sits on top.
+    var fill: Color {
+        theme.color(background ?? theme.palette.bg)
+            .opacity(theme.window.glass ? theme.window.glassOpacity : 1)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .background(GlassSurface(shape: shape))
+            .background(shape.fill(fill))
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(theme.color(theme.palette.border).opacity(0.45), lineWidth: 1))
+    }
+}
+
+extension View {
+    func cardSurface(theme: Theme, background: String? = nil) -> some View {
+        modifier(CardSurface(theme: theme, background: background))
+    }
+}
+
 struct HighlightedText: View {
     var text: String
     var terms: [String]
@@ -322,6 +370,42 @@ struct BadgeView: View {
     }
 }
 
+/// A mode or filter chip. Selection is a solid accent fill with a foreground
+/// chosen for contrast, not accent text on a tint; 28pt tall for the pointer.
+private struct ChipButton: View {
+    var title: String
+    var selected: Bool
+    var theme: Theme
+    var action: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(theme.font(size: 11, weight: .semibold))
+                .lineLimit(1)
+                .foregroundColor(selected
+                    ? theme.color(theme.palette.accentFg)
+                    : theme.color(hovered ? theme.palette.fg : theme.palette.fgMuted))
+                .padding(.horizontal, 10)
+                .frame(minHeight: 28)
+                .background(
+                    Capsule().fill(
+                        selected
+                            ? theme.color(theme.palette.accent)
+                            : theme.color(theme.palette.elevated).opacity(hovered ? 1 : 0.55)
+                    )
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+}
+
 struct ResultRow: View {
     var item: PaletteItem
     var selected: Bool
@@ -388,7 +472,7 @@ struct ResultRow: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, LauncherMetrics.innerPadding)
         .frame(height: CGFloat(theme.effectiveRowHeight))
         .background(selectionBackground)
         .contentShape(Rectangle())
@@ -427,25 +511,13 @@ struct ResultRow: View {
                 }
                 .padding(.leading, 2)
             case "outline":
-                if pill {
-                    Capsule().strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
-                } else {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
-                }
+                RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
+                    .strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
             case "none":
                 Color.clear
             default:
-                if pill {
-                    Capsule()
-                        .fill(theme.color(theme.palette.accent).opacity(0.18))
-                        .overlay(
-                            Capsule().strokeBorder(theme.color(theme.palette.accent).opacity(0.55), lineWidth: 1)
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(color.opacity(0.95))
-                }
+                RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
+                    .fill(color.opacity(0.95))
             }
         } else if hovered {
             // Deliberately weaker than selection, and absent when the user
@@ -454,12 +526,8 @@ struct ResultRow: View {
             case "none":
                 Color.clear
             default:
-                if pill {
-                    Capsule().fill(theme.color(theme.palette.accent).opacity(0.08))
-                } else {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(color.opacity(0.45))
-                }
+                RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
+                    .fill(color.opacity(0.45))
             }
         } else {
             Color.clear
@@ -527,7 +595,7 @@ struct ActionRow: View {
                     .foregroundColor(theme.color(theme.palette.fgMuted))
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, LauncherMetrics.innerPadding)
         .frame(height: CGFloat(theme.effectiveRowHeight))
         .background(selectionBackground)
         .contentShape(Rectangle())
@@ -549,25 +617,13 @@ struct ActionRow: View {
                 }
                 .padding(.leading, 2)
             case "outline":
-                if pill {
-                    Capsule().strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
-                } else {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
-                }
+                RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
+                    .strokeBorder(theme.color(theme.palette.accent).opacity(0.7), lineWidth: 1)
             case "none":
                 Color.clear
             default:
-                if pill {
-                    Capsule()
-                        .fill(theme.color(theme.palette.accent).opacity(0.18))
-                        .overlay(
-                            Capsule().strokeBorder(theme.color(theme.palette.accent).opacity(0.55), lineWidth: 1)
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(color.opacity(0.95))
-                }
+                RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
+                    .fill(color.opacity(0.95))
             }
         } else {
             Color.clear
@@ -581,12 +637,13 @@ struct LauncherRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
     @FocusState private var promptFocused: Bool
-
     private var theme: Theme { themeManager.theme }
     private var isPill: Bool { true }
 
     var body: some View {
-        pillLayout
+        GeometryReader { proxy in
+            pillLayout(railCollapsed: controller.previewVisible || proxy.size.width < 900)
+        }
         .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
         .onAppear {
             DispatchQueue.main.async { searchFocused = true }
@@ -601,208 +658,175 @@ struct LauncherRootView: View {
         }
     }
 
-    /// Pill separates the search capsule from the content card, like the
-    /// floating Siri search surface. The window itself stays transparent.
-    private var pillLayout: some View {
-        VStack(spacing: 10) {
+    /// One grid: search pill, the provider rail plus cards, then the footer.
+    private func pillLayout(railCollapsed: Bool) -> some View {
+        VStack(spacing: LauncherMetrics.cardGap) {
             searchBar
-            pillContentCard
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private var pillContentCard: some View {
-        VStack(spacing: 0) {
-            tabBar
-            content
+            HStack(alignment: .top, spacing: LauncherMetrics.cardGap) {
+                rail(collapsed: railCollapsed)
+                contentArea
+            }
             if theme.footer.show {
                 footer
             }
         }
-        .background(
-            ZStack {
-                GlassSurface(shape: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            .white.opacity(theme.window.glass ? 0.22 : 0.08),
-                            theme.color(theme.palette.border).opacity(0.45),
-                            theme.color(theme.palette.accent).opacity(theme.window.glass ? 0.18 : 0.08),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
+        .padding(LauncherMetrics.outerInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var tabBar: some View {
-        VStack(spacing: 0) {
-            if controller.activeTabID == "clip" {
-                HStack(spacing: 6) {
-                    filterChip("All", value: nil)
-                    filterChip("Text", value: "text")
-                    filterChip("Images", value: "image")
-                    filterChip("Files", value: "files")
-                    Spacer(minLength: 0)
+    /// Vertical provider rail: Everything first, one row per provider, full
+    /// height between the search pill and the footer. Icons only when the
+    /// preview is open or the panel is narrow.
+    private func rail(collapsed: Bool) -> some View {
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                // Everything is pinned: the default scope must always be one
+                // click away, even while the provider list scrolls.
+                if let everything = controller.railEntries.first {
+                    railRow(everything, collapsed: collapsed)
+                        .padding(.horizontal, LauncherMetrics.innerPadding)
+                        .padding(.top, LauncherMetrics.innerPadding)
+                        .onTapGesture {
+                            controller.selectRail(everything.id)
+                            controller.railFocused = true
+                        }
                 }
-                .padding(.horizontal, isPill ? 14 : 12)
-                .padding(.top, isPill ? 8 : 6)
-            }
-            if controller.activeTabID == "ask" {
-                HStack(spacing: 6) {
-                    modeChip("Ask", selected: !controller.askHistoryMode) {
-                        controller.setAskMode(history: false)
-                    }
-                    modeChip("History", selected: controller.askHistoryMode) {
-                        controller.setAskMode(history: true)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, isPill ? 14 : 12)
-                .padding(.top, isPill ? 8 : 6)
-            }
-            if controller.activeGroupMembers.count > 1 {
-                HStack(spacing: 6) {
-                    ForEach(controller.activeGroupMembers) { member in
-                        modeChip(member.title, selected: controller.activeProviderID == member.id) {
-                            controller.selectTab(member.id)
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(Array(controller.railEntries.dropFirst())) { entry in
+                            railRow(entry, collapsed: collapsed)
+                                .id(entry.id)
+                                .onTapGesture {
+                                    controller.selectRail(entry.id)
+                                    controller.railFocused = true
+                                }
                         }
                     }
-                    Spacer(minLength: 0)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, LauncherMetrics.innerPadding)
                 }
-                .padding(.horizontal, isPill ? 14 : 12)
-                .padding(.top, isPill ? 8 : 6)
-            }
-            // Wrap the chips: a clipped half-chip at the card edge reads as a
-            // rendering bug, and every provider stays one click away.
-            if controller.configuration.window.showTabs {
-                FlowLayout(spacing: 2) {
-                    ForEach(controller.providerTabs) { tab in
-                        tabChip(tab)
+                .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
+                .onChange(of: controller.activeRailID) { _, id in
+                    guard id != "everything" else { return }
+                    withAnimation(reduceMotion ? nil : theme.scrollAnimation) {
+                        proxy.scrollTo(id)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: TabStripHeightKey.self, value: proxy.size.height)
-                    }
-                )
-            }
-            if controller.configuration.window.showTabs
-                || controller.activeTabID == "clip"
-                || controller.activeTabID == "ask"
-                || controller.activeGroupMembers.count > 1 {
-                Rectangle()
-                    .fill(theme.color(theme.palette.separator).opacity(isPill ? 0.35 : 0.6))
-                    .frame(height: 1)
             }
         }
-        .onPreferenceChange(TabStripHeightKey.self) { height in
-            controller.setTabStripHeight(height)
-        }
+        .frame(width: collapsed ? 56 : 200)
+        .frame(maxHeight: .infinity)
+        .cardSurface(theme: theme)
     }
 
-    private func tabChip(_ tab: SearchController.ProviderTab) -> some View {
-        let selected = controller.activeTabID == tab.id
-        let title = isPill ? shortTabTitle(tab.title) : tab.title
-        return Button {
-            controller.selectTab(tab.id)
-        } label: {
-            HStack(spacing: 4) {
-                if let icon = tabIcon(tab.icon) {
-                    Image(systemName: icon)
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                Text(title)
-                    .font(theme.font(size: 10, weight: .medium))
+    private func railRow(_ entry: SearchController.RailEntry, collapsed: Bool) -> some View {
+        let selected = controller.activeRailID == entry.id
+        let symbol = entry.icon.hasPrefix("symbol:")
+            ? String(entry.icon.dropFirst("symbol:".count))
+            : "square.grid.2x2"
+        return HStack(spacing: collapsed ? 0 : 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: collapsed ? 24 : 16)
+            if !collapsed {
+                Text(entry.title)
+                    .font(theme.font(size: 11, weight: .medium))
                     .lineLimit(1)
+                Spacer(minLength: 0)
             }
-            .foregroundColor(theme.color(selected
-                ? theme.palette.accent
-                : theme.palette.fgMuted))
-            .padding(.horizontal, 7)
-            .padding(.vertical, isPill ? 7 : 3)
-            .background(
-                Capsule().fill(
-                    selected
-                        ? theme.color(theme.palette.accent).opacity(isPill ? 0.2 : 0.16)
-                        : Color.clear
-                )
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    theme.color(theme.palette.accent).opacity(selected && isPill ? 0.45 : 0),
-                    lineWidth: 1
-                )
-            )
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(tab.title)
+        // Accent, not a slightly lighter grey: the active provider has to be
+        // obvious at a glance.
+        .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
+        .padding(.horizontal, collapsed ? 0 : 10)
+        .frame(maxWidth: .infinity, minHeight: 32, alignment: collapsed ? .center : .leading)
+        .background(
+            RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
+                .fill(selected ? theme.color(theme.palette.accent) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .help(entry.title)
+        .accessibilityLabel(entry.title)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
-    private func shortTabTitle(_ title: String) -> String {
-        if title.hasPrefix("Bitwarden ") {
-            let suffix = String(title.dropFirst("Bitwarden ".count))
-            return suffix == "Usernames" ? "BW Users" : "BW " + suffix
+    /// The list card, plus the preview as its own card on the same grid.
+    @ViewBuilder
+    private var contentArea: some View {
+        if controller.previewVisible, controller.previewLayout == .beside {
+            HStack(spacing: LauncherMetrics.cardGap) {
+                listCard
+                previewCard
+                    .frame(width: controller.previewPaneWidth)
+            }
+        } else if controller.previewVisible {
+            VStack(spacing: LauncherMetrics.cardGap) {
+                listCard
+                previewCard
+                    .frame(height: controller.previewPaneHeight)
+            }
+        } else {
+            listCard
         }
-        if title == "Clipboard History" { return "Clipboard" }
-        if title == "Neovide Folders" { return "Folders" }
-        if title == "Zellij Sessions" { return "Zellij" }
-        return title
+    }
+
+    private var listCard: some View {
+        VStack(spacing: 0) {
+            modeHeader
+            content
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .cardSurface(theme: theme)
+    }
+
+    private var previewCard: some View {
+        ClipboardPreviewPane(
+            item: controller.selectedItem,
+            theme: theme,
+            focused: controller.previewFocused
+        )
+    }
+
+    /// Filters belong to the list, not the rail: one fixed-height row above
+    /// the results when the clipboard or Ask scope is active.
+    @ViewBuilder
+    private var modeHeader: some View {
+        if controller.activeTabID == "clip" {
+            modeRow {
+                filterChip("All", value: nil)
+                filterChip("Text", value: "text")
+                filterChip("Images", value: "image")
+                filterChip("Files", value: "files")
+            }
+        } else if controller.activeTabID == "ask" {
+            modeRow {
+                modeChip("Ask", selected: !controller.askHistoryMode) {
+                    controller.setAskMode(history: false)
+                }
+                modeChip("History", selected: controller.askHistoryMode) {
+                    controller.setAskMode(history: true)
+                }
+            }
+        }
+    }
+
+    private func modeRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 4) {
+            content()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, LauncherMetrics.innerPadding)
+        .frame(height: 40)
     }
 
     private func filterChip(_ title: String, value: String?) -> some View {
-        let selected = controller.effectiveClipboardFilter == value
-        return Button {
+        ChipButton(title: title, selected: controller.effectiveClipboardFilter == value, theme: theme) {
             controller.setClipboardFilter(value)
-        } label: {
-            Text(title)
-                .font(theme.font(size: 10, weight: .semibold))
-                .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule().fill(selected
-                        ? theme.color(theme.palette.accent)
-                        : theme.color(theme.palette.elevated))
-                )
         }
-        .buttonStyle(.plain)
     }
 
     private func modeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(theme.font(size: 10, weight: .semibold))
-                .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule().fill(selected
-                        ? theme.color(theme.palette.accent)
-                        : theme.color(theme.palette.elevated))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func tabIcon(_ raw: String?) -> String? {
-        guard let raw, raw.hasPrefix("symbol:") else { return nil }
-        return String(raw.dropFirst(7))
+        ChipButton(title: title, selected: selected, theme: theme, action: action)
     }
 
     private var searchBar: some View {
@@ -846,13 +870,13 @@ struct LauncherRootView: View {
                     .clipShape(Capsule())
             }
         }
-        .padding(.horizontal, isPill ? 24 : 16)
-        .frame(height: isPill ? CGFloat(theme.search.height) - 12 : CGFloat(theme.search.height))
+        .padding(.horizontal, LauncherMetrics.innerPadding)
+        .frame(height: CGFloat(theme.search.height))
         .background(
             GlassSurface(shape: Capsule())
                 .overlay(
                     Capsule()
-                        .fill(theme.color(theme.palette.bg).opacity(isPill && theme.window.glass ? theme.window.glassOpacity : (isPill ? 1 : 0)))
+                        .fill(theme.color(theme.palette.bg).opacity(isPill && theme.window.glass ? theme.window.glassOpacity : 1))
                 )
         )
         .overlay(
@@ -860,7 +884,7 @@ struct LauncherRootView: View {
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            .white.opacity(isPill && theme.window.glass ? 0.26 : 0),
+                            theme.color(theme.palette.fg).opacity(isPill && theme.window.glass ? 0.14 : 0),
                             theme.color(theme.palette.accent).opacity(isPill ? 0.30 : 0),
                         ],
                         startPoint: .topLeading,
@@ -876,43 +900,14 @@ struct LauncherRootView: View {
     private var content: some View {
         if controller.terminalActive {
             TerminalPane(theme: theme, initialCommand: controller.terminalInitialCommand, session: controller.terminalSession)
-                .padding(.horizontal, isPill ? 8 : 4)
-                .padding(.bottom, isPill ? 6 : 3)
+                .padding(LauncherMetrics.innerPadding)
         } else if controller.scratchpadActive {
             ScratchpadView(controller: controller, theme: theme)
-                .padding(.horizontal, isPill ? 8 : 4)
-                .padding(.bottom, isPill ? 6 : 3)
+                .padding(LauncherMetrics.innerPadding)
         } else if let prompt = controller.prompt {
             PromptView(prompt: prompt, controller: controller, theme: theme, focused: $promptFocused, pill: isPill)
         } else if controller.actionsMode {
             actionsView
-        } else if controller.previewEnabled {
-            if controller.previewLayout == .below {
-                VStack(spacing: 0) {
-                    resultsView
-                    Rectangle()
-                        .fill(theme.color(theme.palette.separator))
-                        .frame(height: 1)
-                        .padding(.horizontal, 10)
-                    ClipboardPreviewPane(item: controller.selectedItem, theme: theme, focused: controller.previewFocused)
-                        .frame(height: controller.previewPaneHeight)
-                        .padding(.horizontal, isPill ? 10 : 6)
-                        .padding(.top, 8)
-                        .padding(.bottom, isPill ? 8 : 4)
-                }
-            } else {
-                HStack(spacing: 10) {
-                    resultsView
-                    Rectangle()
-                        .fill(theme.color(theme.palette.separator))
-                        .frame(width: 1)
-                        .padding(.vertical, 10)
-                    ClipboardPreviewPane(item: controller.selectedItem, theme: theme, focused: controller.previewFocused)
-                        .frame(width: controller.previewPaneWidth)
-                }
-                .padding(.horizontal, isPill ? 10 : 6)
-                .padding(.bottom, isPill ? 8 : 4)
-            }
         } else {
             resultsView
         }
@@ -923,18 +918,18 @@ struct LauncherRootView: View {
             if controller.items.isEmpty {
                 emptyState
             } else {
+                let showGroupHeaders = Set(controller.items.compactMap(\.group)).count > 1
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: isPill ? 6 : CGFloat(theme.list.spacing)) {
                             ForEach(Array(controller.items.enumerated()), id: \.element.stableID) { index, item in
-                                if controller.previewEnabled,
+                                if showGroupHeaders,
                                    let group = item.group,
                                    index == 0 || controller.items[index - 1].group != group {
                                     Text(group.uppercased())
                                         .font(.system(size: 9, weight: .semibold))
                                         .foregroundColor(theme.color(theme.palette.fgMuted))
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.leading, 10)
                                         .padding(.top, 8)
                                 }
                                 ResultRow(
@@ -960,8 +955,8 @@ struct LauncherRootView: View {
                                 .accessibilityAction { controller.activate(index) }
                             }
                         }
-                        .padding(.horizontal, isPill ? 14 : 6)
-                        .padding(.vertical, isPill ? 6 : 4)
+                        .padding(.horizontal, LauncherMetrics.innerPadding)
+                        .padding(.vertical, LauncherMetrics.innerPadding)
                     }
                     .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
                     .onChange(of: controller.selectionIndex) { _, _ in
@@ -975,20 +970,6 @@ struct LauncherRootView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .bottom) {
-            if isPill, !controller.items.isEmpty {
-                LinearGradient(
-                    colors: [
-                        theme.color(theme.palette.bg).opacity(0),
-                        theme.color(theme.palette.bg).opacity(0.96),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 26)
-                .allowsHitTesting(false)
-            }
-        }
     }
 
     /// One sentence for VoiceOver: title, subtitle, provider.
@@ -1014,7 +995,7 @@ struct LauncherRootView: View {
                 Spacer()
             }
             .foregroundColor(theme.color(theme.palette.fgMuted))
-            .padding(.horizontal, isPill ? 20 : 16)
+            .padding(.horizontal, LauncherMetrics.innerPadding)
             .frame(height: 34)
 
             ScrollViewReader { proxy in
@@ -1047,12 +1028,12 @@ struct LauncherRootView: View {
                                 .padding(.top, 8)
                         }
                         keyboardReference
-                            .padding(.horizontal, isPill ? 20 : 16)
+                            .padding(.horizontal, LauncherMetrics.innerPadding)
                             .padding(.top, 6)
                             .padding(.bottom, 6)
                     }
-                    .padding(.horizontal, isPill ? 14 : 6)
-                    .padding(.bottom, isPill ? 6 : 4)
+                    .padding(.horizontal, LauncherMetrics.innerPadding)
+                    .padding(.bottom, LauncherMetrics.innerPadding)
                 }
                 .scrollIndicators(theme.list.showScrollbar ? .visible : .hidden)
                 .onChange(of: controller.actionIndex) { _, _ in
@@ -1138,8 +1119,16 @@ struct LauncherRootView: View {
         return "Try a different spelling, or press ⌘, to enable more sources."
     }
 
+    /// The divider spans the card column, and the text sits on the card inset
+    /// like the list and the preview.
+    /// A card like the others: 16pt radius, 12pt inner padding, its own
+    /// palette surface under the glass, separated by the normal card gap.
     private var footer: some View {
         footerContent
+            .padding(.horizontal, LauncherMetrics.innerPadding)
+            .frame(maxWidth: .infinity)
+            .frame(height: LauncherMetrics.footerHeight)
+            .cardSurface(theme: theme, background: theme.palette.surface)
     }
 
     private var footerContent: some View {
@@ -1152,21 +1141,17 @@ struct LauncherRootView: View {
                     .truncationMode(.tail)
             } else if controller.actionsMode {
                 hint("esc", "Back")
-            } else if let item = controller.selectedItem {
-                primaryActionPill(item.primaryAction?.title ?? "Open")
+            } else if let item = controller.selectedItem, let action = item.primaryAction {
+                // No primary action means Return does nothing; never advertise it.
+                primaryActionPill(action.title)
             }
             Spacer(minLength: 4)
             if !controller.actionsMode {
                 hint("⌘K", "Actions")
             }
-            Text(theme.name)
-                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.55))
-                .lineLimit(1)
         }
         .font(theme.font(size: 10, weight: .medium))
         .foregroundColor(theme.color(theme.footer.hintColor))
-        .padding(.horizontal, isPill ? 20 : 16)
-        .frame(height: 28)
     }
 
     /// Shows what Return does on the selected row, read from its primary action.
@@ -1221,9 +1206,13 @@ struct PromptView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(theme.color(theme.palette.fg))
             if prompt.kind == .confirm {
-                Text("This action cannot be undone.")
-                    .font(.system(size: 11))
-                    .foregroundColor(theme.color(theme.palette.fgMuted))
+                // The provider's placeholder carries the real consequence,
+                // e.g. /web remove's warning about the shortcut.
+                if let detail = prompt.placeholder, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.color(theme.palette.fgMuted))
+                }
             } else if prompt.kind == .secureText {
                 SecureField(prompt.placeholder ?? "Password", text: Binding(
                     get: { controller.promptValue },
@@ -1314,6 +1303,7 @@ struct ClipboardPreviewPane: View {
 
     @State private var files: [FileDetail] = []
     @State private var textPreview: String?
+    @State private var directoryListing = false
 
     private struct FileDetail: Sendable {
         var name: String
@@ -1325,19 +1315,24 @@ struct ClipboardPreviewPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let item {
-                Text(item.title)
-                    .font(theme.font(size: 13, weight: .semibold))
-                    .foregroundColor(theme.color(theme.palette.fg))
-                    .lineLimit(2)
-                if let subtitle = item.subtitle {
+                let header = header(for: item)
+                if let title = header.title {
+                    Text(title)
+                        .font(theme.font(size: 13, weight: .semibold))
+                        .foregroundColor(theme.color(theme.palette.fg))
+                        .lineLimit(2)
+                }
+                if let subtitle = header.subtitle {
                     Text(subtitle)
                         .font(.system(size: 10))
                         .foregroundColor(theme.color(theme.palette.fgMuted))
                         .lineLimit(2)
                 }
-                Rectangle()
-                    .fill(theme.color(theme.palette.separator))
-                    .frame(height: 1)
+                if header.title != nil || header.subtitle != nil {
+                    Rectangle()
+                        .fill(theme.color(theme.palette.separator))
+                        .frame(height: 1)
+                }
                 preview(for: item)
             } else {
                 Text("Nothing selected")
@@ -1346,24 +1341,13 @@ struct ClipboardPreviewPane: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(.horizontal, LauncherMetrics.innerPadding)
+        .padding(.vertical, LauncherMetrics.innerPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            GlassSurface(
-                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                tint: theme.color(theme.palette.elevated).opacity(0.45)
-            )
-        )
+        .cardSurface(theme: theme)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [.white.opacity(theme.window.glass ? 0.18 : 0), theme.color(theme.palette.accent).opacity(focused ? 0.55 : 0.12)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
+            RoundedRectangle(cornerRadius: LauncherMetrics.cardRadius, style: .continuous)
+                .strokeBorder(theme.color(theme.palette.accent).opacity(focused ? 0.55 : 0), lineWidth: 1)
         )
         .task(id: item?.stableID) { await load() }
     }
@@ -1388,7 +1372,7 @@ struct ClipboardPreviewPane: View {
             }
         case .files(let paths):
             VStack(alignment: .leading, spacing: 8) {
-                if files.count == 1, let file = files.first, !file.isDirectory {
+                if !directoryListing, files.count == 1, let file = files.first, !file.isDirectory {
                     QuickLookPreviewView(path: file.path)
                         .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 230)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -1441,32 +1425,67 @@ struct ClipboardPreviewPane: View {
         }
     }
 
+    /// The pane already sits under the row, so repeating the row's own title or
+    /// subtitle above the same text wastes half of a narrow pane.
+    private func header(for item: PaletteItem) -> (title: String?, subtitle: String?) {
+        let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let subtitle = item.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard case .text(let body) = item.preview else {
+            return (title.isEmpty ? nil : title, subtitle)
+        }
+        let flat = body
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+        let titleShown = !title.isEmpty && flat.contains(title)
+        let subtitleShown = subtitle.map { !$0.isEmpty && flat.contains($0) } ?? false
+        return (titleShown ? nil : title, subtitleShown ? nil : subtitle)
+    }
+
     private func load() async {
         files = []
         textPreview = nil
+        directoryListing = false
         guard let item, case .files(let paths) = item.preview else { return }
 
-        let result = await Task.detached(priority: .userInitiated) { () -> ([FileDetail], String?) in
+        let result = await Task.detached(priority: .userInitiated) { () -> ([FileDetail], String?, Bool) in
             let manager = FileManager.default
-            var details: [FileDetail] = []
-            for path in paths.prefix(8) {
+            func detail(_ path: String) -> FileDetail {
                 let attributes = try? manager.attributesOfItem(atPath: path)
-                details.append(FileDetail(
+                return FileDetail(
                     name: (path as NSString).lastPathComponent,
                     path: path,
                     size: (attributes?[.size] as? NSNumber)?.int64Value ?? 0,
                     isDirectory: (attributes?[.type] as? FileAttributeType) == .typeDirectory
-                ))
+                )
+            }
+            // A single directory previews its contents, dirs first, rather
+            // than a QuickLook icon that says nothing.
+            if paths.count == 1, let path = paths.first, detail(path).isDirectory {
+                let children = (try? manager.contentsOfDirectory(
+                    at: URL(fileURLWithPath: path),
+                    includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
+                    options: [.skipsHiddenFiles]
+                )) ?? []
+                let details = children.map { detail($0.path) }.sorted { lhs, rhs in
+                    if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory }
+                    return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+                }
+                return (Array(details.prefix(60)), nil, true)
+            }
+            var details: [FileDetail] = []
+            for path in paths.prefix(8) {
+                details.append(detail(path))
             }
             var rendered: String?
             if paths.count == 1, let path = paths.first, details.first?.isDirectory == false {
                 rendered = Self.batPreview(path)
             }
-            return (details, rendered)
+            return (details, rendered, false)
         }.value
 
         files = result.0
         textPreview = result.1
+        directoryListing = result.2
     }
 
     /// `bat` is the system-friendly text renderer; plain read is the fallback.
@@ -1503,58 +1522,6 @@ struct ClipboardPreviewPane: View {
 /// Wraps provider chips onto as many rows as they need. The old horizontal
 /// scroller hid half the providers behind a clipped edge; tab bars are for
 /// discovery, so every provider should be visible.
-private struct TabStripHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 4
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = max(1, proposal.width ?? 600)
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > maxWidth {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: maxWidth, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > bounds.width {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            subview.place(
-                at: CGPoint(x: bounds.minX + x, y: bounds.minY + y),
-                proposal: ProposedViewSize(width: size.width, height: size.height)
-            )
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-    }
-}
-
-
 extension Notification.Name {
     static let palettePreviewScroll = Notification.Name("palette.preview.scroll")
 }

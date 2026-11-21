@@ -47,6 +47,21 @@ public final class PortProvider: PaletteProvider, @unchecked Sendable {
             listeners = try await Self.listeners()
             await cache.update(listeners)
         }
+        guard !listeners.isEmpty else {
+            guard request.isBound else { return [] }
+            return [PaletteItem(
+                id: "port-empty",
+                title: "Nothing is listening",
+                subtitle: "No local TCP port is bound right now",
+                icon: .symbol("network.slash"),
+                badge: "EMPTY",
+                group: descriptor.name,
+                score: 1_000,
+                actions: [],
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            )]
+        }
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         return listeners.compactMap { listener in
             let haystack = "\(listener.port) \(listener.command) \(listener.pid) \(listener.cwd ?? "")"

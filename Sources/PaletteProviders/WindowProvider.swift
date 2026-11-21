@@ -35,23 +35,25 @@ public final class WindowProvider: PaletteProvider, @unchecked Sendable {
         let ownPID = ProcessInfo.processInfo.processIdentifier
         let entries = await Self.windows().filter { $0.pid != ownPID }
 
-        var items = entries.map { entry in
-            PaletteItem(
+        let items = entries.compactMap { entry -> PaletteItem? in
+            let title = entry.title.isEmpty ? entry.appName : entry.title
+            // Every window is a candidate when the query is empty; otherwise
+            // the host's fuzzy score decides, matching every other provider.
+            let score = query.isEmpty
+                ? 9_000
+                : Ranking.score(query: query, candidate: "\(title) \(entry.appName)")
+            guard let score else { return nil }
+            return PaletteItem(
                 id: "win:\(entry.number)",
-                title: entry.title.isEmpty ? entry.appName : entry.title,
-                subtitle: entry.appName,
+                title: title,
+                subtitle: entry.appName == title ? nil : entry.appName,
                 icon: .symbol("rectangle.inset.filled"),
                 group: entry.appName,
-                score: 9_000,
+                score: score,
                 actions: [PaletteAction(id: "focus", title: "Switch to \(entry.appName)", kind: .custom, value: .text("focus:\(entry.number):\(entry.pid)"))],
-                preview: .text("\(entry.appName)\n\(entry.title)\n\nActivates the window and brings it to the front."),
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )
-        }
-        if !query.isEmpty {
-            let needle = query.lowercased()
-            items = items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(needle) }
         }
         return items
     }

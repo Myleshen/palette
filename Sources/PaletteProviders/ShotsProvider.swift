@@ -18,9 +18,11 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
     )
 
     private let service: CaptureService
+    private let bridge: HostBridge
 
-    public init(service: CaptureService) {
+    public init(service: CaptureService, bridge: HostBridge) {
         self.service = service
+        self.bridge = bridge
     }
 
     private struct Entry: Sendable {
@@ -47,7 +49,12 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         }
         let filtered = query.isEmpty
             ? entries
-            : entries.filter { $0.url.lastPathComponent.lowercased().contains(query) }
+            : entries.compactMap { entry -> (Entry, Double)? in
+                guard let score = Ranking.score(query: query, candidate: entry.url.lastPathComponent) else { return nil }
+                return (entry, score)
+            }
+            .sorted { $0.1 > $1.1 }
+            .map(\.0)
         guard !filtered.isEmpty else {
             guard request.isBound else { return [] }
             return [emptyRow(title: "No captures match \"\(query)\"", subtitle: "\(entries.count) captures in \(directory)")]
@@ -105,6 +112,9 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.writeObjects([image])
+            // Images cannot ride the text bridge; confirm here instead of
+            // copying silently.
+            await bridge.notify("Copied \(item.title)")
         }
         // openPath and reveal are executed by the host from the action kind.
     }
@@ -115,6 +125,7 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
             title: title,
             subtitle: subtitle,
             icon: .symbol("photo.on.rectangle.angled"),
+            badge: "EMPTY",
             group: "Captures",
             score: 1_000,
             actions: [],

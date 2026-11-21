@@ -69,13 +69,13 @@ public final class EmojiProvider: PaletteProvider, @unchecked Sendable {
 
     private func item(for emoji: EmojiCatalogEntry, score: Double) -> PaletteItem {
         let label = (emoji.appleName.isEmpty ? emoji.name : emoji.appleName).capitalized
+        // The group already reads in the subtitle; a badge would print it twice.
         let detail = emoji.group.isEmpty ? "Copy emoji" : emoji.group
         return PaletteItem(
             id: emoji.glyph,
             title: "\(emoji.glyph)  \(label)",
             subtitle: detail,
             icon: .symbol("face.smiling"),
-            badge: emoji.group.isEmpty ? nil : emoji.group,
             score: score,
             actions: [
                 PaletteAction(id: "copy-emoji", title: "Copy Emoji", kind: .copyText, value: .text(emoji.glyph)),

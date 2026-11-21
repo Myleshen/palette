@@ -572,8 +572,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "terminalActive": observation.terminalActive,
             "askWindows": observation.askWindows,
             "statusMessage": observation.statusMessage,
+            "previewVisible": searchController?.previewVisible ?? false,
             "items": observation.items.map {
-                ["id": $0.id, "title": $0.title, "providerID": $0.providerID]
+                [
+                    "id": $0.id,
+                    "title": $0.title,
+                    "subtitle": $0.subtitle ?? "",
+                    "badge": $0.badge ?? "",
+                    "group": $0.group ?? "",
+                    "providerID": $0.providerID,
+                    "actions": $0.actions.map { "\($0.id):\($0.title)" },
+                    "hasPreview": $0.preview != nil,
+                ]
             },
             "firstTitle": observation.items.first?.title ?? "",
         ]
@@ -732,17 +742,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(AppProvider(index: appIndex, launcher: launcher, bridge: hostProxy))
         providers.append(CalculatorProvider())
         providers.append(EmojiProvider())
-        providers.append(ScratchpadProvider(store: store))
+        providers.append(ScratchpadProvider(store: store, bridge: hostProxy))
         providers.append(TerminalProvider())
         providers.append(KeepAwakeProvider(service: keepAwake, bridge: hostProxy, launcher: launcher))
         providers.append(TimerProvider(service: timerService, presetMinutes: configuration.timer.presets))
-        providers.append(ColorProvider())
-        providers.append(StatsProvider())
+        providers.append(ColorProvider(bridge: hostProxy))
+        providers.append(StatsProvider(bridge: hostProxy))
         providers.append(SSHProvider(launcher: launcher, terminalApp: configuration.terminalApp))
         providers.append(DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp))
-        providers.append(UnitsProvider())
+        providers.append(UnitsProvider(bridge: hostProxy))
         providers.append(WindowProvider(launcher: launcher))
-        providers.append(ShotsProvider(service: captureService))
+        providers.append(ShotsProvider(service: captureService, bridge: hostProxy))
         providers.append(CheatsheetProvider(config: configuration.cheatsheets))
         let hideForCapture: @MainActor () -> Void = { [weak self] in
             self?.panel?.hide(activatePrevious: false)
