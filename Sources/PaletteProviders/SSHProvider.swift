@@ -67,7 +67,6 @@ public final class SSHProvider: PaletteProvider, @unchecked Sendable {
                     ),
                     PaletteAction(id: "connect", title: "Open in \(terminalApp)", kind: .custom, value: .text("ssh:\(host.alias)")),
                 ],
-                preview: .text("Runs `ssh \(host.alias)` in the embedded terminal; re-running reattaches."),
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )

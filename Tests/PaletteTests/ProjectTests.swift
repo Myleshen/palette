@@ -51,6 +51,35 @@ final class ProjectTests: XCTestCase {
         XCTAssertEqual(DevxConfig.roots(from: ""), [])
     }
 
+    func testGitStateParsing() {
+        let output = """
+        B
+        providers-pass
+        C
+        d179dc4 Merge gh fixes (2 hours ago)
+        W
+        /Users/me/dev/palette
+        /Users/me/dev/.worktrees/palette/providers-pass
+        N
+        12
+        """
+        let state = ProjectProvider.parseGitState(output)
+        XCTAssertEqual(state?.branch, "providers-pass")
+        XCTAssertEqual(state?.lastCommit, "d179dc4 Merge gh fixes (2 hours ago)")
+        XCTAssertEqual(state?.worktrees, ["palette", "providers-pass"])
+        XCTAssertEqual(state?.changes, 12)
+        XCTAssertTrue(state?.preview.contains("Worktrees palette, providers-pass") == true)
+        XCTAssertNil(ProjectProvider.parseGitState("not a repository\n"))
+    }
+
+    func testHexColourParsing() {
+        XCTAssertEqual(ColorProvider.parseHex("#5b7cfa"), "#5B7CFA")
+        XCTAssertEqual(ColorProvider.parseHex(" 5B7CFA "), "#5B7CFA")
+        XCTAssertNil(ColorProvider.parseHex("#fff"))
+        XCTAssertNil(ColorProvider.parseHex("blue"))
+        XCTAssertNil(ColorProvider.parseHex("#gggggg"))
+    }
+
     func testProjectNameValidation() {
         XCTAssertEqual(ProjectName.validate("  my-new-project "), "my-new-project")
         XCTAssertNil(ProjectName.validate(""))

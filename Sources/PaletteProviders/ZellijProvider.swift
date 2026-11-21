@@ -64,8 +64,47 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
         }
 
         let hasWork = sessions.contains { $0.name.caseInsensitiveCompare("Work") == .orderedSame }
-        var fixed: [PaletteItem] = [
-            PaletteItem(
+
+        // Existing sessions are what the user came for; creation is the last
+        // row, so Enter never starts a throwaway session by accident.
+        var items: [PaletteItem] = sessions.compactMap { session in
+            if !query.isEmpty, Ranking.score(query: query, candidate: session.name) == nil { return nil }
+            return sessionItem(session, query: query)
+        }
+
+        let validName = query.range(of: "^[A-Za-z0-9._-]{1,64}$", options: .regularExpression) != nil
+        if validName, !sessions.contains(where: { $0.name == query }) {
+            items.append(PaletteItem(
+                id: "create:\(query)",
+                title: "Create session “\(query)”",
+                subtitle: "Start a new zellij session in \(terminal)",
+                icon: .symbol("plus.rectangle"),
+                score: 2_000,
+                actions: [
+                    PaletteAction(id: "create", title: "Create Session", kind: .custom, value: .text("create:\(query)")),
+                ],
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            ))
+        }
+
+        if !hasWork, query.isEmpty || Ranking.score(query: query, candidate: "Work") != nil {
+            items.append(PaletteItem(
+                id: "work",
+                title: "Work",
+                subtitle: "Attach or create the work session",
+                icon: .symbol("briefcase"),
+                score: 500,
+                actions: [
+                    PaletteAction(id: "create", title: "Open Work", kind: .custom, value: .text("create:Work")),
+                ],
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            ))
+        }
+
+        if query.isEmpty || Ranking.score(query: query, candidate: "New Zellij session") != nil {
+            items.append(PaletteItem(
                 id: "new",
                 title: "New Zellij session",
                 subtitle: "Start a fresh session in \(terminal)",
@@ -81,46 +120,7 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
                 ],
                 providerID: descriptor.id,
                 providerName: descriptor.name
-            ),
-        ]
-        if !hasWork {
-            fixed.append(PaletteItem(
-                id: "work",
-                title: "Work",
-                subtitle: "Attach or create the work session",
-                icon: .symbol("briefcase"),
-                score: 500,
-                actions: [
-                    PaletteAction(id: "create", title: "Open Work", kind: .custom, value: .text("create:Work")),
-                ],
-                providerID: descriptor.id,
-                providerName: descriptor.name
             ))
-        }
-        if !query.isEmpty {
-            fixed = fixed.filter { Ranking.score(query: query, candidate: $0.title) != nil }
-        }
-
-        var items: [PaletteItem] = fixed
-        items.append(contentsOf: sessions.compactMap { session in
-            if !query.isEmpty, Ranking.score(query: query, candidate: session.name) == nil { return nil }
-            return sessionItem(session, query: query)
-        })
-
-        let validName = query.range(of: "^[A-Za-z0-9._-]{1,64}$", options: .regularExpression) != nil
-        if validName, !sessions.contains(where: { $0.name == query }) {
-            items.insert(PaletteItem(
-                id: "create:\(query)",
-                title: "Create session “\(query)”",
-                subtitle: "Start a new zellij session in \(terminal)",
-                icon: .symbol("plus.rectangle"),
-                score: 2_000,
-                actions: [
-                    PaletteAction(id: "create", title: "Create Session", kind: .custom, value: .text("create:\(query)")),
-                ],
-                providerID: descriptor.id,
-                providerName: descriptor.name
-            ), at: 0)
         }
         return items
     }

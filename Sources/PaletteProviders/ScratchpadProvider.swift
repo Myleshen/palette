@@ -16,9 +16,11 @@ public final class ScratchpadProvider: PaletteProvider, @unchecked Sendable {
     )
 
     private let store: PaletteStore
+    private let bridge: HostBridge
 
-    public init(store: PaletteStore) {
+    public init(store: PaletteStore, bridge: HostBridge) {
         self.store = store
+        self.bridge = bridge
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
@@ -40,6 +42,11 @@ public final class ScratchpadProvider: PaletteProvider, @unchecked Sendable {
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         guard action.id == "scratch-delete",
               let id = action.value.text else { return }
+        guard await bridge.prompt(
+            kind: .confirm,
+            title: "Delete “\(item.title)”?",
+            placeholder: "The note is permanently removed."
+        ) != nil else { return }
         try await store.deleteScratchNote(id: id)
     }
 

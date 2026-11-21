@@ -2,8 +2,9 @@ import AppKit
 import Foundation
 import PaletteCore
 
-/// Colour picker backed by the system sampler, plus the colours picked during
-/// this session so they can be copied again without re-picking.
+/// Colour picker backed by the system sampler, plus typed hex values and the
+/// colours picked during this session so they can be copied again without
+/// re-picking.
 public final class ColorProvider: PaletteProvider, @unchecked Sendable {
     public let descriptor = ProviderDescriptor(
         id: "color",
@@ -17,26 +18,43 @@ public final class ColorProvider: PaletteProvider, @unchecked Sendable {
 
     private static var recent: [(hex: String, rgb: String)] = []
 
-    public init() {}
+    private let bridge: HostBridge
 
-    private func copy(_ text: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+    public init(bridge: HostBridge) {
+        self.bridge = bridge
+    }
+
+    private func copy(_ text: String) async {
+        await bridge.copyToClipboard(text, concealed: false, clearAfterMs: nil)
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        var items: [PaletteItem] = [pickRow()]
+        var items: [PaletteItem] = []
 
+        if let hex = Self.parseHex(query) {
+            items.append(hexRow(hex))
+        }
+        items.append(pickRow())
         for entry in Self.recent.prefix(12) {
             items.append(recentRow(entry))
         }
 
         guard !query.isEmpty else { return items }
         return items.filter {
-            "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased())
+            Ranking.score(
+                query: query,
+                candidate: "\($0.title) \($0.subtitle ?? "") \($0.group ?? "")"
+            ) != nil
         }
+    }
+
+    /// `#5b7cfa` or `5b7cfa`, case-insensitive.
+    static func parseHex(_ text: String) -> String? {
+        var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("#") { value.removeFirst() }
+        guard value.count == 6, value.allSatisfy(\.isHexDigit) else { return nil }
+        return "#" + value.uppercased()
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -45,13 +63,9 @@ public final class ColorProvider: PaletteProvider, @unchecked Sendable {
             guard let picked = await Self.pick() else { return }
             Self.recent.removeAll { $0.hex == picked.hex }
             Self.recent.insert(picked, at: 0)
-            copy(picked.hex)
-            await MainActor.run {
-                NotificationCenter.default.post(name: .paletteColorPicked, object: picked.hex)
-            }
+            await copy(picked.hex)
         case let raw? where raw.hasPrefix("copy:"):
-            let value = String(raw.dropFirst("copy:".count))
-            copy(value)
+            await copy(String(raw.dropFirst("copy:".count)))
         default:
             break
         }
@@ -74,6 +88,20 @@ public final class ColorProvider: PaletteProvider, @unchecked Sendable {
         }
     }
 
+    private func hexRow(_ hex: String) -> PaletteItem {
+        PaletteItem(
+            id: "hex:\(hex)",
+            title: hex,
+            subtitle: "Copy this colour",
+            icon: .symbol("paintbrush"),
+            group: "Typed",
+            score: 10_500,
+            actions: [PaletteAction(id: "copy-hex", title: "Copy \(hex)", kind: .custom, value: .text("copy:\(hex)"))],
+            providerID: descriptor.id,
+            providerName: descriptor.name
+        )
+    }
+
     private func pickRow() -> PaletteItem {
         PaletteItem(
             id: "pick",
@@ -84,7 +112,6 @@ public final class ColorProvider: PaletteProvider, @unchecked Sendable {
             group: "Colour",
             score: 10_000,
             actions: [PaletteAction(id: "pick", title: "Pick", kind: .custom, value: .text("pick"))],
-            preview: .text("Opens the system colour sampler. Click anywhere to copy its hex value; it also lands in the recent list below."),
             providerID: descriptor.id,
             providerName: descriptor.name
         )
@@ -106,9 +133,4 @@ public final class ColorProvider: PaletteProvider, @unchecked Sendable {
             providerName: descriptor.name
         )
     }
-}
-
-extension Notification.Name {
-    /// Posted with the picked hex string so the controller can confirm it.
-    public static let paletteColorPicked = Notification.Name("palette.color.picked")
 }

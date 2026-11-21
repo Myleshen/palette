@@ -46,24 +46,19 @@ public final class TimerProvider: PaletteProvider, @unchecked Sendable {
         // Keep the exact match if the query parsed as a duration, and drop
         // presets that do not match the text.
         if TimerDuration.parse(query) != nil {
-            return items.filter { $0.group != "Presets" || matches(item: $0, query: query) }
+            return items.filter {
+                $0.group != "Presets" || Ranking.score(query: query, candidate: $0.title) != nil
+            }
         }
         return items.compactMap { item in
-            guard matches(item: item, query: query) else { return nil }
-            var item = item
-            if let score = Ranking.score(
+            guard let score = Ranking.score(
                 query: query,
-                candidate: "\(item.title) \(item.subtitle ?? "") timer countdown pomodoro"
-            ) {
-                item.score = score
-            }
+                candidate: "\(item.title) \(item.subtitle ?? "") \(item.group ?? "") timer countdown pomodoro"
+            ) else { return nil }
+            var item = item
+            item.score = score
             return item
         }
-    }
-
-    private func matches(item: PaletteItem, query: String) -> Bool {
-        let haystack = "\(item.title) \(item.subtitle ?? "")".lowercased()
-        return query.lowercased().split(separator: " ").allSatisfy { haystack.contains($0.lowercased()) }
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -78,6 +73,7 @@ public final class TimerProvider: PaletteProvider, @unchecked Sendable {
 
     private func statusRow(_ snapshot: TimerSnapshot) -> PaletteItem {
         let running = snapshot.isRunning
+        let defaultSeconds = presets.first ?? 1_500
         return PaletteItem(
             id: "status",
             title: running ? "\(TimerDuration.format(snapshot.remaining)) remaining" : "No timer running",
@@ -90,10 +86,12 @@ public final class TimerProvider: PaletteProvider, @unchecked Sendable {
             score: 9_500,
             actions: running
                 ? [PaletteAction(id: "stop", title: "Stop Timer", kind: .custom, value: .text("stop"))]
-                : [],
-            preview: .text(running
-                ? "\(snapshot.label) timer running.\n\nRemaining: \(TimerDuration.format(snapshot.remaining))\nFinishes at \(Self.finishTime(snapshot.endsAt)).\n\nThe timer keeps running when Palette is closed and notifies you when it finishes."
-                : "Start a countdown, for example:\n\n/timer 25m\n/timer 1h30m\n/timer 1:30\n\nOnly one timer runs at a time."),
+                : [PaletteAction(
+                    id: "start-default",
+                    title: "Start \(TimerDuration.label(defaultSeconds)) Timer",
+                    kind: .custom,
+                    value: .text("start:\(Int(defaultSeconds))")
+                )],
             providerID: descriptor.id,
             providerName: descriptor.name
         )

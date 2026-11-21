@@ -120,7 +120,6 @@ public final class KeepAwakeProvider: PaletteProvider, @unchecked Sendable {
                     value: .text(status.active ? "stop" : "start:0")
                 ),
             ],
-            preview: .text(preview(status)),
             providerID: descriptor.id,
             providerName: descriptor.name
         )
@@ -166,16 +165,6 @@ public final class KeepAwakeProvider: PaletteProvider, @unchecked Sendable {
                     value: .text("clamshell")
                 ),
             ],
-            preview: .text("""
-            Clamshell mode keeps the Mac awake after the lid closes.
-
-            macOS treats a lid close as forced sleep, so Palette arms a small root guard. The guard only enables sleep-disabled mode while:
-            • Palette is running
-            • clamshell mode is on
-            • the Mac is on AC power
-
-            Unplugging power restores normal lid sleep. Quitting Palette also restores it. Never leave an awake, closed MacBook in a bag.
-            """),
             providerID: descriptor.id,
             providerName: descriptor.name
         )

@@ -15,7 +15,11 @@ public final class UnitsProvider: PaletteProvider, @unchecked Sendable {
         keywords: ["convert", "unit", "currency", "km", "miles", "kg", "pounds", "celsius", "fahrenheit", "usd", "eur"]
     )
 
-    public init() {}
+    private let bridge: HostBridge
+
+    public init(bridge: HostBridge) {
+        self.bridge = bridge
+    }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -35,9 +39,7 @@ public final class UnitsProvider: PaletteProvider, @unchecked Sendable {
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         guard let value = action.value.text else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(value, forType: .string)
+        await bridge.copyToClipboard(value, concealed: false, clearAfterMs: nil)
     }
 
     private func row(_ conversion: Units.Conversion, value: Double) -> PaletteItem {
@@ -52,7 +54,6 @@ public final class UnitsProvider: PaletteProvider, @unchecked Sendable {
             group: "Convert",
             score: 10_000,
             actions: [PaletteAction(id: "copy", title: "Copy \(number)", kind: .custom, value: .text(number))],
-            preview: .text("\(title)\n\nUnits convert offline; currency rates are cached for an hour."),
             providerID: descriptor.id,
             providerName: descriptor.name
         )
@@ -66,7 +67,7 @@ public final class UnitsProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("exclamationmark.triangle"),
             group: "Convert",
             score: 1_000,
-            actions: [],
+            actions: [PaletteAction(id: "retry", title: "Retry", kind: .custom, value: .none)],
             providerID: descriptor.id,
             providerName: descriptor.name
         )
