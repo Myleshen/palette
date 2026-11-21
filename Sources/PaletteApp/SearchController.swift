@@ -654,7 +654,9 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     private func cycleScope() {
-        let bound = registry.providers.filter { $0.descriptor.trigger != nil && !$0.descriptor.isGlobal }
+        let bound = registry.providers.filter {
+            $0.descriptor.trigger != nil && !registry.globalProviderIDs.contains($0.descriptor.id)
+        }
         guard !bound.isEmpty else { return }
         let parser = registry.parser
         let current = parser.parse(query).providerID

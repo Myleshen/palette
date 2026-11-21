@@ -446,12 +446,17 @@ final class CoreTests: XCTestCase {
         var config = PaletteConfig()
         config.webSearchEngines[0].keyword = "goog"
         config.webSearchEngines[0].browser = "Safari"
-        let table = try TOMLTable(string: ConfigWriter.render(config))
+        config.webSearchEngines[0].appMode = true
+        let rendered = ConfigWriter.render(config)
+        XCTAssertEqual(rendered.components(separatedBy: "app_mode = true").count - 1, 1)
+        let table = try TOMLTable(string: rendered)
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
         XCTAssertEqual(parsed.webSearchEngines[0].keyword, "goog")
         XCTAssertEqual(parsed.webSearchEngines[0].browser, "Safari")
+        XCTAssertTrue(parsed.webSearchEngines[0].appMode)
         XCTAssertEqual(parsed.webSearchEngines[1].browser, "")
+        XCTAssertFalse(parsed.webSearchEngines[1].appMode)
     }
 
     func testStockWebSearchEnginesCarryKeywords() {

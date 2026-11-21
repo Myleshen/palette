@@ -10,8 +10,8 @@ final class DeveloperWorkflowTests: XCTestCase {
     private final class StubProvider: PaletteProvider, @unchecked Sendable {
         let descriptor: ProviderDescriptor
         let items: [PaletteItem]
-        init(id: String, trigger: String?, priority: Int = 0, items: [PaletteItem] = []) {
-            descriptor = ProviderDescriptor(id: id, name: id, trigger: trigger, isGlobal: false, priority: priority)
+        init(id: String, trigger: String?, priority: Int = 0, isGlobal: Bool = false, items: [PaletteItem] = []) {
+            descriptor = ProviderDescriptor(id: id, name: id, trigger: trigger, isGlobal: isGlobal, priority: priority)
             self.items = items
         }
         func search(_ request: SearchRequest) async throws -> [PaletteItem] { items }
@@ -58,6 +58,23 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertTrue(diagnostics.isEmpty)
     }
 
+    func testGlobalProviderConfigRoundTripAndMigration() throws {
+        var config = PaletteConfig()
+        config.globalProviders = ["timer"]
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(TOMLTable(string: ConfigWriter.render(config)), diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.globalProviders, ["timer"])
+        XCTAssertTrue(diagnostics.isEmpty)
+
+        // 2.12.x configs read `global` as extras; the untouched list upgrades.
+        let legacy = try ConfigLoader.parse(
+            TOMLTable(string: "[providers]\nglobal = [\"system\", \"timer\", \"awake\"]\n"),
+            diagnostics: &diagnostics
+        )
+        XCTAssertEqual(legacy.globalProviders, PaletteConfig.defaultGlobalProviders)
+        XCTAssertTrue(legacy.globalProviders.contains("calc"))
+    }
+
     func testRegistrySkipsDisabledProviders() {
         let apps = StubProvider(id: "apps", trigger: "apps", priority: 100)
         let clip = StubProvider(id: "clip", trigger: "clip", priority: 10)
@@ -67,15 +84,26 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertEqual(registry.parser.parse("/port 3000").scope, .global)
     }
 
-    func testRegistrySearchesConfiguredGlobalProvidersUnprefixed() async {
-        let apps = StubProvider(id: "apps", trigger: "apps", priority: 100)
+    func testRegistrySearchesOnlyAllowlistedProvidersUnprefixed() async {
+        let apps = StubProvider(id: "apps", trigger: "apps", priority: 100, items: [
+            PaletteItem(id: "apps:safari", title: "Safari", providerID: "apps"),
+        ])
         let timer = StubProvider(id: "timer", trigger: "timer", priority: 5, items: [
             PaletteItem(id: "timer:1", title: "5 minutes", providerID: "timer"),
         ])
-        let registry = ProviderRegistry(providers: [apps, timer], prefix: "/", global: ["timer"])
+        let bookmark = StubProvider(id: "bookmark", trigger: nil, priority: 1, isGlobal: true, items: [
+            PaletteItem(id: "bookmark:1", title: "5 docs", providerID: "bookmark"),
+        ])
+        let registry = ProviderRegistry(providers: [apps, timer, bookmark], prefix: "/", global: ["timer"])
         XCTAssertTrue(registry.diagnostics.isEmpty)
+        XCTAssertEqual(registry.globalProviderIDs, ["apps", "timer"])
         let result = await registry.search(raw: "5")
-        XCTAssertEqual(result.items.map(\.id), ["timer:1"])
+        XCTAssertEqual(Set(result.items.map(\.id)), ["apps:safari", "timer:1"])
+
+        let empty = ProviderRegistry(providers: [apps, bookmark], prefix: "/", global: [])
+        XCTAssertEqual(empty.globalProviderIDs, ["apps"])
+        let fallback = await empty.search(raw: "5")
+        XCTAssertEqual(fallback.items.map(\.id), ["apps:safari"])
 
         let unknown = ProviderRegistry(providers: [apps], prefix: "/", global: ["nope"])
         XCTAssertTrue(unknown.diagnostics.contains { $0.level == .warning && $0.message.contains("nope") })

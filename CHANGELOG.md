@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.13.0 — 2026-11-21
+
+### Changed
+
+- **Default (unprefixed) search is now an allowlist** — `[providers] global` lists
+  exactly which providers answer a plain query (`apps` always does), and the
+  Providers settings table has a **Default** checkbox per provider, so you can add
+  or remove any provider (e.g. drop `calc`). Existing additive configs migrate to
+  the full default set.
+- **Friendlier web-search engine editor** (Settings → Search): each engine is a
+  labelled card — Name · Search URL · `!keyword` · Browser · Open in web app.
+
+### Added
+
+- **`app_mode` for `!` bangs** — turn on "Open in web app" for an engine so
+  `!keyword` opens the search in your web app (SSB) instead of a browser tab;
+  needs a Chromium browser for the web app.
+
 ## 2.12.1 — 2026-11-21
 
 ### Fixed

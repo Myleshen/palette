@@ -64,14 +64,24 @@ public struct WebSearchEngine: Sendable, Equatable, Identifiable {
     public var keyword: String?
     /// Browser app name; empty means the system default.
     public var browser: String = ""
+    /// Open bangs for this engine in the web-app browser instead of a normal
+    /// tab, so a site installed as a web app answers the search.
+    public var appMode: Bool = false
 
     public var id: String { name.lowercased() }
 
-    public init(name: String, urlTemplate: String, keyword: String? = nil, browser: String = "") {
+    public init(
+        name: String,
+        urlTemplate: String,
+        keyword: String? = nil,
+        browser: String = "",
+        appMode: Bool = false
+    ) {
         self.name = name
         self.urlTemplate = urlTemplate
         self.keyword = keyword
         self.browser = browser
+        self.appMode = appMode
     }
 
     public static let defaults: [WebSearchEngine] = [
@@ -358,8 +368,16 @@ public struct PaletteConfig: Sendable, Equatable {
     public var providerAliases: [String: [String]]
     public var providerOrder: [String]
     public var disabledProviders: [String]
-    /// Providers searched by a plain, unprefixed query, in addition to built-ins.
+    /// Allowlist of providers searched by a plain, unprefixed query. `apps` is
+    /// always searched and need not be listed.
     public var globalProviders: [String]
+
+    /// Providers a plain query searches out of the box, before user changes.
+    public static let defaultGlobalProviders = [
+        "calc", "search", "web", "win", "unit", "zj",
+        "bookmark", "pins", "system", "timer", "awake", "cheat",
+    ]
+
     public var terminalSession: TerminalSessionConfig
     public var timer: TimerConfig
     public var capture: CaptureConfig
@@ -395,7 +413,7 @@ public struct PaletteConfig: Sendable, Equatable {
         providerAliases: [String: [String]] = ProviderAliases.defaults,
         providerOrder: [String] = [],
         disabledProviders: [String] = [],
-        globalProviders: [String] = ["system", "timer", "awake"],
+        globalProviders: [String] = PaletteConfig.defaultGlobalProviders,
         terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
         timer: TimerConfig = TimerConfig(),
         capture: CaptureConfig = CaptureConfig(),
@@ -728,12 +746,19 @@ public enum ConfigLoader {
             config.disabledProviders = (providers.strArray("disabled") ?? [])
                 .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
                 .filter { !$0.isEmpty && $0 != "apps" }
-            // Absent key keeps the default extras, so old configs gain them;
-            // an explicit `global = []` opts out.
+            // Absent key keeps the default allowlist, so old configs gain it;
+            // an explicit `global = []` opts out of everything but apps.
             if let global = providers.strArray("global") {
-                config.globalProviders = global
+                let parsed = global
                     .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
                     .filter { !$0.isEmpty }
+                // 2.12.x read this key as extras on top of the built-in
+                // globals, so an untouched config lists only those extras.
+                // Upgrade it to the full allowlist rather than losing the
+                // built-ins it used to get for free.
+                config.globalProviders = parsed == ["system", "timer", "awake"]
+                    ? PaletteConfig.defaultGlobalProviders
+                    : parsed
             }
             if let aliases = providers.table("aliases") {
                 var parsed = config.providerAliases
@@ -784,7 +809,8 @@ public enum ConfigLoader {
                         name: name,
                         urlTemplate: url,
                         keyword: engine.str("keyword"),
-                        browser: engine.str("browser") ?? ""
+                        browser: engine.str("browser") ?? "",
+                        appMode: engine.bool("app_mode") ?? false
                     )
                 }
                 if !parsed.isEmpty { config.webSearchEngines = parsed }
@@ -972,8 +998,12 @@ public enum ConfigLoader {
         [providers]
         order = []
         disabled = []
-        # Plain queries also search these providers; /trigger targets one.
-        global = ["system", "timer", "awake"]
+        # Plain queries search only these providers (apps always); /trigger
+        # targets one.
+        global = [
+          "calc", "search", "web", "win", "unit", "zj",
+          "bookmark", "pins", "system", "timer", "awake",
+        ]
 
         [providers.aliases]
 
@@ -996,7 +1026,8 @@ public enum ConfigLoader {
         fallback = true                # use free/cheap models when quota runs out
 
         # Global web search. Add or remove engines as you like; {query} is
-        # replaced with the URL-encoded search text.
+        # replaced with the URL-encoded search text. app_mode = true opens
+        # that engine's bangs in the web-app browser (Chromium-based only).
         [web_search]
         enabled = true
 
@@ -1173,6 +1204,7 @@ public enum ConfigWriter {
             out.append("url = \(quote(engine.urlTemplate))")
             if let keyword = engine.keyword { out.append("keyword = \(quote(keyword))") }
             if !engine.browser.isEmpty { out.append("browser = \(quote(engine.browser))") }
+            if engine.appMode { out.append("app_mode = true") }
         }
         for name in config.scopes.keys.sorted() {
             guard let scope = config.scopes[name] else { continue }

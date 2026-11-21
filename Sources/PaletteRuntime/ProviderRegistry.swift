@@ -93,14 +93,20 @@ public final class ProviderRegistry: @unchecked Sendable {
 
         self.parser = QueryParser(prefix: prefix, triggers: triggers)
         let knownIDs = Set(providers.map { $0.descriptor.id.lowercased() })
-        let extraGlobal = Set(global.map { $0.lowercased() })
-        for id in extraGlobal.sorted() where !knownIDs.contains(id) {
+        let allow = Set(global.map { $0.lowercased() })
+        for id in allow.sorted() where !knownIDs.contains(id) {
             diagnostics.append(Diagnostic(.warning, "Global search is configured for unknown provider '\(id)'.", source: "providers"))
         }
+        // An allowlist, not extras: only listed providers join a plain query.
         self.globalProviders = self.providers.filter {
-            $0.descriptor.isGlobal || extraGlobal.contains($0.descriptor.id.lowercased())
+            $0.descriptor.id == "apps" || allow.contains($0.descriptor.id.lowercased())
         }
         self.diagnostics = diagnostics
+    }
+
+    /// Providers the registry actually searches for a plain query.
+    public var globalProviderIDs: Set<String> {
+        Set(globalProviders.map { $0.descriptor.id })
     }
 
     public func search(raw: String) async -> RegistrySearchResult {

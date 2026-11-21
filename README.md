@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.12.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.13.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -209,12 +209,12 @@ trigger word:
 A trailing slash browses a directory breadth-first: `/edit ~/dev/` shows the
 direct children of `~/dev` first, then the next level.
 
-Unprefixed queries search apps, web apps, zellij sessions, pinned items, web
-search engines, any provider marked `global = true`, and every provider in
-`[providers] global` (default `system`, `timer`, `awake`). Settings → Search →
-**Search without a prefix** edits that list, so a plain query also matches sleep,
-timers and keep-awake rows. `/trigger` still targets one provider. `= 2+2` and
-bare arithmetic also work, and the calculator always participates.
+Unprefixed queries search apps (always) plus exactly the providers listed in
+`[providers] global` (default `calc`, `search`, `web`, `win`, `unit`, `zj`,
+`bookmark`, `pins`, `system`, `timer`, `awake`). Settings → Providers →
+**Default** edits that allowlist, so you can add a provider or drop one — for
+example remove `calc`. `/trigger` still targets one provider. `= 2+2` and bare
+arithmetic also work while `calc` is on the list.
 
 ### Search matching
 
@@ -241,10 +241,12 @@ the result in your default browser. Engines are ordinary config rows in
 `[web_search]`; add or remove them in Settings or `config.toml`.
 
 Give an engine a keyword and `!keyword query` searches it directly, in its own
-browser when one is set: `!gh palette launcher`. Bangs open a normal browser
-window. Type `!` on its own to list every engine that has a keyword. Keywords
-and per-engine browsers are set under Settings → Search → Advanced: custom
-engines.
+browser when one is set: `!gh palette launcher`. A bang opens a normal browser
+window, unless the engine has **Open in web app** on, which sends that search to
+the web-app browser (SSB) instead; that needs a Chromium-based web-app browser,
+set per engine or under **Web apps**. Type `!` on its own to list every engine
+that has a keyword. Settings → Search edits each engine as a card: Name ·
+Search URL · `!keyword` · Browser · Open in web app.
 
 ### Ask
 
@@ -287,9 +289,12 @@ timer toggles; Launcher holds where the panel opens, app order,
 typography; Capture holds screenshot and recording options; **Terminal** holds
 the embedded session, shell, and font; **Cheatsheets** holds the folders and
 extensions `/cheat` reads.
-**Clipboard**, **Search**, and **Ask** cover their own features. **Providers**
-is one table per provider — enable, name, trigger, aliases, and tab order in
-the same row. **Advanced** has config/theme/log links, backup, diagnostics, and
+**Clipboard**, **Search**, and **Ask** cover their own features. **Search**
+holds the web-results toggle, one card per engine (Name · Search URL ·
+`!keyword` · Browser · Open in web app), bookmarks, and the web-app browser.
+**Providers** is one table per provider — enable, the **Default** checkbox for
+plain-query search, name, trigger, aliases, and tab order in the same row.
+**Advanced** has config/theme/log links, backup, diagnostics, and
 version information. The **Ask** tab selects the endpoint and model, saves a
 local API key, toggles automatic fallback, and controls how many Q&A entries and
 how many days of history are kept.
@@ -418,8 +423,8 @@ artifacts and docs, each shown as `project · path`. Inbox items sort first and
 carry a **review** badge. `⏎` opens a row, Markdown and HTML rows preview in the
 pane, and **Mark Reviewed** in `⌘K` runs `atlas review <path>`. The provider
 only reads atlas's data and derives the marker, modification time and preview
-path the same way atlas does, so atlas itself needs no change. It also answers
-unprefixed queries.
+path the same way atlas does, so atlas itself needs no change. Tick **Default**
+in Settings → Providers to let it answer unprefixed queries too.
 
 ### Bitwarden
 
@@ -619,10 +624,11 @@ mono_size = 13
 
 ### Provider aliases, order, and visibility
 
-`[providers]` stores tab order, extra trigger words, the providers that also
-answer plain queries, and providers you want to hide. Settings → Providers is a
-single table per provider: enable it, see its trigger, edit aliases, and set tab
-order in the same row. The tab bar and Tab cycling only include enabled
+`[providers]` stores tab order, extra trigger words, the allowlist of providers
+that answer plain queries, and providers you want to hide. Settings → Providers
+is a single table per provider: enable it, tick **Default** to include it in
+plain search, see its trigger, edit aliases, and set tab order in the same row.
+The tab bar and Tab cycling only include enabled
 providers. Aliases are added as words in that row; the canonical trigger never
 changes. Duplicate aliases or triggers are rejected when saving.
 
@@ -630,7 +636,8 @@ changes. Duplicate aliases or triggers are rejected when saving.
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]
 disabled = []
-global = ["system", "timer", "awake"]
+global = ["calc", "search", "web", "win", "unit", "zj",
+          "bookmark", "pins", "system", "timer", "awake", "cheat"]
 
 [providers.aliases]
 apps = ["launch", "a"]
@@ -693,7 +700,10 @@ mono_size = 0
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]
 disabled = []
-global = ["system", "timer", "awake"]  # also answer plain, unprefixed queries
+global = [
+  "calc", "search", "web", "win", "unit", "zj",
+  "bookmark", "pins", "system", "timer", "awake", "cheat",
+]                              # plain queries search exactly these; apps always
 
 [providers.aliases]
 apps = ["launch"]
@@ -731,6 +741,7 @@ keyword = "gh"
 name = "YouTube"
 url = "https://www.youtube.com/results?search_query={query}"
 keyword = "yt"
+app_mode = true                # !yt opens in the web-app browser
 
 [theme]
 mode = "auto"                 # dark | light | auto

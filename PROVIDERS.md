@@ -18,7 +18,7 @@ overrides the bundled one.
 id = "neof"                    # required, stable, [a-z0-9._-]
 name = "Editor folders"        # display name
 trigger = "editf"              # bare word; invoked as /editf
-global = false                 # also participate in unprefixed search
+global = false                 # ambient; plain search follows [providers] global
 icon = "symbol:doc.text"       # default icon for rows without one
 keywords = ["file", "neo"]     # extra match terms
 priority = 10                  # tie-break, higher first
@@ -36,23 +36,30 @@ idle_timeout_s = 300           # external providers only
 moves every provider at once. Duplicate triggers produce a warning; the
 lexicographically first `id` wins.
 
-A provider with no `trigger` and `global = false` is unreachable and warned
-about. `global = true` without a trigger is valid for ambient providers.
+A provider with no `trigger` can only be reached through plain, unprefixed
+search, so it needs an entry in `[providers] global`. `global = true` in a
+manifest marks the provider as ambient (it may omit `trigger`); it does not by
+itself join plain search.
 
-`global = true` is part of the manifest. Providers you cannot edit (bundled
-ones, third-party providers) join plain search through `config.toml`:
+Plain search is an **allowlist**: only the providers in `[providers] global`
+answer an unprefixed query, and `apps` always does whether or not it is listed.
+It covers providers you cannot edit — bundled and third-party ones alike — and
+can be set in `config.toml` or with the **Default** checkbox in
+Settings → Providers:
 
 ```toml
 [providers]
-global = ["system", "timer", "awake"]   # default
+global = [
+  "calc", "search", "web", "win", "unit", "zj",
+  "bookmark", "pins", "system", "timer", "awake",
+]
 ```
 
-Every id in that list answers unprefixed queries in addition to the built-in
-global providers (`apps`, `calc`, `pins`, `zj`, `search`, `web`, `bookmark`,
-`cheat`, `atlas`).
-`/trigger` still targets a single provider; the list only widens plain search.
-The default applies when the key is absent; `global = []` drops the extras but
-keeps the built-in ones, and an unknown id logs a warning.
+The list is authoritative: removing an id removes that provider from plain
+search, and `global = []` leaves only `apps`. An unlisted provider is still
+reachable through its `/trigger`. The default applies when the key is absent;
+a 2.12.x list of just `system`, `timer`, `awake` is upgraded to the full
+allowlist on load, and an unknown id logs a warning.
 
 ## 2. Paths providers
 
@@ -265,13 +272,13 @@ on the roadmap.
 
 | ID | Trigger | Backend | Notes |
 |---|---|---|---|
-| `apps` | — | native | applications, always global |
-| `calc` | `calc` | native | arithmetic, also inferred unprefixed |
-| `pins` | — | native | pinned items, global |
+| `apps` | — | native | applications, always searched for plain queries |
+| `calc` | `calc` | native | arithmetic; unprefixed by default |
+| `pins` | — | native | pinned items, in the default allowlist |
 | `neo` | `edit` | paths | files and folders across home, freeform, opens in the configured editor (`/neo` alias) |
 | `neof` | `editf` | paths | folders only, seeded user copy (`/neof` alias) |
-| `zj` | `zj` | native | global; running sessions globally, create rows only under `/zj` |
-| `search` | — | native | global web-search rows for configured engines; `!keyword` bangs when an engine has one |
+| `zj` | `zj` | native | in the default allowlist; running sessions appear unprefixed, create rows only under `/zj` |
+| `search` | — | native | web-search rows for configured engines by default; `!keyword` bangs when an engine has one, and per-engine `app_mode` opens that bang in a web app |
 | `bw` | `bw` | native | Bitwarden passwords |
 | `bwu` | `bwu` | native | Bitwarden usernames |
 | `bwt` | `bwt` | native | Bitwarden TOTP codes |
@@ -289,11 +296,11 @@ on the roadmap.
 | `recent` | `recent` | native | recently opened projects and files |
 | `snip` | `snip` | native | snippets from snippets.toml with safe placeholder expansion |
 | `askh` | `askh` | native | retained Ask history with fuzzy search and metadata |
-| `web` | `web` | native | global web apps with optional Hammerspoon shortcuts |
-| `bookmark` | `bookmark` | native | bookmarks from `bookmarks.toml`, opened in a normal browser window, global |
+| `web` | `web` | native | web apps with optional Hammerspoon shortcuts, in the default allowlist |
+| `bookmark` | `bookmark` | native | bookmarks from `bookmarks.toml`, opened in a normal browser window, in the default allowlist |
 | `emoji` | `emoji` | native | full Unicode emoji catalog with name search |
-| `cheat` | `cheat` | native | global; cheatsheet folders from Settings → Cheatsheets, one level deep, QuickLook preview |
-| `atlas` | `atlas` | native | global; artifacts and docs from `~/.config/atlas/state.json`, inbox first with a review badge and document preview |
+| `cheat` | `cheat` | native | cheatsheet folders from Settings → Cheatsheets, one level deep, QuickLook preview; in the default allowlist (plain queries) |
+| `atlas` | `atlas` | native | artifacts and docs from `~/.config/atlas/state.json`, inbox first with a review badge and document preview; add it to the allowlist for plain queries |
 | `ssh` | `ssh` | native | hosts from `~/.ssh/config`; connect in the embedded terminal, one session per host that reattaches on re-run |
 | `system` | `sys` | native | sleep, lock, empty trash, reload, quit |
 | `theme` | `theme` | native | live theme switching |
