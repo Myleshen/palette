@@ -87,8 +87,8 @@ private struct SettingsTabGroup: Identifiable {
 private extension SettingsTab {
     static let sidebarGroups: [SettingsTabGroup] = [
         SettingsTabGroup(title: "General", tabs: [.general, .launcher, .appearance]),
-        SettingsTabGroup(title: "Features", tabs: [.shortcuts, .clipboard, .search, .capture, .ask, .cheatsheets]),
-        SettingsTabGroup(title: "System", tabs: [.providers, .advanced, .terminal]),
+        SettingsTabGroup(title: "Features", tabs: [.shortcuts, .clipboard, .search, .capture, .terminal, .ask, .cheatsheets]),
+        SettingsTabGroup(title: "System", tabs: [.providers, .advanced]),
     ]
 }
 
@@ -220,6 +220,9 @@ struct SettingsView: View {
     private let providerSummary: [String]
     private let providers: [ProviderSettingsInfo]
     private let diagnostics: [String]
+    private let providerNameWidth: CGFloat = 112
+    private let providerTriggerWidth: CGFloat = 122
+    private let providerOrderWidth: CGFloat = 20
     private let onSave: (PaletteConfig) -> Void
     private let onOpen: (URL) -> Void
     private let onExportBackup: () -> Void
@@ -963,6 +966,7 @@ struct SettingsView: View {
                 numericRow("Visible rows", value: visibleRowsBinding, in: 5...10, step: 1)
                 numericRow("Scale", value: scalePercentBinding, in: 80...160, step: 5, unit: "%")
                 Picker("Preview", selection: $config.window.previewLayout) {
+                    Text("Automatic (window width)").tag(PreviewPlacement.auto)
                     Text("Below the list").tag(PreviewPlacement.below)
                     Text("Beside the list").tag(PreviewPlacement.beside)
                 }
@@ -1378,113 +1382,42 @@ struct SettingsView: View {
         }
     }
 
+    /// One row per provider: visibility, name, trigger, aliases, and order all
+    /// live in the same table so a provider is configured in one place.
     private var providerSettings: some View {
         Form {
             Section {
-                ForEach(allProviderIDs, id: \.self) { id in
-                    Toggle(providerName(id), isOn: Binding(
-                        get: { !disabledProviders.contains(id) },
-                        set: { enabled in
-                            if enabled {
-                                disabledProviders.removeAll { $0 == id }
-                            } else if !disabledProviders.contains(id) {
-                                disabledProviders.append(id)
-                            }
-                        }
-                    ))
-                }
-            } header: {
-                Text("Visible tabs")
-            } footer: {
-                settingsFooter("Turn off providers you do not use. Hidden providers disappear from the tab bar and Tab cycling; apps always stay visible.")
-            }
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 10) {
+                        Color.clear.frame(width: 18, height: 1)
+                        Text("Provider")
+                            .frame(width: providerNameWidth, alignment: .leading)
+                        Text("Trigger")
+                            .frame(width: providerTriggerWidth, alignment: .leading)
+                        Text("Aliases")
+                            .searchTarget("providers-shortcuts")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Order")
+                            .searchTarget("providers-order")
+                            .frame(width: providerOrderWidth)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 6)
 
-            Section {
-                ForEach(Array(providerOrder.enumerated()), id: \.element) { index, id in
-                    HStack {
-                        Text(providerName(id))
-                        Spacer()
-                        Button {
-                            guard index > 0 else { return }
-                            providerOrder.swapAt(index, index - 1)
-                        } label: { Image(systemName: "chevron.left") }
-                            .buttonStyle(.borderless)
-                            .disabled(index == 0)
-                        Button {
-                            guard index + 1 < providerOrder.count else { return }
-                            providerOrder.swapAt(index, index + 1)
-                        } label: { Image(systemName: "chevron.right") }
-                            .buttonStyle(.borderless)
-                            .disabled(index + 1 == providerOrder.count)
+                    Divider()
+
+                    ForEach(Array(allProviderIDs.enumerated()), id: \.element) { index, id in
+                        providerRow(id)
+                        if index < allProviderIDs.count - 1 {
+                            Divider()
+                        }
                     }
                 }
             } header: {
-                Text("Order").searchTarget("providers-order")
+                Text("Providers")
             } footer: {
-                settingsFooter("Use the arrows to move a provider left or right in the tab bar.")
-            }
-
-            Section {
-                ForEach(allProviderIDs, id: \.self) { id in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(providerName(id)).fontWeight(.medium)
-                            if let trigger = providerTrigger(id) {
-                                Text("trigger: \(trigger)")
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
-                                    .help("The trigger is compiled from provider.toml. Edit that file to rename it.")
-                            } else {
-                                Text("global").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if ProviderAliases.defaults[id] != nil {
-                                Button("Reset to defaults") { resetAliases(id) }
-                                    .buttonStyle(.borderless)
-                                    .font(.caption)
-                            }
-                        }
-                        ForEach(aliasEntries(id)) { $entry in
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 8) {
-                                    Toggle("Use alias \(entry.word)", isOn: $entry.enabled)
-                                        .toggleStyle(.checkbox)
-                                        .labelsHidden()
-                                        .accessibilityLabel("Use alias \(entry.word)")
-                                    TextField("Alias", text: $entry.word)
-                                        .settingsField()
-                                        .foregroundStyle(aliasIssues[entry.id] == nil ? Color.primary : Color.red)
-                                    Button {
-                                        deleteAlias(entry.id, from: id)
-                                    } label: {
-                                        Image(systemName: "trash")
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .help("Delete this alias")
-                                    .accessibilityLabel("Delete alias \(entry.word)")
-                                }
-                                if let issue = aliasIssues[entry.id] {
-                                    Text(issue).font(.caption).foregroundStyle(.red)
-                                }
-                            }
-                        }
-                        HStack(spacing: 8) {
-                            TextField("Add alias", text: Binding(
-                                get: { newAlias[id] ?? "" },
-                                set: { newAlias[id] = $0 }
-                            ))
-                            .settingsField()
-                            .onSubmit { addAlias(id) }
-                            Button("Add") { addAlias(id) }
-                                .disabled((newAlias[id] ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            } header: {
-                Text("Shortcuts").searchTarget("providers-shortcuts")
-            } footer: {
-                settingsFooter("A checked alias is active and saved to config.toml; unchecking keeps the row but removes the word. Built-in defaults stay listed so they can be restored. Triggers come from provider.toml and cannot be renamed here.")
+                settingsFooter("Turn off a provider to hide its tab; apps always stay visible. A checked alias is active and saved to config.toml — unchecking keeps the row so the word can be restored. Triggers come from provider.toml and cannot be renamed here. Use the arrows to change the tab order.")
             }
 
             Section {
@@ -1567,6 +1500,151 @@ struct SettingsView: View {
 
     private func providerTrigger(_ id: String) -> String? {
         providers.first(where: { $0.id == id })?.trigger
+    }
+
+    private func providerIsGlobal(_ id: String) -> Bool {
+        providers.first(where: { $0.id == id })?.isGlobal ?? false
+    }
+
+    private func providerEnabledBinding(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { !disabledProviders.contains(id) },
+            set: { enabled in
+                if enabled {
+                    disabledProviders.removeAll { $0 == id }
+                } else if !disabledProviders.contains(id) {
+                    disabledProviders.append(id)
+                }
+            }
+        )
+    }
+
+    /// Moves a provider one row in the table. Rows skip `apps`, so swap with the
+    /// neighbouring row's id rather than the neighbouring array slot.
+    private func moveProvider(_ id: String, up: Bool) {
+        let rows = allProviderIDs
+        guard let row = rows.firstIndex(of: id) else { return }
+        let neighbour = up ? row - 1 : row + 1
+        guard rows.indices.contains(neighbour),
+              let from = providerOrder.firstIndex(of: id),
+              let to = providerOrder.firstIndex(of: rows[neighbour]) else { return }
+        providerOrder.swapAt(from, to)
+    }
+
+    private func providerRow(_ id: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Toggle("Show \(providerName(id))", isOn: providerEnabledBinding(id))
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+                .frame(width: 18, alignment: .leading)
+                .help("Show \(providerName(id)) as a launcher tab")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(providerName(id))
+                    .fontWeight(.medium)
+                    .lineLimit(2)
+                if providerIsGlobal(id) {
+                    Text("always searched")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .help("This provider is searched without a prefix.")
+                }
+            }
+            .frame(width: providerNameWidth, alignment: .leading)
+
+            providerTriggerChip(id)
+                .frame(width: providerTriggerWidth, alignment: .leading)
+
+            aliasEditor(id)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(spacing: 2) {
+                Button { moveProvider(id, up: true) } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .buttonStyle(.borderless)
+                .disabled(providerOrder.firstIndex(of: id) == nil || allProviderIDs.first == id)
+                .help("Move \(providerName(id)) up")
+                .accessibilityLabel("Move \(providerName(id)) up")
+
+                Button { moveProvider(id, up: false) } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .buttonStyle(.borderless)
+                .disabled(providerOrder.firstIndex(of: id) == nil || allProviderIDs.last == id)
+                .help("Move \(providerName(id)) down")
+                .accessibilityLabel("Move \(providerName(id)) down")
+            }
+            .frame(width: providerOrderWidth)
+        }
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func providerTriggerChip(_ id: String) -> some View {
+        if let trigger = providerTrigger(id) {
+            Text("trigger: \(trigger)")
+                .font(.caption.monospaced())
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color.secondary.opacity(0.12))
+                )
+                .help("The trigger is compiled from provider.toml. Edit that file to rename it.")
+        } else {
+            Text("global")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .help("This provider has no trigger, so it is searched without a prefix.")
+        }
+    }
+
+    @ViewBuilder
+    private func aliasEditor(_ id: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(aliasEntries(id)) { $entry in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Toggle("Use alias \(entry.word)", isOn: $entry.enabled)
+                            .toggleStyle(.checkbox)
+                            .labelsHidden()
+                            .accessibilityLabel("Use alias \(entry.word)")
+                        TextField("Alias", text: $entry.word)
+                            .settingsField()
+                            .foregroundStyle(aliasIssues[entry.id] == nil ? Color.primary : Color.red)
+                        Button {
+                            deleteAlias(entry.id, from: id)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Delete this alias")
+                        .accessibilityLabel("Delete alias \(entry.word)")
+                    }
+                    if let issue = aliasIssues[entry.id] {
+                        Text(issue).font(.caption).foregroundStyle(.red)
+                    }
+                }
+            }
+            HStack(spacing: 6) {
+                TextField("Add alias", text: Binding(
+                    get: { newAlias[id] ?? "" },
+                    set: { newAlias[id] = $0 }
+                ))
+                .settingsField()
+                .onSubmit { addAlias(id) }
+                Button("Add") { addAlias(id) }
+                    .disabled((newAlias[id] ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if ProviderAliases.defaults[id] != nil {
+                Button("Reset to defaults") { resetAliases(id) }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
+        }
     }
 
     private func aliasEntries(_ id: String) -> Binding<[ProviderAliasEntry]> {

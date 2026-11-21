@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.12.0 — 2026-11-21
+
+### Added
+
+- **Atlas provider** — native `/atlas` (and global) search over the `atlas` index:
+  artifacts and docs with `project · path`, an inbox "review" badge, a document
+  preview, and a "Mark reviewed" action that runs `atlas review <path>`.
+- **Adaptive preview layout** (`preview_layout = "auto"`, the default) — beside on
+  wide screens, below on narrow/portrait ones.
+- **Providers table** — the Providers settings tab is now a single table per
+  provider (enable · name · trigger · aliases · order) instead of three sections.
+- **Debug build workflow** — `make debug-app` builds a separate `Palette Debug.app`
+  (own bundle id + isolated config) and launches it via LaunchServices.
+
+### Fixed
+
+- **Portrait-screen clipping** — the launcher panel width is clamped to the screen,
+  so the preview pane no longer runs off the right edge of a narrow display.
+- The Terminal settings tab is no longer last in the sidebar.
+
+### Changed
+
+- `preview_layout` accepts `auto` (the default); `beside`/`below` remain explicit.
+
 ## 2.11.1 — 2026-11-21
 
 ### Fixed

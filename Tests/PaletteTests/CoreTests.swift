@@ -380,6 +380,27 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(reloaded.showTabs)
     }
 
+    func testAutoPreviewLayoutFitsTheScreen() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-window-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config"),
+            stateDir: root.appendingPathComponent("state"),
+            cacheDir: root.appendingPathComponent("cache")
+        )
+        try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
+        try "[window]\npreview_layout = \"auto\"\nscale = 1.0\n"
+            .write(to: paths.configFile, atomically: true, encoding: .utf8)
+
+        let loaded = ConfigLoader.load(paths: paths).config.window
+        XCTAssertEqual(loaded.previewLayout, .auto)
+        // Portrait: the beside pane (~880) does not fit inside 1080 - 24.
+        XCTAssertEqual(loaded.resolvedPreviewLayout(for: CGSize(width: 1080, height: 1920)), .below)
+        // Landscape: it does.
+        XCTAssertEqual(loaded.resolvedPreviewLayout(for: CGSize(width: 1440, height: 900)), .beside)
+    }
+
     func testThemeLoaderFallsBackAndValidates() {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("palette-themes-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

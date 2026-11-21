@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.11.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.12.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -204,6 +204,7 @@ trigger word:
 | `/ssh <query>` | hosts from `~/.ssh/config` |
 | `/docker <query>` | containers: start, stop, restart, logs |
 | `/gh <query>` | pull requests and issues through the `gh` CLI |
+| `/atlas <query>` | atlas artifacts and docs, inbox first |
 
 A trailing slash browses a directory breadth-first: `/edit ~/dev/` shows the
 direct children of `~/dev` first, then the next level.
@@ -275,22 +276,23 @@ local key file” and never displays the value again. Keys are never written to
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window with twelve tabs:
-**General**, **Launcher**, **Appearance**, **Shortcuts**, **Clipboard**,
-**Search**, **Capture**, **Ask**, **Providers**, **Advanced**, **Terminal**, and
-**Cheatsheets**. General holds shortcuts, the terminal/editor apps used by
-providers, permissions, and the **Keep Awake** and timer toggles; Launcher holds
-where the panel opens, app order, `Show provider tabs`, and the panel size;
-Appearance holds themes and typography; Capture holds screenshot and recording
-options; **Terminal** holds the embedded session, shell, and font that used to
-live in General; **Cheatsheets** holds the folders and extensions `/cheat`
-reads.
+`⌘,` (or the menu-bar icon) opens a native Settings window with twelve tabs in
+three sidebar groups. The General group holds **General**, **Launcher**, and
+**Appearance**; Features holds **Shortcuts**, **Clipboard**, **Search**,
+**Capture**, **Terminal**, **Ask**, and **Cheatsheets**; System holds
+**Providers** and **Advanced**. The General tab holds shortcuts, the
+terminal/editor apps used by providers, permissions, and the **Keep Awake** and
+timer toggles; Launcher holds where the panel opens, app order,
+`Show provider tabs`, and the panel size; Appearance holds themes and
+typography; Capture holds screenshot and recording options; **Terminal** holds
+the embedded session, shell, and font; **Cheatsheets** holds the folders and
+extensions `/cheat` reads.
 **Clipboard**, **Search**, and **Ask** cover their own features. **Providers**
-picks which provider tabs are visible. **Advanced** has config/theme/log links,
-backup, diagnostics, and version information. The **Ask** tab selects the
-endpoint and model,
-saves a local API key, toggles automatic fallback, and controls how many Q&A
-entries and how many days of history are kept.
+is one table per provider — enable, name, trigger, aliases, and tab order in
+the same row. **Advanced** has config/theme/log links, backup, diagnostics, and
+version information. The **Ask** tab selects the endpoint and model, saves a
+local API key, toggles automatic fallback, and controls how many Q&A entries and
+how many days of history are kept.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
 session event tap, so macOS-reserved combinations such as `⌘Space` are captured
 instead of being swallowed by the system; it stops as soon as Settings loses
@@ -309,6 +311,14 @@ The older `bottom` value is accepted for compatibility and now maps to
 
 The launcher is always the two-surface pill: a floating search capsule above a
 rounded content card. There is no alternate classic layout.
+
+### Preview layout
+
+`preview_layout = "auto"` is the default: the preview sits beside the list when
+the screen is wide enough and below it on narrow or portrait displays.
+`beside` and `below` remain explicit overrides. Panel width is clamped to the
+screen, so the preview pane stays inside a narrow display instead of running
+off the right edge.
 
 ### Pinned items
 
@@ -400,6 +410,16 @@ and reveal it in Finder. Folders and extensions are ordinary config:
 folders = ["~/Documents/cheatsheets", "~/dev/handbook"]
 extensions = ["pdf", "html", "htm", "md", "markdown", "txt", "png", "jpg", "jpeg"]
 ```
+
+### Atlas
+
+`/atlas` lists what `atlas` has indexed in `~/.config/atlas/state.json`:
+artifacts and docs, each shown as `project · path`. Inbox items sort first and
+carry a **review** badge. `⏎` opens a row, Markdown and HTML rows preview in the
+pane, and **Mark Reviewed** in `⌘K` runs `atlas review <path>`. The provider
+only reads atlas's data and derives the marker, modification time and preview
+path the same way atlas does, so atlas itself needs no change. It also answers
+unprefixed queries.
 
 ### Bitwarden
 
@@ -600,11 +620,11 @@ mono_size = 13
 ### Provider aliases, order, and visibility
 
 `[providers]` stores tab order, extra trigger words, the providers that also
-answer plain queries, and providers you want to hide. Turn providers on or off
-in Settings → Advanced; the tab bar and Tab cycling only include enabled
-providers. Order with the up/down buttons; aliases are comma-separated. The
-canonical trigger never changes. Duplicate aliases or triggers are rejected
-when saving.
+answer plain queries, and providers you want to hide. Settings → Providers is a
+single table per provider: enable it, see its trigger, edit aliases, and set tab
+order in the same row. The tab bar and Tab cycling only include enabled
+providers. Aliases are added as words in that row; the canonical trigger never
+changes. Duplicate aliases or triggers are rejected when saving.
 
 ```toml
 [providers]
@@ -657,7 +677,7 @@ ask_width = 0
 preview_width = 0
 terminal_width = 0             # 0 = 1000 * scale
 scratchpad_width = 0
-preview_layout = "below"       # below | beside
+preview_layout = "auto"        # auto | beside | below
 
 [timer]
 presets = [5, 10, 15, 25, 30, 45, 60]   # minutes, shown in /timer
@@ -768,7 +788,15 @@ swift build
 swift test
 make e2e           # end-to-end flows against build/Palette.app
 make run
+make debug-app     # build and launch Palette Debug.app
 ```
+
+`make debug-app` builds `build/Palette Debug.app` with its own bundle id
+(`dev.myleshen.palette.debug`) and its own config and state under
+`~/Library/Application Support/Palette Debug`, then opens it through
+LaunchServices. A debug run never reads or writes the installed app's files, and
+permission prompts attribute to **Palette Debug** rather than the terminal that
+started it. `make debug` is the same target.
 
 Layout:
 

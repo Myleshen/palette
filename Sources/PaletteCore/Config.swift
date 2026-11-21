@@ -142,6 +142,8 @@ public struct TypographyConfig: Sendable, Equatable {
 public enum PreviewPlacement: String, Sendable, Equatable {
     case beside
     case below
+    /// Beside when the screen is wide enough for the preview pane, below if not.
+    case auto
 }
 
 /// Launcher geometry lives in config.toml, not the theme: themes describe how
@@ -163,7 +165,7 @@ public struct WindowConfig: Sendable, Equatable {
     public var previewWidth: Double = 0
     public var terminalWidth: Double = 0
     public var scratchpadWidth: Double = 0
-    public var previewLayout: PreviewPlacement = .beside
+    public var previewLayout: PreviewPlacement = .auto
 
     public init() {}
 
@@ -232,6 +234,13 @@ public struct WindowConfig: Sendable, Equatable {
     }
     public func previewWidth(for visible: CGSize) -> Double {
         panelWidth(previewWidth, Self.defaultPanelWidth, for: visible)
+    }
+
+    /// The layout to actually use: `auto` falls back to below when the beside
+    /// panel would not fit inside the screen minus the 24pt margins.
+    public func resolvedPreviewLayout(for visible: CGSize) -> PreviewPlacement {
+        guard previewLayout == .auto else { return previewLayout }
+        return Double(visible.width) - 24 >= previewWidth(for: visible) ? .beside : .below
     }
     public func terminalWidth(for visible: CGSize) -> Double {
         panelWidth(terminalWidth, Self.defaultTerminalWidth, for: visible)
@@ -441,19 +450,32 @@ public struct PalettePaths: Sendable {
 
     public static func resolve(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        home: String = NSHomeDirectory()
+        home: String = NSHomeDirectory(),
+        bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) -> PalettePaths {
         func directory(_ value: String) -> URL {
             URL(fileURLWithPath: PathExpansion.expand(value, home: home), isDirectory: true)
         }
 
+        // The debug bundle keeps its own config so a debug run never reads or
+        // writes the installed copy. PALETTE_* overrides still win.
+        let debugSupport = bundleIdentifier == "dev.myleshen.palette.debug"
+            ? home + "/Library/Application Support/Palette Debug"
+            : nil
+        let debugCache = bundleIdentifier == "dev.myleshen.palette.debug"
+            ? home + "/Library/Caches/Palette Debug"
+            : nil
+
         let configBase = environment["PALETTE_CONFIG_DIR"]
+            ?? debugSupport.map { $0 + "/config" }
             ?? environment["XDG_CONFIG_HOME"].map { $0 + "/palette" }
             ?? home + "/.config/palette"
         let stateBase = environment["PALETTE_STATE_DIR"]
+            ?? debugSupport.map { $0 + "/state" }
             ?? environment["XDG_STATE_HOME"].map { $0 + "/palette" }
             ?? home + "/.local/state/palette"
         let cacheBase = environment["PALETTE_CACHE_DIR"]
+            ?? debugCache
             ?? (environment["PALETTE_SCRIPT"] != nil
                 ? stateBase + "/cache"
                 : home + "/Library/Caches/Palette")
@@ -903,7 +925,7 @@ public enum ConfigLoader {
         preview_width = 0
         terminal_width = 0             # 0 = 1000 * scale
         scratchpad_width = 0
-        preview_layout = "beside"      # beside | below
+        preview_layout = "auto"        # beside | below | auto
 
         # Screenshots and recordings.
         [capture]
