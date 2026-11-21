@@ -19,6 +19,20 @@ public enum BangResolver {
                 && $0.urlTemplate.contains("{query}")
         }
 
+        // No engine can answer a bang: say how to enable one instead of a bare
+        // "No results". Informational only — opening Settings is a host action
+        // this static resolver cannot reach.
+        guard !candidates.isEmpty else {
+            return [PaletteItem(
+                id: "bang:none",
+                title: "No bangs configured",
+                subtitle: "Add a keyword to a search engine in Settings → Search → Search engines (e.g. !g)",
+                icon: .symbol("gearshape"),
+                providerID: "bang",
+                providerName: "Web Search"
+            )]
+        }
+
         // Keyword first, then the engine name.
         if let engine = candidates.first(where: { ($0.keyword ?? "").lowercased() == lowered })
             ?? candidates.first(where: { $0.name.lowercased() == lowered }) {

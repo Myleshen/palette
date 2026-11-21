@@ -206,6 +206,14 @@ struct ResultRow: View {
     var theme: Theme
     var pill: Bool = false
 
+    /// Armed hover: a parked or jittery pointer must not light a row, so the
+    /// highlight waits until the pointer has moved more than a few points
+    /// since it entered. Selection always outranks it.
+    @State private var hoverOrigin: CGPoint?
+    @State private var hoverArmed = false
+
+    private var hovered: Bool { hoverArmed && !selected }
+
     private var selectedBase: String {
         pill ? theme.palette.fg : (theme.states.selected.fg ?? theme.palette.selectionFg)
     }
@@ -260,6 +268,23 @@ struct ResultRow: View {
         .frame(height: CGFloat(theme.effectiveRowHeight))
         .background(selectionBackground)
         .contentShape(Rectangle())
+        .onContinuousHover(coordinateSpace: .global) { phase in
+            switch phase {
+            case .active(let location):
+                if let origin = hoverOrigin {
+                    if !hoverArmed, hypot(location.x - origin.x, location.y - origin.y) > 3 {
+                        hoverArmed = true
+                    }
+                } else {
+                    // First event in this row: arm it without highlighting.
+                    hoverOrigin = location
+                    hoverArmed = false
+                }
+            case .ended:
+                hoverOrigin = nil
+                hoverArmed = false
+            }
+        }
     }
 
     @ViewBuilder
@@ -298,10 +323,31 @@ struct ResultRow: View {
                         .fill(color.opacity(0.95))
                 }
             }
+        } else if hovered {
+            // Deliberately weaker than selection, and absent when the user
+            // turned selection backgrounds off.
+            switch style {
+            case "none":
+                Color.clear
+            default:
+                if pill {
+                    Capsule().fill(theme.color(theme.palette.accent).opacity(0.08))
+                } else {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(color.opacity(0.45))
+                }
+            }
         } else {
             Color.clear
         }
     }
+}
+
+/// Read-only key reference shown at the end of the ⌘K action list.
+private struct ShortcutHint: Identifiable {
+    var keys: String
+    var label: String
+    var id: String { keys }
 }
 
 struct ActionRow: View {
@@ -845,6 +891,17 @@ struct LauncherRootView: View {
                                 controller.executeAction()
                             }
                         }
+                        if !controller.actionItems.isEmpty {
+                            Rectangle()
+                                .fill(theme.color(theme.palette.separator).opacity(0.5))
+                                .frame(height: 1)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 8)
+                        }
+                        keyboardReference
+                            .padding(.horizontal, isPill ? 20 : 16)
+                            .padding(.top, 6)
+                            .padding(.bottom, 6)
                     }
                     .padding(.horizontal, isPill ? 14 : 6)
                     .padding(.bottom, isPill ? 6 : 4)
@@ -859,22 +916,78 @@ struct LauncherRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 7) {
-            Image(systemName: controller.isSearching ? "hourglass" : "sparkle.magnifyingglass")
-                .font(.system(size: 18, weight: .light))
-                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.8))
-            Text(emptyMessage)
-                .font(.system(size: 12))
-                .foregroundColor(theme.color(theme.palette.fgMuted))
+    private static let shortcutHints: [ShortcutHint] = [
+        ShortcutHint(keys: "↑↓", label: "Navigate"),
+        ShortcutHint(keys: "⏎", label: "Open"),
+        ShortcutHint(keys: "⌘⏎", label: "Secondary"),
+        ShortcutHint(keys: "⌘K", label: "Actions"),
+        ShortcutHint(keys: "⌘R", label: "Reload"),
+        ShortcutHint(keys: "esc", label: "Close"),
+    ]
+
+    private var keyboardReference: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Keyboard")
+                .font(.system(size: 9, weight: .semibold))
+                .textCase(.uppercase)
+                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.7))
+                .padding(.bottom, 2)
+            ForEach(Self.shortcutHints) { hint in
+                HStack(spacing: 8) {
+                    Text(hint.keys)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(theme.color(theme.palette.elevated).opacity(0.7))
+                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                        .frame(width: 50, alignment: .leading)
+                    Text(hint.label)
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.85))
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: emptyGlyph)
+                .font(.system(size: 24, weight: .light))
+                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.7))
+            Text(emptyTitle)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.color(theme.palette.fg).opacity(0.9))
+            Text(emptyDetail)
+                .font(.system(size: 11))
+                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.8))
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+                .frame(maxWidth: 360)
+        }
+        .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var emptyMessage: String {
+    private var emptyGlyph: String {
+        if controller.isSearching { return "hourglass" }
+        if controller.query.isEmpty { return "magnifyingglass" }
+        return "sparkle.magnifyingglass"
+    }
+
+    private var emptyTitle: String {
         if controller.isSearching { return "Searching…" }
-        if controller.query.isEmpty { return "Start typing to search" }
+        if controller.query.isEmpty { return "Start typing" }
         return "No results"
+    }
+
+    private var emptyDetail: String {
+        if controller.isSearching { return "Results appear as each source responds." }
+        if controller.query.isEmpty { return "Search apps, files, clipboard, snippets and more." }
+        if controller.scopeLabel != nil { return "Try a different spelling, or press esc to go back." }
+        return "Try a different spelling, or press ⌘, to enable more sources."
     }
 
     private var footer: some View {

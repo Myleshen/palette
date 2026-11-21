@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.8.0 — 2026-11-21
+
+### Changed
+
+- **Settings reorganized into 10 focused tabs** — General, Launcher, Appearance,
+  Shortcuts, Clipboard, Search, Capture, Ask, Providers, Advanced — with duplicate
+  controls removed and clearer section labels and footers.
+- **Every input now reads as editable**: text fields have a visible bezel, and
+  every numeric control is an editable value field paired with stepper arrows
+  (with units such as `pt`, `%`, `s`, `ms`, `days`).
+- **Settings sidebar** groups the tabs (General / Features / System) and gives each
+  a tinted icon tile; the window keeps a native titlebar band.
+- **Settings search jumps to the matched row** and briefly highlights it, instead
+  of only switching tabs.
+- **Search ranking** uses tier bands (exact > prefix > word-start > substring >
+  subsequence) with word-start and run bonuses.
+- **Launcher rows** show a hover highlight only after the pointer actually moves
+  (3 pt), and the selection always outranks hover.
+- **⌘K** includes a keyboard reference section.
+- Capture and timer settings moved out of the Providers tab; `Show provider tabs`
+  moved to the top of the Launcher tab.
+
+### Fixed
+
+- Empty states now suggest a next step ("Try a different spelling, or press ⌘, to
+  enable more sources") instead of a bare "No results".
+- Existing configs now pick up the default bang keywords (`!g`, `!ddg`, `!gh`,
+  `!yt`) on load, so `!` works after upgrading without pressing Restore Defaults.
+- Typing `!` when no engine has a keyword shows "No bangs configured" with a hint,
+  instead of a bare "No results".
+
 ## 2.7.0 — 2026-11-17
 
 ### Added

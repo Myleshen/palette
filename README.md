@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.7.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.8.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -259,12 +259,16 @@ local key file” and never displays the value again. Keys are never written to
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window. **General** holds
-shortcuts, the terminal/editor used by providers, launcher position, app order,
-and **Keep Awake** toggles for keeping the Mac awake and arming clamshell mode. **Appearance** holds themes and typography. **Clipboard**, **Search**, and
-**Ask** cover their own features. **Providers** controls which tabs are visible,
-their order, and optional aliases. **Advanced** has config/theme/log links,
-backup, diagnostics, and version information. The **Ask** tab selects the endpoint and model,
+`⌘,` (or the menu-bar icon) opens a native Settings window with ten tabs:
+**General**, **Launcher**, **Appearance**, **Shortcuts**, **Clipboard**,
+**Search**, **Capture**, **Ask**, **Providers**, and **Advanced**. General holds
+shortcuts, the terminal/editor used by providers, permissions, and the
+**Keep Awake** and timer toggles; Launcher holds where the panel opens, app order,
+`Show provider tabs`, and the panel size; Appearance holds themes and typography;
+Capture holds screenshot and recording options. **Clipboard**, **Search**, and
+**Ask** cover their own features. **Providers** picks which provider tabs are
+visible. **Advanced** has config/theme/log links, backup, diagnostics, and version
+information. The **Ask** tab selects the endpoint and model,
 saves a local API key, toggles automatic fallback, and controls how many Q&A
 entries and how many days of history are kept.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived

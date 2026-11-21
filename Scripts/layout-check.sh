@@ -24,7 +24,17 @@ fi
 mkdir -p "$REFERENCE_DIR"
 failed=0
 
-for tab in 0 1 2 3 4 5 6 7; do
+# One snapshot per SettingsTab.allCases entry. The case list is read from the
+# enum declaration so adding a tab does not silently skip its snapshot.
+TAB_CASES="$(awk '/enum SettingsTab/{found=1} found && /^    case /{print; exit}' Sources/PaletteApp/SettingsView.swift)"
+TAB_COUNT="$(printf '%s\n' "$TAB_CASES" | tr ',' '\n' | wc -l | tr -d ' ')"
+if [ "$TAB_COUNT" -lt 1 ]; then
+  echo "could not read SettingsTab.allCases from Sources/PaletteApp/SettingsView.swift"
+  exit 1
+fi
+echo "rendering $TAB_COUNT settings tabs"
+
+for ((tab = 0; tab < TAB_COUNT; tab++)); do
   config="$(mktemp -d /tmp/palette-layout-cfg.XXXXXX)"
   PALETTE_CONFIG_DIR="$config" \
   PALETTE_STATE_DIR="$config/state" \
