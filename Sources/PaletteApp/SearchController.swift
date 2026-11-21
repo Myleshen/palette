@@ -119,7 +119,10 @@ public final class SearchController: ObservableObject, HostBridge {
     private var windowConfig: WindowConfig { configuration.window }
 
     public var previewLayout: PreviewPlacement {
-        configuration.window.resolvedPreviewLayout(for: screenSize)
+        configuration.window.resolvedPreviewLayout(
+            screenWidth: Double(screenSize.width),
+            previewPanelWidth: configuration.window.previewWidth(for: screenSize)
+        )
     }
 
     private var timerObserver: NSObjectProtocol?

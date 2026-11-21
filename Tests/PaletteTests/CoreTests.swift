@@ -396,9 +396,15 @@ final class CoreTests: XCTestCase {
         let loaded = ConfigLoader.load(paths: paths).config.window
         XCTAssertEqual(loaded.previewLayout, .auto)
         // Portrait: the beside pane (~880) does not fit inside 1080 - 24.
-        XCTAssertEqual(loaded.resolvedPreviewLayout(for: CGSize(width: 1080, height: 1920)), .below)
+        let portrait = CGSize(width: 1080, height: 1920)
+        XCTAssertEqual(loaded.resolvedPreviewLayout(
+            screenWidth: Double(portrait.width),
+            previewPanelWidth: loaded.previewWidth(for: portrait)), .below)
         // Landscape: it does.
-        XCTAssertEqual(loaded.resolvedPreviewLayout(for: CGSize(width: 1440, height: 900)), .beside)
+        let landscape = CGSize(width: 1440, height: 900)
+        XCTAssertEqual(loaded.resolvedPreviewLayout(
+            screenWidth: Double(landscape.width),
+            previewPanelWidth: loaded.previewWidth(for: landscape)), .beside)
     }
 
     func testThemeLoaderFallsBackAndValidates() {

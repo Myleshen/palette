@@ -237,10 +237,12 @@ public struct WindowConfig: Sendable, Equatable {
     }
 
     /// The layout to actually use: `auto` falls back to below when the beside
-    /// panel would not fit inside the screen minus the 24pt margins.
-    public func resolvedPreviewLayout(for visible: CGSize) -> PreviewPlacement {
+    /// panel would not fit inside the screen minus the 24pt margins. Takes
+    /// primitive widths rather than `CGSize`, which trips a SIL-deserialization
+    /// bug in some toolchains when a serialized function reads `CGSize.width`.
+    public func resolvedPreviewLayout(screenWidth: Double, previewPanelWidth: Double) -> PreviewPlacement {
         guard previewLayout == .auto else { return previewLayout }
-        return Double(visible.width) - 24 >= previewWidth(for: visible) ? .beside : .below
+        return screenWidth - 24 >= previewPanelWidth ? .beside : .below
     }
     public func terminalWidth(for visible: CGSize) -> Double {
         panelWidth(terminalWidth, Self.defaultTerminalWidth, for: visible)
