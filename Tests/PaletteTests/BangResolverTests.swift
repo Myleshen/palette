@@ -31,6 +31,32 @@ final class BangResolverTests: XCTestCase {
         XCTAssertNil(action?.value.object?["mode"])
     }
 
+    func testAppModeEngineOpensInTheWebAppBrowser() {
+        let appEngines = [
+            WebSearchEngine(
+                name: "YouTube",
+                urlTemplate: "https://www.youtube.com/results?search_query={query}",
+                keyword: "yt",
+                browser: "Helium",
+                appMode: true
+            ),
+            WebSearchEngine(
+                name: "DuckDuckGo",
+                urlTemplate: "https://duckduckgo.com/?q={query}",
+                keyword: "ddg"
+            ),
+        ]
+        let app = BangResolver.items(for: "!yt lo-fi", engines: appEngines).first?.actions.first
+        XCTAssertEqual(app?.value.object?["mode"], "app")
+        XCTAssertEqual(app?.value.object?["browser"], "Helium")
+        XCTAssertEqual(app?.title, "Open in Web App")
+
+        // A normal engine keeps opening a regular browser tab.
+        let normal = BangResolver.items(for: "!ddg palette", engines: appEngines).first?.actions.first
+        XCTAssertNil(normal?.value.object?["mode"])
+        XCTAssertEqual(normal?.title, "Open in Browser")
+    }
+
     func testBrowserIsAbsentWhenTheEngineUsesTheDefault() {
         let items = BangResolver.items(for: "!ddg palette", engines: engines)
         XCTAssertEqual(items.first?.actions.first?.value.object?["url"], "https://duckduckgo.com/?q=palette")

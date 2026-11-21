@@ -46,7 +46,10 @@ public enum AskClientError: LocalizedError, Equatable {
     public var allowsFallback: Bool {
         switch self {
         case .quota, .invalidKey: return true
-        case .http(let status, _): return status == 401 || status == 403 || status == 429 || status >= 500
+        // Status 0 means the request never got a response: a timeout or a
+        // dropped connection. Another model may well answer in time.
+        case .http(let status, _):
+            return status == 0 || status == 401 || status == 403 || status == 429 || status >= 500
         case .missingKey, .malformed, .empty: return false
         }
     }
@@ -94,7 +97,20 @@ public struct LiveAskCompleter: AskCompleting {
 /// one-shot and non-streaming: quick answers are easier to persist and render
 /// when the whole reply arrives at once.
 public enum AskClient {
-    public static let timeout: TimeInterval = 30
+    /// Non-streaming full generation is slow, so a generous per-request budget.
+    public static let timeout: TimeInterval = 120
+    /// Hard ceiling on the whole call, a little above `timeout`, so a stalled
+    /// connection cannot sit in the fallback loop forever.
+    public static let deadline: TimeInterval = 130
+
+    /// Dedicated session: `URLSession.shared` defaults to a 60 s resource
+    /// timeout, which would silently undercut the values above.
+    private static let defaultSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = timeout
+        configuration.timeoutIntervalForResource = timeout
+        return URLSession(configuration: configuration)
+    }()
 
     public static func complete(
         endpoint: AskEndpoint,
@@ -104,8 +120,9 @@ public enum AskClient {
         maxTokens: Int,
         sessionID: String,
         baseURL: URL? = nil,
-        session: URLSession = .shared
+        session: URLSession? = nil
     ) async throws -> AskCompletion {
+        let session = session ?? defaultSession
         let base = baseURL ?? endpoint.baseURL
         let url = base.appendingPathComponent("chat/completions")
         var request = URLRequest(url: url)
@@ -126,14 +143,15 @@ public enum AskClient {
 
         let started = Date()
         let data: Data
-        let response: URLResponse
+        let status: Int
         do {
-            (data, response) = try await session.data(for: request)
+            (data, status) = try await send(request, session: session)
+        } catch let error as AskClientError {
+            throw error
         } catch {
             throw AskClientError.http(0, error.localizedDescription)
         }
         let duration = Int(Date().timeIntervalSince(started) * 1_000)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
             let message = errorMessage(from: data)
             switch status {
@@ -143,6 +161,29 @@ public enum AskClient {
             }
         }
         return try parse(data, durationMs: duration)
+    }
+
+    /// Races the request against `deadline` so a hung connection fails with a
+    /// readable error instead of blocking `/ask`.
+    private static func send(
+        _ request: URLRequest,
+        session: URLSession
+    ) async throws -> (Data, Int) {
+        try await withThrowingTaskGroup(of: (Data, Int).self) { group in
+            group.addTask {
+                let (data, response) = try await session.data(for: request)
+                return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(deadline * 1_000_000_000))
+                throw AskClientError.http(0, "No answer after \(Int(deadline))s — the model was too slow.")
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else {
+                throw AskClientError.http(0, "The AI endpoint sent no response.")
+            }
+            return first
+        }
     }
 
     public static func parse(_ data: Data, durationMs: Int) throws -> AskCompletion {
@@ -165,9 +206,12 @@ public enum AskClient {
         }
         let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw AskClientError.empty }
+        // A length stop means the model was cut off mid-answer; never present
+        // that as a complete reply.
+        let truncated = choices.first?["finish_reason"] as? String == "length"
         let usage = root["usage"] as? [String: Any]
         return AskCompletion(
-            answer: trimmed,
+            answer: truncated ? trimmed + "\n\n…(truncated — raise max_tokens)" : trimmed,
             promptTokens: usage?["prompt_tokens"] as? Int ?? 0,
             completionTokens: usage?["completion_tokens"] as? Int ?? 0,
             durationMs: durationMs

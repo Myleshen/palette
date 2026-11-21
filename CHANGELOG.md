@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.13.0 — 2026-11-21
+
+### Changed
+
+- **Default (unprefixed) search is now an allowlist** — `[providers] global` lists
+  exactly which providers answer a plain query (`apps` always does), with a
+  **Default** checkbox per provider in the Providers table (add *and* remove, e.g.
+  drop `calc`). Existing additive configs migrate to the full default set (now
+  includes `cheat`).
+- **Friendlier web-search engine editor** — each engine is a labelled card
+  (Name · Search URL · `!keyword` · Browser · Open in web app).
+
+### Added
+
+- **`app_mode` for `!` bangs** — "Open in web app" opens the search in the
+  SSB/web-app (Chromium) instead of a browser tab.
+
+### Fixed
+
+- **`/ask` reliability** — request timeout raised to 120 s with a 130 s deadline
+  and a dedicated session, models fall back on a timeout, `max_tokens` default
+  2048 with truncation flagged, "Ask Again" really re-asks, failures are
+  persisted and logged, the progress status persists, and the stale `glm-5.2`
+  model is gone.
+- **macOS UI/HIG pass** — Settings window minimum size, fullscreen and position
+  autosave; right-click context menus on launcher rows; save errors are shown
+  instead of silently discarding; readable Providers table (`Show`/`Order`
+  headers); `.labelsHidden()` engine fields; result-row accessibility plus a
+  Reduce Motion guard; Window and Help menus; better scoped empty state;
+  accessibility labels on icon buttons; `⌘⇧3`-style shortcut display.
+
 ## 2.12.1 — 2026-11-21
 
 ### Fixed

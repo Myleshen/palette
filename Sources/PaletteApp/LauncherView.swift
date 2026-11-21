@@ -578,6 +578,7 @@ struct ActionRow: View {
 struct LauncherRootView: View {
     @ObservedObject var controller: SearchController
     @EnvironmentObject var themeManager: ThemeManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
     @FocusState private var promptFocused: Bool
 
@@ -946,6 +947,17 @@ struct LauncherRootView: View {
                                 )
                                 .id(item.stableID)
                                 .onTapGesture { controller.activate(index) }
+                                .contextMenu {
+                                    ForEach(controller.actions(for: item)) { action in
+                                        Button(action.title) {
+                                            controller.run(action, on: item)
+                                        }
+                                    }
+                                }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityLabel(rowAccessibilityLabel(item))
+                                .accessibilityAction { controller.activate(index) }
                             }
                         }
                         .padding(.horizontal, isPill ? 14 : 6)
@@ -955,7 +967,7 @@ struct LauncherRootView: View {
                     .onChange(of: controller.selectionIndex) { _, _ in
                         guard controller.items.indices.contains(controller.selectionIndex) else { return }
                         let stableID = controller.items[controller.selectionIndex].stableID
-                        withAnimation(theme.scrollAnimation) {
+                        withAnimation(reduceMotion ? nil : theme.scrollAnimation) {
                             proxy.scrollTo(stableID, anchor: .center)
                         }
                     }
@@ -977,6 +989,14 @@ struct LauncherRootView: View {
                 .allowsHitTesting(false)
             }
         }
+    }
+
+    /// One sentence for VoiceOver: title, subtitle, provider.
+    private func rowAccessibilityLabel(_ item: PaletteItem) -> String {
+        [item.title, item.subtitle, item.providerName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 
     private var actionsView: some View {
@@ -1012,6 +1032,12 @@ struct LauncherRootView: View {
                                 controller.actionIndex = index
                                 controller.executeAction()
                             }
+                            .contextMenu {
+                                Button(action.title) {
+                                    controller.actionIndex = index
+                                    controller.executeAction()
+                                }
+                            }
                         }
                         if !controller.actionItems.isEmpty {
                             Rectangle()
@@ -1044,7 +1070,7 @@ struct LauncherRootView: View {
         ShortcutHint(keys: "⌘⏎", label: "Secondary"),
         ShortcutHint(keys: "⌘K", label: "Actions"),
         ShortcutHint(keys: "⌘R", label: "Reload"),
-        ShortcutHint(keys: "esc", label: "Close"),
+        ShortcutHint(keys: "esc", label: "Back"),
     ]
 
     private var keyboardReference: some View {
@@ -1108,7 +1134,7 @@ struct LauncherRootView: View {
     private var emptyDetail: String {
         if controller.isSearching { return "Results appear as each source responds." }
         if controller.query.isEmpty { return "Search apps, files, clipboard, snippets and more." }
-        if controller.scopeLabel != nil { return "Try a different spelling, or press esc to go back." }
+        if controller.scopeLabel != nil { return "Nothing here yet." }
         return "Try a different spelling, or press ⌘, to enable more sources."
     }
 

@@ -221,9 +221,10 @@ struct SettingsView: View {
     private let providers: [ProviderSettingsInfo]
     private let diagnostics: [String]
     private let providerNameWidth: CGFloat = 112
+    private let providerDefaultWidth: CGFloat = 62
     private let providerTriggerWidth: CGFloat = 122
-    private let providerOrderWidth: CGFloat = 20
-    private let onSave: (PaletteConfig) -> Void
+    private let providerOrderWidth: CGFloat = 36
+    private let onSave: (PaletteConfig) -> String?
     private let onOpen: (URL) -> Void
     private let onExportBackup: () -> Void
 
@@ -236,7 +237,7 @@ struct SettingsView: View {
         providerSummary: [String],
         providers: [ProviderSettingsInfo],
         diagnostics: [String],
-        onSave: @escaping (PaletteConfig) -> Void,
+        onSave: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
         onExportBackup: @escaping () -> Void
     ) {
@@ -385,6 +386,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 8)
@@ -543,12 +545,12 @@ struct SettingsView: View {
             .init(title: "Global shortcuts", tab: .shortcuts, anchor: "shortcuts-global", keywords: "hotkey shortcut launcher clipboard terminal scratchpad ask record screen region window"),
             .init(title: "Clipboard history", tab: .clipboard, anchor: "clipboard-history", keywords: "clipboard history entries poll clear retention secrets"),
             .init(title: "Web search", tab: .search, anchor: "search-web", keywords: "web search engine google duckduckgo github youtube"),
-            .init(title: "Search without a prefix", tab: .search, anchor: "search-global", keywords: "global unprefixed plain query provider system timer awake"),
             .init(title: "Search engines and bangs", tab: .search, anchor: "search-engines", keywords: "engine url keyword bang !g"),
             .init(title: "Bookmarks", tab: .search, anchor: "search-bookmarks", keywords: "bookmark url keywords browser"),
             .init(title: "Web app browser", tab: .search, anchor: "search-webapps", keywords: "browser helium chrome chromium web app"),
             .init(title: "Screenshots and recordings", tab: .capture, anchor: "capture-screenshots", keywords: "screenshot capture record audio microphone delay format save folder gallery"),
             .init(title: "Ask models and API key", tab: .ask, anchor: "ask-model", keywords: "ask model api key token endpoint history retention"),
+            .init(title: "Default search", tab: .providers, anchor: "providers-default", keywords: "global unprefixed plain query provider default search system timer awake"),
             .init(title: "Provider order and aliases", tab: .providers, anchor: "providers-order", keywords: "provider order alias visibility trigger"),
             .init(title: "Provider shortcuts and aliases", tab: .providers, anchor: "providers-shortcuts", keywords: "provider alias shortcut trigger reset defaults enable disable neo editor neof folders"),
             .init(title: "Cheatsheet folders", tab: .cheatsheets, anchor: "cheatsheets-folders", keywords: "cheatsheet reference pdf html markdown text image folder book"),
@@ -703,7 +705,9 @@ struct SettingsView: View {
             ("Window", config.windowScreenshotHotkey),
             ("Recording", config.recordingHotkey),
         ].filter { !$0.1.isEmpty }
-        let values = entries.map { "\($0.0) \($0.1)" }.joined(separator: " · ")
+        let values = entries
+            .map { "\($0.0) \(HotKeySpec.parse($0.1)?.prettyDisplay ?? $0.1)" }
+            .joined(separator: " · ")
         return hasShortcutConflict ? "Conflict: each global shortcut must be unique." : values
     }
 
@@ -910,6 +914,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.borderless)
                         .help("Remove folder")
+                        .accessibilityLabel("Remove folder")
                     }
                     .padding(.vertical, 4)
                 }
@@ -1076,31 +1081,6 @@ struct SettingsView: View {
     private var search: some View {
         Form {
             Section {
-                ForEach(providers) { provider in
-                    if provider.isGlobal {
-                        Toggle(provider.name, isOn: .constant(true))
-                            .disabled(true)
-                    } else {
-                        Toggle(provider.name, isOn: Binding(
-                            get: { globalProviders.contains(provider.id.lowercased()) },
-                            set: { enabled in
-                                let id = provider.id.lowercased()
-                                if enabled {
-                                    if !globalProviders.contains(id) { globalProviders.append(id) }
-                                } else {
-                                    globalProviders.removeAll { $0 == id }
-                                }
-                            }
-                        ))
-                    }
-                }
-            } header: {
-                Text("Search without a prefix").searchTarget("search-global")
-            } footer: {
-                settingsFooter("Plain queries search these providers in addition to the built-in ones; /trigger still targets one provider.")
-            }
-
-            Section {
                 Toggle("Show web results in search", isOn: $config.webSearchEnabled)
             } header: {
                 Text("Web search").searchTarget("search-web")
@@ -1109,46 +1089,28 @@ struct SettingsView: View {
             }
 
             Section {
-                ForEach($engines) { $engine in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            TextField("Name", text: $engine.name)
-                                .settingsField()
-                            Button {
-                                engines.removeAll { $0.id == engine.id }
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Remove engine")
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach($engines) { $engine in
+                        engineEditor($engine)
+                        Divider().padding(.vertical, 6)
+                    }
+                    HStack(spacing: 8) {
+                        Button("Add Engine") {
+                            engines.append(WebSearchEngine(
+                                name: "New Engine",
+                                urlTemplate: "https://example.com/?q={query}"
+                            ))
                         }
-                        TextField("Search URL with {query}", text: $engine.urlTemplate)
-                            .settingsField()
-                        TextField("Keyword (!bang)", text: Binding(
-                            get: { engine.keyword ?? "" },
-                            set: { engine.keyword = $0.isEmpty ? nil : $0 }
-                        ))
-                        .settingsField()
-                        BrowserPicker(browser: $engine.browser)
-                    }
-                    .padding(.vertical, 4)
-                }
-                HStack(spacing: 8) {
-                    Button("Add Engine") {
-                        engines.append(WebSearchEngine(
-                            name: "New Engine",
-                            urlTemplate: "https://example.com/?q={query}"
-                        ))
-                    }
-                    Button("Restore Defaults") {
-                        engines = WebSearchEngine.restoringDefaults(into: engines)
-                        config.webSearchEngines = engines
+                        Button("Restore Defaults") {
+                            engines = WebSearchEngine.restoringDefaults(into: engines)
+                            config.webSearchEngines = engines
+                        }
                     }
                 }
             } header: {
                 Text("Search engines").searchTarget("search-engines")
             } footer: {
-                settingsFooter("Type !<keyword> in the launcher to search that engine, e.g. !g cats — set a keyword per engine above. The URL must contain {query}.")
+                settingsFooter("Type !keyword in the launcher, e.g. !yt lo-fi. The search URL must contain {query} — for example https://example.com/search?q={query} — which Palette replaces with the URL-encoded text. “Open in web app” sends that engine's searches to the web-app browser — set a Chromium-based browser below or under Web apps.")
             }
 
             Section {
@@ -1164,6 +1126,7 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.borderless)
                             .help("Remove bookmark")
+                            .accessibilityLabel("Remove bookmark")
                         }
                         TextField("URL", text: $bookmark.url)
                             .settingsField()
@@ -1207,6 +1170,53 @@ struct SettingsView: View {
             bookmarks = BookmarkStore.load(from: PalettePaths.resolve().bookmarksFile)
             bookmarksLoaded = true
         }
+    }
+
+    /// One engine card: labelled fields, the bang keyword beside its `!`, and
+    /// the web-app switch. Rows stay one line so several engines fit at once.
+    private func engineEditor(_ engine: Binding<WebSearchEngine>) -> some View {
+        let keyword = Binding(
+            get: { engine.wrappedValue.keyword ?? "" },
+            set: { engine.wrappedValue.keyword = $0.isEmpty ? nil : $0 }
+        )
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                LabeledContent("Name") {
+                    TextField("Name", text: engine.name)
+                        .labelsHidden()
+                        .settingsField()
+                }
+                Button {
+                    if let index = engines.firstIndex(where: { $0.id == engine.wrappedValue.id }) {
+                        engines.remove(at: index)
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("Remove engine")
+                .accessibilityLabel("Remove \(engine.wrappedValue.name)")
+            }
+            LabeledContent("Search URL") {
+                TextField("Search URL", text: engine.urlTemplate)
+                    .labelsHidden()
+                    .settingsField()
+                    .font(.system(.body, design: .monospaced))
+            }
+            LabeledContent("Keyword") {
+                HStack(spacing: 4) {
+                    Text("!").foregroundStyle(.secondary)
+                    TextField("Keyword", text: keyword)
+                        .labelsHidden()
+                        .settingsField()
+                        .frame(width: 90)
+                }
+            }
+            BrowserPicker(browser: engine.browser)
+            Toggle("Open in web app", isOn: engine.appMode)
+                .toggleStyle(.checkbox)
+        }
+        .padding(.vertical, 2)
     }
 
     private var capture: some View {
@@ -1389,9 +1399,13 @@ struct SettingsView: View {
             Section {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 10) {
-                        Color.clear.frame(width: 18, height: 1)
+                        Text("Show")
+                            .frame(width: 30, alignment: .leading)
                         Text("Provider")
                             .frame(width: providerNameWidth, alignment: .leading)
+                        Text("Default")
+                            .searchTarget("providers-default")
+                            .frame(width: providerDefaultWidth, alignment: .leading)
                         Text("Trigger")
                             .frame(width: providerTriggerWidth, alignment: .leading)
                         Text("Aliases")
@@ -1417,7 +1431,7 @@ struct SettingsView: View {
             } header: {
                 Text("Providers")
             } footer: {
-                settingsFooter("Turn off a provider to hide its tab; apps always stay visible. A checked alias is active and saved to config.toml — unchecking keeps the row so the word can be restored. Triggers come from provider.toml and cannot be renamed here. Use the arrows to change the tab order.")
+                settingsFooter("Turn off a provider to hide its tab; apps always stay visible. A checked Default column means plain, unprefixed queries search that provider. A checked alias is active and saved to config.toml — unchecking keeps the row so the word can be restored. Triggers come from provider.toml and cannot be renamed here. Use the arrows to change the tab order.")
             }
 
             Section {
@@ -1502,8 +1516,20 @@ struct SettingsView: View {
         providers.first(where: { $0.id == id })?.trigger
     }
 
-    private func providerIsGlobal(_ id: String) -> Bool {
-        providers.first(where: { $0.id == id })?.isGlobal ?? false
+    /// The Default column: apps always answer a plain query, everything else
+    /// follows the allowlist saved to `[providers] global`.
+    private func providerDefaultBinding(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { id == "apps" || globalProviders.contains(id.lowercased()) },
+            set: { enabled in
+                let key = id.lowercased()
+                if enabled {
+                    if !globalProviders.contains(key) { globalProviders.append(key) }
+                } else {
+                    globalProviders.removeAll { $0 == key }
+                }
+            }
+        )
     }
 
     private func providerEnabledBinding(_ id: String) -> Binding<Bool> {
@@ -1536,21 +1562,24 @@ struct SettingsView: View {
             Toggle("Show \(providerName(id))", isOn: providerEnabledBinding(id))
                 .toggleStyle(.checkbox)
                 .labelsHidden()
-                .frame(width: 18, alignment: .leading)
+                .frame(width: 30, alignment: .leading)
                 .help("Show \(providerName(id)) as a launcher tab")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(providerName(id))
                     .fontWeight(.medium)
                     .lineLimit(2)
-                if providerIsGlobal(id) {
-                    Text("always searched")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .help("This provider is searched without a prefix.")
-                }
             }
             .frame(width: providerNameWidth, alignment: .leading)
+
+            Toggle("Search \(providerName(id)) without a prefix", isOn: providerDefaultBinding(id))
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+                .frame(width: providerDefaultWidth, alignment: .leading)
+                .disabled(id == "apps")
+                .help(id == "apps"
+                    ? "Apps always answer a plain query."
+                    : "Include \(providerName(id)) in plain, unprefixed queries.")
 
             providerTriggerChip(id)
                 .frame(width: providerTriggerWidth, alignment: .leading)
@@ -1595,10 +1624,10 @@ struct SettingsView: View {
                 )
                 .help("The trigger is compiled from provider.toml. Edit that file to rename it.")
         } else {
-            Text("global")
+            Text("no trigger")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .help("This provider has no trigger, so it is searched without a prefix.")
+                .help("This provider has no trigger; it can only appear in a plain query.")
         }
     }
 
@@ -1822,7 +1851,8 @@ struct SettingsView: View {
         config.providerAliases = aliasMap
         config.providerOrder = providerOrder
         config.disabledProviders = disabledProviders.filter { $0 != "apps" }
-        config.globalProviders = globalProviders
+        // apps is always searched, so keep it out of the stored allowlist.
+        config.globalProviders = globalProviders.filter { $0 != "apps" }
         switch terminalShellChoice {
         case "auto": config.terminalSession.shell = ""
         case "fish", "zsh": config.terminalSession.shell = terminalShellChoice
@@ -1847,7 +1877,10 @@ struct SettingsView: View {
             .filter { !$0.isEmpty }
         // An empty list would silently hide every file; keep the defaults.
         config.cheatsheets.extensions = extensions.isEmpty ? CheatsheetConfig().extensions : extensions
-        onSave(config)
+        // The writer owns the file; surface its failure in this window's alert.
+        if let error = onSave(config) {
+            saveError = error
+        }
     }
 }
 
@@ -1890,7 +1923,7 @@ final class RecorderView: NSView {
     var value: String = "" {
         didSet {
             needsDisplay = true
-            setAccessibilityValue(value)
+            setAccessibilityValue(HotKeySpec.parse(value)?.prettyDisplay ?? value)
         }
     }
     var label: String = "Shortcut" {
@@ -2065,7 +2098,8 @@ final class RecorderView: NSView {
         path.lineWidth = focused ? 2 : 1
         path.stroke()
 
-        let text = focused && value.isEmpty ? "Press shortcut…" : (value.isEmpty ? "Click to record" : value)
+        let shown = HotKeySpec.parse(value)?.prettyDisplay ?? value
+        let text = focused && value.isEmpty ? "Press shortcut…" : (value.isEmpty ? "Click to record" : shown)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
             .foregroundColor: value.isEmpty ? NSColor.secondaryLabelColor : NSColor.labelColor,

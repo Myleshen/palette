@@ -48,10 +48,10 @@ public final class AskProvider: PaletteProvider, @unchecked Sendable {
                   let model = AskModel.find(key: key) else { return }
             try await service.selectModel(model)
             await bridge.notify("Ask model: \(model.name)")
-        case "ask":
+        case "ask", "ask-again":
             guard let question = action.value.text else { return }
             let model = await service.selectedModel()
-            await bridge.notify("Asking \(model.name)…")
+            await bridge.beginProgress("Asking \(model.name)…")
             let record = try await service.ask(question)
             await bridge.notify("Answered with \(record.model)")
         case "ask-settings":
@@ -223,9 +223,19 @@ public final class AskHistoryProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        guard action.id == "delete-ask" else { return }
-        try await service.deleteHistory(id: item.id)
-        await bridge.notify("Deleted from Ask History")
+        switch action.id {
+        case "delete-ask":
+            try await service.deleteHistory(id: item.id)
+            await bridge.notify("Deleted from Ask History")
+        case "ask-again":
+            guard let question = action.value.text else { return }
+            let model = await service.selectedModel()
+            await bridge.beginProgress("Asking \(model.name)…")
+            let record = try await service.ask(question)
+            await bridge.notify("Answered with \(record.model)")
+        default:
+            break
+        }
     }
 
     private func row(_ record: AskRecord) -> PaletteItem {
@@ -237,7 +247,7 @@ public final class AskHistoryProvider: PaletteProvider, @unchecked Sendable {
             title: record.question,
             subtitle: parts.joined(separator: " · "),
             icon: .symbol("text.bubble"),
-            badge: "Q&A",
+            badge: record.error == nil ? "Q&A" : "ERROR",
             score: 0,
             actions: [
                 PaletteAction(id: "copy-answer", title: "Copy Answer", kind: .copyText, value: .text(record.answer)),
@@ -245,7 +255,7 @@ public final class AskHistoryProvider: PaletteProvider, @unchecked Sendable {
                 PaletteAction(id: "ask-again", title: "Ask Again", kind: .custom, value: .text(record.question)),
                 PaletteAction(id: "delete-ask", title: "Delete from History", kind: .custom, value: .text(record.id)),
             ],
-            preview: .text(record.answer),
+            preview: .text(record.error ?? record.answer),
             providerID: descriptor.id,
             providerName: descriptor.name
         )

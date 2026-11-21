@@ -75,15 +75,21 @@ public actor AskService {
         let selected = await selectedModel()
         let candidates = candidateModels(selected: selected)
         let sessionID = await sessionIdentifier()
+        let started = Date()
         var lastError: Error = AskClientError.missingKey
+        var lastModel: AskModel?
         var attempts = 0
         var rejectedEndpoints: Set<AskEndpoint> = []
 
         for model in candidates where !rejectedEndpoints.contains(model.endpoint) {
+            // Falling back on timeouts could otherwise spend 130 s per model;
+            // cap the whole ask so the panel cannot sit busy for many minutes.
+            if attempts > 0, Date().timeIntervalSince(started) > 300 { break }
             guard let key = AskKeychain.resolve(endpoint: model.endpoint, environment: environment) else {
                 continue
             }
             attempts += 1
+            lastModel = model
             do {
                 let completion = try await completer.complete(
                     endpoint: model.endpoint,
@@ -109,19 +115,37 @@ public actor AskService {
                 return record
             } catch let error as AskClientError {
                 lastError = error
+                Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
                 if error == .invalidKey {
                     // One rejected key rejects that whole endpoint; do not burn
                     // the remaining fallback attempts on the same account.
                     rejectedEndpoints.insert(model.endpoint)
                 }
-                if !error.allowsFallback { throw error }
+                if !error.allowsFallback { break }
             } catch {
                 lastError = error
+                Log.shared.warn("ask \(model.id) failed: \(error.localizedDescription)", source: "ask")
             }
         }
 
         if attempts == 0 {
             throw AskClientError.missingKey
+        }
+        // A failed re-ask must not keep showing the cached answer for it.
+        if lastAnswer?.question == trimmed { lastAnswer = nil }
+        if let lastModel {
+            // Keep failures next to answers (the error column) so a timeout is
+            // diagnosable from Ask History as well as the log.
+            _ = try? await store.insertAsk(
+                question: trimmed,
+                answer: "",
+                model: lastModel.id,
+                provider: lastModel.endpoint.rawValue,
+                durationMs: Int(Date().timeIntervalSince(started) * 1_000),
+                error: lastError.localizedDescription,
+                maxHistory: configuration.maxHistory,
+                retentionDays: configuration.retentionDays
+            )
         }
         throw lastError
     }

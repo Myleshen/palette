@@ -241,6 +241,16 @@ public protocol HostBridge: AnyObject, Sendable {
     func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String?
     func notify(_ message: String) async
     func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async
+    /// Like `notify`, but stays on screen until the next status replaces it.
+    /// Used for work that can run longer than a toast.
+    func beginProgress(_ message: String) async
+}
+
+public extension HostBridge {
+    /// Hosts that cannot keep a status fall back to a normal toast.
+    func beginProgress(_ message: String) async {
+        await notify(message)
+    }
 }
 
 public struct WebApp: Identifiable, Equatable, Sendable {

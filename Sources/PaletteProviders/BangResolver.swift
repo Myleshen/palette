@@ -59,9 +59,11 @@ public enum BangResolver {
         let keyword = (engine.keyword ?? "").trimmingCharacters(in: .whitespaces)
         let searching = !query.isEmpty
 
-        // A normal browser window in the engine's own browser; no "mode".
+        // A browser window in the engine's own browser; app mode routes it to
+        // the web-app browser instead.
         var value = ["url": url.absoluteString]
         if !engine.browser.isEmpty { value["browser"] = engine.browser }
+        if engine.appMode { value["mode"] = "app" }
 
         let title: String
         let subtitle: String
@@ -82,7 +84,12 @@ public enum BangResolver {
             subtitle: subtitle,
             icon: .symbol("magnifyingglass"),
             badge: discovery ? "BANG" : nil,
-            actions: [PaletteAction(id: "open", title: "Open in Browser", kind: .openURL, value: .object(value))],
+            actions: [PaletteAction(
+                id: "open",
+                title: engine.appMode ? "Open in Web App" : "Open in Browser",
+                kind: .openURL,
+                value: .object(value)
+            )],
             providerID: "bang",
             providerName: "Web Search"
         )
