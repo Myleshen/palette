@@ -35,7 +35,7 @@ jobs:
           path: |
             .build
             ~/.cache/org.swift.swiftpm
-          key: ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          key: ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-
 
@@ -91,7 +91,7 @@ jobs:
           path: |
             .build
             ~/.cache/org.swift.swiftpm
-          key: ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          key: ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-build-${{ steps.swift.outputs.version }}-
 
