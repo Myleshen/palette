@@ -71,7 +71,28 @@ extension Theme {
 struct GlassBackdrop: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
 
-    func makeNSView(context: Context) -> NSVisualEffectView {
+    func makeNSView(context: Context) -> NSView {
+        if #available(macOS 26.0, *) {
+            let view = NSGlassEffectView()
+            view.style = .regular
+            view.cornerRadius = 0
+            return view
+        }
+        return makeMaterialView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if #available(macOS 26.0, *), let glass = nsView as? NSGlassEffectView {
+            glass.style = .regular
+            return
+        }
+        guard let view = nsView as? NSVisualEffectView else { return }
+        view.material = material
+        view.blendingMode = .behindWindow
+        view.state = .active
+    }
+
+    private func makeMaterialView() -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = .behindWindow
@@ -79,11 +100,18 @@ struct GlassBackdrop: NSViewRepresentable {
         view.isEmphasized = true
         return view
     }
+}
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = .behindWindow
-        nsView.state = .active
+/// Liquid Glass on macOS 26+, ultra-thin material before it.
+struct GlassSurface<S: Shape>: View {
+    var shape: S
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            Color.clear.glassEffect(.regular, in: shape)
+        } else {
+            shape.fill(.ultraThinMaterial)
+        }
     }
 }
 
@@ -499,8 +527,7 @@ struct LauncherRootView: View {
         }
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                GlassSurface(shape: RoundedRectangle(cornerRadius: 28, style: .continuous))
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(theme.color(theme.palette.bg).opacity(theme.window.glass ? theme.window.glassOpacity : 1))
             }
@@ -725,8 +752,7 @@ struct LauncherRootView: View {
         .padding(.horizontal, isPill ? 24 : 16)
         .frame(height: isPill ? CGFloat(theme.search.height) - 12 : CGFloat(theme.search.height))
         .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
+            GlassSurface(shape: Capsule())
                 .overlay(
                     Capsule()
                         .fill(theme.color(theme.palette.bg).opacity(isPill && theme.window.glass ? theme.window.glassOpacity : (isPill ? 1 : 0)))
@@ -1003,18 +1029,14 @@ struct LauncherRootView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             } else if controller.actionsMode {
-                hint("↑↓", "Select")
-                hint("⏎", "Run")
                 hint("esc", "Back")
-            } else {
-                hint("↑↓", "Navigate")
-                hint("⏎", "Open")
-                hint("⌘⏎", "Secondary")
-                hint("⌘K", "Actions")
-                hint("⌘R", "Reload")
-                hint("esc", "Close")
+            } else if let item = controller.selectedItem {
+                primaryActionPill(item.primaryAction?.title ?? "Open")
             }
             Spacer(minLength: 4)
+            if !controller.actionsMode {
+                hint("⌘K", "Actions")
+            }
             Text(theme.name)
                 .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.55))
                 .lineLimit(1)
@@ -1023,6 +1045,29 @@ struct LauncherRootView: View {
         .foregroundColor(theme.color(theme.footer.hintColor))
         .padding(.horizontal, isPill ? 20 : 16)
         .frame(height: 28)
+    }
+
+    /// Shows what Return does on the selected row, read from its primary action.
+    private func primaryActionPill(_ title: String) -> some View {
+        HStack(spacing: 4) {
+            Text("⏎")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(theme.color(theme.palette.elevated).opacity(0.7))
+                .clipShape(Capsule())
+            Text(title)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.leading, 3)
+        .padding(.trailing, 8)
+        .padding(.vertical, 3)
+        .background(theme.color(theme.palette.elevated).opacity(0.35))
+        .clipShape(Capsule())
+        .layoutPriority(1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Press return to \(title)")
     }
 
     private func hint(_ key: String, _ label: String) -> some View {

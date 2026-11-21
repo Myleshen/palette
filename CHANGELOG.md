@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.9.0 — 2026-11-21
+
+### Changed
+
+- **Launcher footer** is a live primary-action pill: it shows what Enter will do
+  on the selected row (e.g. "⏎ Open Application", "⏎ Run Command", "⏎ Open
+  Bookmark") next to "Actions ⌘K", replacing the six static hints (which now live
+  in the ⌘K keyboard reference).
+- **Liquid Glass on macOS 26+**: the launcher panel, settings and onboarding use
+  the system glass effect where available, falling back to the existing material
+  on macOS 14–25, so the deployment floor is unchanged.
+
 ## 2.8.0 — 2026-11-21
 
 ### Changed
