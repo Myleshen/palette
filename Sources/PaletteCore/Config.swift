@@ -580,6 +580,9 @@ public struct ConfigLoadResult: Sendable {
     public var config: PaletteConfig
     public var diagnostics: [Diagnostic]
     public var createdDefault: Bool
+    /// Set when config.toml on disk could not be parsed. Auto-apply refuses to
+    /// write in this state so the user's file and comments survive.
+    public var parseError: String?
 }
 
 public enum ConfigLoader {
@@ -608,13 +611,31 @@ public enum ConfigLoader {
             let config = try parse(table, diagnostics: &diagnostics)
             return ConfigLoadResult(config: config, diagnostics: diagnostics, createdDefault: created)
         } catch {
-            diagnostics.append(Diagnostic(.error, "Invalid config.toml: \(error.localizedDescription). Using defaults.", source: "config"))
-            return ConfigLoadResult(config: PaletteConfig(), diagnostics: diagnostics, createdDefault: created)
+            let backup = ConfigWriter.backupURL(for: paths.configFile)
+            let message = "config.toml has an error; fix it or restore \(backup.path) before changing settings here (\(error.localizedDescription))."
+            diagnostics.append(Diagnostic(.error, message, source: "config"))
+            return ConfigLoadResult(
+                config: PaletteConfig(),
+                diagnostics: diagnostics,
+                createdDefault: created,
+                parseError: message
+            )
         }
+    }
+
+    /// A list written before `[meta] config_version` meant extras on top of the
+    /// old three globals. A list naming only providers that already default
+    /// today is a deliberate narrowing from a later release, not legacy.
+    static func usesLegacyGlobalSemantics(_ list: [String]) -> Bool {
+        let oldBaseline: Set<String> = ["system", "timer", "awake"]
+        let today = Set(PaletteConfig.defaultGlobalProviders)
+        return list.allSatisfy { oldBaseline.contains($0) || !today.contains($0) }
     }
 
     public static func parse(_ table: TOMLTable, diagnostics: inout [Diagnostic]) throws -> PaletteConfig {
         var config = PaletteConfig()
+        // Missing means a config written before the version key existed.
+        let schemaVersion = table.table("meta")?.int("config_version") ?? 0
 
         if let hotkey = table.str("hotkey"), !hotkey.isEmpty {
             config.hotkey = hotkey
@@ -796,13 +817,22 @@ public enum ConfigLoader {
                 let parsed = global
                     .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
                     .filter { !$0.isEmpty }
-                // 2.12.x read this key as extras on top of the built-in
-                // globals, so an untouched config lists only those extras.
-                // Upgrade it to the full allowlist rather than losing the
-                // built-ins it used to get for free.
-                config.globalProviders = parsed == ["system", "timer", "awake"]
-                    ? PaletteConfig.defaultGlobalProviders
-                    : parsed
+                if parsed.isEmpty {
+                    // An explicit `global = []` opts out of everything but apps.
+                    config.globalProviders = []
+                } else if schemaVersion < ConfigWriter.configVersion,
+                          Self.usesLegacyGlobalSemantics(parsed) {
+                    // Before the version key, this list meant extras on top of
+                    // the built-in globals. Upgrade it to the full allowlist,
+                    // keeping ids the user added themselves.
+                    var merged = PaletteConfig.defaultGlobalProviders
+                    for id in parsed where !merged.contains(id) {
+                        merged.append(id)
+                    }
+                    config.globalProviders = merged
+                } else {
+                    config.globalProviders = parsed
+                }
             }
             if let aliases = providers.table("aliases") {
                 var parsed = config.providerAliases
@@ -1192,11 +1222,37 @@ public enum ConfigLoader {
         poll_ms = 500
         clear_after_ms = 30000
 
+        # Written by Palette. Missing means the file predates schema versioning.
+        [meta]
+        config_version = 2
+
         """
     }
 }
 
 public enum ConfigWriter {
+    /// Bumped when a key's on-disk meaning changes. Written as
+    /// `[meta] config_version`.
+    public static let configVersion = 2
+
+    public static func backupURL(for url: URL) -> URL {
+        url.appendingPathExtension("bak")
+    }
+
+    /// Saves the canonical render, keeping the exact previous file as a single
+    /// rolling backup. The backup is written first: if it fails, the original
+    /// file stays untouched.
+    public static func write(_ config: PaletteConfig, to url: URL) throws {
+        let manager = FileManager.default
+        if manager.fileExists(atPath: url.path) {
+            let previous = try Data(contentsOf: url)
+            let backup = backupURL(for: url)
+            try previous.write(to: backup, options: .atomic)
+            try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: backup.path)
+        }
+        try render(config).write(to: url, atomically: true, encoding: .utf8)
+    }
+
     public static func render(_ config: PaletteConfig) -> String {
         var out: [String] = []
         out.append("# Palette configuration")
@@ -1343,6 +1399,9 @@ public enum ConfigWriter {
         out.append("max_entries = \(config.clipboard.maxEntries)")
         out.append("poll_ms = \(config.clipboard.pollMs)")
         out.append("clear_after_ms = \(config.clipboard.clearAfterMs)")
+        out.append("")
+        out.append("[meta]")
+        out.append("config_version = \(configVersion)")
         out.append("")
         return out.joined(separator: "\n")
     }

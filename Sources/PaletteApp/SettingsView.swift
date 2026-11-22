@@ -2604,6 +2604,7 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Button("Open config.toml") { onOpen(configURL) }
                     Button("Reveal in Finder") { reveal(configURL.path) }
+                    Button("Open config.toml.bak") { onOpen(configURL.appendingPathExtension("bak")) }
                 }
                 HStack(spacing: 8) {
                     Button("Open log") { onOpen(PalettePaths.resolve().logFile) }

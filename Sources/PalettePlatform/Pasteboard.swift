@@ -121,12 +121,52 @@ public final class ClipboardMonitor: @unchecked Sendable {
     }
 }
 
+/// A clipboard clear that has to survive quitting Palette: the secret's
+/// deadline, its SHA-256, and the pasteboard changeCount at write time.
+struct PendingClipboardClear: Codable, Equatable, Sendable {
+    var expiresAt: Double
+    var hash: String
+    var changeCount: Int
+
+    func isDue(at date: Date = Date()) -> Bool {
+        expiresAt <= date.timeIntervalSince1970
+    }
+
+    /// Only the recorded value is cleared. An unrelated clipboard survives.
+    func shouldClear(currentHash: String?, at date: Date = Date()) -> Bool {
+        isDue(at: date) && currentHash == hash
+    }
+}
+
 @MainActor
 public final class PasteboardService {
     private var clearWorkItem: DispatchWorkItem?
     private var writtenChangeCount: Int = -1
+    /// `stateDir/clipboard-clear.json`. Nil keeps clears in memory only.
+    public var stateFile: URL?
 
     public init() {}
+
+    /// Called on launch before any write: clear a secret whose deadline passed
+    /// while Palette was closed, or re-arm the remaining time.
+    public func resumePendingClear(now: Date = Date()) {
+        guard let record = readPendingClear() else { return }
+        if record.shouldClear(currentHash: Self.fingerprint(), at: now) {
+            NSPasteboard.general.clearContents()
+            Log.shared.info("Cleared a clipboard value left over from a previous run", source: "clipboard")
+            clearPendingClear()
+            return
+        }
+        if record.isDue(at: now) {
+            // The value on the pasteboard is no longer the one we wrote.
+            clearPendingClear()
+            return
+        }
+        scheduleClear(
+            changeCount: record.changeCount,
+            expiresAt: Date(timeIntervalSince1970: record.expiresAt)
+        )
+    }
 
     public var isAccessibilityTrusted: Bool {
         AXIsProcessTrusted()
@@ -139,7 +179,7 @@ public final class PasteboardService {
 
     @discardableResult
     public func write(text: String, concealed: Bool = false, clearAfterMs: Int? = nil) -> Int {
-        clearWorkItem?.cancel()
+        cancelPendingClear()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
 
@@ -153,14 +193,18 @@ public final class PasteboardService {
         writtenChangeCount = changeCount
 
         if let clearAfterMs, clearAfterMs > 0 {
-            scheduleClear(changeCount: changeCount, clearAfterMs: clearAfterMs)
+            scheduleClear(
+                changeCount: changeCount,
+                expiresAt: Date().addingTimeInterval(Double(clearAfterMs) / 1000),
+                hash: Self.digest(Data(text.utf8))
+            )
         }
         return changeCount
     }
 
     @discardableResult
     public func write(image: Data, concealed: Bool = false, clearAfterMs: Int? = nil) -> Int {
-        clearWorkItem?.cancel()
+        cancelPendingClear()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
 
@@ -177,14 +221,18 @@ public final class PasteboardService {
         writtenChangeCount = changeCount
 
         if let clearAfterMs, clearAfterMs > 0 {
-            scheduleClear(changeCount: changeCount, clearAfterMs: clearAfterMs)
+            scheduleClear(
+                changeCount: changeCount,
+                expiresAt: Date().addingTimeInterval(Double(clearAfterMs) / 1000),
+                hash: Self.digest(image)
+            )
         }
         return changeCount
     }
 
     @discardableResult
     public func write(files paths: [String], concealed: Bool = false, clearAfterMs: Int? = nil) -> Int {
-        clearWorkItem?.cancel()
+        cancelPendingClear()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects(paths.map { URL(fileURLWithPath: $0) as NSURL })
@@ -192,21 +240,96 @@ public final class PasteboardService {
         writtenChangeCount = changeCount
 
         if let clearAfterMs, clearAfterMs > 0 {
-            scheduleClear(changeCount: changeCount, clearAfterMs: clearAfterMs)
+            scheduleClear(
+                changeCount: changeCount,
+                expiresAt: Date().addingTimeInterval(Double(clearAfterMs) / 1000),
+                hash: Self.digest(Data(paths.joined(separator: "\0").utf8))
+            )
         }
         return changeCount
     }
 
-    private func scheduleClear(changeCount: Int, clearAfterMs: Int) {
+    private func scheduleClear(changeCount: Int, expiresAt: Date, hash: String) {
+        persistPendingClear(PendingClipboardClear(
+            expiresAt: expiresAt.timeIntervalSince1970,
+            hash: hash,
+            changeCount: changeCount
+        ))
+        scheduleClear(changeCount: changeCount, expiresAt: expiresAt)
+    }
+
+    private func scheduleClear(changeCount: Int, expiresAt: Date) {
+        let delay = max(0, expiresAt.timeIntervalSinceNow)
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             if NSPasteboard.general.changeCount == changeCount {
                 NSPasteboard.general.clearContents()
             }
             self.clearWorkItem = nil
+            self.clearPendingClear()
         }
         clearWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(clearAfterMs), execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func cancelPendingClear() {
+        clearWorkItem?.cancel()
+        clearWorkItem = nil
+        clearPendingClear()
+    }
+
+    private func persistPendingClear(_ record: PendingClipboardClear) {
+        guard let stateFile else { return }
+        do {
+            let data = try JSONEncoder().encode(record)
+            try data.write(to: stateFile, options: .atomic)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: stateFile.path
+            )
+        } catch {
+            Log.shared.warn("Could not persist the clipboard clear: \(error.localizedDescription)", source: "clipboard")
+        }
+    }
+
+    private func readPendingClear() -> PendingClipboardClear? {
+        guard let stateFile,
+              let data = try? Data(contentsOf: stateFile) else { return nil }
+        guard let record = try? JSONDecoder().decode(PendingClipboardClear.self, from: data) else {
+            try? FileManager.default.removeItem(at: stateFile)
+            return nil
+        }
+        return record
+    }
+
+    private func clearPendingClear() {
+        guard let stateFile else { return }
+        try? FileManager.default.removeItem(at: stateFile)
+    }
+
+    /// SHA-256 of the pasteboard's current value in the same shape the writes
+    /// above use. Files come before text because Finder copies carry both.
+    nonisolated static func fingerprint(of pasteboard: NSPasteboard = .general) -> String? {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL],
+           !urls.filter(\.isFileURL).isEmpty {
+            let paths = urls.filter(\.isFileURL).map(\.path)
+            return digest(Data(paths.joined(separator: "\0").utf8))
+        }
+        if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            return digest(Data(text.utf8))
+        }
+        if let image = pasteboard.data(forType: .png) {
+            return digest(image)
+        }
+        if let image = pasteboard.data(forType: .tiff) {
+            return digest(image)
+        }
+        return nil
+    }
+
+    nonisolated static func digest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Copies and, when Accessibility is granted, pastes into the given app.
