@@ -163,7 +163,7 @@ public actor ExternalProvider: PaletteProvider {
         process.executableURL = URL(fileURLWithPath: arguments[0])
         process.arguments = Array(arguments.dropFirst())
         process.currentDirectoryURL = manifest.directory
-        var environment = ProcessInfo.processInfo.environment
+        var environment = ProcessRunner.sanitizedEnvironment(ProcessInfo.processInfo.environment)
         environment["PALETTE_PROVIDER_ID"] = manifest.id
         environment["PALETTE_CONFIG_DIR"] = PalettePaths.resolve().configDir.path
         process.environment = environment

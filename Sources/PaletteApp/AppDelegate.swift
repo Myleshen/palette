@@ -2521,6 +2521,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func exportBackup() {
+        let confirm = NSAlert()
+        confirm.messageText = "Export a backup without clipboard text?"
+        confirm.informativeText = """
+        The backup includes config.toml, themes, providers and history. \
+        Plain-text clipboard entries are removed before zipping because they can hold pasted secrets. \
+        Image and file entries stay because they hold paths and pictures, not the text you typed. \
+        Ask API keys are not included.
+        """
+        confirm.addButton(withTitle: "Export")
+        confirm.addButton(withTitle: "Cancel")
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+
         let panel = NSSavePanel()
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         panel.nameFieldStringValue = "Palette-Backup-\(stamp).zip"
@@ -2530,17 +2542,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("Palette-Backup-\(UUID().uuidString)", isDirectory: true)
         let manager = FileManager.default
+        let temporaryDatabase = temp.appendingPathComponent("palette.sqlite")
         do {
             try manager.createDirectory(at: temp, withIntermediateDirectories: true)
             try? manager.copyItem(at: paths.configFile, to: temp.appendingPathComponent("config.toml"))
             try? manager.copyItem(at: paths.themesDir, to: temp.appendingPathComponent("themes"))
             try? manager.copyItem(at: paths.providersDir, to: temp.appendingPathComponent("providers"))
-            try? manager.copyItem(at: paths.databaseFile, to: temp.appendingPathComponent("palette.sqlite"))
+            // The DB copy is where secrets are handled. If another branch adds
+            // Ask keys (or the .bak file) to the backup, add it here and update
+            // the alert and the Settings footer to say what is included.
+            try? manager.copyItem(at: paths.databaseFile, to: temporaryDatabase)
             for suffix in ["-wal", "-shm"] {
                 let source = URL(fileURLWithPath: paths.databaseFile.path + suffix)
                 if manager.fileExists(atPath: source.path) {
                     try? manager.copyItem(at: source, to: temp.appendingPathComponent("palette.sqlite" + suffix))
                 }
+            }
+
+            // Pasted text is the sensitive part of the clipboard history. Fold
+            // the WAL into the copy, drop text rows, then vacuum so no deleted
+            // page survives in the zip.
+            let sqlite = Process()
+            sqlite.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+            sqlite.arguments = [
+                temporaryDatabase.path,
+                "PRAGMA journal_mode=DELETE; DELETE FROM clipboard WHERE kind = 'text'; VACUUM;",
+            ]
+            try sqlite.run()
+            sqlite.waitUntilExit()
+            guard sqlite.terminationStatus == 0 else {
+                throw NSError(domain: "PaletteBackup", code: Int(sqlite.terminationStatus))
+            }
+            for suffix in ["-wal", "-shm"] {
+                let leftover = URL(fileURLWithPath: temporaryDatabase.path + suffix)
+                try? manager.removeItem(at: leftover)
             }
 
             let process = Process()
