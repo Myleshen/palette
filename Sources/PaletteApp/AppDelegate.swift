@@ -100,6 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var systemIsShuttingDown = false
     private var askService: AskService?
     private var startupDiagnostics: [Diagnostic] = []
+    /// Set when config.toml cannot be parsed; auto-apply must not overwrite it.
+    private var configErrorMessage: String?
     private var themeObserver: NSObjectProtocol?
     private var watcherTimer: Timer?
     private var lastConfigModification: Date?
@@ -167,6 +169,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let configResult = ConfigLoader.load(paths: paths)
         configuration = configResult.config
         startupDiagnostics = configResult.diagnostics
+        configErrorMessage = configResult.parseError
+        captureService.stateFile = paths.stateDir.appendingPathComponent("recording.json")
+        let recordingAdoption = captureService.adoptPendingRecording()
         let forceOnboarding = ProcessInfo.processInfo.environment["PALETTE_FORCE_ONBOARDING"] == "1"
         shouldShowOnboarding = (configResult.createdDefault || forceOnboarding)
             && (forceOnboarding || !UserDefaults.standard.bool(forKey: "onboardingCompleted"))
@@ -199,6 +204,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         registerLoginItemOnFirstLaunch()
         launcher = LauncherService()
         pasteboard = PasteboardService()
+        pasteboard.stateFile = paths.stateDir.appendingPathComponent("clipboard-clear.json")
+        pasteboard.resumePendingClear()
+
         Log.shared.info("Accessibility trusted=\(pasteboard.isAccessibilityTrusted)", source: "app")
         if !pasteboard.isAccessibilityTrusted {
             // Make the permission gap visible instead of silently copying.
@@ -293,6 +301,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installHotKey()
         configureClipboard()
         buildStatusItem()
+        if case .adopted = recordingAdoption {
+            updateRecordingMenuItem()
+            startRecordingTicker()
+            searchController?.setStatus("Recording in progress", duration: nil)
+        }
+
         installThemeObserver()
         showOnboardingIfNeeded()
 
@@ -426,6 +440,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     NotificationCenter.default.post(name: .paletteSettingsClearSearch, object: nil)
                 } else if step == "clipboard" {
                     self.showClipboard()
+                } else if let value = step.dropPrefix("clipboard_test=") {
+                    // Script-only: exercises the persisted clear window.
+                    let parts = value.split(separator: "|", maxSplits: 1).map(String.init)
+                    let clearAfterMs = parts.count == 2 ? Int(parts[1]) ?? 0 : 0
+                    self.pasteboard.write(text: parts[0], concealed: true, clearAfterMs: clearAfterMs)
                 } else if step == "scratchpad" {
                     self.searchController.openScratchpad()
                 } else if let question = step.dropPrefix("askwindow=") {
@@ -845,6 +864,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // A raw screencapture child outlives us unless we stop it here; SIGINT
+        // lets it finalise the file before the app disappears.
+        captureService.stopRecordingOnQuit()
         watcherTimer?.invalidate()
         clipboardMonitor?.stop()
         hotkey?.unregister()
@@ -1428,12 +1450,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         await self.searchController.notify("Recording failed: \(error.localizedDescription)")
                     }
                     self.updateRecordingMenuItem()
-                    self.recordingTicker?.invalidate()
-                    self.recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                        Task { @MainActor in self?.updateRecordingMenuItem() }
-                    }
+                    self.startRecordingTicker()
                 }
             }
+        }
+    }
+
+    private func startRecordingTicker() {
+        recordingTicker?.invalidate()
+        recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateRecordingMenuItem() }
         }
     }
 
@@ -1860,7 +1886,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             providers: providerSettingsInfo()
         )
         do {
-            try ConfigWriter.render(essentials).write(to: paths.configFile, atomically: true, encoding: .utf8)
+            try ConfigWriter.write(essentials, to: paths.configFile)
         } catch {
             Log.shared.warn("Could not save the Essentials preset: \(error.localizedDescription)", source: "onboarding")
         }
@@ -1881,7 +1907,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onFinish: { [weak self] updated in
                 guard let self else { return }
                 do {
-                    try ConfigWriter.render(updated).write(to: self.paths.configFile, atomically: true, encoding: .utf8)
+                    try ConfigWriter.write(updated, to: self.paths.configFile)
                 } catch {
                     self.searchController.setStatus("Could not save setup: \(error.localizedDescription)", duration: 4)
                 }
@@ -1944,18 +1970,138 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let isInstalled = bundlePath.hasPrefix("/Applications/")
             || bundlePath.hasPrefix(NSHomeDirectory() + "/Applications/")
         // A debug build must never become the login item or consume the seed.
-        guard isInstalled else { return }
+        guard isInstalled else {
+            Log.shared.info("Login item left alone: Palette is not running from /Applications", source: "app")
+            return
+        }
         let seeded = "loginItemSeeded"
-        guard !UserDefaults.standard.bool(forKey: seeded) else { return }
-        UserDefaults.standard.set(true, forKey: seeded)
-        // mainApp reports .notFound until it has been registered at least once.
-        guard SMAppService.mainApp.status != .enabled else { return }
+        if !UserDefaults.standard.bool(forKey: seeded) {
+            UserDefaults.standard.set(true, forKey: seeded)
+            // mainApp reports .notFound until it has been registered at least once.
+            if SMAppService.mainApp.status == .enabled {
+                UserDefaults.standard.set(bundlePath, forKey: Self.loginItemPathKey)
+            } else {
+                do {
+                    try SMAppService.mainApp.register()
+                    UserDefaults.standard.set(bundlePath, forKey: Self.loginItemPathKey)
+                    Log.shared.info("Registered login item to \(bundlePath)", source: "app")
+                } catch {
+                    Log.shared.warn("Could not register login item: \(error.localizedDescription)", source: "app")
+                }
+            }
+        }
+        reconcileLoginItem(currentPath: bundlePath)
+    }
+
+    private static let loginItemPathKey = "loginItemBundlePath"
+
+    /// A login item can outlive the bundle it points at (a deleted worktree
+    /// build). Re-register the running /Applications copy when the recorded
+    /// path is different or gone; otherwise leave the user's setting alone.
+    private func reconcileLoginItem(currentPath: String) {
+        switch SMAppService.mainApp.status {
+        case .enabled:
+            break
+        case .requiresApproval:
+            Log.shared.info("Login item needs approval in System Settings; leaving it alone", source: "app")
+            return
+        default:
+            Log.shared.info("Login item is off; leaving it alone", source: "app")
+            return
+        }
+        guard let recorded = UserDefaults.standard.string(forKey: Self.loginItemPathKey)
+            ?? recordedLoginItemPath() else {
+            Log.shared.warn(
+                "Login item is on but its recorded path is unknown; re-registering \(currentPath)",
+                source: "app"
+            )
+            refreshLoginItem(currentPath: currentPath)
+            return
+        }
+        UserDefaults.standard.set(recorded, forKey: Self.loginItemPathKey)
+        if recorded == currentPath {
+            Log.shared.info("Login item already points at \(currentPath)", source: "app")
+            return
+        }
+        if FileManager.default.fileExists(atPath: recorded) {
+            Log.shared.warn(
+                "Login item points at \(recorded); re-registering \(currentPath)",
+                source: "app"
+            )
+        } else {
+            Log.shared.warn(
+                "Login item points at a missing bundle \(recorded); re-registering \(currentPath)",
+                source: "app"
+            )
+        }
+        refreshLoginItem(currentPath: currentPath)
+    }
+
+    private func refreshLoginItem(currentPath: String) {
+        // The login item stores the path LaunchServices resolves for the bundle
+        // id. Repointing it first stops a stale worktree path from sticking.
+        refreshLaunchServicesRecord(bundlePath: currentPath)
+        do {
+            try SMAppService.mainApp.unregister()
+        } catch {
+            Log.shared.warn("Could not unregister the stale login item: \(error.localizedDescription)", source: "app")
+        }
         do {
             try SMAppService.mainApp.register()
-            Log.shared.info("Registered login item", source: "app")
+            UserDefaults.standard.set(currentPath, forKey: Self.loginItemPathKey)
+            Log.shared.info("Login item now points at \(currentPath)", source: "app")
         } catch {
-            Log.shared.warn("Could not register login item: \(error.localizedDescription)", source: "app")
+            Log.shared.warn("Could not register the login item: \(error.localizedDescription)", source: "app")
         }
+    }
+
+    /// `lsregister -f` re-associates the bundle id with this copy, which is what
+    /// the background-task record follows after a worktree build is deleted.
+    private func refreshLaunchServicesRecord(bundlePath: String) {
+        let tool = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = ["-f", bundlePath]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            Log.shared.warn("Could not refresh the LaunchServices record: \(error.localizedDescription)", source: "app")
+        }
+    }
+
+    /// Reads the path the system has on file. `SMAppService` does not expose it,
+    /// so ask the same tool support uses to diagnose login items.
+    private func recordedLoginItemPath() -> String? {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sfltool")
+        process.arguments = ["dumpbtm"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let identifier = "2." + bundleID
+        var currentIdentifier: String?
+        for line in output.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("Identifier: ") {
+                currentIdentifier = String(trimmed.dropFirst("Identifier: ".count))
+            } else if trimmed.hasPrefix("URL: "), currentIdentifier == identifier {
+                let path = String(trimmed.dropFirst("URL: ".count))
+                return path == "(null)" ? nil : path
+            }
+        }
+        return nil
     }
 
     private func seedUserProviders() {
@@ -2362,6 +2508,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let result = ConfigLoader.load(paths: paths)
         configuration = result.config
         startupDiagnostics = result.diagnostics
+        configErrorMessage = result.parseError
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
@@ -2432,7 +2579,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configuration.searchPosition = position
         panel?.anchorOverride = position.rawValue
         do {
-            try ConfigWriter.render(configuration).write(to: paths.configFile, atomically: true, encoding: .utf8)
+            try ConfigWriter.write(configuration, to: paths.configFile)
         } catch {
             Log.shared.warn("Could not save launcher position: \(error.localizedDescription)", source: "app")
         }
@@ -2593,8 +2740,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// reloads the app in place. The Settings view is not rebuilt, so the field
     /// the user is typing in keeps focus.
     private func applySettings(_ updated: PaletteConfig) -> String? {
+        // A file Palette cannot parse is the user's, not ours: writing defaults
+        // over it would erase comments and every unknown key.
+        if let configErrorMessage {
+            return configErrorMessage
+        }
         do {
-            try ConfigWriter.render(updated).write(to: paths.configFile, atomically: true, encoding: .utf8)
+            try ConfigWriter.write(updated, to: paths.configFile)
         } catch {
             return "Could not save settings: \(error.localizedDescription)"
         }
