@@ -226,6 +226,7 @@ struct SettingsView: View {
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
     @State private var appsMessage: String?
+    @State private var copiedDiagnostics = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -408,6 +409,11 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsClearSearch)) { _ in
             settingsSearch = ""
+            settingsSearchFocused = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsSearch)) { note in
+            guard let query = note.object as? String else { return }
+            settingsSearch = query
             settingsSearchFocused = false
         }
         .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsEdit)) { note in
@@ -1022,6 +1028,7 @@ struct SettingsView: View {
             .init(title: "Provider aliases", tab: .providers, anchor: "providers-default", keywords: "provider alias shortcut"),
             .init(title: "Provider files", tab: .providers, anchor: "providers-files", keywords: "provider commands.toml folder"),
             .init(title: "Config file and logs", tab: .providers, anchor: "providers-config", keywords: "config log crash backup export diagnostics"),
+            .init(title: "About Palette", tab: .general, anchor: "settings-about", keywords: "about version build commit chip macos architecture config state logs reveal diagnostics github releases issue author myleshen licence"),
         ]
     }
 
@@ -1443,7 +1450,99 @@ struct SettingsView: View {
             } footer: {
                 Text("Text and PNG images are stored. Anything another app marks concealed is never recorded. Zero seconds keeps secrets until you clear the history.")
             }
+
+            card("About", anchor: "settings-about") {
+                aboutRow("Version", about.versionBuild)
+                if let commit = about.commit {
+                    aboutRow("Commit", commit)
+                }
+                aboutRow("macOS", AboutInfo.macOS)
+                aboutRow("Chip", AboutInfo.chip)
+                aboutLinkRow("Licence", "MIT", AboutInfo.licence)
+                Divider()
+                aboutFolderRow("Config folder", url: palettePaths.configDir)
+                aboutFolderRow("State folder", url: palettePaths.stateDir)
+                aboutFolderRow("Logs folder", url: palettePaths.logsDir)
+                Divider()
+                HStack(spacing: 12) {
+                    aboutLink("GitHub", AboutInfo.repo)
+                    aboutLink("Releases", AboutInfo.releases)
+                    aboutLink("Report an Issue", AboutInfo.issues)
+                }
+                HStack(spacing: 4) {
+                    Text("Built by")
+                    Text(AboutInfo.author).fontWeight(.semibold)
+                    Text("·").foregroundStyle(muted)
+                    Link(AboutInfo.email, destination: URL(string: "mailto:\(AboutInfo.email)")!)
+                        .foregroundStyle(linkColor)
+                }
+                .font(theme.font(size: 12))
+                Button(copiedDiagnostics ? "Copied" : "Copy Diagnostics") {
+                    AboutInfo.copyDiagnostics()
+                    copiedDiagnostics = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        copiedDiagnostics = false
+                    }
+                }
+                .controlSize(.small)
+            } footer: {
+                Text("Palette is a keyboard-first launcher for macOS. Built with SwiftUI + AppKit.")
+            }
         }
+    }
+
+    private var about: AboutInfo { AboutInfo() }
+    private var palettePaths: PalettePaths { PalettePaths.resolve() }
+
+    private func aboutRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(theme.font(size: 13))
+            Spacer(minLength: 12)
+            Text(value)
+                .font(theme.font(size: 13))
+                .foregroundStyle(muted)
+                .textSelection(.enabled)
+                .multilineTextAlignment(.trailing)
+        }
+        .searchTarget("row-\(title)")
+    }
+
+    private func aboutLinkRow(_ title: String, _ value: String, _ url: URL) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+            Spacer(minLength: 12)
+            Link(value, destination: url)
+        }
+        .font(theme.font(size: 13))
+        .searchTarget("row-\(title)")
+    }
+
+    private func aboutFolderRow(_ title: String, url: URL) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(theme.font(size: 13))
+                Spacer(minLength: 12)
+                Button("Reveal in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+                .controlSize(.small)
+            }
+            Text(url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                .font(.caption)
+                .foregroundStyle(muted)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .searchTarget("row-\(title)")
+    }
+
+    private func aboutLink(_ title: String, _ url: URL) -> some View {
+        Button(title) { NSWorkspace.shared.open(url) }
+            .buttonStyle(.link)
+            .font(theme.font(size: 12))
     }
 
     private var keepAwakeBinding: Binding<Bool> {
@@ -3242,6 +3341,8 @@ extension Notification.Name {
     static let paletteSettingsJump = Notification.Name("palette.settings.jump")
     /// Clears the Settings search field so a scripted snapshot is canonical.
     static let paletteSettingsClearSearch = Notification.Name("palette.settings.clearSearch")
+    /// Sets the Settings search field from a script, for the same reason.
+    static let paletteSettingsSearch = Notification.Name("palette.settings.search")
 }
 
 /// Borderless AppKit field that records a real key press instead of asking the
