@@ -2650,7 +2650,7 @@ struct SettingsView: View {
                 }
                 Button("Export backup…") { onExportBackup() }
             } footer: {
-                Text("Settings writes config.toml for you. Edit it directly only for options that are not in this window, then press ⌘R.")
+                Text("Settings writes config.toml for you. Edit it directly only for options that are not in this window, then press ⌘R. Backups include config, themes, providers, history and encrypted Ask keys: plain-text clipboard entries are removed, image and file entries stay.")
             }
 
             card("Diagnostics") {

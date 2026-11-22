@@ -169,6 +169,8 @@ public final class PasteboardService {
     private var writtenChangeCount: Int = -1
     /// `stateDir/clipboard-clear.json`. Nil keeps clears in memory only.
     public var stateFile: URL?
+    /// Tests drive paste scheduling without triggering the Accessibility prompt.
+    var requestsAccessibility = true
 
     public init() {}
 
@@ -363,29 +365,29 @@ public final class PasteboardService {
     /// Copies and, when Accessibility is granted, pastes into the given app.
     /// Returns false when the paste keystroke could not be delivered.
     @discardableResult
-    public func paste(text: String, concealed: Bool = false, into app: NSRunningApplication?) -> Bool {
-        write(text: text, concealed: concealed)
+    public func paste(text: String, concealed: Bool = false, clearAfterMs: Int? = nil, into app: NSRunningApplication?) -> Bool {
+        write(text: text, concealed: concealed, clearAfterMs: clearAfterMs)
         return deliver(to: app)
     }
 
     @discardableResult
-    public func paste(image: Data, concealed: Bool = false, into app: NSRunningApplication?) -> Bool {
-        write(image: image, concealed: concealed)
+    public func paste(image: Data, concealed: Bool = false, clearAfterMs: Int? = nil, into app: NSRunningApplication?) -> Bool {
+        write(image: image, concealed: concealed, clearAfterMs: clearAfterMs)
         // TUI editors such as OpenCode read images from the clipboard when
         // they receive Ctrl+V; Cmd+V only reaches the terminal's text paste.
         return deliver(to: app, modifiers: Self.imagePasteModifiers(for: app))
     }
 
     @discardableResult
-    public func paste(files paths: [String], into app: NSRunningApplication?) -> Bool {
-        write(files: paths)
+    public func paste(files paths: [String], clearAfterMs: Int? = nil, into app: NSRunningApplication?) -> Bool {
+        write(files: paths, clearAfterMs: clearAfterMs)
         return deliver(to: app)
     }
 
     private func deliver(to app: NSRunningApplication?, modifiers: CGEventFlags = .maskCommand) -> Bool {
         guard isAccessibilityTrusted else {
             Log.shared.warn("Paste skipped: Accessibility is not trusted", source: "clipboard")
-            requestAccessibility()
+            if requestsAccessibility { requestAccessibility() }
             return false
         }
 

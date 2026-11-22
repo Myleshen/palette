@@ -860,6 +860,7 @@ public final class SearchController: ObservableObject, HostBridge {
                     _ = pasteboard.paste(
                         text: text,
                         concealed: action.concealed,
+                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
                         into: previous
                     )
                 }
@@ -882,7 +883,12 @@ public final class SearchController: ObservableObject, HostBridge {
                     }
                     let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(image: image, concealed: action.concealed, into: previous)
+                    _ = pasteboard.paste(
+                        image: image,
+                        concealed: action.concealed,
+                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
+                        into: previous
+                    )
                 }
 
             case .copyFiles:
@@ -901,7 +907,11 @@ public final class SearchController: ObservableObject, HostBridge {
                     }
                     let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(files: paths, into: previous)
+                    _ = pasteboard.paste(
+                        files: paths,
+                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
+                        into: previous
+                    )
                 }
 
             case .run:

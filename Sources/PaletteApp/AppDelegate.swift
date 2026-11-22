@@ -2619,6 +2619,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func exportBackup() {
+        let confirm = NSAlert()
+        confirm.messageText = "Export a backup without clipboard text?"
+        confirm.informativeText = """
+        The backup includes config.toml, themes, providers, history and the encrypted Ask key files. \
+        Plain-text clipboard entries are removed before zipping because they can hold pasted secrets. \
+        Image and file entries stay because they hold paths and pictures, not the text you typed.
+        """
+        confirm.addButton(withTitle: "Export")
+        confirm.addButton(withTitle: "Cancel")
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+
         let panel = NSSavePanel()
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         panel.nameFieldStringValue = "Palette-Backup-\(stamp).zip"
@@ -2659,6 +2670,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             copy(paths.configDir.appendingPathComponent("commands.toml"), as: "commands.toml")
             copy(paths.configDir.appendingPathComponent("snippets.toml"), as: "snippets.toml")
 
+            // Pasted text is the sensitive part of the clipboard history. Fold
+            // the WAL into the copy, drop text rows, then vacuum so no deleted
+            // page survives in the zip.
+            let database = temp.appendingPathComponent("palette.sqlite")
+            let sqlite = Process()
+            sqlite.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+            sqlite.arguments = [
+                database.path,
+                "PRAGMA journal_mode=DELETE; DELETE FROM clipboard WHERE kind = 'text'; VACUUM;",
+            ]
+            try sqlite.run()
+            sqlite.waitUntilExit()
+            guard sqlite.terminationStatus == 0 else {
+                throw NSError(domain: "PaletteBackup", code: Int(sqlite.terminationStatus))
+            }
+            for suffix in ["-wal", "-shm"] {
+                try? manager.removeItem(at: URL(fileURLWithPath: database.path + suffix))
+            }
+
             let readme = """
             Palette backup
             ==============
@@ -2667,7 +2697,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             ask-key.bin and ask-keys.bin hold API keys stored by Palette; they
             are encrypted. Everything else is plain text or a normal SQLite
-            database.
+            database. Clipboard history is included without its text entries.
             """
             try readme.write(to: temp.appendingPathComponent("README.txt"), atomically: true, encoding: .utf8)
 

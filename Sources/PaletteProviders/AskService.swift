@@ -196,8 +196,10 @@ public actor AskService {
         if sources.isEmpty {
             modelMessages = trimmedMessages
         } else {
-            let note = AskWebSearch.systemNote(question: question, sources: sources)
-            modelMessages = [AskMessage(role: .system, content: note)] + trimmedMessages
+            // Sources travel as a user message: web text is data, not a system
+            // instruction. The message body marks it as untrusted.
+            let sourceMessage = AskWebSearch.sourceMessage(question: question, sources: sources)
+            modelMessages = [sourceMessage] + trimmedMessages
         }
         var lastError: Error = AskClientError.missingKey
         var lastModel: AskModel?

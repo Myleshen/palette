@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 /// One styled run of inline text. Kept as plain data so the block parser can
 /// live in Core (and be tested) while PaletteApp applies the theme fonts.
@@ -253,7 +254,7 @@ public enum AskMarkdown {
                    let closeParen = source[source.index(after: openParen)...].firstIndex(of: ")") {
                     let label = String(source[source.index(after: index)..<closeBracket])
                     let urlText = String(source[source.index(after: openParen)..<closeParen])
-                    if !label.isEmpty, let url = URL(string: urlText) {
+                    if !label.isEmpty, let url = URL(string: urlText), isSafeLinkURL(url) {
                         flushPlain()
                         var labelSpans = spans(label)
                         if labelSpans.isEmpty { labelSpans = [AskInlineSpan(text: label)] }
@@ -282,6 +283,32 @@ public enum AskMarkdown {
         guard url.scheme?.lowercased() == "https" else { return false }
         guard let host = url.host, !host.isEmpty else { return false }
         return true
+    }
+
+    /// Links only ever open http/https. A `file:`, `javascript:` or custom
+    /// scheme stays literal text instead of becoming a clickable link.
+    public static func isSafeLinkURL(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
+    }
+
+    /// Limits for remote images: 5 MB on the wire and 8192 px per side, so a
+    /// hostile `![](…)` cannot exhaust memory or wedge the transcript.
+    public enum ImagePolicy {
+        public static let maxBytes = 5_000_000
+        public static let maxDimension = 8192
+
+        public static func accepts(data: Data, expectedContentLength: Int64?) -> Bool {
+            if let expectedContentLength, expectedContentLength > Int64(maxBytes) { return false }
+            guard !data.isEmpty, data.count <= maxBytes else { return false }
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                  let width = properties[kCGImagePropertyPixelWidth] as? Int,
+                  let height = properties[kCGImagePropertyPixelHeight] as? Int,
+                  width > 0, height > 0,
+                  width <= maxDimension, height <= maxDimension else { return false }
+            return true
+        }
     }
 
     /// Splits a paragraph around `![alt](url)` markers. Unsafe schemes become
