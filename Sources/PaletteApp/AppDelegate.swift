@@ -222,6 +222,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.searchPlaceholder = configuration.searchPlaceholder
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.config = configuration.capture
+        // A timer that outlived a quit resumes here; one that expired while the
+        // app was closed announces itself once and is cleared.
+        let timerAdoption = timerService.adopt(stateDir: paths.stateDir)
         themeManager.reload()
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
@@ -232,6 +235,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let builtRegistry = buildRegistry()
         registry = builtRegistry
+        // A badge left by an answer that landed while Palette was quitting
+        // comes back with the chat that owns it.
+        Task { [weak self] in
+            guard let self, let askService = self.askService,
+                  await askService.unseenChatID() != nil else { return }
+            NSApp.dockTile.badgeLabel = "1"
+        }
         // Warm `/edit` and `/neo` off the main thread: the walk is cached to
         // disk, so the first bound query after this launch is instant.
         if ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] == nil {
@@ -254,6 +264,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         hostProxy.setTarget(searchController)
         searchController.observeTimerTicks()
+        if case .expired = timerAdoption {
+            searchController.setStatus("Timer finished while Palette was closed", duration: 8)
+        }
         captureService.onStatus = { [weak self] message in
             self?.searchController.setStatus(message, duration: 4)
         }
@@ -879,6 +892,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         watcherTimer?.invalidate()
         clipboardMonitor?.stop()
         hotkey?.unregister()
+        // A draft that was never explicitly closed must survive the quit.
+        searchController?.saveScratchpadOnTerminate()
         // Keep the clamshell flag: the next launch reads it back and shows the
         // real state. The root guard itself restores normal lid sleep when this
         // process disappears. The caffeinate child is left running on purpose.
@@ -1665,6 +1680,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.updateActivationPolicy()
             let panelFrame = self.panel?.isVisible == true ? self.panel?.panel.frame : nil
             controller.show(below: panelFrame)
+            // Reopening with no question restores the last chat instead of an
+            // empty transcript.
+            if trimmed.isEmpty,
+               let lastID = await askService.lastChatID(),
+               let chat = (try? await askService.chats(limit: 200))?
+                   .first(where: { $0.id == lastID }) {
+                controller.open(chat: chat)
+            }
         }
     }
 
@@ -2534,6 +2557,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let newRegistry = buildRegistry()
         registry = newRegistry
         searchController.replace(registry: newRegistry, configuration: configuration)
+        // An open chat must follow the new config, not keep the old service.
+        if let askService, let askWindow {
+            askWindow.reconfigure(
+                service: askService,
+                notify: configuration.ask.notify,
+                webSearch: configuration.ask.webSearch
+            )
+            Log.shared.info("Ask window reconfigured after reload", source: "ask")
+        }
 
         if currentHotKey?.display.lowercased() != configuration.hotkey.lowercased()
             || currentClipboardHotKey?.display.lowercased() != configuration.clipboardHotkey.lowercased()

@@ -111,6 +111,57 @@ public actor AskService {
 
     public func deleteChat(id: String) async throws {
         try await store.deleteAskChat(id: id)
+        // A deleted chat must not be reopened on the next launch, and a badge
+        // pointing at it would never clear.
+        if (try? await store.metaValue("ask.last_chat")) == id {
+            try? await store.setMeta("ask.last_chat", value: nil)
+        }
+        if (try? await store.metaValue("ask.unseen_chat")) == id {
+            try? await store.setMeta("ask.unseen_chat", value: nil)
+        }
+        if (try? await store.metaValue("ask.inflight_chat")) == id {
+            try? await store.setMeta("ask.inflight_chat", value: nil)
+        }
+    }
+
+    // MARK: - Window state
+
+    public func setLastChat(id: String?) async {
+        try? await store.setMeta("ask.last_chat", value: id)
+    }
+
+    public func lastChatID() async -> String? {
+        try? await store.metaValue("ask.last_chat")
+    }
+
+    /// Chat with an answer the user has not looked at; drives the Dock badge
+    /// and survives a relaunch.
+    public func markUnseen(chatID: String) async {
+        try? await store.setMeta("ask.unseen_chat", value: chatID)
+    }
+
+    public func unseenChatID() async -> String? {
+        try? await store.metaValue("ask.unseen_chat")
+    }
+
+    public func clearUnseen(chatID: String) async {
+        guard (try? await store.metaValue("ask.unseen_chat")) == chatID else { return }
+        try? await store.setMeta("ask.unseen_chat", value: nil)
+    }
+
+    /// Marked when a turn starts and cleared when it settles. A marker left
+    /// behind at launch means the app quit mid-stream.
+    public func beginTurn(chatID: String) async {
+        try? await store.setMeta("ask.inflight_chat", value: chatID)
+    }
+
+    public func endTurn(chatID: String) async {
+        guard (try? await store.metaValue("ask.inflight_chat")) == chatID else { return }
+        try? await store.setMeta("ask.inflight_chat", value: nil)
+    }
+
+    public func inflightChatID() async -> String? {
+        try? await store.metaValue("ask.inflight_chat")
     }
 
     /// Sends a conversation and returns the completed turn. `onDelta` receives
@@ -297,6 +348,18 @@ public actor AskService {
         try? await store.setMeta("ask.session", value: value)
         cachedSessionID = value
         return value
+    }
+}
+
+/// How a persisted chat's trailing user message reads when reloaded.
+public enum AskUnfinishedTurn: Equatable, Sendable {
+    /// The app quit while the answer was streaming.
+    case interrupted
+    /// The turn ended without an answer for another reason.
+    case missing
+
+    public static func resolve(chatID: String, inflight: String?) -> AskUnfinishedTurn {
+        inflight == chatID ? .interrupted : .missing
     }
 }
 
