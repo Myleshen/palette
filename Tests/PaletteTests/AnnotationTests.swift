@@ -187,8 +187,8 @@ extension AnnotationTests {
     func testTextUsesTheConfiguredSize() {
         let editor = AnnotationEditor(image: solidImage(width: 100, height: 100, color: .white), url: nil)
         editor.textSize = 0.09
-        editor.add(.text(at: .zero, text: "Hi", size: editor.textSize, color: .red))
-        guard case let .text(_, _, size, _) = editor.shapes[0] else { return XCTFail("text expected") }
+        editor.add(.text(at: .zero, text: "Hi", size: editor.textSize, color: .red, box: .zero))
+        guard case let .text(_, _, size, _, _) = editor.shapes[0] else { return XCTFail("text expected") }
         XCTAssertEqual(size, 0.09, accuracy: 0.0001)
     }
 
@@ -204,6 +204,29 @@ extension AnnotationTests {
         editor.add(.rectangle(rect: CGRect(x: 0.2, y: 0.2, width: 0.3, height: 0.4), color: .blue, width: 0.004))
         XCTAssertEqual(editor.hitTest(CGPoint(x: 0.3, y: 0.3)), 0)
         XCTAssertNil(editor.hitTest(CGPoint(x: 0.8, y: 0.8)))
+    }
+
+    func testTextHitBoxUsesGlyphMetricsNotCharacterCount() {
+        let editor = AnnotationEditor(image: solidImage(width: 600, height: 200, color: .white), url: nil)
+        editor.textSize = 0.1 // 20 px at this image height
+        editor.addText(at: CGPoint(x: 0.05, y: 0.2), text: "WWWWW")
+        editor.addText(at: CGPoint(x: 0.05, y: 0.6), text: "iii")
+        guard case let .text(atW, _, _, _, boxW) = editor.shapes[0],
+              case let .text(atI, _, _, _, boxI) = editor.shapes[1] else {
+            return XCTFail("two text shapes expected")
+        }
+
+        // Wide glyphs: the measured box reaches the end of the visible text,
+        // where the old character-count guess stopped short.
+        let rightEnd = CGPoint(x: atW.x + boxW.width * 0.9, y: atW.y + boxW.height / 2)
+        XCTAssertEqual(editor.hitTest(rightEnd), 0)
+
+        // Narrow glyphs: the old guess was twice as wide, so this point is
+        // empty canvas past the measured text.
+        let oldGuess = max(20, CGFloat(3) * 20 * 0.62) / 600
+        XCTAssertGreaterThan(oldGuess, boxI.width)
+        let pastText = CGPoint(x: atI.x + (boxI.width + oldGuess) / 2, y: atI.y + boxI.height / 2)
+        XCTAssertNil(editor.hitTest(pastText))
     }
 
     func testTranslateMovesOnlyTheSelectedMark() {

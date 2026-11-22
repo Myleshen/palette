@@ -194,6 +194,9 @@ public struct WindowConfig: Sendable, Equatable {
     public var previewWidth: Double = 0
     public var terminalWidth: Double = 0
     public var previewLayout: PreviewPlacement = .auto
+    /// Fetch site icons for web apps. Turning it off stops any request to the
+    /// third-party favicon service; cached icons stay local.
+    public var favicons: Bool = true
 
     public init() {}
 
@@ -732,6 +735,7 @@ public enum ConfigLoader {
                let placement = ProviderBarPlacement(rawValue: raw.lowercased()) {
                 config.window.providerBar = placement
             }
+            config.window.favicons = window.bool("favicons") ?? config.window.favicons
         }
         // 2.3.2 wrote a root-level key; keep reading it for one release.
         if let rows = table.int("visible_rows"), rows > 0, config.window.visibleRows == 0 {
@@ -1094,6 +1098,7 @@ public enum ConfigLoader {
         terminal_width = 0             # 0 = 1000 * scale
         preview_layout = "auto"        # beside | below | auto
         provider_bar = "top"           # top | left | hidden
+        favicons = true                # fetch web-app site icons from Google
 
         # Screenshots and recordings.
         [capture]
@@ -1296,6 +1301,7 @@ public enum ConfigWriter {
         if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
         out.append("preview_layout = \"\(config.window.previewLayout.rawValue)\"")
         out.append("provider_bar = \"\(config.window.providerBar.rawValue)\"")
+        out.append("favicons = \(config.window.favicons)")
         out.append("")
         out.append("[capture]")
         out.append("directory = \(quote(config.capture.directory))")

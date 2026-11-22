@@ -211,6 +211,7 @@ struct SettingsView: View {
     @State private var globalProviders: [String]
     @State private var providerFilter = ""
     @State private var bookmarks: [Bookmark]
+    @State private var bookmarksError: String?
     @State private var bookmarksDirty = false
     @State private var terminalShellChoice: String
     @State private var cheatsheetFolders: [String]
@@ -260,7 +261,14 @@ struct SettingsView: View {
         _engines = State(initialValue: config.webSearchEngines)
         _accessibilityTrusted = State(initialValue: accessibilityTrusted)
         _askKeyStored = State(initialValue: AskKeychain.hasStoredKey(for: config.ask.endpoint))
-        _bookmarks = State(initialValue: BookmarkStore.load(from: PalettePaths.resolve().bookmarksFile))
+        do {
+            _bookmarks = State(initialValue: try BookmarkStore.load(from: PalettePaths.resolve().bookmarksFile))
+        } catch {
+            // Keep the rows empty and report the parse failure; saving is
+            // blocked below so the broken file is never overwritten.
+            _bookmarks = State(initialValue: [])
+            _bookmarksError = State(initialValue: error.localizedDescription)
+        }
         let order = config.providerOrder.isEmpty ? providers.map(\.id) : config.providerOrder
         let ordered = order.filter { id in providers.contains { $0.id == id } }
             + providers.map(\.id).filter { !order.contains($0) }
@@ -1179,7 +1187,7 @@ struct SettingsView: View {
         // An empty list would silently hide every file; keep the defaults.
         next.cheatsheets.extensions = extensions.isEmpty ? CheatsheetConfig().extensions : extensions
 
-        if bookmarksDirty {
+        if bookmarksDirty, bookmarksError == nil {
             try? BookmarkStore.save(bookmarks, to: PalettePaths.resolve().bookmarksFile)
             bookmarksDirty = false
         }
@@ -1533,8 +1541,9 @@ struct SettingsView: View {
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 toggleRow("Fit to the active screen", isOn: $config.window.autoSize)
+                toggleRow("Site favicons", isOn: $config.window.favicons)
             } footer: {
-                Text("Provider tabs are the chip strip above the list, or the rail on the left. Hidden keeps Tab and /trigger for switching. Turn individual providers on or off under Providers. Fit sizes the launcher to the screen under the pointer.")
+                Text("Provider tabs are the chip strip above the list, or the rail on the left. Hidden keeps Tab and /trigger for switching. Turn individual providers on or off under Providers. Fit sizes the launcher to the screen under the pointer. Site favicons fetch web-app icons from Google; turn them off to keep hostnames on this Mac.")
             }
 
             card("Size", anchor: "launcher-size") {
@@ -2137,47 +2146,56 @@ struct SettingsView: View {
             }
 
             card("Bookmarks", anchor: "search-bookmarks") {
-                ForEach($bookmarks) { $bookmark in
-                    VStack(alignment: .leading, spacing: 8) {
-                        fieldRow("Name", anchor: "row-bookmark-\(bookmark.id)-name") {
-                            HStack(spacing: 8) {
-                                TextField("Name", text: $bookmark.name)
-                                    .settingsField()
-                                Button {
-                                    bookmarks.removeAll { $0.id == bookmark.id }
-                                } label: {
-                                    Image(systemName: "trash")
+                if let bookmarksError {
+                    Text("\(bookmarksError) The file is left untouched; fix or restore bookmarks.toml, then reopen Settings.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach($bookmarks) { $bookmark in
+                        VStack(alignment: .leading, spacing: 8) {
+                            fieldRow("Name", anchor: "row-bookmark-\(bookmark.id)-name") {
+                                HStack(spacing: 8) {
+                                    TextField("Name", text: $bookmark.name)
+                                        .settingsField()
+                                    Button {
+                                        bookmarks.removeAll { $0.id == bookmark.id }
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Remove bookmark")
+                                    .accessibilityLabel("Remove bookmark")
                                 }
-                                .buttonStyle(.borderless)
-                                .help("Remove bookmark")
-                                .accessibilityLabel("Remove bookmark")
+                            }
+                            fieldRow("URL", anchor: "row-bookmark-\(bookmark.id)-url") {
+                                TextField("URL", text: $bookmark.url)
+                                    .settingsField()
+                            }
+                            fieldRow("Browser", anchor: "row-bookmark-\(bookmark.id)-browser") {
+                                BrowserPicker(browser: $bookmark.browser)
+                            }
+                            fieldRow("Keywords", anchor: "row-bookmark-\(bookmark.id)-keywords") {
+                                TextField("Keywords (comma separated)", text: Binding(
+                                    get: { bookmark.keywords.joined(separator: ", ") },
+                                    set: { text in
+                                        bookmark.keywords = text
+                                            .split(separator: ",")
+                                            .map { $0.trimmingCharacters(in: .whitespaces) }
+                                            .filter { !$0.isEmpty }
+                                    }
+                                ))
+                                .settingsField()
                             }
                         }
-                        fieldRow("URL", anchor: "row-bookmark-\(bookmark.id)-url") {
-                            TextField("URL", text: $bookmark.url)
-                                .settingsField()
-                        }
-                        fieldRow("Browser", anchor: "row-bookmark-\(bookmark.id)-browser") {
-                            BrowserPicker(browser: $bookmark.browser)
-                        }
-                        fieldRow("Keywords", anchor: "row-bookmark-\(bookmark.id)-keywords") {
-                            TextField("Keywords (comma separated)", text: Binding(
-                                get: { bookmark.keywords.joined(separator: ", ") },
-                                set: { text in
-                                    bookmark.keywords = text
-                                        .split(separator: ",")
-                                        .map { $0.trimmingCharacters(in: .whitespaces) }
-                                        .filter { !$0.isEmpty }
-                                }
-                            ))
-                            .settingsField()
-                        }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
                 }
                 HStack(spacing: 8) {
-                    Button("Add bookmark") {
-                        bookmarks.append(Bookmark(name: "", url: "", browser: ""))
+                    if bookmarksError == nil {
+                        Button("Add bookmark") {
+                            bookmarks.append(Bookmark(name: "", url: "", browser: ""))
+                        }
                     }
                     Button("Reveal in Finder") {
                         reveal(PalettePaths.resolve().bookmarksFile.path)

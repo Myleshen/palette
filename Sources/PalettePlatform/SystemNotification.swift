@@ -10,8 +10,15 @@ public enum SystemNotification {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var askedForPermission = false
     nonisolated(unsafe) private static var allowed = false
+    /// When the permission state was last read from the system.
+    nonisolated(unsafe) private static var lastCheck = Date.distantPast
+    /// Denying and then enabling notifications in System Settings must take
+    /// effect without a relaunch, but every answer should not pay for a
+    /// notification-center round trip.
+    private static let checkInterval: TimeInterval = 1
 
     /// Whether the system has granted banners. False until `prepare()` resolved.
+    /// This is the cached value; `post` re-reads the live setting first.
     public static var isAllowed: Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -37,13 +44,14 @@ public enum SystemNotification {
 
     public static func post(title: String, body: String, identifier: String = UUID().uuidString) {
         guard Bundle.main.bundlePath.hasSuffix(".app") else { return }
-        guard !alreadyAsked() || isAllowed else { return }
         Task.detached(priority: .utility) {
             let center = UNUserNotificationCenter.current()
             if claimPermissionRequest() {
                 let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
                 setAllowed(granted)
                 guard granted else { return }
+            } else if !(await permissionAllowed(center)) {
+                return
             }
             let content = UNMutableNotificationContent()
             content.title = title
@@ -60,10 +68,32 @@ public enum SystemNotification {
         }
     }
 
-    private static func alreadyAsked() -> Bool {
+    /// The live permission state, re-read at most once a second.
+    private static func permissionAllowed(_ center: UNUserNotificationCenter) async -> Bool {
+        let state = permissionCacheState()
+        guard state.stale else { return state.allowed }
+
+        let settings = await center.notificationSettings()
+        let granted = settings.authorizationStatus == .authorized
+            || settings.authorizationStatus == .provisional
+        storePermission(granted)
+        return granted
+    }
+
+    /// Claims the stale check before the await so two answers in one second
+    /// share one notification-center round trip.
+    private static func permissionCacheState() -> (stale: Bool, allowed: Bool) {
         lock.lock()
         defer { lock.unlock() }
-        return askedForPermission
+        let stale = Date().timeIntervalSince(lastCheck) >= checkInterval
+        if stale { lastCheck = Date() }
+        return (stale, allowed)
+    }
+
+    private static func storePermission(_ granted: Bool) {
+        lock.lock()
+        allowed = granted
+        lock.unlock()
     }
 
     private static func claimPermissionRequest() -> Bool {
