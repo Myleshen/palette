@@ -30,6 +30,12 @@ public final class SearchController: ObservableObject, HostBridge {
     private var actionsOwner: PaletteItem?
     private var allActions: [PaletteAction] = []
     private var queryBeforeActions = ""
+    /// Bumped on every scratchpad open/close so an in-flight load cannot write
+    /// over newer text.
+    private var scratchpadGeneration = 0
+    /// The close-path save; the next open waits for it so it cannot read the
+    /// snapshot from before the save.
+    private var scratchpadSaveTask: Task<Void, Never>?
     @Published public var actionIndex = 0
     /// The rail has keyboard focus after a click; arrows move providers then,
     /// while the search field keeps the actual typing focus.
@@ -369,7 +375,16 @@ public final class SearchController: ObservableObject, HostBridge {
             selectionIndex = 0
         }
         if actionsMode {
-            if let owner = actionsOwnerID, items[selectionIndex].stableID != owner {
+            if !items.indices.contains(selectionIndex) {
+                // An external refresh can empty the list while ⌘K is open.
+                actionsMode = false
+                actionItems = []
+                allActions = []
+                actionsOwner = nil
+                actionsOwnerID = nil
+                queryBeforeActions = ""
+                actionIndex = 0
+            } else if let owner = actionsOwnerID, items[selectionIndex].stableID != owner {
                 actionsMode = false
                 actionItems = []
                 actionIndex = 0
@@ -1279,6 +1294,7 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func openTerminalPanel(command: String? = nil, sessionName: String? = nil) {
+        scratchpadGeneration += 1
         terminalInitialCommand = command
         terminalSessionName = sessionName
         terminalActive = true
@@ -1308,6 +1324,8 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
         if terminalActive { closeTerminalPanel() }
+        scratchpadGeneration += 1
+        let generation = scratchpadGeneration
         panel?.show()
         panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
         scratchpadActive = true
@@ -1322,19 +1340,25 @@ public final class SearchController: ObservableObject, HostBridge {
 
         if let noteID {
             Task { [weak self] in
-                guard let self, let note = try? await self.store.scratchNote(id: noteID) else { return }
+                guard let self else { return }
+                await self.scratchpadSaveTask?.value
+                guard let note = try? await self.store.scratchNote(id: noteID) else { return }
+                guard self.scratchpadGeneration == generation, self.scratchpadNoteID == noteID else { return }
                 self.scratchpadTitle = note.title
                 self.scratchpadText = note.text
             }
         } else if seed == nil {
             Task { [weak self] in
                 guard let self else { return }
+                await self.scratchpadSaveTask?.value
                 if let note = try? await self.store.scratchNotes(limit: 1).first {
+                    guard self.scratchpadGeneration == generation else { return }
                     self.scratchpadNoteID = note.id
                     self.scratchpadTitle = note.title
                     self.scratchpadText = note.text
                 } else if let legacy = try? await self.store.metaValue("scratchpad.text"),
                           !legacy.isEmpty {
+                    guard self.scratchpadGeneration == generation else { return }
                     self.scratchpadText = legacy
                 }
             }
@@ -1345,19 +1369,22 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func closeScratchpad(save: Bool) {
         guard scratchpadActive else { return }
+        scratchpadGeneration += 1
+        let generation = scratchpadGeneration
         if save {
             let title = scratchpadTitle
             let text = scratchpadText
             let noteID = scratchpadNoteID
             if !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Task { [weak self] in
+                scratchpadSaveTask = Task { [weak self] in
                     guard let self,
                           let note = try? await self.store.saveScratchNote(
                             id: noteID,
                             title: title,
                             text: text
                           ) else { return }
+                    guard self.scratchpadGeneration == generation else { return }
                     self.scratchpadNoteID = note.id
                 }
             }

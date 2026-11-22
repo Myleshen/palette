@@ -18,8 +18,8 @@ final class ProjectTests: XCTestCase {
         managed_files = []
 
         [[roots]]
-        name = "dev"
-        path = "/Users/me/dev"
+        name = "dev" # the main tree
+        path = "/Users/me/dev" # absolute
 
         [usage]
         pins = 0

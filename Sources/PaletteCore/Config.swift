@@ -929,9 +929,6 @@ public enum ConfigLoader {
             if let webSearch = askTable.bool("web_search") {
                 ask.webSearch = webSearch
             }
-            if AskModel.find(id: ask.model)?.endpoint != ask.endpoint {
-                ask.model = AskModel.models(for: ask.endpoint).first?.id ?? AskModel.defaultModel.id
-            }
             config.ask = ask
         }
 

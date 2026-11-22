@@ -169,6 +169,38 @@ final class CoreTests: XCTestCase {
         XCTAssertNil(hosts[1].user)
     }
 
+    func testSSHConfigEmitsEveryPatternAndFollowsInclude() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-ssh-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try """
+        Host jump
+          HostName jump.example.com
+        """.write(
+            to: directory.appendingPathComponent("extra.conf"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let text = """
+        Include extra.conf
+
+        Host a b c
+          HostName shared.example.com
+          User deploy
+          Port 2222
+
+        Host after
+        """
+        let hosts = SSHConfig.parse(text, directory: directory)
+        XCTAssertEqual(hosts.map(\.alias), ["a", "after", "b", "c", "jump"])
+        XCTAssertEqual(hosts.first { $0.alias == "a" }?.hostName, "shared.example.com")
+        XCTAssertEqual(hosts.first { $0.alias == "b" }?.user, "deploy")
+        XCTAssertEqual(hosts.first { $0.alias == "c" }?.port, "2222")
+        XCTAssertEqual(hosts.first { $0.alias == "jump" }?.hostName, "jump.example.com")
+    }
+
     func testCaptureConfigParsesAndRoundTrips() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-capture-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }

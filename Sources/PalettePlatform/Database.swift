@@ -1072,7 +1072,7 @@ public actor PaletteStore {
         let statement = try prepare("""
         DELETE FROM clipboard
         WHERE pinned = 0 AND id NOT IN (
-            SELECT id FROM clipboard ORDER BY pinned DESC, created DESC LIMIT ?
+            SELECT id FROM clipboard WHERE pinned = 0 ORDER BY created DESC LIMIT ?
         );
         """)
         defer { sqlite3_finalize(statement) }
