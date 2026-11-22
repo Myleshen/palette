@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.17.1 — 2026-11-22
+
+### Fixed
+
+- Pressing Return on an emoji now pastes it into the focused app; Copy Emoji
+  moved to the second action and the row's subtitle says “Paste emoji”.
+
 ## 2.17.0 — 2026-11-22
 
 ### Added
