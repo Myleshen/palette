@@ -22,12 +22,20 @@ private actor FakeClamshell: ClamshellControlling {
     private var armed = false
     private var staleFlag = false
     private(set) var enableCount = 0
+    private(set) var disableCount = 0
 
     func setStaleFlag() { staleFlag = true }
     func isEnabled() async -> Bool { armed || staleFlag }
     func isArmed() async -> Bool { armed }
     func enable() async throws { armed = true; staleFlag = false; enableCount += 1 }
-    func disable() async { armed = false; staleFlag = false }
+    func disable() async { armed = false; staleFlag = false; disableCount += 1 }
+}
+
+private struct SessionFixture: Encodable {
+    var pid: Int32
+    var startedAt: Date
+    var endsAt: Date?
+    var preventDisplaySleep: Bool
 }
 
 final class KeepAwakeTests: XCTestCase {
@@ -37,8 +45,62 @@ final class KeepAwakeTests: XCTestCase {
         return ClamshellGuard(flagURL: flag, verifyEnabled: false)
     }
 
+    private func makeStateDir() -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-awake-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
+    }
+
+    private func sessionFile(in dir: URL) -> URL {
+        dir.appendingPathComponent("keepawake.json")
+    }
+
+    private func writeSession(
+        to dir: URL,
+        pid: Int32,
+        startedAt: Date = Date(),
+        endsAt: Date?,
+        preventDisplaySleep: Bool = true
+    ) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let session = SessionFixture(
+            pid: pid,
+            startedAt: startedAt,
+            endsAt: endsAt,
+            preventDisplaySleep: preventDisplaySleep
+        )
+        try encoder.encode(session).write(to: sessionFile(in: dir), options: .atomic)
+    }
+
+    private func startCaffeinate(seconds: Int) throws -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
+        process.arguments = ["-i", "-t", "\(seconds)"]
+        try process.run()
+        addTeardownBlock {
+            if process.isRunning { process.terminate() }
+        }
+        return process
+    }
+
+    private func waitForExit(_ process: Process, timeout: TimeInterval = 5) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning, Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertFalse(process.isRunning, "the child should have exited")
+    }
+
     func testStartAndStopWithAssertionsDisabled() async throws {
-        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: makeGuard(), timerInterval: 0.1)
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: makeGuard(),
+            timerInterval: 0.1,
+            stateDir: makeStateDir()
+        )
         try await service.start(duration: nil)
         var status = await service.snapshot()
         XCTAssertTrue(status.active)
@@ -50,7 +112,12 @@ final class KeepAwakeTests: XCTestCase {
     }
 
     func testTimedSessionExpires() async throws {
-        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: makeGuard(), timerInterval: 0.05)
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: makeGuard(),
+            timerInterval: 0.05,
+            stateDir: makeStateDir()
+        )
         try await service.start(duration: 0.25)
         let active = await service.snapshot()
         XCTAssertTrue(active.active)
@@ -62,7 +129,11 @@ final class KeepAwakeTests: XCTestCase {
     }
 
     func testProviderRowsAndStartAction() async throws {
-        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: makeGuard())
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: makeGuard(),
+            stateDir: makeStateDir()
+        )
         let bridge = KeepAwakeBridge()
         let launcher = await MainActor.run { LauncherService() }
         let provider = KeepAwakeProvider(service: service, bridge: bridge, launcher: launcher)
@@ -88,7 +159,7 @@ final class KeepAwakeTests: XCTestCase {
     }
 
     func testClamshellDaemonInstallCommand() throws {
-        let command = ClamshellGuard.installCommand(pid: 4242, flagPath: "/tmp/clamshell flag.active")
+        let command = ClamshellGuard.installCommand(flagPath: "/tmp/clamshell flag.active")
         XCTAssertTrue(command.contains(ClamshellGuard.daemonLabel))
         XCTAssertTrue(command.contains("/bin/launchctl bootstrap system"))
         XCTAssertTrue(command.contains(ClamshellGuard.daemonPlistPath))
@@ -96,22 +167,27 @@ final class KeepAwakeTests: XCTestCase {
 
         let plist = ClamshellGuard.daemonPlist()
         XCTAssertTrue(plist.contains("<key>RunAtLoad</key><true/>"))
+        XCTAssertTrue(plist.contains("<key>StartInterval</key><integer>30</integer>"))
         XCTAssertTrue(plist.contains(ClamshellGuard.daemonLabel))
         // The plist must be valid property list data, or launchd rejects it.
         let data = try XCTUnwrap(plist.data(using: .utf8))
         let parsed = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
         XCTAssertEqual(parsed?["Label"] as? String, ClamshellGuard.daemonLabel)
+        XCTAssertEqual(parsed?["StartInterval"] as? Int, 30)
         XCTAssertEqual((parsed?["ProgramArguments"] as? [String])?.first, "/bin/sh")
 
-        // The guard body must watch this process and this flag.
-        let script = ClamshellGuard.helperScript(pid: 4242, flagPath: "/tmp/clamshell flag.active", cleanUpPlist: true)
-        XCTAssertTrue(script.contains("/bin/kill -0 4242"))
+        // The guard watches the flag and power, not Palette's pid.
+        let script = ClamshellGuard.helperScript(flagPath: "/tmp/clamshell flag.active", cleanUpPlist: true)
+        XCTAssertFalse(script.contains("kill -0"), "the daemon must outlive Palette")
         XCTAssertTrue(script.contains("/tmp/clamshell flag.active"))
+        XCTAssertTrue(script.contains("stat -f %m"), "the cap reads the flag's age")
+        XCTAssertTrue(script.contains("12h cap reached"))
+        XCTAssertTrue(script.contains("battery power; lid sleep restored"))
         XCTAssertTrue(script.contains(ClamshellGuard.daemonLabel), "the guard removes its own plist on exit")
     }
 
     func testClamshellInstallCommandParsesAsShell() async throws {
-        let command = ClamshellGuard.installCommand(pid: 42, flagPath: "/tmp/clamshell.active")
+        let command = ClamshellGuard.installCommand(flagPath: "/tmp/clamshell.active")
         // `sh -n` parses without executing, so this catches quoting breaks in
         // the root command before it ever reaches the password prompt.
         let result = try await ProcessRunner.run(["/bin/sh", "-n", "-c", command], timeout: 10)
@@ -123,8 +199,8 @@ final class KeepAwakeTests: XCTestCase {
     /// time with status 127, after the user has already typed a password.
     func testClamshellToolsExistAtTheirPaths() throws {
         let sources = [
-            ClamshellGuard.installCommand(pid: 42, flagPath: "/tmp/clamshell.active"),
-            ClamshellGuard.helperScript(pid: 42, flagPath: "/tmp/clamshell.active"),
+            ClamshellGuard.installCommand(flagPath: "/tmp/clamshell.active"),
+            ClamshellGuard.helperScript(flagPath: "/tmp/clamshell.active"),
         ]
         let pattern = try NSRegularExpression(pattern: "/(?:usr/)?s?bin/[A-Za-z0-9_.-]+")
         for source in sources {
@@ -139,7 +215,11 @@ final class KeepAwakeTests: XCTestCase {
     func testStaleClamshellFlagRearmsTheGuard() async throws {
         let fake = FakeClamshell()
         await fake.setStaleFlag()
-        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: fake,
+            stateDir: makeStateDir()
+        )
 
         // The flag exists from an earlier run but nothing is armed, so the
         // guard must be started again rather than trusted.
@@ -150,7 +230,11 @@ final class KeepAwakeTests: XCTestCase {
 
     func testClamshellToggleIsIndependentOfKeepAwake() async throws {
         let fake = FakeClamshell()
-        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: fake,
+            stateDir: makeStateDir()
+        )
 
         try await service.setClamshell(true)
         var status = await service.snapshot()
@@ -179,7 +263,11 @@ final class KeepAwakeTests: XCTestCase {
 
     func testKeepAwakeToggleLeavesClamshellAlone() async throws {
         let fake = FakeClamshell()
-        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: fake,
+            stateDir: makeStateDir()
+        )
 
         try await service.setClamshell(true)
         try await service.setKeepAwake(true)
@@ -201,9 +289,39 @@ final class KeepAwakeTests: XCTestCase {
         XCTAssertFalse(disarmed)
     }
 
+    func testExpiredTimerLeavesClamshellAlone() async throws {
+        let fake = FakeClamshell()
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: fake,
+            timerInterval: 0.05,
+            stateDir: makeStateDir()
+        )
+        try await service.setClamshell(true)
+        try await service.start(duration: 0.25)
+        var status = await service.snapshot()
+        XCTAssertTrue(status.active, "the timer starts active")
+        XCTAssertNotNil(status.endsAt, "the timer has a deadline")
+        XCTAssertTrue(status.clamshell, "clamshell is armed alongside the timer")
+
+        try await Task.sleep(nanoseconds: 700_000_000)
+        status = await service.snapshot()
+        XCTAssertFalse(status.active, "The timer alone should expire")
+        XCTAssertNil(status.endsAt, "the deadline is cleared with the session")
+        XCTAssertTrue(status.clamshell, "Expiry is not Stop All; clamshell stays armed")
+        let stillArmed = await fake.isEnabled()
+        XCTAssertTrue(stillArmed)
+        let disables = await fake.disableCount
+        XCTAssertEqual(disables, 0, "Expiry must not disarm the clamshell guard")
+    }
+
     func testProviderClamshellActionTogglesWithoutStartingTimer() async throws {
         let fake = FakeClamshell()
-        let service = KeepAwakeService(assertionsEnabled: false, clamshellGuard: fake)
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: fake,
+            stateDir: makeStateDir()
+        )
         let bridge = KeepAwakeBridge()
         let launcher = await MainActor.run { LauncherService() }
         let provider = KeepAwakeProvider(service: service, bridge: bridge, launcher: launcher)
@@ -275,44 +393,234 @@ final class KeepAwakeTests: XCTestCase {
         try "AC Power".write(to: ac, atomically: true, encoding: .utf8)
         try Data().write(to: flag)
 
-        let script = ClamshellGuard.helperScript(
-            pid: getpid(),
-            flagPath: flag.path,
-            pmset: fakePmset.path,
-            sleepBinary: fakeSleep.path,
-            interval: 0
-        )
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", script]
-        process.environment = [
-            "FAKE_AC": ac.path,
-            "FAKE_STATE": state.path,
-            "PATH": "/usr/bin:/bin",
-        ]
-        try process.run()
-        defer {
-            if process.isRunning { process.terminate() }
+        func startGuard(maxArmedSeconds: Int = 12 * 60 * 60) throws -> Process {
+            let script = ClamshellGuard.helperScript(
+                flagPath: flag.path,
+                pmset: fakePmset.path,
+                sleepBinary: fakeSleep.path,
+                interval: 0,
+                maxArmedSeconds: maxArmedSeconds
+            )
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", script]
+            process.environment = [
+                "FAKE_AC": ac.path,
+                "FAKE_STATE": state.path,
+                "PATH": "/usr/bin:/bin",
+            ]
+            try process.run()
+            return process
         }
 
         func stateValue() -> String {
             (try? String(contentsOf: state, encoding: .utf8)) ?? ""
         }
 
-        // The helper polls every 50ms; give slow CI runners room for the first write.
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-        XCTAssertEqual(stateValue(), "1", "AC power should arm lid-sleep prevention")
+        func waitForState(_ value: String) async throws -> Bool {
+            for _ in 0..<40 {
+                if stateValue() == value { return true }
+                try await Task.sleep(nanoseconds: 50_000_000)
+            }
+            return false
+        }
+
+        var guardProcess = try startGuard()
+        let armed = try await waitForState("1")
+        XCTAssertTrue(armed, "AC power should arm lid-sleep prevention")
+        XCTAssertTrue(guardProcess.isRunning)
 
         try "Battery Power".write(to: ac, atomically: true, encoding: .utf8)
-        try await Task.sleep(nanoseconds: 500_000_000)
-        XCTAssertEqual(stateValue(), "0", "Battery power should restore normal sleep")
+        let disarmed = try await waitForState("0")
+        XCTAssertTrue(disarmed, "Battery power should restore normal sleep")
+        // The daemon exits on battery; launchd's StartInterval starts it again.
+        try await waitForExit(guardProcess)
 
         try "AC Power".write(to: ac, atomically: true, encoding: .utf8)
-        try await Task.sleep(nanoseconds: 500_000_000)
-        XCTAssertEqual(stateValue(), "1", "Reconnecting AC should re-arm the guard")
+        guardProcess = try startGuard()
+        let rearmed = try await waitForState("1")
+        XCTAssertTrue(rearmed, "A launchd restart should re-arm on AC")
+        XCTAssertTrue(guardProcess.isRunning)
 
         try manager.removeItem(at: flag)
-        try await Task.sleep(nanoseconds: 500_000_000)
-        XCTAssertEqual(stateValue(), "0", "Removing the flag should restore normal sleep")
+        let stopped = try await waitForState("0")
+        XCTAssertTrue(stopped, "Removing the flag should restore normal sleep")
+        try await waitForExit(guardProcess)
+
+        // A killed daemon must not leave sleep disabled behind.
+        try Data().write(to: flag)
+        guardProcess = try startGuard()
+        let armedAgain = try await waitForState("1")
+        XCTAssertTrue(armedAgain)
+        guardProcess.terminate()
+        try await waitForExit(guardProcess)
+        let trapDisarmed = try await waitForState("0")
+        XCTAssertTrue(trapDisarmed, "The EXIT trap must disarm a killed guard")
+
+        // The 12-hour cap (shortened here) disarms and removes the flag.
+        try Data().write(to: flag)
+        try manager.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-60)],
+            ofItemAtPath: flag.path
+        )
+        let capProcess = try startGuard(maxArmedSeconds: 1)
+        try await waitForExit(capProcess)
+        XCTAssertFalse(manager.fileExists(atPath: flag.path), "The cap must remove the flag")
+        XCTAssertEqual(stateValue(), "0")
+    }
+
+    // MARK: - Session adoption
+
+    func testRestoreAdoptsLiveCaffeinate() async throws {
+        let dir = makeStateDir()
+        let process = try startCaffeinate(seconds: 30)
+        let endsAt = Date().addingTimeInterval(30)
+        try writeSession(to: dir, pid: process.processIdentifier, endsAt: endsAt)
+
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: FakeClamshell(),
+            stateDir: dir
+        )
+        await service.restore()
+
+        let status = await service.snapshot()
+        XCTAssertTrue(status.active)
+        XCTAssertTrue(status.displaySleepPrevented)
+        XCTAssertEqual(try XCTUnwrap(status.endsAt).timeIntervalSince(endsAt), 0, accuracy: 1)
+
+        await service.stop()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sessionFile(in: dir).path))
+        try await waitForExit(process)
+    }
+
+    func testRestoreClearsADeadPid() async throws {
+        let dir = makeStateDir()
+        let dead = Process()
+        dead.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try dead.run()
+        dead.waitUntilExit()
+        try writeSession(to: dir, pid: dead.processIdentifier, endsAt: Date().addingTimeInterval(60))
+
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: FakeClamshell(),
+            stateDir: dir
+        )
+        await service.restore()
+
+        let status = await service.snapshot()
+        XCTAssertFalse(status.active)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sessionFile(in: dir).path))
+    }
+
+    func testRestoreClearsAnExpiredDeadline() async throws {
+        let dir = makeStateDir()
+        // The pid is alive but is not caffeinate: the deadline must win.
+        try writeSession(to: dir, pid: getpid(), endsAt: Date().addingTimeInterval(-1))
+
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: FakeClamshell(),
+            stateDir: dir
+        )
+        await service.restore()
+
+        let status = await service.snapshot()
+        XCTAssertFalse(status.active)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sessionFile(in: dir).path))
+    }
+
+    func testRestoreIgnoresAMalformedFile() async throws {
+        let dir = makeStateDir()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("{ not json".utf8).write(to: sessionFile(in: dir))
+
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: FakeClamshell(),
+            stateDir: dir
+        )
+        await service.restore()
+
+        let status = await service.snapshot()
+        XCTAssertFalse(status.active)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sessionFile(in: dir).path))
+    }
+
+    /// A recycled pid belongs to some other process; Stop must never kill it.
+    func testRestoreIgnoresAPidThatIsNotCaffeinate() async throws {
+        let dir = makeStateDir()
+        try writeSession(to: dir, pid: getpid(), endsAt: Date().addingTimeInterval(60))
+
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: FakeClamshell(),
+            stateDir: dir
+        )
+        await service.restore()
+        await service.stop()
+
+        let status = await service.snapshot()
+        XCTAssertFalse(status.active)
+        XCTAssertEqual(kill(getpid(), 0), 0, "Stop must not signal a pid it did not start")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sessionFile(in: dir).path))
+    }
+
+    func testStartPersistsTheCaffeinateSession() async throws {
+        let dir = makeStateDir()
+        let service = KeepAwakeService(
+            assertionsEnabled: true,
+            clamshellGuard: FakeClamshell(),
+            stateDir: dir
+        )
+        try await service.start(duration: 60)
+
+        let data = try Data(contentsOf: sessionFile(in: dir))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let pid = try XCTUnwrap(object["pid"] as? Int)
+        XCTAssertGreaterThan(pid, 0)
+        XCTAssertNotNil(object["startedAt"] as? String)
+        XCTAssertNotNil(object["endsAt"] as? String)
+        XCTAssertEqual(object["preventDisplaySleep"] as? Bool, true)
+
+        await service.stop()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sessionFile(in: dir).path))
+        var ticks = 0
+        while kill(Int32(pid), 0) == 0, ticks < 100 {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            ticks += 1
+        }
+        XCTAssertNotEqual(kill(Int32(pid), 0), 0, "Stop must kill the recorded caffeinate")
+    }
+
+    func testAdoptedClamshellShowsArmedButInactive() async throws {
+        let fake = FakeClamshell()
+        await fake.setStaleFlag()
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: fake,
+            stateDir: makeStateDir()
+        )
+        await service.restore()
+
+        let status = await service.snapshot()
+        XCTAssertTrue(status.clamshell)
+        XCTAssertTrue(status.clamshellRequiresPower)
+    }
+
+    func testAdoptedArmedClamshellTurnsTheToggleOn() async throws {
+        let fake = FakeClamshell()
+        try await fake.enable()
+        let service = KeepAwakeService(
+            assertionsEnabled: false,
+            clamshellGuard: fake,
+            stateDir: makeStateDir()
+        )
+        await service.restore()
+
+        let status = await service.snapshot()
+        XCTAssertTrue(status.clamshell)
+        XCTAssertFalse(status.clamshellRequiresPower)
     }
 }

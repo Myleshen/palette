@@ -1422,7 +1422,14 @@ struct SettingsView: View {
     }
 
     private var keepAwakeSummary: String {
-        let clamshell = keepAwakeStatus.clamshell ? "Clamshell on" : "Clamshell off"
+        let clamshell: String
+        if keepAwakeStatus.clamshell {
+            clamshell = keepAwakeStatus.clamshellRequiresPower
+                ? "Clamshell armed but inactive — needs AC power"
+                : "Clamshell on"
+        } else {
+            clamshell = "Clamshell off"
+        }
         if keepAwakeStatus.active {
             if let endsAt = keepAwakeStatus.endsAt {
                 return "Awake until \(Self.timeFormatter.string(from: endsAt)) · \(clamshell)"

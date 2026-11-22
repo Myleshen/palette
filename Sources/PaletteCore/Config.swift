@@ -179,7 +179,6 @@ public struct WindowConfig: Sendable, Equatable {
     public var clipboardWidth: Double = 0
     public var previewWidth: Double = 0
     public var terminalWidth: Double = 0
-    public var scratchpadWidth: Double = 0
     public var previewLayout: PreviewPlacement = .auto
 
     public init() {}
@@ -256,14 +255,9 @@ public struct WindowConfig: Sendable, Equatable {
     public func terminalWidth(for visible: CGSize) -> Double {
         panelWidth(terminalWidth, Self.defaultTerminalWidth, for: visible)
     }
-    public func scratchpadWidth(for visible: CGSize) -> Double {
-        panelWidth(scratchpadWidth, Self.defaultPanelWidth, for: visible)
-    }
-
     public var clipboardPanelWidth: Double { size(clipboardWidth, Self.defaultPanelWidth) }
     public var previewPanelWidth: Double { size(previewWidth, Self.defaultPanelWidth) }
     public var terminalPanelWidth: Double { size(terminalWidth, Self.defaultTerminalWidth) }
-    public var scratchpadPanelWidth: Double { size(scratchpadWidth, Self.defaultPanelWidth) }
 }
 
 public enum CaptureAction: String, Sendable, Equatable {
@@ -717,7 +711,6 @@ public enum ConfigLoader {
             if let value = window.number("clipboard_width"), value > 0 { config.window.clipboardWidth = value }
             if let value = window.number("preview_width"), value > 0 { config.window.previewWidth = value }
             if let value = window.number("terminal_width"), value > 0 { config.window.terminalWidth = value }
-            if let value = window.number("scratchpad_width"), value > 0 { config.window.scratchpadWidth = value }
             if let raw = window.str("preview_layout"), let layout = PreviewPlacement(rawValue: raw.lowercased()) {
                 config.window.previewLayout = layout
             }
@@ -1084,7 +1077,6 @@ public enum ConfigLoader {
         clipboard_width = 0            # 0 = 880 * scale
         preview_width = 0
         terminal_width = 0             # 0 = 1000 * scale
-        scratchpad_width = 0
         preview_layout = "auto"        # beside | below | auto
         provider_bar = "top"           # top | left | hidden
 
@@ -1285,7 +1277,6 @@ public enum ConfigWriter {
         if config.window.clipboardWidth > 0 { out.append("clipboard_width = \(config.window.clipboardWidth)") }
         if config.window.previewWidth > 0 { out.append("preview_width = \(config.window.previewWidth)") }
         if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
-        if config.window.scratchpadWidth > 0 { out.append("scratchpad_width = \(config.window.scratchpadWidth)") }
         out.append("preview_layout = \"\(config.window.previewLayout.rawValue)\"")
         out.append("provider_bar = \"\(config.window.providerBar.rawValue)\"")
         out.append("")
