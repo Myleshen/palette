@@ -955,3 +955,7 @@ Security → Accessibility, then relaunch.
 
 **A provider misbehaves.** Check `~/.local/state/palette/logs/palette.log` and
 the provider's stderr in the same log.
+
+## License
+
+Palette is released under the [MIT License](LICENSE). © 2026 Myleshen.

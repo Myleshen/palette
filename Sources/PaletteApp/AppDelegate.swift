@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
     private var askWindow: AskWindowController?
+    private var aboutWindow: AboutWindowController?
     private var systemIsShuttingDown = false
     private var askService: AskService?
     private var startupDiagnostics: [Diagnostic] = []
@@ -374,6 +375,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     try? await Task.sleep(nanoseconds: 300_000_000)
                 } else if step == "settings" {
                     self.showSettings()
+                } else if step == "about" {
+                    self.showAboutWindow()
                 } else if let value = step.dropPrefix("settings_tab="), let index = Int(value) {
                     self.showSettings()
                     try? await Task.sleep(nanoseconds: 300_000_000)
@@ -390,6 +393,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.showSettings()
                     try? await Task.sleep(nanoseconds: 300_000_000)
                     NotificationCenter.default.post(name: .paletteSettingsJump, object: value)
+                } else if let value = step.dropPrefix("settings_search=") {
+                    self.showSettings()
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    NotificationCenter.default.post(name: .paletteSettingsSearch, object: value)
                 } else if let value = step.dropPrefix("config=") {
                     let parts = value.split(separator: "=", maxSplits: 1).map(String.init)
                     if parts.count == 2, var updated: PaletteConfig = self.configuration {
@@ -481,6 +488,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.write(view: hud.contentView ?? NSView(), to: value)
                     } else if let hudView = self.screenshotHUD.view {
                         self.write(view: hudView, to: value)
+                    } else if let about = self.aboutWindow?.window {
+                        // Include the titlebar, as the ask window does above.
+                        self.write(view: about.contentView?.superview ?? NSView(), to: value)
                     } else if let other = NSApp.keyWindow ?? NSApp.windows.last(where: { $0.isVisible }) {
                         self.write(view: other.contentView ?? NSView(), to: value)
                     }
@@ -1659,6 +1669,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleAskWindow()
     }
 
+    private func showAboutWindow() {
+        if aboutWindow == nil {
+            aboutWindow = AboutWindowController(themeManager: themeManager)
+        }
+        aboutWindow?.show()
+    }
+
+    @objc private func showAboutWindowFromMenu() {
+        showAboutWindow()
+    }
+
     /// Opens the Nth saved chat in the current ask window. Script-only hook so
     /// the relaunch test can restore a transcript without mouse input.
     private func openSavedChat(at index: Int) {
@@ -1678,6 +1699,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for controller in annotateWindows { controller.apply(theme: theme) }
         for controller in mediaPreviews { controller.apply(theme: theme) }
         askWindow?.apply(theme: theme)
+        aboutWindow?.apply(theme: theme)
     }
 
     @objc private func stopRecordingFromMenu() {
@@ -2035,7 +2057,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "About Palette", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: "About Palette", action: #selector(showAboutWindowFromMenu), keyEquivalent: "")
+        about.target = self
+        appMenu.addItem(about)
         let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))"
         let versionItem = NSMenuItem(title: "Version \(version)", action: nil, keyEquivalent: "")
         versionItem.isEnabled = false

@@ -9,6 +9,9 @@ BIN_PATH := $(shell swift build -c release --show-bin-path)
 BINARY := $(BIN_PATH)/$(APP_NAME)
 DEBUG_BIN_PATH := $(shell swift build --show-bin-path)
 DEBUG_BINARY := $(DEBUG_BIN_PATH)/$(APP_NAME)
+# The short commit is stamped into Info.plist so About can name the build.
+# Missing git (a source tarball, CI without history) just skips the key.
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null)
 
 .PHONY: all build app install run test clean debug debug-app layout-check e2e
 
@@ -25,6 +28,7 @@ define assemble_bundle
 	touch "$(BUILD_DIR)/.metadata_never_index"
 	cp "$(2)" "$(1)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(1)/Contents/Info.plist"
+	if [ -n "$(COMMIT)" ]; then plutil -insert PaletteCommit -string "$(COMMIT)" "$(1)/Contents/Info.plist"; fi
 	cp Resources/AppIcon.icns "$(1)/Contents/Resources/AppIcon.icns"
 	cp -R Resources/Themes "$(1)/Contents/Resources/Themes"
 	cp -R Resources/Providers "$(1)/Contents/Resources/Providers"
