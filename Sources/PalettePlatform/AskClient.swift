@@ -132,9 +132,12 @@ public struct AskStreamParser {
     public func completion(durationMs: Int) throws -> AskCompletion {
         let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !reply.isEmpty else { throw AskClientError.empty }
-        // A length stop means the model was cut off mid-answer; never present
-        // that as a complete reply.
+        // A length stop means the model was cut off mid-answer; so does a
+        // stream that ended without [DONE] and without any finish_reason, which
+        // is what a dropped connection looks like. Some proxies also strip
+        // [DONE], so mark the answer instead of throwing it away.
         let truncated = finishReason == "length"
+            || (!finished && finishReason == nil)
         return AskCompletion(
             answer: truncated ? reply + "\n\n…(truncated — raise max_tokens)" : reply,
             promptTokens: promptTokens,

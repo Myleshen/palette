@@ -915,7 +915,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ClipboardProvider(store: store, bridge: hostProxy))
         let askService = AskService(store: store, configuration: configuration.ask)
         self.askService = askService
-        providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, onChange: { [weak self] in
+        providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, favicons: configuration.window.favicons, onChange: { [weak self] in
             await self?.refreshWebAppHotkeys()
         }))
         providers.append(BookmarkProvider())
@@ -1493,7 +1493,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             color: .systemBlue,
             width: 0.004
         ))
-        editor.add(.text(at: CGPoint(x: 0.1, y: 0.6), text: "Palette", size: 0.06, color: .systemYellow))
+        editor.color = .systemYellow
+        editor.textSize = 0.06
+        editor.addText(at: CGPoint(x: 0.1, y: 0.6), text: "Palette")
         editor.crop(to: CGRect(x: 0.05, y: 0.05, width: 0.8, height: 0.8))
         guard let data = editor.renderedPNG() else {
             Log.shared.error("annotate_export could not encode", source: "capture")

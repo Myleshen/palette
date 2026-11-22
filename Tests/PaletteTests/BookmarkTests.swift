@@ -30,7 +30,7 @@ final class BookmarkTests: XCTestCase {
         url = "https://example.com/docs"
         """.write(to: file, atomically: true, encoding: .utf8)
 
-        let bookmarks = BookmarkStore.load(from: file)
+        let bookmarks = try BookmarkStore.load(from: file)
         XCTAssertEqual(bookmarks.count, 2)
         XCTAssertEqual(bookmarks[0].name, "GitHub")
         XCTAssertEqual(bookmarks[0].url, "https://github.com")
@@ -47,7 +47,7 @@ final class BookmarkTests: XCTestCase {
             Bookmark(name: "Quoted \"name\"", url: "https://example.com/a?b=1&c=2", browser: ""),
         ]
         try BookmarkStore.save(original, to: file)
-        let loaded = BookmarkStore.load(from: file)
+        let loaded = try BookmarkStore.load(from: file)
         XCTAssertEqual(loaded.map(\.name), original.map(\.name))
         XCTAssertEqual(loaded.map(\.url), original.map(\.url))
         XCTAssertEqual(loaded.map(\.browser), original.map(\.browser))
@@ -98,14 +98,45 @@ final class BookmarkTests: XCTestCase {
     }
 
     func testMissingAndMalformedFilesLoadNothing() throws {
-        XCTAssertTrue(BookmarkStore.load(from: directory.appendingPathComponent("missing.toml")).isEmpty)
+        XCTAssertTrue(try BookmarkStore.load(from: directory.appendingPathComponent("missing.toml")).isEmpty)
 
         let malformed = directory.appendingPathComponent("malformed.toml")
         try "[[bookmark]\nname = \"Broken\"".write(to: malformed, atomically: true, encoding: .utf8)
-        XCTAssertTrue(BookmarkStore.load(from: malformed).isEmpty)
+        XCTAssertThrowsError(try BookmarkStore.load(from: malformed)) { error in
+            guard case BookmarkStore.StoreError.malformed = error else {
+                return XCTFail("expected a malformed-file error, got \(error)")
+            }
+        }
 
         let missingFields = directory.appendingPathComponent("nofields.toml")
         try "[[bookmark]]\nname = \"Only a name\"".write(to: missingFields, atomically: true, encoding: .utf8)
-        XCTAssertTrue(BookmarkStore.load(from: missingFields).isEmpty)
+        XCTAssertTrue(try BookmarkStore.load(from: missingFields).isEmpty)
+    }
+
+    func testControlCharactersRoundTrip() throws {
+        let file = directory.appendingPathComponent("bookmarks.toml")
+        let original = [
+            Bookmark(
+                name: "Line\rBreak",
+                url: "https://example.com",
+                keywords: ["a\rb", "tab\there"]
+            ),
+        ]
+        try BookmarkStore.save(original, to: file)
+        let loaded = try BookmarkStore.load(from: file)
+        XCTAssertEqual(loaded.map(\.name), original.map(\.name))
+        XCTAssertEqual(loaded.map(\.keywords), original.map(\.keywords))
+    }
+
+    func testCorruptFileIsPreservedAndReported() throws {
+        let file = directory.appendingPathComponent("bookmarks.toml")
+        let corrupt = "[[bookmark]\nname = \"Broken\""
+        try corrupt.write(to: file, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try BookmarkStore.load(from: file))
+
+        try BookmarkStore.save([Bookmark(name: "New", url: "https://new.example.com")], to: file)
+        let backup = try String(contentsOf: file.appendingPathExtension("bak"), encoding: .utf8)
+        XCTAssertEqual(backup, corrupt, "the unparseable file survives in bookmarks.toml.bak")
     }
 }

@@ -50,17 +50,20 @@ public actor WebAppProvider: PaletteProvider {
     private let store: PaletteStore
     private let bridge: HostBridge
     private let browser: String
+    private let favicons: Bool
     private let onChange: @Sendable () async -> Void
 
     public init(
         store: PaletteStore,
         bridge: HostBridge,
         browser: String = "Helium",
+        favicons: Bool = true,
         onChange: @escaping @Sendable () async -> Void = {}
     ) {
         self.store = store
         self.bridge = bridge
         self.browser = browser
+        self.favicons = favicons
         self.onChange = onChange
     }
 
@@ -108,18 +111,20 @@ public actor WebAppProvider: PaletteProvider {
         }
 
         let urls = items.map { $0.subtitle?.components(separatedBy: " · ").first ?? "" }
-        let icons = await withTaskGroup(of: (Int, String?).self) { group in
-            for (index, url) in urls.enumerated() {
-                group.addTask { (index, await FaviconStore.shared.icon(for: url)) }
+        // Rows are returned with the globe immediately. Cached icons are
+        // applied now and new ones are fetched in the background, so the next
+        // search fills them in without this one waiting on the network.
+        for (index, url) in urls.enumerated() {
+            if let base64 = await FaviconStore.shared.cachedIcon(for: url) {
+                items[index].icon = .base64(base64)
             }
-            var result: [Int: String] = [:]
-            for await (index, base64) in group {
-                if let base64 { result[index] = base64 }
-            }
-            return result
         }
-        for (index, base64) in icons {
-            items[index].icon = .base64(base64)
+        if favicons {
+            for url in urls where !url.isEmpty {
+                Task.detached(priority: .utility) {
+                    _ = await FaviconStore.shared.icon(for: url)
+                }
+            }
         }
 
         items.sort {

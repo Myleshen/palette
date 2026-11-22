@@ -12,12 +12,15 @@ public final class IconProvider {
 
     public func image(for spec: IconSpec?, size: CGFloat = 20) -> NSImage? {
         guard let spec else { return nil }
+        // Size belongs in the key: a cached 16pt image must never answer a
+        // 32pt request, or changing the icon size stays soft until relaunch.
+        let sizeKey = "\(size)"
         let key: String
         switch spec {
-        case .symbol(let name): key = "symbol:\(name)"
-        case .file(let path): key = "file:\(path)"
-        case .url(let url): key = "url:\(url)"
-        case .base64(let value): key = "base64:\(value.hashValue)"
+        case .symbol(let name): key = "symbol:\(name):\(sizeKey)"
+        case .file(let path): key = "file:\(path):\(sizeKey)"
+        case .url(let url): key = "url:\(url):\(sizeKey)"
+        case .base64(let value): key = "base64:\(value.hashValue):\(sizeKey)"
         }
         if let cached = cache.object(forKey: key as NSString) { return cached }
 

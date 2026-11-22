@@ -442,6 +442,24 @@ final class AskTests: XCTestCase {
         }
     }
 
+    func testAskStreamThatEndsWithoutDoneIsMarkedTruncated() throws {
+        var parser = AskStreamParser()
+        XCTAssertEqual(
+            parser.feed(#"data: {"choices":[{"delta":{"content":"Half a sen"}}]}"# + "\n\n"),
+            ["Half a sen"]
+        )
+        let completion = try parser.completion(durationMs: 3)
+        XCTAssertTrue(completion.answer.hasPrefix("Half a sen"))
+        XCTAssertTrue(completion.answer.contains("truncated"))
+    }
+
+    func testAskStreamWithFinishReasonButNoDoneIsComplete() throws {
+        // Some proxies strip the [DONE] terminator after a normal finish.
+        var parser = AskStreamParser()
+        _ = parser.feed(#"data: {"choices":[{"delta":{"content":"Whole answer"},"finish_reason":"stop"}]}"# + "\n\n")
+        XCTAssertEqual(try parser.completion(durationMs: 3).answer, "Whole answer")
+    }
+
     func testAskConversationTrimsOldestTurnsFirst() {
         var messages: [AskMessage] = []
         for index in 0..<30 {

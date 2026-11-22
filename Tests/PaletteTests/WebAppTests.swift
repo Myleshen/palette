@@ -53,4 +53,31 @@ final class WebAppTests: XCTestCase {
         let empty = try await store.webApps()
         XCTAssertTrue(empty.isEmpty)
     }
+
+    func testSearchReturnsWithoutWaitingForFavicons() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-web-apps-\(UUID().uuidString).sqlite")
+            .path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = try PaletteStore(path: path)
+        // Non-routable hosts: an await on their icons would take the 2.5 s
+        // timeout each, which is what used to block the whole search.
+        for index in 1...12 {
+            _ = try await store.addWebApp(name: "App \(index)", url: "https://10.255.255.\(index)")
+        }
+
+        let provider = WebAppProvider(store: store, bridge: SilentWebAppBridge(), favicons: true)
+        let started = Date()
+        let items = try await provider.search(SearchRequest(text: "", isBound: true))
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertGreaterThanOrEqual(items.count, 12)
+        XCTAssertLessThan(elapsed, 2, "rows must come back before site icons are fetched")
+    }
+}
+
+private actor SilentWebAppBridge: HostBridge {
+    func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String? { nil }
+    func notify(_ message: String) async {}
+    func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {}
 }

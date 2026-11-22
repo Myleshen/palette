@@ -21,7 +21,15 @@ public final class BookmarkProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
-        let bookmarks = BookmarkStore.load(from: fileURL)
+        let bookmarks: [Bookmark]
+        do {
+            bookmarks = try BookmarkStore.load(from: fileURL)
+        } catch {
+            // Settings shows the parse error; searching only logs it so a
+            // broken file does not fail every query.
+            Log.shared.warn(error.localizedDescription, source: "bookmark")
+            return request.isBound ? [setupItem()] : []
+        }
         // Global providers run on every search: only offer the setup row when
         // the user asked for bookmarks explicitly.
         guard !bookmarks.isEmpty else { return request.isBound ? [setupItem()] : [] }

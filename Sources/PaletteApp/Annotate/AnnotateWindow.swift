@@ -385,7 +385,7 @@ struct AnnotateView: View {
             )
             context.stroke(Path(target), with: .color(colour), lineWidth: max(1, width * fitted.width))
 
-        case let .text(at, text, size, _):
+        case let .text(at, text, size, _, _):
             let fontSize = max(7, size * fitted.height)
             var resolved = context.resolve(
                 Text(text).font(.system(size: fontSize, weight: .semibold)).foregroundColor(colour)
@@ -415,13 +415,12 @@ struct AnnotateView: View {
                 width: rect.width * fitted.width,
                 height: rect.height * fitted.height
             )
-        case let .text(at, text, size, _):
-            let fontSize = max(7, size * fitted.height)
+        case let .text(at, _, _, _, measured):
             box = CGRect(
                 x: fitted.minX + at.x * fitted.width,
                 y: fitted.minY + at.y * fitted.height,
-                width: max(fontSize, CGFloat(text.count) * fontSize * 0.62),
-                height: fontSize * 1.3
+                width: measured.width * fitted.width,
+                height: measured.height * fitted.height
             )
         }
         let padded = box.insetBy(dx: -4, dy: -4)
@@ -546,7 +545,7 @@ struct AnnotateView: View {
         let text = entry.value.trimmingCharacters(in: .whitespacesAndNewlines)
         textEntry = nil
         guard !text.isEmpty else { return }
-        editor.add(.text(at: entry.point, text: text, size: editor.textSize, color: editor.color))
+        editor.addText(at: entry.point, text: text)
         unsaved = true
     }
 
