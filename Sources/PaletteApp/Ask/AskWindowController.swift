@@ -86,7 +86,13 @@ final class AskWindowController: NSWindowController, NSWindowDelegate {
     var turnCount: Int { state.turns.count }
     var chatCount: Int { state.chats.count }
 
+    /// Apply a reloaded config without tearing the window down mid-chat.
+    func reconfigure(service: AskService, notify: Bool, webSearch: Bool) {
+        state.reconfigure(service: service, notify: notify, webSearch: webSearch)
+    }
+
     private func clearBadge() {
+        state.clearUnseen()
         guard NSApp.dockTile.badgeLabel != nil else { return }
         NSApp.dockTile.badgeLabel = nil
         Log.shared.info("Ask badge cleared", source: "ask")

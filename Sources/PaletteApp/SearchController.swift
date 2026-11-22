@@ -170,6 +170,11 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func panelDidHide() {
+        // The panel auto-hides when another app takes focus; that must keep a
+        // half-written draft, not throw it away.
+        if scratchpadActive {
+            saveScratchpad()
+        }
         searchTask?.cancel()
         isSearching = false
         cancelPrompt()
@@ -1345,23 +1350,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func closeScratchpad(save: Bool) {
         guard scratchpadActive else { return }
-        if save {
-            let title = scratchpadTitle
-            let text = scratchpadText
-            let noteID = scratchpadNoteID
-            if !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Task { [weak self] in
-                    guard let self,
-                          let note = try? await self.store.saveScratchNote(
-                            id: noteID,
-                            title: title,
-                            text: text
-                          ) else { return }
-                    self.scratchpadNoteID = note.id
-                }
-            }
-        }
+        if save { saveScratchpad() }
         scratchpadActive = false
         panel?.widthOverride = nil
         panel?.suppressAutoHide = false
@@ -1371,6 +1360,42 @@ public final class SearchController: ObservableObject, HostBridge {
         scheduleSearch(debounce: false)
         updatePanelHeight()
         requestFocus()
+    }
+
+    /// Saves the open draft under the note it was opened from, so reopening
+    /// restores it instead of creating a duplicate note.
+    private func saveScratchpad() {
+        let title = scratchpadTitle
+        let text = scratchpadText
+        let noteID = scratchpadNoteID
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        Task { [weak self] in
+            guard let self,
+                  let note = try? await self.store.saveScratchNote(
+                    id: noteID,
+                    title: title,
+                    text: text
+                  ) else { return }
+            self.scratchpadNoteID = note.id
+        }
+    }
+
+    /// `applicationWillTerminate` cannot await, so block briefly on a detached
+    /// save (the store actor is not main-actor bound) before the process exits.
+    public func saveScratchpadOnTerminate() {
+        let title = scratchpadTitle
+        let text = scratchpadText
+        let noteID = scratchpadNoteID
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let store = self.store
+        let done = DispatchSemaphore(value: 0)
+        Task.detached(priority: .userInitiated) {
+            _ = try? await store.saveScratchNote(id: noteID, title: title, text: text)
+            done.signal()
+        }
+        _ = done.wait(timeout: .now() + 1)
     }
 
     public func copyScratchpad() {

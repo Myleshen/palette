@@ -880,6 +880,65 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(record.answer, "fallback answer")
         XCTAssertEqual(resets.value, 1, "a partial answer must be discarded before the fallback streams")
     }
+
+    func testLastChatMetaRoundTripsAcrossServices() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let first = AskService(store: store, configuration: AskConfig())
+        let chat = try await first.createChat(title: "remember me", model: .defaultModel)
+        await first.setLastChat(id: chat.id)
+
+        // A new service is what the next launch builds.
+        let relaunched = AskService(store: store, configuration: AskConfig())
+        let remembered = await relaunched.lastChatID()
+        XCTAssertEqual(remembered, chat.id)
+
+        try await relaunched.deleteChat(id: chat.id)
+        let cleared = await relaunched.lastChatID()
+        XCTAssertNil(cleared)
+    }
+
+    func testUnseenChatMetaRoundTripsAndClearsOnlyItsOwnChat() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let service = AskService(store: store, configuration: AskConfig())
+        let unseen = try await service.createChat(title: "unseen", model: .defaultModel)
+        let other = try await service.createChat(title: "other", model: .defaultModel)
+        await service.markUnseen(chatID: unseen.id)
+
+        let relaunched = AskService(store: store, configuration: AskConfig())
+        let unseenAfterLaunch = await relaunched.unseenChatID()
+        XCTAssertEqual(unseenAfterLaunch, unseen.id)
+
+        await relaunched.clearUnseen(chatID: other.id)
+        let stillUnseen = await relaunched.unseenChatID()
+        XCTAssertEqual(stillUnseen, unseen.id)
+        await relaunched.clearUnseen(chatID: unseen.id)
+        let cleared = await relaunched.unseenChatID()
+        XCTAssertNil(cleared)
+    }
+
+    func testInflightTurnSurvivesRelaunchAsInterrupted() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-ask-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try PaletteStore(path: url.path)
+        let service = AskService(store: store, configuration: AskConfig())
+        let chat = try await service.createChat(title: "mid stream", model: .defaultModel)
+        _ = try await service.appendMessage(chatID: chat.id, role: .user, content: "half a question")
+        await service.beginTurn(chatID: chat.id)
+
+        // Quit mid-stream, then launch again: the marker is still there.
+        let relaunched = AskService(store: store, configuration: AskConfig())
+        let inflight = await relaunched.inflightChatID()
+        XCTAssertEqual(AskUnfinishedTurn.resolve(chatID: chat.id, inflight: inflight), .interrupted)
+        XCTAssertEqual(AskUnfinishedTurn.resolve(chatID: "another", inflight: inflight), .missing)
+
+        await relaunched.endTurn(chatID: chat.id)
+        let settled = await relaunched.inflightChatID()
+        XCTAssertNil(settled)
+    }
 }
 
 private func user(_ text: String) -> AskMessage {

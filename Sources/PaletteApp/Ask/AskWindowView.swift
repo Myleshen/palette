@@ -14,6 +14,7 @@ final class AskWindowState: ObservableObject {
             case streaming
             case answered(AskRecord)
             case failed(String)
+            case interrupted
             case stopped
         }
 
@@ -42,8 +43,8 @@ final class AskWindowState: ObservableObject {
     @Published private(set) var loadingChat = false
     @Published var webSearch: Bool
 
-    private let service: AskService
-    private let notify: Bool
+    private var service: AskService
+    private var notify: Bool
     private let isKey: () -> Bool
     var onStatusChange: () -> Void
     private var task: Task<Void, Never>?
@@ -81,6 +82,23 @@ final class AskWindowState: ObservableObject {
         Task { await refreshChats() }
         guard let first = turns.first else { return }
         run(turnID: first.id)
+    }
+
+    /// ⌘R builds a new `AskService` and config; the open window must use it
+    /// instead of the endpoint/model/toggles it was born with.
+    func reconfigure(service: AskService, notify: Bool, webSearch: Bool) {
+        self.service = service
+        self.notify = notify
+        self.webSearch = webSearch
+        Task {
+            selectedModel = await service.selectedModel()
+            onStatusChange()
+        }
+    }
+
+    func clearUnseen() {
+        guard let chatID else { return }
+        Task { await service.clearUnseen(chatID: chatID) }
     }
 
     /// Appends a user turn and sends the whole conversation.
@@ -130,6 +148,7 @@ final class AskWindowState: ObservableObject {
         cancel()
         turns.removeAll()
         chatID = nil
+        Task { await service.setLastChat(id: nil) }
     }
 
     /// A model picked here applies to subsequent turns only; changing it does
@@ -152,12 +171,17 @@ final class AskWindowState: ObservableObject {
     func openChat(_ chat: AskChat) {
         cancel()
         chatID = chat.id
+        Task { await service.setLastChat(id: chat.id) }
         if let stored = AskModel.find(id: chat.model) {
             selectedModel = stored
         }
         loadingChat = true
         Task {
             let messages = (try? await service.messages(chatID: chat.id)) ?? []
+            let unfinished = AskUnfinishedTurn.resolve(
+                chatID: chat.id,
+                inflight: await service.inflightChatID()
+            )
             var restored: [Turn] = []
             var current: Turn?
             for message in messages {
@@ -165,7 +189,7 @@ final class AskWindowState: ObservableObject {
                 case .user:
                     if let unanswered = current {
                         var pending = unanswered
-                        pending.status = .failed("No answer was saved for this turn.")
+                        pending.status = self.status(for: unfinished)
                         restored.append(pending)
                     }
                     var turn = Turn(question: message.content)
@@ -195,11 +219,22 @@ final class AskWindowState: ObservableObject {
                 }
             }
             if var pending = current {
-                pending.status = .failed("No answer was saved for this turn.")
+                pending.status = self.status(for: unfinished)
                 restored.append(pending)
+            }
+            // The turn is no longer in flight once it has been reloaded.
+            if unfinished == .interrupted {
+                await service.endTurn(chatID: chat.id)
             }
             turns = restored
             loadingChat = false
+        }
+    }
+
+    private func status(for unfinished: AskUnfinishedTurn) -> Turn.Status {
+        switch unfinished {
+        case .interrupted: return .interrupted
+        case .missing: return .failed("No answer was saved for this turn.")
         }
     }
 
@@ -229,6 +264,7 @@ final class AskWindowState: ObservableObject {
         do {
             let chat = try await service.createChat(title: AskChat.title(from: question), model: model)
             chatID = chat.id
+            await service.setLastChat(id: chat.id)
             await refreshChats()
             return chat.id
         } catch {
@@ -279,6 +315,7 @@ final class AskWindowState: ObservableObject {
                     }
                     await refreshChats()
                 }
+                if let savedChatID { await service.beginTurn(chatID: savedChatID) }
                 let record = try await service.ask(
                     messages,
                     webSearch: wantsSearch,
@@ -292,6 +329,7 @@ final class AskWindowState: ObservableObject {
                         Task { @MainActor in self?.resetAnswer(turnID) }
                     }
                 )
+                if let savedChatID { await service.endTurn(chatID: savedChatID) }
                 guard !Task.isCancelled,
                       let index = turns.firstIndex(where: { $0.id == turnID }) else { return }
                 streamedText = ""
@@ -303,6 +341,7 @@ final class AskWindowState: ObservableObject {
                 streaming = false
                 let unseen = !isKey()
                 if unseen {
+                    if let savedChatID { await service.markUnseen(chatID: savedChatID) }
                     NSApp.dockTile.badgeLabel = "1"
                     Log.shared.info("Ask answer ready unseen; badge set", source: "ask")
                 }
@@ -332,6 +371,7 @@ final class AskWindowState: ObservableObject {
                     }
                 }
             } catch {
+                if let savedChatID { await service.endTurn(chatID: savedChatID) }
                 guard !Task.isCancelled,
                       let index = turns.firstIndex(where: { $0.id == turnID }) else { return }
                 flushStream(into: index)
@@ -787,6 +827,18 @@ struct AskWindowView: View {
                         }
                         .buttonStyle(PillButton(theme: theme))
                     }
+                    if state.canRetry(turn) {
+                        Button("Retry") { state.retry(turn) }
+                            .buttonStyle(PillButton(theme: theme))
+                    }
+                    copyButton(turn)
+                }
+            case .interrupted:
+                HStack(spacing: 8) {
+                    Text("Interrupted — Palette quit before this answer finished.")
+                        .font(theme.font(size: theme.typography.subtitleSize))
+                        .foregroundStyle(theme.color(theme.palette.fgMuted))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if state.canRetry(turn) {
                         Button("Retry") { state.retry(turn) }
                             .buttonStyle(PillButton(theme: theme))
