@@ -88,6 +88,48 @@ final class FuzzySearchTests: XCTestCase {
         XCTAssertTrue(results.contains { $0.title == "buried zebra needle" })
     }
 
+    func testCalculatorPastesFirstThenCopies() async throws {
+        let items = try await CalculatorProvider().search(SearchRequest(text: "2+2", limit: 10, isBound: true))
+        let item = try XCTUnwrap(items.first)
+        let actions = item.actions
+        XCTAssertEqual(actions.first?.kind, .pasteText)
+        XCTAssertEqual(actions.first?.value.text, item.title)
+        XCTAssertEqual(actions.dropFirst().first?.kind, .copyText)
+        XCTAssertEqual(actions.dropFirst().first?.value.text, item.title)
+    }
+
+    func testClipboardTransformPastesFirst() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        _ = try await store.insertClipboard(text: "hello world", maxEntries: 20)
+        let entries = try await store.clipboardEntries(limit: 1)
+        let entry = try XCTUnwrap(entries.first)
+        let provider = ClipboardProvider(store: store, bridge: FuzzyBridge())
+        let items = try await provider.search(SearchRequest(text: "transform:\(entry.id)", limit: 20, isBound: true))
+        XCTAssertFalse(items.isEmpty)
+        for item in items {
+            XCTAssertEqual(item.actions.first?.kind, .pasteText)
+        }
+    }
+
+    func testSnippetPastesExpandedTextFirst() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("snippets-\(UUID().uuidString).toml")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        [[snippet]]
+        title = "Signature"
+        text = "Best,\\n{{user}}"
+        """.write(to: url, atomically: true, encoding: .utf8)
+
+        let provider = SnippetProvider(bridge: FuzzyBridge(), fileURL: url)
+        let items = try await provider.search(SearchRequest(text: "", limit: 10, isBound: true))
+        let actions = try XCTUnwrap(items.first?.actions)
+        XCTAssertEqual(actions.first?.kind, .pasteText)
+        XCTAssertEqual(actions.first?.value.text, "Best,\n\(NSUserName())")
+        XCTAssertEqual(Array(actions.dropFirst()).map(\.id), ["snippet-copy", "snippet-raw", "snippet-scratch"])
+    }
+
     func testEmojiAcceptsAbbreviationsWithoutNoise() async throws {
         let provider = EmojiProvider()
         let abbreviations = try await provider.search(SearchRequest(text: "drgn", limit: 20, isBound: true))

@@ -86,6 +86,8 @@ public final class SnippetProvider: PaletteProvider, @unchecked Sendable {
             badge: "SNIPPET",
             score: 1_000,
             actions: [
+                // Enter pastes; expansion is already resolved above.
+                PaletteAction(id: "snippet-paste", title: "Paste", kind: .pasteText, value: .text(preview)),
                 PaletteAction(id: "snippet-copy", title: "Copy Expanded", kind: .custom, value: .text(snippet.text)),
                 PaletteAction(id: "snippet-raw", title: "Copy Raw", kind: .custom, value: .text(snippet.text)),
                 PaletteAction(id: "snippet-scratch", title: "Open Expanded in Scratchpad", kind: .custom, value: .text(snippet.text)),

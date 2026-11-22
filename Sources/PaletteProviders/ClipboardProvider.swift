@@ -286,8 +286,8 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
                 badge: "TRANSFORM",
                 score: 1_000,
                 actions: [
-                    PaletteAction(id: "copy", title: "Copy Result", kind: .copyText, value: .text(output)),
                     PaletteAction(id: "paste", title: "Paste Result", kind: .pasteText, value: .text(output)),
+                    PaletteAction(id: "copy", title: "Copy Result", kind: .copyText, value: .text(output)),
                 ],
                 preview: .text(output),
                 providerID: provider.id,
