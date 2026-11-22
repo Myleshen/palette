@@ -4,8 +4,10 @@
 
 ### Fixed
 
-- Pressing Return on an emoji now pastes it into the focused app; Copy Emoji
-  moved to the second action and the row's subtitle says “Paste emoji”.
+- **Return pastes** for every text result: emoji (previously copied only),
+  calculator results, clipboard transform output, and snippets, which gained a
+  Paste action for the expanded text. Copy stays the second action everywhere,
+  and rows now say "paste" in their subtitle.
 
 ## 2.17.0 — 2026-11-22
 
