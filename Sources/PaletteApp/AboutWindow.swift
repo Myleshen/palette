@@ -109,11 +109,11 @@ struct AboutView: View {
             .font(theme.font(size: 11))
             .foregroundStyle(muted)
 
-            HStack(spacing: 4) {
-                Text("Built by ")
-                Text(AboutInfo.author).fontWeight(.semibold)
-                Text("·")
-                    .foregroundStyle(muted)
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    Text("Built by ")
+                    Text(AboutInfo.author).fontWeight(.semibold)
+                }
                 Link(AboutInfo.email, destination: URL(string: "mailto:\(AboutInfo.email)")!)
                     .foregroundStyle(theme.color(theme.palette.accent))
             }
@@ -121,9 +121,8 @@ struct AboutView: View {
             .padding(.top, 2)
 
             VStack(spacing: 2) {
-                Text("Palette is a keyboard-first launcher for macOS,")
-                Text("released under the MIT licence.")
-                Text("Built with SwiftUI + AppKit.")
+                Text("A keyboard-first launcher for macOS.")
+                Text("MIT licensed · Built with SwiftUI + AppKit.")
                     .foregroundStyle(muted)
             }
             .font(theme.font(size: 12))

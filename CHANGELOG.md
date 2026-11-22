@@ -24,6 +24,11 @@
 - **Favicons for web apps** (async fetch, cached, toggleable), an icon cache
   size limit, an annotation text box, and tool-cache misses are retried on the
   next lookup.
+- **About Palette, and a licence.** A proper About window (app menu) shows the
+  version, build, commit, author and licence, with GitHub, Releases and Issues
+  links plus **Copy Diagnostics**; the same lives in Settings → General, so the
+  version is findable again. The build stamps the commit hash into the bundle,
+  and Palette is now released under the **MIT licence**.
 - Database retention for clipboard and Ask history, with periodic checkpointing.
 
 ### Changed
