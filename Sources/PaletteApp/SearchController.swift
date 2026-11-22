@@ -130,8 +130,26 @@ public final class SearchController: ObservableObject, HostBridge {
     public var previewLayout: PreviewPlacement {
         configuration.window.resolvedPreviewLayout(
             screenWidth: Double(screenSize.width),
-            previewPanelWidth: configuration.window.previewWidth(for: screenSize)
+            previewPanelWidth: Double(windowConfig.previewWidth(for: screenSize))
         )
+    }
+
+    /// Top strip, left rail, or no provider switcher at all.
+    public var providerBar: ProviderBarPlacement { configuration.window.providerBar }
+
+    /// The strip only occupies height in top mode and only while it has chips.
+    public var showsProviderBar: Bool {
+        providerBar == .top && !railEntries.isEmpty
+    }
+
+    /// Rendered height of the top provider strip, measured by the view. The
+    /// panel height uses this instead of assuming the chip metrics.
+    private var measuredProviderBarHeight = LauncherMetrics.providerBarHeight
+
+    public func setProviderBarHeight(_ height: CGFloat) {
+        guard abs(height - measuredProviderBarHeight) > 0.5 else { return }
+        measuredProviderBarHeight = height
+        updatePanelHeight()
     }
 
     private var timerObserver: NSObjectProtocol?
@@ -741,7 +759,7 @@ public final class SearchController: ObservableObject, HostBridge {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
         actionItems = needle.isEmpty
             ? allActions
-            : allActions.filter { $0.title.lowercased().contains(needle) }
+            : allActions.filter { Ranking.score(query: needle, candidate: $0.title) != nil }
         actionIndex = 0
         updatePanelHeight()
     }
@@ -1156,12 +1174,16 @@ public final class SearchController: ObservableObject, HostBridge {
         panel.setContentHeight(CGFloat(theme.search.height) + content + chrome)
     }
 
-    /// Everything around the list: both outer insets, the card gaps and the
-    /// footer. The rail is a sibling card, so it reserves no list height.
+    /// Everything around the list: both outer insets, the card gaps, the
+    /// footer, and the top provider strip when it is showing. The left rail is
+    /// a sibling card, so it reserves no list height.
     private var tabChromeHeight: CGFloat {
         let footer = themeManager.theme.footer.show ? LauncherMetrics.footerHeight : 0
         let gaps = themeManager.theme.footer.show ? LauncherMetrics.cardGap * 2 : LauncherMetrics.cardGap
-        return LauncherMetrics.outerInset * 2 + gaps + footer
+        let bar: CGFloat = showsProviderBar
+            ? measuredProviderBarHeight + LauncherMetrics.cardGap
+            : 0
+        return LauncherMetrics.outerInset * 2 + gaps + footer + bar
     }
 
     /// The optional Ask/History or clipboard filter row inside the list card.
@@ -1169,32 +1191,48 @@ public final class SearchController: ObservableObject, HostBridge {
         activeTabID == "clip" || activeTabID == "ask" ? 40 : 0
     }
 
-    /// The configured row count is the panel's fixed height: a short list
-    /// does not shrink it and a long one does not grow it. Rows that wrap to
-    /// two title lines get 16pt more, and the viewport is sized from those
-    /// exact heights so no row is cut at the bottom.
-    private var listHeight: CGFloat {
+    /// The configured row count fixes the panel's height: it does not change
+    /// with how many results exist, how many headers they carry, or whether a
+    /// title wraps. The list scrolls inside this budget instead.
+    private func listHeight(rows: Int) -> CGFloat {
         let row = CGFloat(themeManager.theme.effectiveRowHeight)
         let spacing: CGFloat = 6
-        let visible = Int(panel?.effectiveRows() ?? windowConfig.launcherRows)
-        let rows = Array(items.prefix(visible))
-        let heights = rows.map { row + (titleWraps($0) ? 16 : 0) }
-        let used = heights.isEmpty ? row * CGFloat(visible) : heights.reduce(0, +)
-        let count = max(1, heights.isEmpty ? CGFloat(visible) : CGFloat(heights.count))
-        // Only the headers among the rows that fit take vertical space; a
-        // later group must not inflate the viewport and reveal a partial row.
-        let visibleGroups = Set(rows.compactMap(\.group)).count
-        let groups = min(4, visibleGroups)
-        // Header: 11pt line + 8pt top pad + the 6pt stack gap.
-        let headerRoom = CGFloat(groups) * 25
-        return used + (count - 1) * spacing + LauncherMetrics.innerPadding * 2 + headerRoom
+        return CGFloat(rows) * row
+            + CGFloat(max(0, rows - 1)) * spacing
+            + LauncherMetrics.innerPadding * 2
+    }
+
+    private var listHeight: CGFloat {
+        listHeight(rows: Int(panel?.effectiveRows() ?? windowConfig.launcherRows))
+    }
+
+    /// Height the panel renders for `rows` in a plain search: the same terms
+    /// `updatePanelHeight` uses, so Settings can show the exact number.
+    public func panelHeight(forRows rows: Int) -> CGFloat {
+        let theme = themeManager.theme
+        let footer = theme.footer.show ? LauncherMetrics.footerHeight : 0
+        let gaps = theme.footer.show ? LauncherMetrics.cardGap * 2 : LauncherMetrics.cardGap
+        let bar = showsProviderBar
+            ? measuredProviderBarHeight + LauncherMetrics.cardGap
+            : 0
+        return CGFloat(theme.search.height)
+            + listHeight(rows: rows)
+            + LauncherMetrics.outerInset * 2
+            + gaps + footer + bar
+    }
+
+    /// The rows the panel would use right now (auto or explicit).
+    public func panelHeightForEffectiveRows() -> CGFloat {
+        panelHeight(forRows: Int(panel?.effectiveRows() ?? windowConfig.launcherRows))
     }
 
     /// Width left for a result title after the rail, card/row insets, icon,
     /// badge and spacer. Err narrow so a long title is predicted to wrap.
     private var titleColumnWidth: CGFloat {
         let panelWidth = panel?.widthOverride ?? CGFloat(windowConfig.launcherWidth(for: screenSize))
-        let rail: CGFloat = (previewVisible || panelWidth < 700) ? 56 : 220
+        let rail: CGFloat = providerBar == .left
+            ? ((previewVisible || panelWidth < 700) ? 56 : 220)
+            : 0
         return max(120, panelWidth - LauncherMetrics.outerInset * 2 - rail
             - LauncherMetrics.cardGap - LauncherMetrics.innerPadding * 4 - 20 - 10 - 8 - 80)
     }

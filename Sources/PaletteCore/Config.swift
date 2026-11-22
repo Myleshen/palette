@@ -156,6 +156,12 @@ public enum PreviewPlacement: String, Sendable, Equatable {
     case auto
 }
 
+/// Where the provider switcher sits: a horizontal strip above the list, the
+/// vertical rail beside it, or nowhere at all (Tab still cycles providers).
+public enum ProviderBarPlacement: String, Sendable, Equatable, CaseIterable {
+    case top, left, hidden
+}
+
 /// Launcher geometry lives in config.toml, not the theme: themes describe how
 /// things look, this describes how big they are.
 public struct WindowConfig: Sendable, Equatable {
@@ -163,7 +169,8 @@ public struct WindowConfig: Sendable, Equatable {
     public var scale: Double = 1
     /// Size to the screen under the cursor instead of one fixed size.
     public var autoSize: Bool = true
-    /// Show the row of provider chips above the list.
+    /// Provider switcher: top strip, left rail, or hidden.
+    public var providerBar: ProviderBarPlacement = .top
     /// Points. 0 means "use the default times scale".
     public var width: Double = 0
     public var maxHeight: Double = 0
@@ -178,7 +185,7 @@ public struct WindowConfig: Sendable, Equatable {
     public init() {}
 
     public static let defaultWidth: Double = 680
-    public static let defaultMaxHeight: Double = 720
+    public static let defaultMaxHeight: Double = 820
     public static let defaultRows: Int = 7
     public static let defaultPanelWidth: Double = 880
     public static let defaultTerminalWidth: Double = 1000
@@ -191,22 +198,19 @@ public struct WindowConfig: Sendable, Equatable {
         explicit > 0 ? explicit : (fallback * effectiveScale).rounded()
     }
 
-    /// Landscape gets a centered column; portrait and near-square screens get
-    /// most of the width, since there is little of it.
+    /// A 13" laptop (1440×900) is the reference: 0.486 × width gives 700pt.
+    /// Larger displays scale up to 1000, small ones down to 640.
     public func autoWidth(for visible: CGSize) -> Double {
         guard visible.width > 0, visible.height > 0 else { return Self.defaultWidth * effectiveScale }
-        let aspect = visible.width / visible.height
-        let fraction = aspect < 1.2 ? 0.82 : 0.45
-        let raw = Double(visible.width) * fraction
-        return (min(980, max(620, raw)) * effectiveScale).rounded()
+        let raw = Double(visible.width) * 0.486
+        return (min(1_000, max(640, raw)) * effectiveScale).rounded()
     }
 
-    /// ~6 rows per 900 points of screen height: a laptop gets 6, a 1440p
-    /// display 10. Clamped to the same 5...10 the manual setting uses.
+    /// 900pt gets 7 rows; every 128pt of height adds one, clamped 6...11.
     public func autoRows(for visible: CGSize) -> Int {
         guard visible.height > 0 else { return Self.defaultRows }
-        let fit = Int((Double(visible.height) / 150).rounded())
-        return min(10, max(5, fit))
+        let fit = Int((Double(visible.height) / 128).rounded())
+        return min(11, max(6, fit))
     }
 
     public func launcherWidth(for visible: CGSize) -> Double {
@@ -215,7 +219,7 @@ public struct WindowConfig: Sendable, Equatable {
     }
 
     public func launcherRows(for visible: CGSize) -> Int {
-        if visibleRows > 0 { return min(10, max(5, visibleRows)) }
+        if visibleRows > 0 { return min(11, max(6, visibleRows)) }
         return autoSize ? autoRows(for: visible) : launcherRows
     }
 
@@ -230,8 +234,8 @@ public struct WindowConfig: Sendable, Equatable {
     public var launcherMaxHeight: Double { size(maxHeight, Self.defaultMaxHeight) }
 
     public var launcherRows: Int {
-        if visibleRows > 0 { return min(10, max(5, visibleRows)) }
-        return min(10, max(5, Int((Double(Self.defaultRows) * effectiveScale).rounded())))
+        if visibleRows > 0 { return min(11, max(6, visibleRows)) }
+        return min(11, max(6, Int((Double(Self.defaultRows) * effectiveScale).rounded())))
     }
 
     public func clipboardWidth(for visible: CGSize) -> Double {
@@ -324,6 +328,35 @@ public struct TimerConfig: Sendable, Equatable {
     public init() {}
 }
 
+public enum HotkeyAction: String, Sendable, Equatable, CaseIterable {
+    case launch
+    case command
+    case provider
+    case url
+
+    public var title: String {
+        switch self {
+        case .launch: return "Launch app"
+        case .command: return "Run command"
+        case .provider: return "Open provider"
+        case .url: return "Open URL"
+        }
+    }
+}
+
+/// One `[[binding]]` row: a global shortcut and the action it runs.
+public struct HotkeyBinding: Sendable, Equatable {
+    public var keys: String
+    public var action: HotkeyAction
+    public var value: String
+
+    public init(keys: String, action: HotkeyAction = .launch, value: String = "") {
+        self.keys = keys
+        self.action = action
+        self.value = value
+    }
+}
+
 /// Built-in provider aliases. Settings shows these even when removed so they
 /// can be re-enabled, and "Reset to defaults" restores them.
 public enum ProviderAliases {
@@ -364,6 +397,10 @@ public struct PaletteConfig: Sendable, Equatable {
     public var providerAliases: [String: [String]]
     public var providerOrder: [String]
     public var disabledProviders: [String]
+    /// Global shortcut → action rows from `[[binding]]`.
+    public var bindings: [HotkeyBinding]
+    /// Catalogue command → key rows from `[[shortcut]]`.
+    public var shortcuts: [ShortcutBinding]
     /// Allowlist of providers searched by a plain, unprefixed query. `apps` is
     /// always searched and need not be listed.
     public var globalProviders: [String]
@@ -410,6 +447,8 @@ public struct PaletteConfig: Sendable, Equatable {
         providerAliases: [String: [String]] = ProviderAliases.defaults,
         providerOrder: [String] = [],
         disabledProviders: [String] = [],
+        bindings: [HotkeyBinding] = [],
+        shortcuts: [ShortcutBinding] = [],
         globalProviders: [String] = PaletteConfig.defaultGlobalProviders,
         terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
         timer: TimerConfig = TimerConfig(),
@@ -445,6 +484,8 @@ public struct PaletteConfig: Sendable, Equatable {
         self.providerAliases = providerAliases
         self.providerOrder = providerOrder
         self.disabledProviders = disabledProviders
+        self.bindings = bindings
+        self.shortcuts = shortcuts
         self.globalProviders = globalProviders
         self.terminalSession = terminalSession
         self.timer = timer
@@ -650,7 +691,7 @@ public enum ConfigLoader {
             if let value = window.number("width"), value > 0 { config.window.width = value }
             if let value = window.number("max_height"), value > 0 { config.window.maxHeight = value }
             if let value = window.int("visible_rows"), value > 0 {
-                config.window.visibleRows = min(10, max(5, value))
+                config.window.visibleRows = min(11, max(6, value))
             }
             if let value = window.number("clipboard_width"), value > 0 { config.window.clipboardWidth = value }
             if let value = window.number("preview_width"), value > 0 { config.window.previewWidth = value }
@@ -659,10 +700,14 @@ public enum ConfigLoader {
             if let raw = window.str("preview_layout"), let layout = PreviewPlacement(rawValue: raw.lowercased()) {
                 config.window.previewLayout = layout
             }
+            if let raw = window.str("provider_bar"),
+               let placement = ProviderBarPlacement(rawValue: raw.lowercased()) {
+                config.window.providerBar = placement
+            }
         }
         // 2.3.2 wrote a root-level key; keep reading it for one release.
         if let rows = table.int("visible_rows"), rows > 0, config.window.visibleRows == 0 {
-            config.window.visibleRows = min(10, max(5, rows))
+            config.window.visibleRows = min(11, max(6, rows))
         }
 
         if let typography = table.table("typography") {
@@ -770,6 +815,47 @@ public enum ConfigLoader {
                     parsed[key] = cleaned
                 }
                 config.providerAliases = parsed
+            }
+        }
+
+        // `[[binding]]` is an array of tables so shortcuts like ctrl+alt+g need
+        // no quoting around the key.
+        if let bindings = table.array("binding") {
+            for (index, value) in bindings.enumerated() {
+                guard let entry = value.table else {
+                    diagnostics.append(Diagnostic(.warning, "Binding #\(index + 1) is not a table; skipped.", source: "config"))
+                    continue
+                }
+                let keys = (entry.str("keys") ?? "").trimmingCharacters(in: .whitespaces)
+                let actionName = (entry.str("action") ?? "").lowercased()
+                let bindingValue = (entry.str("value") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !keys.isEmpty, !bindingValue.isEmpty, let action = HotkeyAction(rawValue: actionName) else {
+                    diagnostics.append(Diagnostic(
+                        .warning,
+                        "Binding #\(index + 1) needs keys, a known action (launch | command | provider | url), and a value; skipped.",
+                        source: "config"
+                    ))
+                    continue
+                }
+                config.bindings.append(HotkeyBinding(keys: keys, action: action, value: bindingValue))
+            }
+        }
+
+        // `[[shortcut]]` binds a catalogue command. Unknown ids are kept: a
+        // newer build may know them, and registration reports them.
+        if let shortcuts = table.array("shortcut") {
+            for (index, value) in shortcuts.enumerated() {
+                guard let entry = value.table else {
+                    diagnostics.append(Diagnostic(.warning, "Shortcut #\(index + 1) is not a table; skipped.", source: "config"))
+                    continue
+                }
+                let command = (entry.str("command") ?? "").trimmingCharacters(in: .whitespaces)
+                guard !command.isEmpty else {
+                    diagnostics.append(Diagnostic(.warning, "Shortcut #\(index + 1) needs a command; skipped.", source: "config"))
+                    continue
+                }
+                let keys = (entry.str("keys") ?? "").trimmingCharacters(in: .whitespaces)
+                config.shortcuts.append(ShortcutBinding(command: command, keys: keys))
             }
         }
 
@@ -924,6 +1010,19 @@ public enum ConfigLoader {
         # Shared prefix. Every provider trigger is appended to this character.
         provider_prefix = "/"
 
+        # Run anything from a global shortcut. A binding never replaces the
+        # built-in hotkeys: use a key that is not already taken.
+        # [[binding]]
+        # keys = "ctrl+alt+g"
+        # action = "launch"            # launch | command | provider | url
+        # value = "Ghostty"
+
+        # Give any provider or app command its own key. Add rows in Settings >
+        # Shortcuts; keys = "" keeps a command explicitly unbound.
+        # [[shortcut]]
+        # command = "provider.calc"
+        # keys = "ctrl+alt+c"
+
         # Extra directories to search for fd, fzf, bw, zellij, kitty.
         tools_path = []
 
@@ -950,13 +1049,14 @@ public enum ConfigLoader {
         auto_size = true               # size to the screen under the cursor
         scale = 1.0                    # 0.8 - 1.6
         width = 0                      # points, 0 = 680 * scale
-        max_height = 0                 # points, 0 = 720 * scale
-        visible_rows = 0               # 5-10, 0 = 7 * scale
+        max_height = 0                 # points, 0 = 820 * scale
+        visible_rows = 0               # 6-11, 0 = 7 * scale
         clipboard_width = 0            # 0 = 880 * scale
         preview_width = 0
         terminal_width = 0             # 0 = 1000 * scale
         scratchpad_width = 0
         preview_layout = "auto"        # beside | below | auto
+        provider_bar = "top"           # top | left | hidden
 
         # Screenshots and recordings.
         [capture]
@@ -1028,7 +1128,7 @@ public enum ConfigLoader {
         max_tokens = 8192
         fallback = true                # use free/cheap models when quota runs out
         notify = true                  # sound and Dock bounce when an answer arrives
-        web_search = false             # one web lookup per turn (composer toggle)
+        web_search = true              # one web lookup per turn (composer toggle)
 
         # Global web search. Add or remove engines as you like; {query} is
         # replaced with the URL-encoded search text. app_mode = true opens
@@ -1131,6 +1231,7 @@ public enum ConfigWriter {
         if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
         if config.window.scratchpadWidth > 0 { out.append("scratchpad_width = \(config.window.scratchpadWidth)") }
         out.append("preview_layout = \"\(config.window.previewLayout.rawValue)\"")
+        out.append("provider_bar = \"\(config.window.providerBar.rawValue)\"")
         out.append("")
         out.append("[capture]")
         out.append("directory = \(quote(config.capture.directory))")
@@ -1179,6 +1280,19 @@ public enum ConfigWriter {
             out.append("\(quote(id)) = [\(aliases.map(quote).joined(separator: ", "))]")
         }
         out.append("")
+        for binding in config.bindings {
+            out.append("[[binding]]")
+            out.append("keys = \(quote(binding.keys))")
+            out.append("action = \(quote(binding.action.rawValue))")
+            out.append("value = \(quote(binding.value))")
+            out.append("")
+        }
+        for shortcut in config.shortcuts {
+            out.append("[[shortcut]]")
+            out.append("command = \(quote(shortcut.command))")
+            out.append("keys = \(quote(shortcut.keys))")
+            out.append("")
+        }
         out.append("[terminal_session]")
         out.append("multiplexer = \(quote(config.terminalSession.multiplexer.rawValue))")
         out.append("name = \(quote(config.terminalSession.name))")

@@ -119,7 +119,7 @@ public struct ThemeList: Equatable, Sendable {
     public var selection = "fill"
     public var columns = 1
     public var showScrollbar = true
-    /// Rows the panel shows before scrolling. Clamped to 5...10; drives panel height.
+    /// Rows the panel shows before scrolling. Clamped to 6...11; drives panel height.
     public var visibleRows = 7
     public init() {}
 }

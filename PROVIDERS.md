@@ -306,7 +306,7 @@ providers fill the list but never widen the panel.
 | `scratch` | `scratch` | native | named, searchable scratch notes and in-panel editor |
 | `recent` | `recent` | native | recently opened projects and files |
 | `snip` | `snip` | native | snippets from snippets.toml with safe placeholder expansion |
-| `web` | `web` | native | web apps with optional Hammerspoon shortcuts, in the default allowlist |
+| `web` | `web` | native | web apps with optional in-app global shortcuts, in the default allowlist |
 | `bookmark` | `bookmark` | native | bookmarks from `bookmarks.toml`, opened in a normal browser window, in the default allowlist |
 | `emoji` | `emoji` | native | full Unicode emoji catalog with name search |
 | `cheat` | `cheat` | native | cheatsheet folders from Settings → Search → Cheatsheets, one level deep, QuickLook preview; in the default allowlist (plain queries) |

@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.15.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.16.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -24,6 +24,8 @@ Where each headline feature landed. Every fix, and everything before 1.8, is in
 
 | Feature | Version |
 |---|---|
+| Custom hotkey binder — `[[binding]]` launches an app, runs a shell command, opens a provider trigger, or opens a URL | 2.16.0 |
+| Ask web search on by default; installed-font dropdowns; onboarding shows the real capture keys and Skip applies Essentials | 2.16.0 |
 | Ask chat window — multi-turn, streaming, saved chats, markdown (code, tables, images), optional web search | 2.15.0 |
 | NVIDIA NIM endpoint — 16 free chat models beside OpenCode Go | 2.15.0 |
 | GitHub providers — `ghr` repositories, `ghp` pull requests, `ghi` issues, `gha` Actions runs, `ghn` notifications | 2.15.0 |
@@ -33,7 +35,7 @@ Where each headline feature landed. Every fix, and everything before 1.8, is in
 | `/proj` can clone a repository and create a new project | 2.15.0 |
 | `/gh` works outside a git repository | 2.15.0 |
 | Ask answer window (single question, single answer) | 2.14.0 |
-| Web app shortcuts registered by Palette — no Hammerspoon binding | 2.14.0 |
+| Web app shortcuts registered by Palette, in-app | 2.14.0 |
 | Ask model list mirrors the live endpoint (31 models) | 2.14.0 |
 | Answer sound, Dock bounce and dock badge; ⌘Q dismisses instead of quitting | 2.14.0 |
 | Atlas — fuzzy `/atlas <query>` search, review badge clears on ack | 2.14.0 |
@@ -133,7 +135,7 @@ brew uninstall --cask --zap palette
 That removes `~/.config/palette` (settings, providers, themes),
 `~/.local/state/palette` (clipboard history, database, logs),
 `~/Library/Caches/Palette` (Bitwarden session, favicons, web-app icons), the
-preferences plist, saved window state and the Hammerspoon export.
+preferences plist and saved window state.
 
 macOS keeps the privacy grants separately from the app, so finish the reset with:
 
@@ -152,6 +154,13 @@ gone. Dragging the app to the Trash removes neither the data nor the grants.
 2. Press `⌥Space`.
 3. Run a command that pastes (for example a clipboard entry and `⌘⏎`) and grant
    Accessibility when prompted. Copy-only actions work without it.
+
+On first launch, onboarding shows the launcher and clipboard shortcuts and the
+four capture keys Palette will take: `⌘⇧3` full screen, `⌘⇧4` region, `⌘⇧6`
+window, and `⌘⇧5` recording. These replace macOS's own screenshot shortcuts
+while Palette runs. Step 2 picks a starting provider set — Essentials,
+Developer, or Everything. **Skip setup** applies Essentials as well, so
+declining setup never leaves every provider in the rail.
 
 Configuration lives in `~/.config/palette`:
 
@@ -306,7 +315,9 @@ with no tools, shell, or file access.
 OpenAI-compatible endpoint. Answers stream in and render markdown (headings,
 lists, tables, fenced code with a Copy button, links, and https images). Stop
 cancels; closing the window or pressing `⌘⌥A` again does not — the answer keeps
-streaming, is saved, and badges the Dock until you reopen the window.
+streaming, is saved, and badges the Dock until you reopen the window. If Palette
+is in the background when it completes you also get a Notification Center banner
+and the answer sound (permission is requested the first time it posts).
 
 Supported endpoints:
 
@@ -330,8 +341,9 @@ from its hover button or context menu (with confirmation). The legacy
 history surface.
 
 The composer's globe enables one web lookup for the turn (default in
-**Settings → Ask → Search the web once per turn**, off by default). Without the
-toggle, a message that contains an `https://` link still fetches that page. A
+**Settings → Ask → Search the web once per turn**, on by default). Turning the
+globe off skips the search for that turn; a message that contains an `https://`
+link still fetches that page. A
 search runs once on DuckDuckGo HTML, reads up to four result pages in parallel,
 and sends the text to the model as an untrusted source note. The answer shows a
 numbered **Sources** list (click opens the browser), and the sources are saved
@@ -354,12 +366,14 @@ and **Shortcuts**; Features holds **Search** and **Ask**; System holds
 editor/terminal apps used by providers, and clipboard history; Launcher holds
 where the panel opens, the search placeholder, app order, and the panel size;
 Appearance holds themes, typography, and glass; Shortcuts holds every global
-shortcut, including capture and recording. **Search** holds the web-results
+shortcut, including capture, recording, and your own **Custom hotkeys**.
+**Search** holds the web-results
 toggle, one card per engine (Name · Search URL · `!keyword` · Browser · Open in
 web app), bookmarks, cheatsheets, the web-app browser, and the screenshot and
 recording options. **Ask** selects the endpoint and model, saves a local API
-key, toggles fallback, sound, and the per-turn web search, and controls how many
-Q&A rows and how many days of history are kept. **Providers** is one table with
+key, toggles fallback, answer notifications (sound, Notification Center banner,
+Dock badge) and the per-turn web search, and controls how many Q&A rows and how
+many days of history are kept. **Providers** is one table with
 a row per provider — enable, the **Plain queries** checkbox, name,
 trigger, aliases, and order in the same row. Appearance links the themes folder;
 **Providers** also links the providers and commands files, config, log, and
@@ -374,6 +388,31 @@ not installed is not written. Changes apply immediately — there is no Save or 
 the footer reports **Saved** or the failure, and **Reset `<pane>`…** restores that
 pane's defaults. `⌘F` searches panes and sections. Editing files by hand still
 works, then press `⌘R`.
+
+### Custom hotkeys
+
+The built-in shortcuts stay as they are; a `[[binding]]` row adds a general
+binder that maps one global key to an app, a shell command, a provider trigger,
+or a URL. Add rows in Settings → **Shortcuts → Custom hotkeys**, or write them
+directly. An array of tables means keys with `+` need no quoting:
+
+```toml
+[[binding]]
+keys = "ctrl+alt+g"
+action = "launch"      # launch | command | provider | url
+value = "Ghostty"
+```
+
+- `launch` opens an app by name, a path, or a URL.
+- `command` runs the value in `/bin/zsh -lc` with no terminal window; failures
+  are written to the app log.
+- `provider` opens the panel with that trigger, e.g. `value = "calc"`.
+- `url` opens the address in your default browser.
+
+Bindings use their own key range and do not replace the launcher, capture, or
+web-app shortcuts. An invalid key, a repeated key, or one already taken by a
+built-in shortcut shows an inline error in Settings, is skipped at runtime with
+a log warning, and never takes the app down.
 
 ### Search position
 
@@ -520,17 +559,13 @@ Local development URLs work too: `/web http://localhost:5173` or
 Web apps open in Helium by default, in their own Chromium **app window**
 (`--app=…`) with a dedicated Palette profile, not as a normal browser tab.
 Change the browser in Settings → Search; only Chromium-based browsers are
-listed and Palette will not save one that is not installed. Hammerspoon
-shortcuts use the same app-window launcher, so the shortcut opens the same
-standalone window instead of Safari.
+listed and Palette will not save one that is not installed.
 
-A shortcut needs at least two modifiers. Palette writes
-`~/.hammerspoon/palette-webapps.lua`; Hammerspoon watches that file and binds
-each app to its URL, so shortcuts are managed here, not by editing Hammerspoon
-config. Use `⌘K` on a saved app to open it, copy its URL, set/change or clear
-its shortcut, or remove it. Opens are counted by the normal frecency store, so
-frequently used apps rise to the top. Definitions live in Palette’s SQLite
-state, not in `config.toml`.
+A shortcut needs at least two modifiers. Palette registers it itself, so the
+same app-window launcher opens the URL. Use `⌘K` on a saved app to open it,
+copy its URL, set/change or clear its shortcut, or remove it. Opens are counted
+by the normal frecency store, so frequently used apps rise to the top.
+Definitions live in Palette’s SQLite state, not in `config.toml`.
 
 ### Bookmarks
 
@@ -688,9 +723,10 @@ formats render directly in the preview pane.
 
 `[typography]` overrides the active theme. Empty strings and zero sizes inherit
 from the theme, which in turn falls back to the system font. Settings →
-Appearance has family pickers, a free-text family field, size controls, a live
-preview, and **Reset to Theme**. Missing fonts fall back silently with a startup
-diagnostic.
+Appearance has installed-font dropdowns for the UI and mono families, size
+controls, a live preview, and **Reset to Theme**. **Inherit** is the empty
+value. A configured family that is no longer installed stays selected and is
+marked **(missing)** instead of being silently reset.
 
 ```toml
 [typography]
@@ -744,16 +780,20 @@ clipboard_hotkey = "opt+v"
 terminal_hotkey = "cmd+option+t"     # empty disables
 scratchpad_hotkey = "cmd+option+s"   # empty disables
 ask_hotkey = "cmd+option+a"          # empty disables
-screenshot_hotkey = "cmd+option+shift+s"
-recording_hotkey = "cmd+option+shift+r"
+screenshot_hotkey = "cmd+shift+3"
+recording_hotkey = "cmd+shift+5"
 search_position = "top"        # top | center
 web_app_browser = "Helium"
 app_sort = "alphabetical"      # alphabetical | frequent
 
+# Global shortcut → action. Add one table per key.
+[[binding]]
+keys = "ctrl+alt+g"
+action = "launch"              # launch | command | provider | url
+value = "Ghostty"
 
 [window]
 auto_size = true               # size to the screen under the cursor
-show_tabs = true               # parsed for compatibility; the rail always shows
 scale = 1.0                    # 0.8-1.6; multiplies every size below, like rem
 width = 0                      # points; 0 = 680 * scale
 max_height = 0                 # points; 0 = 720 * scale

@@ -57,7 +57,7 @@ public final class AppProvider: PaletteProvider, @unchecked Sendable {
             return PaletteItem(
                 id: app.path,
                 title: app.name,
-                subtitle: app.bundleID,
+                subtitle: app.path.isEmpty ? nil : PathsProvider.displayPath(app.path),
                 icon: .file(app.path),
                 score: score,
                 actions: actions,

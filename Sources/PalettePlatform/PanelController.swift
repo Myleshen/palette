@@ -164,9 +164,14 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
             ?? NSScreen.screens.first
     }
 
+    /// Script-only visible-frame override, so a dock/undock size change can be
+    /// exercised on a single-display machine.
+    public var screenSizeOverride: CGSize?
+
     /// Rows that fit on the screen the cursor is on.
     public func effectiveRows() -> Int {
-        let visible = (Self.screenUnderPointer() ?? panel.screen)?.visibleFrame.size
+        let visible = screenSizeOverride
+            ?? (Self.screenUnderPointer() ?? panel.screen)?.visibleFrame.size
             ?? CGSize(width: 1440, height: 900)
         return windowConfig.launcherRows(for: visible)
     }
@@ -177,8 +182,9 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         let visible = screen.visibleFrame
         // Never grow past the usable screen area, whatever the theme or an
         // override asks for.
+        let metrics = screenSizeOverride ?? visible.size
         let width = min(
-            widthOverride ?? CGFloat(windowConfig.launcherWidth(for: visible.size)),
+            widthOverride ?? CGFloat(windowConfig.launcherWidth(for: metrics)),
             visible.width - 24
         )
         let height = max(92, min(contentHeight, CGFloat(theme.window.maxHeight), visible.height - 24))

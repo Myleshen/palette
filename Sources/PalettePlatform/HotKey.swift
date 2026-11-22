@@ -41,7 +41,12 @@ public struct HotKeySpec: Equatable, Sendable {
         }
     }
 
-    public static func parse(_ raw: String) -> HotKeySpec? {        let parts = raw
+    /// Carbon's real identity for the pair, used to spot a duplicate without
+    /// caring about modifier order or aliases.
+    public var identity: String { "\(keyCode)-\(modifiers)" }
+
+    public static func parse(_ raw: String) -> HotKeySpec? {
+        let parts = raw
             .lowercased()
             .split(separator: "+")
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -134,6 +139,127 @@ public struct HotKeySpec: Equatable, Sendable {
     }
 }
 
+/// Filters `[[binding]]` rows down to the ones that can be registered, and
+/// explains every row it had to drop. The first binding wins a duplicate key.
+public enum HotKeyBindings {
+    public static func usable(
+        _ bindings: [HotkeyBinding],
+        reserved: [String] = []
+    ) -> (usable: [HotkeyBinding], issues: [String]) {
+        var seen = Set<String>()
+        for key in reserved {
+            if let spec = HotKeySpec.parse(key) { seen.insert(spec.identity) }
+        }
+        var usable: [HotkeyBinding] = []
+        var issues: [String] = []
+        for binding in bindings {
+            let keys = binding.keys.trimmingCharacters(in: .whitespaces)
+            let value = binding.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !keys.isEmpty, !value.isEmpty else {
+                issues.append("Binding '\(keys)' skipped: keys and a value are required.")
+                continue
+            }
+            guard let spec = HotKeySpec.parse(keys) else {
+                issues.append("Binding '\(keys)' skipped: not a valid shortcut.")
+                continue
+            }
+            guard seen.insert(spec.identity).inserted else {
+                issues.append("Binding '\(keys)' skipped: the shortcut is already in use.")
+                continue
+            }
+            usable.append(HotkeyBinding(keys: keys, action: binding.action, value: value))
+        }
+        return (usable, issues)
+    }
+}
+
+/// Filters `[[shortcut]]` rows down to the ones that can be registered and
+/// explains every row it had to drop. Unknown command ids are reported but
+/// left in config.toml by the writer, so a newer build can still use them.
+public enum ShortcutResolver {
+    public struct Plan: Sendable, Equatable {
+        public var resolved: [ShortcutBinding]
+        public var issues: [String]
+
+        public init(resolved: [ShortcutBinding] = [], issues: [String] = []) {
+            self.resolved = resolved
+            self.issues = issues
+        }
+    }
+
+    public static func resolve(
+        _ entries: [ShortcutBinding],
+        commands: [CatalogCommand],
+        reserved: [String] = []
+    ) -> Plan {
+        let known = Set(commands.map(\.id))
+        var seen = Set<String>()
+        for key in reserved {
+            if let spec = HotKeySpec.parse(key) { seen.insert(spec.identity) }
+        }
+        var resolved: [ShortcutBinding] = []
+        var issues: [String] = []
+        for entry in entries {
+            let command = entry.command.trimmingCharacters(in: .whitespaces)
+            let keys = entry.keys.trimmingCharacters(in: .whitespaces)
+            guard known.contains(command) else {
+                issues.append("Shortcut '\(command)' skipped: unknown command.")
+                continue
+            }
+            guard !keys.isEmpty else { continue }
+            guard let spec = HotKeySpec.parse(keys) else {
+                issues.append("Shortcut '\(keys)' for \(command) skipped: not a valid shortcut.")
+                continue
+            }
+            guard seen.insert(spec.identity).inserted else {
+                issues.append("Shortcut '\(keys)' for \(command) skipped: the shortcut is already in use.")
+                continue
+            }
+            resolved.append(ShortcutBinding(command: command, keys: keys))
+        }
+        return Plan(resolved: resolved, issues: issues)
+    }
+}
+
+/// Whether a key combination can be claimed. Carbon exposes no list, so this
+/// is only answerable by trying to register and letting go again.
+public enum HotKeyProbe: Equatable, Sendable {
+    case available
+    case usedByPalette
+    case usedBySystem
+
+    /// A failure means someone else owns the pair: macOS, another app, or a
+    /// Palette registration the live set does not know about.
+    public static func classify(isLive: Bool, status: OSStatus) -> HotKeyProbe {
+        if isLive { return .usedByPalette }
+        return status == noErr ? .available : .usedBySystem
+    }
+}
+
+/// The one message a recorder shows: our own keys first so a live registration
+/// of ours is never blamed on macOS, then the throwaway Carbon probe.
+public enum ShortcutAvailability {
+    public static let usedByPalette = "Used by Palette"
+    public static let usedByAnotherApp = "Already used by another app"
+
+    public static func message(
+        for spec: HotKeySpec,
+        ownedKeys: [String],
+        probe: (HotKeySpec) -> HotKeyProbe = HotKeyManager.probe
+    ) -> String? {
+        let owned = ownedKeys.contains { key in
+            guard let other = HotKeySpec.parse(key) else { return false }
+            return other.identity == spec.identity
+        }
+        if owned { return usedByPalette }
+        switch probe(spec) {
+        case .available: return nil
+        case .usedByPalette: return usedByPalette
+        case .usedBySystem: return usedByAnotherApp
+        }
+    }
+}
+
 /// One Carbon handler for the whole process. `InstallEventHandler` replaces the
 /// previous handler for the same target and event kind, so installing one per
 /// manager silently disables every hotkey registered before it.
@@ -192,6 +318,13 @@ public final class HotKeyManager {
     private var registered: HotKeySpec?
     private let hotKeyID: UInt32
 
+    /// Identities this process currently owns. A probe must answer "Used by
+    /// Palette" for these instead of blaming another app.
+    nonisolated(unsafe) private static var liveIdentities: Set<String> = []
+    private static let liveLock = NSLock()
+    /// Throwaway id for probes, above the 300+ catalogue range.
+    private static let probeID: UInt32 = 900
+
     /// Each manager needs its own id: Carbon rejects a duplicate pair.
     public init(hotKeyID: UInt32 = 1) {
         self.hotKeyID = hotKeyID
@@ -222,6 +355,9 @@ public final class HotKeyManager {
             throw ProviderError.failed("Hotkey \(raw) is already in use. Change it in config.toml.")
         }
         registered = spec
+        Self.liveLock.lock()
+        Self.liveIdentities.insert(spec.identity)
+        Self.liveLock.unlock()
         return spec
     }
 
@@ -230,9 +366,36 @@ public final class HotKeyManager {
             UnregisterEventHotKey(hotKeyRef)
             self.hotKeyRef = nil
         }
+        if let registered {
+            Self.liveLock.lock()
+            Self.liveIdentities.remove(registered.identity)
+            Self.liveLock.unlock()
+        }
         HotKeyRouter.shared.remove(hotKeyID)
         registered = nil
     }
 
     public var current: HotKeySpec? { registered }
+
+    /// Try the pair with a throwaway id and release it at once. Only a live
+    /// registration of our own is distinguishable from someone else's.
+    public static func probe(_ spec: HotKeySpec) -> HotKeyProbe {
+        liveLock.lock()
+        let live = liveIdentities.contains(spec.identity)
+        liveLock.unlock()
+        if live { return HotKeyProbe.classify(isLive: true, status: noErr) }
+
+        var ref: EventHotKeyRef?
+        let id = EventHotKeyID(signature: OSType(0x50414C54), id: probeID)
+        let status = RegisterEventHotKey(
+            spec.keyCode,
+            spec.modifiers,
+            id,
+            GetApplicationEventTarget(),
+            0,
+            &ref
+        )
+        if let ref { UnregisterEventHotKey(ref) }
+        return HotKeyProbe.classify(isLive: false, status: status)
+    }
 }

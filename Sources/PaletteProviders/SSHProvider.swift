@@ -72,7 +72,7 @@ public final class SSHProvider: PaletteProvider, @unchecked Sendable {
             )
         }
         guard !query.isEmpty else { return items }
-        return items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
+        return items.filter { Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "") \($0.group ?? "")") != nil }
     }
 
     /// zellij and tmux reject `:` and other punctuation in session names.

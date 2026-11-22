@@ -33,7 +33,7 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
             row(id: "annotate-screen", title: "Capture the screen and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:screen", score: 8_600),
         ]
         guard !query.isEmpty else { return items }
-        return items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
+        return items.filter { Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "")") != nil }
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -136,11 +136,11 @@ public final class RecProvider: PaletteProvider, @unchecked Sendable {
             }
             let filtered = query.isEmpty
                 ? rows
-                : rows.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }
+                : rows.filter { Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "")") != nil }
             return filtered
         }
         guard !query.isEmpty else { return [item] }
-        return "\(item.title) \(item.subtitle ?? "")".lowercased().contains(query.lowercased()) ? [item] : []
+        return Ranking.score(query: query, candidate: "\(item.title) \(item.subtitle ?? "")") != nil ? [item] : []
     }
 
     private func startRow(id: String, title: String, subtitle: String, value: String, score: Double) -> PaletteItem {

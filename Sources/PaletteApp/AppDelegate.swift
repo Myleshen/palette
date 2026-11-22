@@ -87,6 +87,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var askHotkey: HotKeyManager!
     private var currentAskHotKey: HotKeySpec?
     private var webAppHotkeys: [HotKeyManager] = []
+    private var bindingHotkeys: [HotKeyManager] = []
+    private var catalogHotkeys: [HotKeyManager] = []
+    /// Bindable catalogue, rebuilt with the registry so provider ids never lie.
+    private var catalogCommands: [CatalogCommand] = []
     private var recordingMenuItem: NSMenuItem?
     private var recordingTicker: Timer?
     private let screenshotHUD = ScreenshotHUD()
@@ -118,6 +122,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self,
             selector: #selector(handleWillPowerOff),
             name: NSWorkspace.willPowerOffNotification,
+            object: nil
+        )
+        // Dock/undock or a resolution change must re-apply auto width and rows
+        // immediately, not on the next open.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
         // Finder launches inherit launchd's minimal PATH. Give child CLIs
@@ -158,9 +170,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let forceOnboarding = ProcessInfo.processInfo.environment["PALETTE_FORCE_ONBOARDING"] == "1"
         shouldShowOnboarding = (configResult.createdDefault || forceOnboarding)
             && (forceOnboarding || !UserDefaults.standard.bool(forKey: "onboardingCompleted"))
-        if isScriptMode {
+        if isScriptMode && !forceOnboarding {
             // A scripted run must never open a focus-stealing window or touch
-            // the real onboarding flag.
+            // the real onboarding flag. Forcing onboarding explicitly still
+            // renders it so the harness can snapshot it.
             shouldShowOnboarding = false
         }
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
@@ -220,7 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
-        Task { await exportWebApps() }
+        Task { await refreshWebAppHotkeys() }
         searchController = SearchController(
             registry: registry,
             configuration: configuration,
@@ -373,8 +386,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.settingsWindow?.setContentSize(NSSize(width: parts[0], height: parts[1]))
                         self.settingsWindow?.center()
                     }
-                } else if let value = step.dropPrefix("settings_edit=") {
+                } else if let value = step.dropPrefix("settings_jump=") {
+                    self.showSettings()
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    NotificationCenter.default.post(name: .paletteSettingsJump, object: value)
+                } else if let value = step.dropPrefix("config=") {
                     let parts = value.split(separator: "=", maxSplits: 1).map(String.init)
+                    if parts.count == 2, var updated: PaletteConfig = self.configuration {
+                        switch parts[0] {
+                        case "provider_bar":
+                            updated.window.providerBar = ProviderBarPlacement(rawValue: parts[1])
+                                ?? updated.window.providerBar
+                        case "width":
+                            updated.window.width = Double(parts[1]) ?? updated.window.width
+                        case "visible_rows":
+                            updated.window.visibleRows = Int(parts[1]) ?? updated.window.visibleRows
+                        default:
+                            break
+                        }
+                        _ = self.applySettings(updated)
+                    }
+                } else if let value = step.dropPrefix("screen_override=") {
+                    let parts = value.lowercased().split(separator: "x").compactMap { Double($0) }
+                    if parts.count == 2 {
+                        self.panel?.screenSizeOverride = CGSize(width: parts[0], height: parts[1])
+                        NotificationCenter.default.post(
+                            name: NSApplication.didChangeScreenParametersNotification,
+                            object: nil
+                        )
+                    }
+                } else if let value = step.dropPrefix("settings_edit=") {                    let parts = value.split(separator: "=", maxSplits: 1).map(String.init)
                     if parts.count == 2 {
                         NotificationCenter.default.post(
                             name: .paletteSettingsEdit,
@@ -422,10 +463,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.recordScriptFailure(
                         failure.map { "wait_until '\(condition)' timed out after \(timeout)s: \($0)" }
                     )
+                } else if let value = step.dropPrefix("binding=") {
+                    self.fireBinding(keys: value)
                 } else if let value = step.dropPrefix("query=") {
                     self.searchController.query = value
                 } else if let value = step.dropPrefix("snapshot=") {
                     self.writeSnapshot(to: value)
+                } else if let value = step.dropPrefix("probe=") {
+                    self.scriptProbeResult = self.probeShortcut(value)
                 } else if let value = step.dropPrefix("window_snapshot=") {
                     if let ask = self.askWindow?.window {
                         // Include the titlebar: it is transparent, so only the
@@ -443,6 +488,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.writeSettingsSnapshot(to: value)
                 } else if let value = step.dropPrefix("onboarding_snapshot=") {
                     self.writeOnboardingSnapshot(to: value)
+                } else if step == "onboarding_skip" {
+                    self.skipOnboarding()
                 } else if let value = step.dropPrefix("prompt=") {
                     self.searchController.promptValue = value
                 } else if let value = step.dropPrefix("wait=") {
@@ -460,7 +507,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Script hook: fires a configured binding by its key, through the same
+    /// `performBinding` path the Carbon hotkey uses.
+    private func fireBinding(keys: String) {
+        let normalized = keys.trimmingCharacters(in: .whitespaces).lowercased()
+        guard let binding = configuration.bindings.first(where: {
+            $0.keys.trimmingCharacters(in: .whitespaces).lowercased() == normalized
+        }) else {
+            recordScriptFailure("binding '\(keys)' not found")
+            return
+        }
+        performBinding(binding)
+    }
+
     // MARK: - Script assertions
+
+    private var scriptProbeResult = ""
+
+    /// Script hook: run the same availability check a recorder uses against
+    /// the configured keys, including the nine built-ins.
+    private func probeShortcut(_ keys: String) -> String {
+        guard let spec = HotKeySpec.parse(keys) else { return "Invalid shortcut" }
+        let owned = [
+            configuration.hotkey, configuration.clipboardHotkey,
+            configuration.terminalHotkey, configuration.scratchpadHotkey,
+            configuration.askHotkey, configuration.screenshotHotkey,
+            configuration.regionScreenshotHotkey, configuration.windowScreenshotHotkey,
+            configuration.recordingHotkey,
+        ] + configuration.bindings.map(\.keys)
+            + configuration.shortcuts.map(\.keys)
+        return ShortcutAvailability.message(for: spec, ownedKeys: owned) ?? "Available"
+    }
 
     /// Everything an `assert=` or `dump=` can observe, read from the live
     /// controller and panel.
@@ -480,6 +557,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var askChats: Int
         var askBadge: String
         var statusMessage: String
+        var probeResult: String
+        var panelHeight: CGFloat
+        var panelWidth: CGFloat
+        var derivedPanelHeight: CGFloat
+        var providerCount: Int
+        var providerBarMode: String
         var items: [PaletteItem]
     }
 
@@ -490,7 +573,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
         "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "askWindows",
         "askStreaming", "askTurns", "askChats", "askBadge",
-        "firstTitle", "firstProvider", "statusMessage",
+        "firstTitle", "firstProvider", "statusMessage", "probeResult",
+        "panelHeight", "providerCount", "providerBarMode", "panelWidth",
     ]
 
     private func scriptObservation() -> ScriptObservation {
@@ -510,6 +594,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             askChats: askWindow?.chatCount ?? 0,
             askBadge: NSApp.dockTile.badgeLabel ?? "",
             statusMessage: searchController?.statusMessage ?? "",
+            probeResult: scriptProbeResult,
+            panelHeight: panel?.panel.frame.height ?? 0,
+            panelWidth: panel?.panel.frame.width ?? 0,
+            derivedPanelHeight: searchController?.panelHeightForEffectiveRows() ?? 0,
+            providerCount: searchController?.railEntries.count ?? 0,
+            providerBarMode: searchController?.providerBar.rawValue ?? "",
             items: searchController?.items ?? []
         )
     }
@@ -532,6 +622,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "scopeLabel": return observation.scopeLabel
         case "firstTitle": return observation.items.first?.title ?? ""
         case "firstProvider": return observation.items.first?.providerID ?? ""
+        case "probeResult": return observation.probeResult
+        case "panelHeight": return String(format: "%.2f", observation.panelHeight)
+        case "panelWidth": return String(format: "%.2f", observation.panelWidth)
+        case "derivedPanelHeight": return String(format: "%.2f", observation.derivedPanelHeight)
+        case "providerCount": return String(observation.providerCount)
+        case "providerBarMode": return observation.providerBarMode
         default: return observation.statusMessage
         }
     }
@@ -616,6 +712,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "askChats": observation.askChats,
             "askBadge": observation.askBadge,
             "statusMessage": observation.statusMessage,
+            "probeResult": observation.probeResult,
+            "panelHeight": observation.panelHeight,
+            "panelWidth": observation.panelWidth,
+            "derivedPanelHeight": observation.derivedPanelHeight,
+            "providerCount": observation.providerCount,
+            "providerBarMode": observation.providerBarMode,
             "previewVisible": searchController?.previewVisible ?? false,
             "items": observation.items.map {
                 [
@@ -814,7 +916,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let askService = AskService(store: store, configuration: configuration.ask)
         self.askService = askService
         providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, onChange: { [weak self] in
-            await self?.exportWebApps()
+            await self?.refreshWebAppHotkeys()
         }))
         providers.append(BookmarkProvider())
         providers.append(AtlasProvider(bridge: hostProxy))
@@ -900,6 +1002,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for diagnostic in registry.diagnostics where diagnostic.level == .error {
             Log.shared.error(diagnostic.message, source: diagnostic.source ?? "providers")
         }
+        catalogCommands = CommandCatalog.commands(
+            providers: registry.providers.map {
+                CommandCatalog.ProviderEntry(id: $0.descriptor.id, trigger: $0.descriptor.trigger)
+            },
+            prefix: configuration.providerPrefix
+        )
         return registry
     }
 
@@ -950,6 +1058,181 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installRegionHotKey()
         installWindowHotKey()
         installRecordingHotKey()
+        installBindingHotKeys()
+        installCatalogHotKeys()
+    }
+
+    /// User `[[binding]]` rows live above 200 so they never collide with the
+    /// 1–9 app hotkeys or the 100+ web-app range. A shortcut that is invalid,
+    /// repeated, or already taken by a built-in key is logged and skipped, not
+    /// allowed to take the app down.
+    private func installBindingHotKeys() {
+        bindingHotkeys.forEach { $0.unregister() }
+        bindingHotkeys.removeAll()
+        let reserved = [
+            configuration.hotkey, configuration.clipboardHotkey,
+            configuration.terminalHotkey, configuration.scratchpadHotkey,
+            configuration.askHotkey, configuration.screenshotHotkey,
+            configuration.regionScreenshotHotkey, configuration.windowScreenshotHotkey,
+            configuration.recordingHotkey,
+        ]
+        let plan = HotKeyBindings.usable(configuration.bindings, reserved: reserved)
+        plan.issues.forEach { Log.shared.warn($0, source: "hotkey") }
+        var nextID: UInt32 = 200
+        for binding in plan.usable {
+            let manager = HotKeyManager(hotKeyID: nextID)
+            manager.onPressed = { [weak self] in self?.performBinding(binding) }
+            do {
+                try manager.register(binding.keys)
+                bindingHotkeys.append(manager)
+                Log.shared.info(
+                    "Binding registered: \(HotKeySpec.parse(binding.keys)?.prettyDisplay ?? binding.keys) → \(binding.action.rawValue) \(binding.value)",
+                    source: "hotkey"
+                )
+                nextID += 1
+            } catch {
+                Log.shared.warn(
+                    "Binding \(binding.keys) → \(binding.value) is unavailable: \(error.localizedDescription)",
+                    source: "hotkey"
+                )
+            }
+        }
+    }
+
+    /// Catalogue shortcuts live above 300. Rows are user data: an unknown
+    /// command, invalid key, duplicate, or collision with a built-in or
+    /// `[[binding]]` key is logged and skipped, never fatal.
+    private func installCatalogHotKeys() {
+        catalogHotkeys.forEach { $0.unregister() }
+        catalogHotkeys.removeAll()
+        let reserved = [
+            configuration.hotkey, configuration.clipboardHotkey,
+            configuration.terminalHotkey, configuration.scratchpadHotkey,
+            configuration.askHotkey, configuration.screenshotHotkey,
+            configuration.regionScreenshotHotkey, configuration.windowScreenshotHotkey,
+            configuration.recordingHotkey,
+        ] + configuration.bindings.map(\.keys)
+        let plan = ShortcutResolver.resolve(
+            configuration.shortcuts,
+            commands: catalogCommands,
+            reserved: reserved
+        )
+        plan.issues.forEach {
+            Log.shared.warn($0, source: "hotkey")
+            startupDiagnostics.append(Diagnostic(.warning, $0, source: "hotkey"))
+        }
+        let byID = Dictionary(uniqueKeysWithValues: catalogCommands.map { ($0.id, $0) })
+        var nextID: UInt32 = 300
+        for shortcut in plan.resolved {
+            guard let command = byID[shortcut.command] else { continue }
+            let manager = HotKeyManager(hotKeyID: nextID)
+            manager.onPressed = { [weak self] in self?.performCatalogCommand(command) }
+            do {
+                try manager.register(shortcut.keys)
+                catalogHotkeys.append(manager)
+                Log.shared.info(
+                    "Command shortcut registered: \(HotKeySpec.parse(shortcut.keys)?.prettyDisplay ?? shortcut.keys) → \(command.title)",
+                    source: "hotkey"
+                )
+                nextID += 1
+            } catch {
+                Log.shared.warn(
+                    "Command shortcut \(shortcut.keys) for \(command.title) is unavailable: \(error.localizedDescription)",
+                    source: "hotkey"
+                )
+            }
+        }
+    }
+
+    private func performCatalogCommand(_ command: CatalogCommand) {
+        switch command.action {
+        case .provider(let trigger):
+            let prefix = configuration.providerPrefix
+            panel.show()
+            searchController.query = trigger.hasPrefix(prefix) ? trigger : prefix + trigger
+        case .app(let app):
+            switch app {
+            case .settings: showSettings()
+            case .reload: reload(quiet: false)
+            case .quit: NSApp.terminate(nil)
+            case .toggleLauncher: togglePalette()
+            }
+        }
+    }
+
+    private func performBinding(_ binding: HotkeyBinding) {
+        switch binding.action {
+        case .launch:
+            launchBindingTarget(binding.value)
+        case .command:
+            runBindingCommand(binding.value)
+        case .provider:
+            let prefix = configuration.providerPrefix
+            let trigger = binding.value.hasPrefix(prefix) ? binding.value : prefix + binding.value
+            panel.show()
+            searchController.query = trigger
+        case .url:
+            launcher.openURL(binding.value)
+        }
+    }
+
+    private func launchBindingTarget(_ target: String) {
+        if let url = URL(string: target), let scheme = url.scheme, !scheme.isEmpty {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        if target.contains("/") {
+            let expanded = PathExpansion.expand(target)
+            guard FileManager.default.fileExists(atPath: expanded) else {
+                Log.shared.warn("Binding launch target not found: \(target)", source: "binding")
+                return
+            }
+            launcher.activateApp(path: expanded)
+            return
+        }
+        guard let path = ToolLocator.shared.appPath(named: target) else {
+            Log.shared.warn("Binding launch app not installed: \(target)", source: "binding")
+            return
+        }
+        launcher.activateApp(path: path)
+    }
+
+    /// Runs `/bin/zsh -lc <command>` with no terminal and no inherited pipes.
+    /// stderr goes to a temp file so a failed command can be reported in the log
+    /// without blocking the child on a full pipe.
+    private func runBindingCommand(_ command: String) {
+        let logURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-binding-\(UUID().uuidString).log")
+        FileManager.default.createFile(atPath: logURL.path, contents: nil)
+        guard let errorLog = try? FileHandle(forWritingTo: logURL) else {
+            Log.shared.warn("Binding command could not open its log: \(command)", source: "binding")
+            return
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", command]
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = errorLog
+        process.terminationHandler = { finished in
+            try? errorLog.close()
+            defer { try? FileManager.default.removeItem(at: logURL) }
+            guard finished.terminationStatus != 0 else { return }
+            let output = (try? String(contentsOf: logURL, encoding: .utf8))?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let detail = output.isEmpty ? command : String(output.suffix(600))
+            Log.shared.error(
+                "Binding command failed (\(finished.terminationStatus)): \(detail)",
+                source: "binding"
+            )
+        }
+        do {
+            try process.run()
+        } catch {
+            try? errorLog.close()
+            try? FileManager.default.removeItem(at: logURL)
+            Log.shared.error("Binding command could not start: \(error.localizedDescription)", source: "binding")
+        }
     }
 
     private func installLauncherHotKey() {
@@ -1351,6 +1634,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// ⌘⌥A: show the existing chat or hide it. Hiding never cancels a request.
     private func toggleAskWindow() {
+        if let controller = askWindow, let window = controller.window, window.isMiniaturized {
+            let panelFrame = panel?.isVisible == true ? panel?.panel.frame : nil
+            controller.show(below: panelFrame)
+            updateActivationPolicy()
+            return
+        }
         if let controller = askWindow, let window = controller.window, window.isVisible {
             window.orderOut(nil)
             panel?.suppressAutoHide = false
@@ -1551,19 +1840,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         clipboardMonitor = monitor
     }
 
+    private func providerSettingsInfo() -> [ProviderSettingsInfo] {
+        registry.providers.map {
+            ProviderSettingsInfo(
+                id: $0.descriptor.id,
+                name: $0.descriptor.name,
+                trigger: $0.descriptor.trigger,
+                isGlobal: $0.descriptor.isGlobal
+            )
+        }
+    }
+
+    /// Skip means "Essentials", not "everything": the user declined setup, so
+    /// keep the rail to the same small set Finish would.
+    private func skipOnboarding() {
+        let essentials = OnboardingView.applying(
+            .essentials,
+            to: configuration,
+            providers: providerSettingsInfo()
+        )
+        do {
+            try ConfigWriter.render(essentials).write(to: paths.configFile, atomically: true, encoding: .utf8)
+        } catch {
+            Log.shared.warn("Could not save the Essentials preset: \(error.localizedDescription)", source: "onboarding")
+        }
+        if !isScriptMode {
+            UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+        }
+        onboardingWindow?.close()
+        onboardingWindow = nil
+        reload(quiet: false)
+    }
+
     private func showOnboardingIfNeeded() {
         guard shouldShowOnboarding else { return }
         let view = OnboardingView(
             themeManager: themeManager,
             config: configuration,
-            providers: registry.providers.map {
-                ProviderSettingsInfo(
-                    id: $0.descriptor.id,
-                    name: $0.descriptor.name,
-                    trigger: $0.descriptor.trigger,
-                    isGlobal: $0.descriptor.isGlobal
-                )
-            },
+            providers: providerSettingsInfo(),
             onFinish: { [weak self] updated in
                 guard let self else { return }
                 do {
@@ -1571,19 +1885,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } catch {
                     self.searchController.setStatus("Could not save setup: \(error.localizedDescription)", duration: 4)
                 }
-                UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+                if !self.isScriptMode {
+                    UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+                }
                 self.onboardingWindow?.close()
                 self.onboardingWindow = nil
                 self.reload(quiet: false)
             },
-            onSkip: { [weak self] in
-                UserDefaults.standard.set(true, forKey: "onboardingCompleted")
-                self?.onboardingWindow?.close()
-                self?.onboardingWindow = nil
-            }
+            onSkip: { [weak self] in self?.skipOnboarding() }
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 640),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -1997,20 +2309,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Reload
 
-    private func exportWebApps() async {
+    private func refreshWebAppHotkeys() async {
         do {
             let apps = try await store.webApps()
             registerWebAppHotkeys(apps)
-            if let url = try HammerspoonExport.write(apps, browser: configuration.webAppBrowser) {
-                Log.shared.info("Exported \(apps.count) web app(s) to \(url.path)", source: "hammerspoon")
-            }
         } catch {
-            Log.shared.warn("Could not export web apps to Hammerspoon: \(error.localizedDescription)", source: "hammerspoon")
+            Log.shared.warn("Could not load web apps: \(error.localizedDescription)", source: "hotkey")
         }
     }
 
-    /// Web app shortcuts are registered here, not by Hammerspoon: mixing both
-    /// would fail to register (Carbon rejects a duplicate hotkey pair).
+    /// Web app shortcuts are registered by Palette itself so Carbon owns every
+    /// global key exactly once.
     private func registerWebAppHotkeys(_ apps: [WebApp]) {
         webAppHotkeys.forEach { $0.unregister() }
         webAppHotkeys.removeAll()
@@ -2035,6 +2344,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 )
             }
         }
+    }
+
+    /// Dock/undock or a resolution change: re-measure rows on the new screen,
+    /// re-apply the width, and reposition even if the panel is already open.
+    @objc private func screenParametersChanged() {
+        guard let panel else { return }
+        searchController?.updatePanelHeight()
+        panel.windowConfig = configuration.window
     }
 
     func reload(quiet: Bool, refreshSettings: Bool = true) {
@@ -2071,6 +2388,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || currentWindowHotKey?.display.lowercased() != configuration.windowScreenshotHotkey.lowercased()
             || currentRecordingHotKey?.display.lowercased() != configuration.recordingHotkey.lowercased() {
             installHotKey()
+        }
+        // Bindings can change without touching a built-in key, so they always
+        // re-register on reload. Scripted runs leave Carbon alone.
+        if !isScriptMode {
+            installBindingHotKeys()
+            installCatalogHotKeys()
         }
         configureClipboard()
         if refreshSettings { refreshSettingsWindow() }
@@ -2243,6 +2566,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             themesDirectory: paths.themesDir,
             accessibilityTrusted: pasteboard.isAccessibilityTrusted,
             providers: allProviderInfo,
+            commands: catalogCommands,
             diagnostics: startupDiagnostics.map { "\($0.level.rawValue): \($0.message)" },
             onApply: { [weak self] updated in
                 self?.applySettings(updated)
@@ -2252,6 +2576,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             onExportBackup: { [weak self] in
                 self?.exportBackup()
+            },
+            panelHeightForRows: { [weak self] rows in
+                self?.searchController?.panelHeight(forRows: rows) ?? 0
             }
         )
     }

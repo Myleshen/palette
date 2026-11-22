@@ -28,26 +28,9 @@ final class WebAppTests: XCTestCase {
         XCTAssertNil(WebAppShortcut.parse("ctrl+alt+notakey"))
     }
 
-    func testHammerspoonExport() {
-        let apps = [
-            WebApp(id: "1", name: "Figma", url: "https://figma.com", createdAt: Date(), shortcut: "ctrl+alt+f"),
-            WebApp(id: "2", name: "No Key", url: "https://example.com", createdAt: Date()),
-        ]
-        let text = HammerspoonExport.render(apps, browser: "Helium")
-        // Palette registers web app shortcuts itself; the export must not bind them.
-        XCTAssertTrue(text.contains("name = \"Figma\", url = \"https://figma.com\""))
-        XCTAssertFalse(text.contains("shortcut = "))
-        XCTAssertTrue(text.contains("name = \"No Key\", url = \"https://example.com\""))
-        if ToolLocator.shared.appPath(named: "Helium") != nil {
-            XCTAssertTrue(text.contains("browser_path = \"/Applications/Helium.app/Contents/MacOS/Helium\""))
-            XCTAssertTrue(text.contains("--app=https://figma.com"))
-            XCTAssertTrue(text.contains("--user-data-dir="))
-        }
-    }
-
     func testStoreAddDedupeAndDelete() async throws {
         let path = FileManager.default.temporaryDirectory
-            .appendingPathComponent("palette-webapps-\(UUID().uuidString).sqlite")
+            .appendingPathComponent("palette-web-apps-\(UUID().uuidString).sqlite")
             .path
         defer { try? FileManager.default.removeItem(atPath: path) }
 

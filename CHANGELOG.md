@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.16.0 — 2026-11-22
+
+### Added
+
+- **Notification Center banners** for completed answers when Palette is in the
+  background (permission is asked on the first post, not at launch). Timers use
+  the same path.
+- **Custom hotkeys** — `[[binding]]` entries in `config.toml` map any shortcut to
+  an action: launch an app or path, run a shell command, open a provider, or open
+  a URL. Managed in Settings → Shortcuts with the same recorder as the built-in
+  hotkeys, and re-registered on reload.
+- Onboarding lists the real screenshot shortcuts it will take and says they
+  replace macOS's, and **Skip** now applies the Essentials set instead of leaving
+  every provider enabled.
+- Font pickers are dropdowns of installed families, with an Inherit option; a
+  configured family that is no longer installed is shown as missing.
+- Web search is on by default for new chats.
+
+### Changed
+
+- **Hammerspoon integration removed.** Web-app shortcuts have been Palette's own
+  since 2.14.0; the generated `palette-webapps.lua` and the exporter are gone.
+
 ## 2.15.1 — 2026-11-22
 
 ### Changed

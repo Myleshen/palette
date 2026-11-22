@@ -161,11 +161,11 @@ public struct AskConfig: Sendable, Equatable {
     public var retentionDays: Int
     public var maxTokens: Int
     public var fallback: Bool
-    /// Sound and Dock bounce when an answer lands while the window is in the
-    /// background.
+    /// Sound, Notification Center banner and Dock badge when an answer lands
+    /// while the window is in the background.
     public var notify: Bool
-    /// Default for the composer's globe toggle. Off means no web lookups unless
-    /// the message itself contains an https link.
+    /// Default for the composer's globe toggle. On means a turn searches the web
+    /// unless the user turns the globe off; an https link is always fetched.
     public var webSearch: Bool
 
     public init(
@@ -176,7 +176,7 @@ public struct AskConfig: Sendable, Equatable {
         maxTokens: Int = 8_192,
         fallback: Bool = true,
         notify: Bool = true,
-        webSearch: Bool = false
+        webSearch: Bool = true
     ) {
         self.endpoint = endpoint
         self.model = model

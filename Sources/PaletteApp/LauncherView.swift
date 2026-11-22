@@ -226,6 +226,16 @@ enum LauncherMetrics {
     /// Selection highlight radius.
     static let rowRadius: CGFloat = 10
     static let footerHeight: CGFloat = 44
+    /// The horizontal provider strip: 26pt chips with 6pt vertical padding.
+    static let providerChipHeight: CGFloat = 26
+    static let providerBarVerticalPadding: CGFloat = 6
+    static var providerBarHeight: CGFloat {
+        providerChipHeight + providerBarVerticalPadding * 2
+    }
+    static let providerChipGap: CGFloat = 8
+    static let providerChipPadding: CGFloat = 12
+    /// A long provider name widens its chip only up to this, then ellipsizes.
+    static let providerChipMaxWidth: CGFloat = 220
 }
 
 /// The glass + theme fill + hairline used by every launcher card. Cards share
@@ -373,8 +383,7 @@ struct BadgeView: View {
 
 /// A mode or filter chip. Selection is a solid accent fill with a foreground
 /// chosen for contrast, not accent text on a tint; 28pt tall for the pointer.
-private struct ChipButton: View {
-    var title: String
+private struct ChipButton: View {    var title: String
     var selected: Bool
     var theme: Theme
     var action: () -> Void
@@ -404,6 +413,90 @@ private struct ChipButton: View {
         .onHover { hovered = $0 }
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+}
+
+/// One provider chip for the top strip: the rail's glyph and label in a 26pt
+/// rounded chip. Selection uses the rail's solid palette pair.
+private struct ProviderBarChip: View {
+    var entry: SearchController.RailEntry
+    var width: CGFloat
+    var selected: Bool
+    var theme: Theme
+    var action: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                ProviderGlyph(entry: entry, theme: theme)
+                Text(entry.title)
+                    .font(theme.font(size: 11, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .padding(.horizontal, LauncherMetrics.providerChipPadding)
+            .frame(width: width, height: LauncherMetrics.providerChipHeight, alignment: .leading)
+            .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fg))
+            .background(
+                RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
+                    .fill(
+                        selected
+                            ? theme.color(theme.palette.accent)
+                            : theme.color(theme.palette.elevated).opacity(hovered ? 1 : 0.65)
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .help(entry.title)
+        .accessibilityLabel(entry.title)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+}
+
+/// The provider's real icon when it ships one, otherwise a two-letter tile.
+/// Shared by the left rail and the top strip so both read the same.
+private struct ProviderGlyph: View {
+    var entry: SearchController.RailEntry
+    var theme: Theme
+    var collapsed: Bool = false
+
+    private var symbol: String? {
+        entry.icon.flatMap { raw -> String? in
+            raw.hasPrefix("symbol:") ? String(raw.dropFirst("symbol:".count)) : nil
+        }
+    }
+
+    private var initials: String {
+        let words = entry.title.split(whereSeparator: \.isWhitespace).prefix(2)
+        return words.compactMap { $0.first }.map { String($0).uppercased() }.joined()
+    }
+
+    var body: some View {
+        if let symbol {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: collapsed ? 24 : 16)
+        } else {
+            Text(initials)
+                .font(.system(size: 10, weight: .bold))
+                .frame(width: collapsed ? 22 : 16, height: 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(theme.color(theme.palette.elevated))
+                )
+        }
+    }
+}
+
+/// Reports the strip's rendered height so the panel can reserve exactly that.
+private struct ProviderBarHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
@@ -639,6 +732,10 @@ struct LauncherRootView: View {
     @FocusState private var searchFocused: Bool
     @FocusState private var promptFocused: Bool
     @State private var railScrollTarget: String?
+    @State private var barStart = 0
+    @State private var barHovered = false
+    @State private var barWheelAccum: CGFloat = 0
+    @State private var barScrollMonitor: Any?
     private var theme: Theme { themeManager.theme }
     private var isPill: Bool { true }
 
@@ -660,12 +757,17 @@ struct LauncherRootView: View {
         }
     }
 
-    /// One grid: search pill, the provider rail plus cards, then the footer.
+    /// One grid: search pill, the provider switcher, cards, then the footer.
     private func pillLayout(railCollapsed: Bool) -> some View {
         VStack(spacing: LauncherMetrics.cardGap) {
             searchBar
+            if controller.showsProviderBar {
+                topProviderBar
+            }
             HStack(alignment: .top, spacing: LauncherMetrics.cardGap) {
-                rail(collapsed: railCollapsed)
+                if controller.providerBar == .left {
+                    rail(collapsed: railCollapsed)
+                }
                 contentArea
             }
             if theme.footer.show {
@@ -674,6 +776,214 @@ struct LauncherRootView: View {
         }
         .padding(LauncherMetrics.outerInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// Horizontal strip: one fixed-height row of rail-style chips. Only whole
+    /// chips are laid out, so a resting offset never leaves one cut in half.
+    private var topProviderBar: some View {
+        providerBarContent
+    }
+
+    private var providerBarContent: some View {
+        GeometryReader { proxy in
+            let width = max(0, proxy.size.width - LauncherMetrics.innerPadding * 2)
+            let window = barWindow(width: width)
+            HStack(spacing: LauncherMetrics.providerChipGap) {
+                ForEach(window.entries) { entry in
+                    ProviderBarChip(
+                        entry: entry,
+                        width: chipWidth(entry),
+                        selected: controller.activeRailID == entry.id,
+                        theme: theme
+                    ) {
+                        controller.selectRail(entry.id)
+                        controller.railFocused = true
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, LauncherMetrics.innerPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .overlay(alignment: .leading) {
+                if window.startIndex > 0 { providerBarScrim(leading: true) }
+            }
+            .overlay(alignment: .trailing) {
+                if window.endIndex < controller.railEntries.count {
+                    providerBarScrim(leading: false)
+                }
+            }
+            .overlay(alignment: .leading) {
+                if barHovered, window.startIndex > 0 {
+                    barChevron("chevron.left") {
+                        shiftBar(by: -max(1, window.count - 1))
+                    }
+                    .padding(.leading, 4)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                if barHovered, window.endIndex < controller.railEntries.count {
+                    barChevron("chevron.right") {
+                        shiftBar(by: max(1, window.count - 1))
+                    }
+                    .padding(.trailing, 4)
+                }
+            }
+            .onChange(of: proxy.size.width, initial: true) { _, newWidth in
+                settleBar(width: max(0, newWidth - LauncherMetrics.innerPadding * 2))
+            }
+            .onChange(of: controller.activeRailID, initial: true) { _, _ in
+                settleBar(width: width)
+            }
+        }
+        .frame(height: LauncherMetrics.providerBarHeight)
+        .background(theme.color(theme.palette.bg))
+        .background(
+            GeometryReader { measured in
+                Color.clear.preference(key: ProviderBarHeightKey.self, value: measured.size.height)
+            }
+        )
+        .onPreferenceChange(ProviderBarHeightKey.self) { height in
+            controller.setProviderBarHeight(height)
+        }
+        .cardSurface(theme: theme)
+        .onHover { inside in
+            barHovered = inside
+            if inside { installBarScrollMonitor() } else { removeBarScrollMonitor() }
+        }
+        .onDisappear {
+            barHovered = false
+            removeBarScrollMonitor()
+        }
+    }
+
+    private struct ProviderBarWindow {
+        var entries: [SearchController.RailEntry]
+        var startIndex: Int
+        var endIndex: Int
+        var count: Int { entries.count }
+    }
+
+    /// Chips from `barStart` that fully fit. The active chip anchors the window
+    /// on scope changes, so it is always visible and every edge is a chip edge.
+    private func barWindow(width: CGFloat) -> ProviderBarWindow {
+        let entries = controller.railEntries
+        guard !entries.isEmpty, width > 0 else {
+            return ProviderBarWindow(entries: [], startIndex: 0, endIndex: 0)
+        }
+        let widths = entries.map(chipWidth)
+        let gap = LauncherMetrics.providerChipGap
+        let start = min(max(0, barStart), entries.count - 1)
+        var total: CGFloat = 0
+        var end = start
+        while end < entries.count {
+            let addition = widths[end] + (end == start ? 0 : gap)
+            if total + addition > width { break }
+            total += addition
+            end += 1
+        }
+        return ProviderBarWindow(
+            entries: Array(entries[start..<end]),
+            startIndex: start,
+            endIndex: end
+        )
+    }
+
+    /// Put the active provider at the right edge of the widest window that
+    /// starts on a chip boundary.
+    private func settleBar(width: CGFloat) {
+        let entries = controller.railEntries
+        guard !entries.isEmpty, width > 0 else {
+            barStart = 0
+            return
+        }
+        guard let active = entries.firstIndex(where: { $0.id == controller.activeRailID }) else {
+            barStart = 0
+            return
+        }
+        let widths = entries.map(chipWidth)
+        let gap = LauncherMetrics.providerChipGap
+        var start = active
+        var total = widths[active]
+        while start > 0 {
+            let candidate = widths[start - 1] + gap + total
+            if candidate <= width { total = candidate; start -= 1 } else { break }
+        }
+        barStart = start
+    }
+
+    private func shiftBar(by delta: Int) {
+        let count = controller.railEntries.count
+        guard count > 0 else { return }
+        barStart = min(max(0, barStart + delta), count - 1)
+    }
+
+    /// Chip widths are measured from the same 11pt label the chip draws, plus
+    /// its 16pt glyph, 6pt gap and 12pt padding on each side.
+    private func chipWidth(_ entry: SearchController.RailEntry) -> CGFloat {
+        let label = (entry.title as NSString).size(
+            withAttributes: [.font: theme.nsFont(size: 11, weight: .medium)]
+        ).width
+        let chrome = LauncherMetrics.providerChipPadding * 2 + 16 + 6 + 2
+        let maxLabel = LauncherMetrics.providerChipMaxWidth - chrome
+        return ceil(min(label, maxLabel)) + chrome
+    }
+
+    /// A soft scrim at the edge where more chips continue. It shades the card
+    /// itself rather than masking a half chip, so every chip stays whole.
+    private func providerBarScrim(leading: Bool) -> some View {
+        LinearGradient(
+            colors: [
+                theme.appearance == "light"
+                    ? Color.white.opacity(0.55)
+                    : Color.black.opacity(0.5),
+                .clear,
+            ],
+            startPoint: leading ? .leading : .trailing,
+            endPoint: leading ? .trailing : .leading
+        )
+        .frame(width: 26)
+        .allowsHitTesting(false)
+    }
+
+    private func barChevron(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(theme.color(theme.palette.fg))
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(theme.color(theme.palette.elevated)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(symbol.hasSuffix("left") ? "Earlier providers" : "More providers")
+    }
+
+    private func installBarScrollMonitor() {
+        guard barScrollMonitor == nil else { return }
+        barScrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            let dx = event.scrollingDeltaX
+            let dy = event.scrollingDeltaY
+            let delta = abs(dx) >= abs(dy) ? dx : dy
+            if delta != 0 { scrollBarWheel(delta) }
+            return nil
+        }
+    }
+
+    private func removeBarScrollMonitor() {
+        if let barScrollMonitor {
+            NSEvent.removeMonitor(barScrollMonitor)
+            self.barScrollMonitor = nil
+        }
+    }
+
+    private func scrollBarWheel(_ delta: CGFloat) {
+        barWheelAccum += delta
+        if barWheelAccum <= -24 {
+            barWheelAccum = 0
+            shiftBar(by: 1)
+        } else if barWheelAccum >= 24 {
+            barWheelAccum = 0
+            shiftBar(by: -1)
+        }
     }
 
     /// Vertical provider rail: Everything first, one row per provider, full
@@ -751,27 +1061,11 @@ struct LauncherRootView: View {
         return words.compactMap { $0.first }.map { String($0).uppercased() }.joined()
     }
 
+
     private func railRow(_ entry: SearchController.RailEntry, collapsed: Bool) -> some View {
         let selected = controller.activeRailID == entry.id
-        let symbol = entry.icon.flatMap { raw -> String? in
-            raw.hasPrefix("symbol:") ? String(raw.dropFirst("symbol:".count)) : nil
-        }
         return HStack(spacing: collapsed ? 0 : 8) {
-            if let symbol {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: collapsed ? 24 : 16)
-            } else {
-                // A repeated grid glyph is worse than a letter: every row
-                // stays distinguishable in the icon-only rail.
-                Text(railInitials(entry.title))
-                    .font(.system(size: 10, weight: .bold))
-                    .frame(width: collapsed ? 22 : 16, height: 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(theme.color(theme.palette.elevated))
-                    )
-            }
+            ProviderGlyph(entry: entry, theme: theme, collapsed: collapsed)
             if !collapsed {
                 Text(railTitle(entry.title, width: 220))
                     .font(theme.font(size: 11, weight: .medium))
@@ -1729,6 +2023,16 @@ struct TerminalPane: NSViewRepresentable {
     var initialCommand: String?
     var session: TerminalSessionConfig
 
+    /// The stop observer runs on the main queue but is `@Sendable`; the view
+    /// itself is main-actor UI.
+    final class Stoppable: @unchecked Sendable {
+        let view: LocalProcessTerminalView
+
+        init(_ view: LocalProcessTerminalView) {
+            self.view = view
+        }
+    }
+
     final class Coordinator {
         weak var view: LocalProcessTerminalView?
         var observer: NSObjectProtocol?
@@ -1748,13 +2052,13 @@ struct TerminalPane: NSViewRepresentable {
         terminal.layer?.cornerRadius = 10
         terminal.font = resolvedFont()
         context.coordinator.view = terminal
-        nonisolated(unsafe) let stoppable = terminal
+        let stoppable = Stoppable(terminal)
         context.coordinator.observer = NotificationCenter.default.addObserver(
             forName: .paletteTerminalStop,
             object: nil,
             queue: .main
         ) { _ in
-            stoppable.terminate()
+            stoppable.view.terminate()
         }
         DispatchQueue.main.async {
             let shell = resolvedShell()

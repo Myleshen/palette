@@ -24,7 +24,7 @@ final class AskWindowController: NSWindowController, NSWindowDelegate {
         let theme = themeManager.theme
         let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 860, height: 560),
-            styleMask: [.titled, .closable, .resizable, .utilityWindow],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .utilityWindow],
             backing: .buffered,
             defer: false
         )
@@ -101,6 +101,9 @@ final class AskWindowController: NSWindowController, NSWindowDelegate {
     /// Switches this window to a saved chat; the sidebar uses the same path.
     func open(chat: AskChat) {
         state.openChat(chat)
+        // Ordering a miniaturised window front would otherwise leave it in the
+        // Dock; ⌘⌥A has to bring it back.
+        window?.deminiaturize(nil)
         window?.makeKeyAndOrderFront(nil)
         window?.makeKey()
         clearBadge()
@@ -111,6 +114,9 @@ final class AskWindowController: NSWindowController, NSWindowDelegate {
             NSApp.setActivationPolicy(.regular)
         }
         position(below: panelFrame)
+        // Ask for banner permission while the user is looking at the app; a
+        // prompt fired by a background answer would suppress that answer.
+        SystemNotification.prepare()
         showWindow(nil)
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window?.makeKeyAndOrderFront(nil)
