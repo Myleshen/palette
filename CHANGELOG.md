@@ -1,5 +1,60 @@
 # Changelog
 
+## 2.17.0 — 2026-11-22
+
+### Added
+
+- **State survives quitting.** A running timer resumes on relaunch (and says so
+  once if it finished while Palette was closed), an in-progress recording is
+  adopted, a pending clipboard clear is finished or re-armed, and the last Ask
+  chat, its badge and interrupted answers come back with the window.
+- **Clamshell and keep-awake are real across launches.** The caffeinate session
+  and the clamshell flag are re-adopted at startup; the guard now has a 12-hour
+  cap, re-arms on AC, disarms on battery, and an expired caffeinate session
+  leaves the clamshell guard armed.
+- **Config safety.** `config.toml` is backed up before every write as
+  `config.toml.bak`, an unparseable file is refused instead of overwritten, and
+  `[meta] config_version` migrates the old provider allowlist.
+- **Hotkey availability in Settings.** Every global shortcut is planned in one
+  ordered pass (built-ins, web apps, `[[binding]]`, catalogue) and registered
+  transactionally; a key another app owns is reported on its row.
+- **Backup now carries the whole state**: bookmarks, commands, snippets and the
+  encrypted Ask key files, with plain-text clipboard history stripped and the
+  database vacuumed.
+- **Favicons for web apps** (async fetch, cached, toggleable), an icon cache
+  size limit, an annotation text box, and tool-cache misses are retried on the
+  next lookup.
+- Database retention for clipboard and Ask history, with periodic checkpointing.
+
+### Changed
+
+- The Settings window follows `config.toml` live and keeps the field you are
+  typing in focused; theme picks are written to config instead of a side file.
+- The annotator asks before closing with unsaved marks, and the scratchpad saves
+  a draft on quit.
+- Ask history entry was consolidated onto the Ask row (the `askh` alias is
+  gone); reopening the window restores the last chat.
+- Settings gained real terminal/terminal-app fields, an automatic terminal font
+  size, and honest bookmark save failures.
+
+### Fixed
+
+- **Security:** child processes no longer inherit Palette's environment, Ask keys
+  go through the Keychain wrapper, concealed copies are marked and cleared, web
+  search carries a role plus SSRF guards, images and links are size-capped, and
+  process-group kills reach helpers.
+- **Correctness:** ⌘K no longer crashes when the list empties, chat/scratchpad
+  loads cannot paint over newer state, a `200 {"error"}` reply falls through the
+  model chain, and command ids, `gh` checkout paths, Docker, SSH and devx paths
+  are fixed.
+- Bookmarks refuse to overwrite a file they cannot parse, SSE streams truncate
+  cleanly, the notification permission is re-read, and icons no longer leak.
+- Twelve Settings defects: dropped or renamed web-search engines, duplicate
+  engine/hotkey detection (modifier order), wrong terminal field, missing
+  automatic font size, deleted themes shown as blank, browser auto-detect
+  overwriting the choice, ignored bookmark save errors, and binding values that
+  registered truncated while typing.
+
 ## 2.16.0 — 2026-11-22
 
 ### Added
