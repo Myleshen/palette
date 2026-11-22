@@ -584,15 +584,14 @@ public final class SearchController: ObservableObject, HostBridge {
         public var icon: String?
     }
 
-    /// Everything first, then one row per provider in registry order. `askh`
-    /// shares the Ask row; the rail has no grouped chips.
+    /// Everything first, then one row per provider in registry order.
     public var railEntries: [RailEntry] {
         var entries: [RailEntry] = [
             RailEntry(id: "everything", title: "Everything", trigger: nil, icon: "symbol:square.grid.2x2"),
         ]
         for provider in registry.providers {
             let descriptor = provider.descriptor
-            guard let trigger = descriptor.trigger, descriptor.id != "askh" else { continue }
+            guard let trigger = descriptor.trigger else { continue }
             entries.append(RailEntry(
                 id: descriptor.id,
                 title: descriptor.name,
@@ -607,7 +606,6 @@ public final class SearchController: ObservableObject, HostBridge {
     public var activeRailID: String {
         let provider = registry.parser.parse(query).providerID
         if provider == nil || provider == "apps" { return "everything" }
-        if provider == "askh" { return "ask" }
         return provider ?? "everything"
     }
 

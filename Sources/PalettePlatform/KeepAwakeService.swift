@@ -470,6 +470,13 @@ public actor ClamshellGuard: ClamshellControlling {
     public func disable() async {
         Log.shared.info("Clamshell: disarming the root guard", source: "awake")
         try? FileManager.default.removeItem(at: flagURL)
+        // The guard normally removes its own job; bootout is a defensive
+        // second try for a deleted plist that launchd still remembers. It
+        // legitimately fails without root and is not fatal.
+        _ = try? await ProcessRunner.run(
+            ["/bin/launchctl", "bootout", "system/\(Self.daemonLabel)"],
+            timeout: 5
+        )
         // The root loop notices the missing flag within three seconds and
         // restores normal sleep. Wait briefly so "off" is not just cosmetic.
         for _ in 0..<10 {
@@ -505,11 +512,26 @@ public actor ClamshellGuard: ClamshellControlling {
         // Written by root so a guard that dies right after arming is visible
         // instead of looking like a silent success.
         let log = shellQuote("/tmp/palette-clamshell-guard.log")
+        // The guard runs as root, so it can remove what it owns: its script,
+        // its plist and the log it has been growing.
+        let cleanUp = cleanUpPlist
+            ? """
+              /bin/rm -f \(shellQuote(daemonScriptPath)) \(shellQuote(daemonPlistPath))
+              """
+            : ""
         return """
         exec >>\(log) 2>&1
         note() { echo "$(date '+%F %T') [\(pid)] $1"; }
+        cleanup() {
+          \(tool) -a disablesleep 0 >/dev/null 2>&1
+          note "guard stopping"
+          exec >/dev/null 2>&1
+          : > \(log)
+          \(cleanUp)
+        }
+        trap cleanup EXIT
+        trap 'exit 0' INT TERM HUP
         note "guard started"
-        trap '\(tool) -a disablesleep 0 >/dev/null 2>&1; note "guard stopped (trap)"' EXIT INT TERM HUP
         was=""
         while /bin/kill -0 \(pid) 2>/dev/null && [ -f \(flag) ]; do
           if \(tool) -g ps | /usr/bin/grep -q "AC Power"; then
@@ -523,8 +545,7 @@ public actor ClamshellGuard: ClamshellControlling {
           \(sleeper) \(interval)
         done
         note "guard exiting (palette gone or flag removed)"
-        \(tool) -a disablesleep 0 >/dev/null 2>&1
-        \(cleanUpPlist ? "/bin/rm -f /Library/LaunchDaemons/\(ClamshellGuard.daemonLabel).plist" : "")
+        exit 0
         """
     }
 

@@ -56,21 +56,7 @@ public actor AskService {
         return lastAnswer
     }
 
-    public func history(limit: Int = 200) async throws -> [AskRecord] {
-        try await store.trimAskHistory(
-            maxHistory: configuration.maxHistory,
-            retentionDays: configuration.retentionDays
-        )
-        return try await store.askHistory(limit: limit)
-    }
-
-    public func deleteHistory(id: String) async throws {
-        try await store.deleteAsk(id: id)
-        if lastAnswer?.id == id { lastAnswer = nil }
-    }
-
     // MARK: - Saved chats
-
     public func chats(limit: Int = 200) async throws -> [AskChat] {
         try await store.askChats(limit: limit)
     }

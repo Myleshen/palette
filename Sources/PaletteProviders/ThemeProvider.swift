@@ -61,8 +61,8 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
                 badge: isCurrent ? "ACTIVE" : nil,
                 score: score,
                 actions: [
-                    // A pick is live-only; config stays authoritative on launch.
-                    PaletteAction(id: "select", title: "Preview Theme", kind: .custom, value: .text(info.name)),
+                    // The pick is written into `[theme]`, so it survives relaunch.
+                    PaletteAction(id: "select", title: "Use Theme", kind: .custom, value: .text(info.name)),
                 ],
                 providerID: descriptor.id,
                 providerName: descriptor.name

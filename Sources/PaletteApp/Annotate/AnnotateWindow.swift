@@ -113,6 +113,7 @@ struct AnnotateView: View {
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
     @State private var moving: Moving?
+    @State private var changeBegun = false
     @State private var textEntry: TextEntry?
     @State private var zoom: CGFloat = 1
     @State private var toast: String?
@@ -479,7 +480,7 @@ struct AnnotateView: View {
                         if let index = editor.hitTest(startFraction) {
                             editor.selected = index
                             moving = Moving(index: index, original: editor.shapes[index], start: startFraction)
-                            editor.beginChange()
+                            changeBegun = false
                         } else {
                             editor.selected = nil
                         }
@@ -490,13 +491,22 @@ struct AnnotateView: View {
                 if let moving {
                     let current = fraction(value.location, in: rect)
                     let delta = CGPoint(x: current.x - moving.start.x, y: current.y - moving.start.y)
-                    editor.replace(moving.index, with: moving.original.offset(by: delta))
+                    // A click that selects without moving must not add an undo
+                    // step; the first real movement records one.
+                    if delta != .zero, !changeBegun {
+                        editor.beginChange()
+                        changeBegun = true
+                    }
+                    if changeBegun {
+                        editor.replace(moving.index, with: moving.original.offset(by: delta))
+                    }
                 }
             }
             .onEnded { value in
                 defer {
                     dragStart = nil
                     dragCurrent = nil
+                    changeBegun = false
                 }
                 if self.moving != nil {
                     self.moving = nil

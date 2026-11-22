@@ -260,6 +260,97 @@ public enum ShortcutAvailability {
     }
 }
 
+/// A shortcut Palette wants to own, before any Carbon call. `id` is the stable
+/// row id Settings uses to ask why a key is unavailable.
+public struct HotKeyRequest: Sendable, Equatable {
+    public var id: String
+    public var label: String
+    public var keys: String
+
+    public init(id: String, label: String, keys: String) {
+        self.id = id
+        self.label = label
+        self.keys = keys
+    }
+}
+
+/// One line of the plan: either the request may register, or an earlier entry
+/// already owns the key and this one is unavailable.
+public struct HotKeyResolution: Sendable, Equatable {
+    public var request: HotKeyRequest
+    public var unavailable: String?
+
+    public init(request: HotKeyRequest, unavailable: String? = nil) {
+        self.request = request
+        self.unavailable = unavailable
+    }
+}
+
+/// Decides Palette-internal collisions before anything touches Carbon. Input
+/// order is the priority: built-ins, then web apps, then `[[binding]]`, then
+/// the catalogue, so a launch and a reload resolve the same way.
+public enum HotKeyPlan {
+    public static func resolve(_ requests: [HotKeyRequest]) -> [HotKeyResolution] {
+        var owners: [String: String] = [:]
+        return requests.map { request in
+            let keys = request.keys.trimmingCharacters(in: .whitespaces)
+            guard !keys.isEmpty else { return HotKeyResolution(request: request) }
+            guard let spec = HotKeySpec.parse(keys) else {
+                return HotKeyResolution(request: request, unavailable: HotKeyUnavailable.invalid)
+            }
+            if let owner = owners[spec.identity] {
+                return HotKeyResolution(request: request, unavailable: HotKeyUnavailable.usedBy(owner))
+            }
+            owners[spec.identity] = request.label
+            return HotKeyResolution(request: request)
+        }
+    }
+}
+
+public enum HotKeyUnavailable {
+    public static let anotherApp = "Unavailable — already used by another app"
+    public static let invalid = "Unavailable — not a valid shortcut"
+    public static func usedBy(_ owner: String) -> String { "Unavailable — used by \(owner)" }
+}
+
+/// What the live registration pass achieved, readable by Settings. `id` matches
+/// the row id (`launcher`, a catalogue command id, `binding-3`, `web:<uuid>`).
+public struct HotKeyStatus: Sendable, Equatable {
+    public var id: String
+    public var label: String
+    public var keys: String
+    /// nil when Palette holds the key; otherwise the red line Settings shows.
+    public var unavailable: String?
+
+    public init(id: String, label: String, keys: String, unavailable: String? = nil) {
+        self.id = id
+        self.label = label
+        self.keys = keys
+        self.unavailable = unavailable
+    }
+}
+
+public enum HotKeyRegistry {
+    nonisolated(unsafe) private static var entries: [String: HotKeyStatus] = [:]
+    private static let lock = NSLock()
+
+    public static func replaceAll(_ newEntries: [HotKeyStatus]) {
+        lock.lock()
+        entries = Dictionary(newEntries.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        lock.unlock()
+    }
+
+    public static func status(id: String) -> HotKeyStatus? {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries[id]
+    }
+
+    public static func unavailable(id: String) -> String? {
+        status(id: id)?.unavailable
+    }
+}
+
 /// One Carbon handler for the whole process. `InstallEventHandler` replaces the
 /// previous handler for the same target and event kind, so installing one per
 /// manager silently disables every hotkey registered before it.
@@ -316,14 +407,25 @@ public final class HotKeyManager {
     public var onPressed: (() -> Void)?
     private var hotKeyRef: EventHotKeyRef?
     private var registered: HotKeySpec?
-    private let hotKeyID: UInt32
+    private var hotKeyID: UInt32
 
     /// Identities this process currently owns. A probe must answer "Used by
     /// Palette" for these instead of blaming another app.
     nonisolated(unsafe) private static var liveIdentities: Set<String> = []
     private static let liveLock = NSLock()
-    /// Throwaway id for probes, above the 300+ catalogue range.
+    /// Throwaway id for probes, above the catalogue range.
     private static let probeID: UInt32 = 900
+    /// Every successful registration gets a fresh id, so an attempt can be made
+    /// while the old key is still live without Carbon rejecting the duplicate.
+    nonisolated(unsafe) private static var installID: UInt32 = 1000
+    private static let installLock = NSLock()
+
+    private static func nextInstallID() -> UInt32 {
+        installLock.lock()
+        defer { installLock.unlock() }
+        installID += 1
+        return installID
+    }
 
     /// Each manager needs its own id: Carbon rejects a duplicate pair.
     public init(hotKeyID: UInt32 = 1) {
@@ -339,22 +441,37 @@ public final class HotKeyManager {
         guard let spec = HotKeySpec.parse(raw) else {
             throw ProviderError.failed("Invalid hotkey '\(raw)'")
         }
-        unregister()
-        HotKeyRouter.shared.set(hotKeyID) { [weak self] in self?.onPressed?() }
-
-        let hotKeyID = EventHotKeyID(signature: OSType(0x50414C54), id: hotKeyID) // 'PALT'
+        // Register the new pair first, under a fresh id. A failure (another app
+        // owns it) leaves the previous registration untouched, so a reload can
+        // never leave the user with no shortcut at all.
+        let candidateID = Self.nextInstallID()
+        var candidateRef: EventHotKeyRef?
         let status = RegisterEventHotKey(
             spec.keyCode,
             spec.modifiers,
-            hotKeyID,
+            EventHotKeyID(signature: OSType(0x50414C54), id: candidateID), // 'PALT'
             GetApplicationEventTarget(),
             0,
-            &hotKeyRef
+            &candidateRef
         )
         guard status == noErr else {
-            throw ProviderError.failed("Hotkey \(raw) is already in use. Change it in config.toml.")
+            let kept = registered.map { " Kept \($0.prettyDisplay)." } ?? ""
+            throw ProviderError.failed("Hotkey \(raw) is already in use.\(kept)")
         }
+
+        let previousID = hotKeyID
+        if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
+        if let registered {
+            Self.liveLock.lock()
+            Self.liveIdentities.remove(registered.identity)
+            Self.liveLock.unlock()
+        }
+        HotKeyRouter.shared.remove(previousID)
+
+        hotKeyID = candidateID
+        hotKeyRef = candidateRef
         registered = spec
+        HotKeyRouter.shared.set(hotKeyID) { [weak self] in self?.onPressed?() }
         Self.liveLock.lock()
         Self.liveIdentities.insert(spec.identity)
         Self.liveLock.unlock()

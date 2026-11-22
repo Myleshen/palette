@@ -125,12 +125,26 @@ public struct ClipboardConfig: Sendable, Equatable {
     public var maxEntries: Int
     public var pollMs: Int
     public var clearAfterMs: Int
+    /// Clipboard rows older than this many days are dropped on launch and
+    /// periodically. Pinned rows are kept.
+    public var retentionDays: Int
+    /// Total bytes of image blobs; the oldest images are evicted first.
+    public var maxImageBytes: Int
 
-    public init(enabled: Bool = true, maxEntries: Int = 5_000, pollMs: Int = 500, clearAfterMs: Int = 30_000) {
+    public init(
+        enabled: Bool = true,
+        maxEntries: Int = 5_000,
+        pollMs: Int = 500,
+        clearAfterMs: Int = 30_000,
+        retentionDays: Int = 30,
+        maxImageBytes: Int = 200 * 1024 * 1024
+    ) {
         self.enabled = enabled
         self.maxEntries = maxEntries
         self.pollMs = pollMs
         self.clearAfterMs = clearAfterMs
+        self.retentionDays = retentionDays
+        self.maxImageBytes = maxImageBytes
     }
 }
 
@@ -977,6 +991,10 @@ public enum ConfigLoader {
             clipboard.maxEntries = max(10, clipboardTable.int("max_entries") ?? clipboard.maxEntries)
             clipboard.pollMs = max(150, clipboardTable.int("poll_ms") ?? clipboard.pollMs)
             clipboard.clearAfterMs = max(0, clipboardTable.int("clear_after_ms") ?? clipboard.clearAfterMs)
+            clipboard.retentionDays = max(0, clipboardTable.int("retention_days") ?? clipboard.retentionDays)
+            if let bytes = clipboardTable.int("max_image_bytes") {
+                clipboard.maxImageBytes = max(0, bytes)
+            }
             config.clipboard = clipboard
         }
 
@@ -1191,6 +1209,8 @@ public enum ConfigLoader {
         max_entries = 5000
         poll_ms = 500
         clear_after_ms = 30000
+        retention_days = 30
+        max_image_bytes = 209715200
 
         """
     }
@@ -1343,6 +1363,8 @@ public enum ConfigWriter {
         out.append("max_entries = \(config.clipboard.maxEntries)")
         out.append("poll_ms = \(config.clipboard.pollMs)")
         out.append("clear_after_ms = \(config.clipboard.clearAfterMs)")
+        out.append("retention_days = \(config.clipboard.retentionDays)")
+        out.append("max_image_bytes = \(config.clipboard.maxImageBytes)")
         out.append("")
         return out.joined(separator: "\n")
     }
