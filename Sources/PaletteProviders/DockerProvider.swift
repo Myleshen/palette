@@ -16,10 +16,14 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
 
     private let launcher: LauncherService
     private let terminalApp: String
+    private let bridge: HostBridge?
+    /// Re-runs the current search after a container changes state.
+    public var onRefresh: (() -> Void)?
 
-    public init(launcher: LauncherService, terminalApp: String) {
+    public init(launcher: LauncherService, terminalApp: String, bridge: HostBridge? = nil) {
         self.launcher = launcher
         self.terminalApp = terminalApp
+        self.bridge = bridge
     }
 
     private var dockerPath: String? { ToolLocator.shared.path(for: "docker") }
@@ -120,7 +124,15 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        guard let docker = dockerPath, let raw = action.value.text else { return }
+        guard let raw = action.value.text else { return }
+        // "Open Docker" is not a `command:name` action; handle it first.
+        if raw == "open-app" {
+            if let app = ToolLocator.shared.appPath(named: "Docker") {
+                await MainActor.run { launcher.activateApp(path: app) }
+            }
+            return
+        }
+        guard let docker = dockerPath else { return }
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return }
         let command = parts[0]
@@ -129,12 +141,16 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
         case "logs":
             let app = terminalApp
             try await MainActor.run { try launcher.openTerminal(command: "\(docker) logs -f \(name)", app: app) }
-        case "open-app":
-            if let app = ToolLocator.shared.appPath(named: "Docker") {
-                await MainActor.run { launcher.activateApp(path: app) }
-            }
         default:
-            _ = try? await ProcessRunner.run([docker, command, name], timeout: 20)
+            let result = try? await ProcessRunner.run([docker, command, name], timeout: 20)
+            if result?.status != 0 {
+                let line = result?.stderrString
+                    .split(separator: "\n", omittingEmptySubsequences: true)
+                    .first
+                    .map(String.init) ?? ""
+                await bridge?.notify(line.isEmpty ? "docker \(command) \(name) failed" : line)
+            }
+            await MainActor.run { onRefresh?() }
         }
     }
 }

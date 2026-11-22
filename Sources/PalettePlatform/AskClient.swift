@@ -48,8 +48,11 @@ public enum AskClientError: LocalizedError, Equatable {
         case .quota, .invalidKey: return true
         // Status 0 means the request never got a response: a timeout or a
         // dropped connection. Another model may well answer in time.
+        // 200 with an error body means the model accepted and then refused the
+        // request; the next model can try.
         case .http(let status, _):
-            return status == 0 || status == 401 || status == 403 || status == 429 || status >= 500
+            return status == 0 || status == 200 || status == 401 || status == 403
+                || status == 429 || status >= 500
         case .missingKey, .malformed: return false
         // An empty reply is model-specific (some reasoning models do it); the
         // next model in the chain may answer normally.
@@ -312,6 +315,15 @@ public enum AskClient {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AskClientError.malformed("response was not JSON")
         }
+        // Some OpenAI-compatible endpoints report a failure as a 200 with an
+        // `error` body. Treat it as a request failure, not an unreadable
+        // response, so the fallback chain can move on.
+        if root["error"] != nil {
+            let message = errorMessage(from: data)
+            throw isQuotaMessage(message)
+                ? AskClientError.quota(message)
+                : AskClientError.http(200, message)
+        }
         guard let choices = root["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any] else {
             throw AskClientError.malformed("response had no choices")
@@ -344,6 +356,11 @@ public enum AskClient {
             completionTokens: usage?["completion_tokens"] as? Int ?? 0,
             durationMs: durationMs
         )
+    }
+
+    private static func isQuotaMessage(_ message: String) -> Bool {
+        let lower = message.localizedLowercase
+        return lower.contains("quota") || lower.contains("usage limit") || lower.contains("rate limit")
     }
 
     public static func errorMessage(from data: Data) -> String {

@@ -301,6 +301,15 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
                   let url = entry["url"] as? String else { return nil }
             let state = entry["state"] as? String ?? "OPEN"
             let draft = entry["isDraft"] as? Bool ?? false
+            var actions = [openAction(url)]
+            if let cwd {
+                actions.append(PaletteAction(
+                    id: "checkout",
+                    title: "Check out locally",
+                    kind: .custom,
+                    value: .object(["number": "\(number)", "dir": cwd])
+                ))
+            }
             return PaletteItem(
                 id: "pr:\(number)",
                 title: title,
@@ -309,10 +318,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
                 badge: draft ? "DRAFT" : state,
                 group: "Pull requests",
                 score: 9_000,
-                actions: [
-                    openAction(url),
-                    PaletteAction(id: "checkout", title: "Check out locally", kind: .custom, value: .object(["number": "\(number)"])),
-                ],
+                actions: actions,
                 preview: .text("\(title)\n\nPR #\(number) · \(state)\n\(url)"),
                 providerID: descriptor.id,
                 providerName: descriptor.name

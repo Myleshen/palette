@@ -1,8 +1,9 @@
 import Foundation
 import PaletteCore
 import PalettePlatform
+import TOMLKit
 
-/// The `[[roots]]` blocks of devx's config, read without a TOML dependency.
+/// The `[[roots]]` blocks of devx's config.
 public enum DevxConfig {
     public struct Root: Equatable {
         public var name: String
@@ -15,30 +16,15 @@ public enum DevxConfig {
     }
 
     public static func roots(from toml: String) -> [Root] {
-        var roots: [Root] = []
-        var current: Root?
-        let finish: () -> Void = {
-            if let current, !current.name.isEmpty, !current.path.isEmpty { roots.append(current) }
+        guard let table = try? TOMLTable(string: toml),
+              let entries = table["roots"]?.array else { return [] }
+        return entries.compactMap { value in
+            guard let row = value.table,
+                  let name = row["name"]?.string,
+                  let path = row["path"]?.string,
+                  !name.isEmpty, !path.isEmpty else { return nil }
+            return Root(name: name, path: path)
         }
-        for line in toml.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("[[roots]]") {
-                finish()
-                current = Root(name: "", path: "")
-            } else if trimmed.hasPrefix("[") {
-                finish()
-                current = nil
-            } else if current != nil, let equals = trimmed.firstIndex(of: "=") {
-                let key = trimmed[..<equals].trimmingCharacters(in: .whitespaces)
-                let value = trimmed[trimmed.index(after: equals)...]
-                    .trimmingCharacters(in: .whitespaces)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-                if key == "name" { current?.name = value }
-                if key == "path" { current?.path = value }
-            }
-        }
-        finish()
-        return roots
     }
 }
 

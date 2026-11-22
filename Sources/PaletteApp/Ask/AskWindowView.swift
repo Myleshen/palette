@@ -149,6 +149,7 @@ final class AskWindowState: ObservableObject {
         turns.removeAll()
         chatID = nil
         Task { await service.setLastChat(id: nil) }
+        loadingChat = false
     }
 
     /// A model picked here applies to subsequent turns only; changing it does
@@ -172,16 +173,19 @@ final class AskWindowState: ObservableObject {
         cancel()
         chatID = chat.id
         Task { await service.setLastChat(id: chat.id) }
+        let targetID = chat.id
         if let stored = AskModel.find(id: chat.model) {
             selectedModel = stored
         }
         loadingChat = true
         Task {
-            let messages = (try? await service.messages(chatID: chat.id)) ?? []
+            let messages = (try? await service.messages(chatID: targetID)) ?? []
             let unfinished = AskUnfinishedTurn.resolve(
-                chatID: chat.id,
+                chatID: targetID,
                 inflight: await service.inflightChatID()
             )
+            // A newer open or New Chat wins; never paint this chat over it.
+            guard chatID == targetID else { return }
             var restored: [Turn] = []
             var current: Turn?
             for message in messages {
@@ -245,6 +249,7 @@ final class AskWindowState: ObservableObject {
                 cancel()
                 chatID = nil
                 turns.removeAll()
+                loadingChat = false
             }
             await refreshChats()
         }

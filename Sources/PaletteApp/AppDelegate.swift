@@ -528,6 +528,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.fireBinding(keys: value)
                 } else if let value = step.dropPrefix("query=") {
                     self.searchController.query = value
+                } else if step == "refresh" {
+                    self.searchController.refreshResults()
                 } else if let value = step.dropPrefix("snapshot=") {
                     self.writeSnapshot(to: value)
                 } else if let value = step.dropPrefix("probe=") {
@@ -963,7 +965,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ColorProvider(bridge: hostProxy))
         providers.append(StatsProvider(bridge: hostProxy))
         providers.append(SSHProvider(launcher: launcher, terminalApp: configuration.terminalApp))
-        providers.append(DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp))
+        let docker = DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp, bridge: hostProxy)
+        docker.onRefresh = { [weak self] in self?.searchController?.refreshResults() }
+        providers.append(docker)
         providers.append(UnitsProvider(bridge: hostProxy))
         providers.append(WindowProvider(launcher: launcher))
         providers.append(ShotsProvider(service: captureService, bridge: hostProxy))

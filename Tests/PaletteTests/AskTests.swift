@@ -48,7 +48,7 @@ final class AskTests: XCTestCase {
         XCTAssertTrue(diagnostics.isEmpty)
     }
 
-    func testLegacyAskEndpointMigratesToGo() throws {
+    func testLegacyAskProviderNameIsIgnored() throws {
         let table = try TOMLTable(string: """
         [ask]
         provider = "opencode-zen"
@@ -57,7 +57,8 @@ final class AskTests: XCTestCase {
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
         XCTAssertEqual(parsed.ask.endpoint, .opencodeGo)
-        XCTAssertEqual(parsed.ask.model, AskModel.defaultModel.id)
+        // An unknown id is kept: the baked catalog is not the whole truth.
+        XCTAssertEqual(parsed.ask.model, "glm-5.3-flash-free")
         XCTAssertTrue(diagnostics.isEmpty)
     }
 
@@ -295,6 +296,33 @@ final class AskTests: XCTestCase {
             #"{"error":{"message":"Free usage limit reached"}}"#.utf8
         ))
         XCTAssertEqual(message, "Free usage limit reached")
+    }
+
+    func testAsk200ErrorBodyMapsToAFallbackError() {
+        let quota = Data(#"{"error":{"message":"Free usage limit reached"}}"#.utf8)
+        XCTAssertThrowsError(try AskClient.parse(quota, durationMs: 0)) { error in
+            XCTAssertEqual(error as? AskClientError, .quota("Free usage limit reached"))
+            XCTAssertTrue((error as? AskClientError)?.allowsFallback == true)
+        }
+
+        let other = Data(#"{"error":{"message":"model is not loaded"}}"#.utf8)
+        XCTAssertThrowsError(try AskClient.parse(other, durationMs: 0)) { error in
+            XCTAssertEqual(error as? AskClientError, .http(200, "model is not loaded"))
+            XCTAssertTrue((error as? AskClientError)?.allowsFallback == true)
+        }
+    }
+
+    func testUnknownAskModelSurvivesConfigParse() throws {
+        let table = try TOMLTable(string: """
+        [ask]
+        provider = "nvidia"
+        model = "acme/not-in-the-catalog"
+        """)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.ask.endpoint, .nvidia)
+        XCTAssertEqual(parsed.ask.model, "acme/not-in-the-catalog")
+        XCTAssertTrue(diagnostics.isEmpty)
     }
 
     func testAskEmptyContentUsesReasoning() throws {
