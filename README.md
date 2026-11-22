@@ -16,6 +16,49 @@ v2.15.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandbox
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
+## Feature timeline
+
+Where each headline feature landed. Every fix, and everything before 1.8, is in
+[CHANGELOG.md](CHANGELOG.md); the full list of providers and triggers is in
+[PROVIDERS.md](PROVIDERS.md).
+
+| Feature | Version |
+|---|---|
+| Ask chat window — multi-turn, streaming, saved chats, markdown (code, tables, images), optional web search | 2.15.0 |
+| NVIDIA NIM endpoint — 16 free chat models beside OpenCode Go | 2.15.0 |
+| GitHub providers — `ghr` repositories, `ghp` pull requests, `ghi` issues, `gha` Actions runs, `ghn` notifications | 2.15.0 |
+| Provider rail — full-height list of every provider, replacing the chip strip | 2.15.0 |
+| Settings rebuilt — 7 panes, auto-apply, ⌘F search, scoped resets | 2.15.0 |
+| Theme contrast enforced — accent, selection, badge and muted pairs measured | 2.15.0 |
+| `/proj` can clone a repository and create a new project | 2.15.0 |
+| `/gh` works outside a git repository | 2.15.0 |
+| Ask answer window (single question, single answer) | 2.14.0 |
+| Web app shortcuts registered by Palette — no Hammerspoon binding | 2.14.0 |
+| Ask model list mirrors the live endpoint (31 models) | 2.14.0 |
+| Answer sound, Dock bounce and dock badge; ⌘Q dismisses instead of quitting | 2.14.0 |
+| Atlas — fuzzy `/atlas <query>` search, review badge clears on ack | 2.14.0 |
+| Default search allowlist — the `Plain queries` column in Settings → Providers | 2.13.0 |
+| `app_mode` for `!` bangs — open a search in a web app | 2.13.0 |
+| Ask reliability — 120 s timeout, empty replies fall back to the next model | 2.13.0 – 2.13.1 |
+| Atlas provider over the local index | 2.12.0 |
+| Adaptive preview layout (`preview_layout = "auto"`) | 2.12.0 |
+| Providers table in Settings | 2.12.0 |
+| Cheatsheets provider (`/cheat`) | 2.11.0 |
+| `/ssh` inside the embedded terminal | 2.11.0 |
+| `/shots` paste image action | 2.11.0 |
+| Universal default search across chosen providers | 2.10.0 |
+| End-to-end harness — `PALETTE_SCRIPT` with `dump=` and `assert=` | 2.10.0 |
+| Siri Silver and Siri Graphite themes, Liquid Glass surfaces | 2.9.0 |
+| Settings tabs with search, tiered search ranking | 2.8.0 |
+| Bookmarks, `!` bangs, microphone picker | 2.7.0 |
+| Annotator pointer tool | 2.6.0 |
+| Universal capture shortcuts and the annotate window | 2.4.0 |
+| Editor-agnostic paths, two-step onboarding | 2.3.0 |
+| `/awake` with timers and clamshell mode | 2.2.0 |
+| Scratchpad, embedded terminal, first-run setup | 2.0.0 |
+| Clipboard transforms, typography overrides, `/port` | 1.9.0 |
+| One-shot `/ask` answers and `/askh` history (later replaced by the chat window) | 1.8.0 |
+
 ## Requirements
 
 | Tool | Why | Install |
