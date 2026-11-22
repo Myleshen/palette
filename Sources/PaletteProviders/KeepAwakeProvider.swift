@@ -147,14 +147,24 @@ public final class KeepAwakeProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private func clamshellRow(_ status: KeepAwakeStatus) -> PaletteItem {
-        PaletteItem(
+        let subtitle: String
+        let badge: String
+        if status.clamshellRequiresPower {
+            subtitle = "Armed but inactive · needs AC power"
+            badge = "ARMED"
+        } else if status.clamshell {
+            subtitle = "On · root guard checks AC power"
+            badge = "ON"
+        } else {
+            subtitle = "Off · keeps running with the lid shut · admin prompt once"
+            badge = "OFF"
+        }
+        return PaletteItem(
             id: "clamshell",
             title: "Clamshell Mode (Lid Closed)",
-            subtitle: status.clamshell
-                ? "On · root guard checks AC power"
-                : "Off · keeps running with the lid shut · admin prompt once",
+            subtitle: subtitle,
             icon: .symbol(status.clamshell ? "laptopcomputer.and.arrow.down" : "laptopcomputer"),
-            badge: status.clamshell ? "ON" : "OFF",
+            badge: badge,
             group: "Clamshell",
             score: 8_000,
             actions: [
@@ -210,7 +220,7 @@ public final class KeepAwakeProvider: PaletteProvider, @unchecked Sendable {
             lines.append("Keep your Mac awake while builds, downloads, or agent sessions run.")
             lines.append("")
             lines.append("Choose a duration, or enable clamshell mode to keep running with the lid closed.")
-            lines.append("Clamshell mode asks for an administrator password once and restores normal sleep when you stop or quit.")
+            lines.append("Clamshell mode asks for an administrator password once and restores normal sleep when you stop it, unplug power, or reach the 12-hour cap.")
         }
         return lines.joined(separator: "\n")
     }

@@ -305,6 +305,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { [weak self] in
             await self?.themeManager.restore()
         }
+        // Adopt a caffeinate session and a clamshell guard that outlived the
+        // last run, so Settings and the menu show what is really on.
+        Task { [weak self] in
+            await self?.keepAwake.restore()
+            await self?.refreshKeepAwakeMenu()
+            self?.searchController.refreshResults()
+        }
 
         if ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] != nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -355,6 +362,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.toggleRecording()
                 } else if step == "clamshell" {
                     try? await self.keepAwake.setClamshell(true)
+                } else if step == "awake_stop" {
+                    await self.keepAwake.stop()
                 } else if let value = step.dropPrefix("awake=") {
                     try? await self.keepAwake.start(duration: Double(value))
                 } else if let value = step.dropPrefix("annotate=") {
@@ -848,8 +857,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         watcherTimer?.invalidate()
         clipboardMonitor?.stop()
         hotkey?.unregister()
-        // Restore normal lid sleep even if the async cleanup does not finish.
-        ClamshellGuard.clearFlag()
+        // Keep the clamshell flag: the next launch reads it back and shows the
+        // real state. The root guard itself restores normal lid sleep when this
+        // process disappears. The caffeinate child is left running on purpose.
         if let themeObserver {
             DistributedNotificationCenter.default().removeObserver(themeObserver)
         }
@@ -2697,7 +2707,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let status = await keepAwake.snapshot()
         keepAwakeToggleItem?.title = status.active ? "Stop Keeping Awake" : "Keep Mac Awake (Indefinitely)"
         keepAwakeToggleItem?.state = status.active ? .on : .off
-        keepAwakeClamshellItem?.title = "Clamshell (Lid Closed)"
+        keepAwakeClamshellItem?.title = status.clamshell && status.clamshellRequiresPower
+            ? "Clamshell (Lid Closed) — armed, inactive"
+            : "Clamshell (Lid Closed)"
         keepAwakeClamshellItem?.state = status.clamshell ? .on : .off
         keepAwakeStopItem?.isEnabled = status.active
     }
