@@ -8,9 +8,13 @@ import SwiftUI
 final class ScreenshotHUD {
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
+    private var keyMonitor: Any?
+    private var hovering = false
+    private var onOpen: (() -> Void)?
 
     func show(image: NSImage, title: String, theme: Theme, onOpen: @escaping () -> Void) {
         dismiss()
+        self.onOpen = onOpen
 
         let size = image.size
         let maxWidth: CGFloat = 260
@@ -19,29 +23,15 @@ final class ScreenshotHUD {
         let width = max(120, size.width * scale)
         let height = size.height * scale
 
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        let content = VStack(alignment: .leading, spacing: 6) {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: width, height: height)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text(title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.color(theme.palette.fgMuted))
-                .lineLimit(1)
-        }
-        .padding(8)
-        .background {
-            ZStack {
-                GlassBackdrop(material: .hudWindow)
-                    .allowsHitTesting(false)
-                shape.fill(theme.color(theme.palette.elevated).opacity(0.8))
-            }
-            .clipShape(shape)
-            .overlay(shape.strokeBorder(theme.color(theme.palette.border)))
-        }
-        .onTapGesture { onOpen() }
+        let content = ScreenshotHUDContent(
+            image: image,
+            title: title,
+            theme: theme,
+            width: width,
+            height: height,
+            onOpen: { [weak self] in self?.activate() },
+            onHover: { [weak self] in self?.setHovering($0) }
+        )
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: width + 16, height: height + 42),
@@ -69,10 +59,26 @@ final class ScreenshotHUD {
         panel.orderFrontRegardless()
         self.panel = panel
 
-        dismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_400_000_000)
-            dismiss()
+        // The panel never becomes key, so a local monitor supplies Return and
+        // Space while it is on screen. Any key also counts as activity.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            let keyCode = event.keyCode
+            let handled = MainActor.assumeIsolated { () -> Bool in
+                guard let panel = self.panel else { return false }
+                // Do not swallow Return or Space while another Palette window
+                // (Settings, the launcher) has focus.
+                if let keyWindow = NSApp.keyWindow, keyWindow !== panel { return false }
+                self.extendDismissal()
+                if keyCode == 36 || keyCode == 49 {
+                    self.activate()
+                    return true
+                }
+                return false
+            }
+            return handled ? nil : event
         }
+        scheduleDismiss()
     }
 
     var view: NSView? { panel?.contentView }
@@ -80,7 +86,94 @@ final class ScreenshotHUD {
     func dismiss() {
         dismissTask?.cancel()
         dismissTask = nil
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
+        hovering = false
+        onOpen = nil
         panel?.orderOut(nil)
         panel = nil
+    }
+
+    private func activate() {
+        let open = onOpen
+        dismiss()
+        open?()
+    }
+
+    private func setHovering(_ value: Bool) {
+        hovering = value
+        if value {
+            dismissTask?.cancel()
+            dismissTask = nil
+        } else {
+            scheduleDismiss()
+        }
+    }
+
+    /// Keyboard activity keeps the thumbnail around a little longer.
+    private func extendDismissal() {
+        guard !hovering else { return }
+        scheduleDismiss()
+    }
+
+    private func scheduleDismiss() {
+        dismissTask?.cancel()
+        dismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_400_000_000)
+            guard let self, !Task.isCancelled, !self.hovering else { return }
+            self.dismiss()
+        }
+    }
+}
+
+private struct ScreenshotHUDContent: View {
+    let image: NSImage
+    let title: String
+    let theme: Theme
+    let width: CGFloat
+    let height: CGFloat
+    let onOpen: () -> Void
+    let onHover: (Bool) -> Void
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        VStack(alignment: .leading, spacing: 6) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(theme.color(theme.palette.fgMuted))
+                .lineLimit(1)
+        }
+        .padding(8)
+        .background {
+            ZStack {
+                if !reduceTransparency {
+                    GlassBackdrop(material: .hudWindow)
+                        .allowsHitTesting(false)
+                }
+                shape.fill(
+                    theme.color(theme.palette.elevated)
+                        .opacity(reduceTransparency ? 1 : 0.8)
+                )
+            }
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(theme.color(theme.palette.border)))
+        }
+        .contentShape(shape)
+        .onTapGesture(perform: onOpen)
+        .onHover(perform: onHover)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Screenshot thumbnail, \(title)")
+        .accessibilityHint("Press Return or Space to open")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onOpen() }
     }
 }

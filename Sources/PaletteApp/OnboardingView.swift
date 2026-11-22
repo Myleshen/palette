@@ -52,6 +52,10 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var preset: Preset = .essentials
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var loginError: String?
+    @State private var shortcutMessage: String?
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let providers: [ProviderSettingsInfo]
     let onFinish: (PaletteConfig) -> Void
@@ -116,8 +120,10 @@ struct OnboardingView: View {
         .frame(width: 640, height: 640)
         .background(
             ZStack {
-                GlassBackdrop(material: .hudWindow)
-                theme.color(theme.palette.bg).opacity(0.65)
+                if !reduceTransparency {
+                    GlassBackdrop(material: .hudWindow)
+                }
+                theme.color(theme.palette.bg).opacity(reduceTransparency ? 1 : 0.65)
             }
         )
         .preferredColorScheme(theme.appearance == "light" ? .light : .dark)
@@ -127,12 +133,27 @@ struct OnboardingView: View {
         Form {
             Section("Shortcuts") {
                 LabeledContent("Launcher") {
-                    ShortcutRecorder(value: $config.hotkey, label: "Launcher shortcut")
-                        .frame(width: 190, height: 26)
+                    ShortcutRecorder(
+                        value: $config.hotkey,
+                        label: "Launcher shortcut",
+                        validate: { validateShortcut($0, current: config.hotkey) },
+                        onValidation: { shortcutMessage = $0 }
+                    )
+                    .frame(width: 190, height: 26)
                 }
                 LabeledContent("Clipboard") {
-                    ShortcutRecorder(value: $config.clipboardHotkey, label: "Clipboard shortcut")
-                        .frame(width: 190, height: 26)
+                    ShortcutRecorder(
+                        value: $config.clipboardHotkey,
+                        label: "Clipboard shortcut",
+                        validate: { validateShortcut($0, current: config.clipboardHotkey) },
+                        onValidation: { shortcutMessage = $0 }
+                    )
+                    .frame(width: 190, height: 26)
+                }
+                if let shortcutMessage {
+                    Text(shortcutMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
                 }
             }
             Section("Capture shortcuts") {
@@ -150,10 +171,17 @@ struct OnboardingView: View {
                         do {
                             if enabled { try SMAppService.mainApp.register() }
                             else { try SMAppService.mainApp.unregister() }
+                            loginError = nil
                         } catch {
+                            loginError = "Could not update the login item: \(error.localizedDescription)"
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+                if let loginError {
+                    Text(loginError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
             Section {
                 Text("Everything else can wait. You can change any of this later with ⌘, or /sys settings.")
@@ -211,6 +239,24 @@ struct OnboardingView: View {
     private var detectedEditor: String? {
         ["neovide", "Visual Studio Code", "Cursor", "Zed", "Sublime Text"]
             .first { ToolLocator.shared.appPath(named: $0) != nil }
+    }
+
+    /// The same duplicate rule Settings applies: compare Carbon identities,
+    /// not typed strings, and include every built-in key already configured.
+    private func validateShortcut(_ display: String, current: String) -> String? {
+        guard let spec = HotKeySpec.parse(display) else {
+            return "Not a valid shortcut."
+        }
+        if let currentSpec = HotKeySpec.parse(current), currentSpec.identity == spec.identity {
+            return nil
+        }
+        let owned = [
+            config.hotkey, config.clipboardHotkey, config.terminalHotkey,
+            config.scratchpadHotkey, config.askHotkey, config.screenshotHotkey,
+            config.regionScreenshotHotkey, config.windowScreenshotHotkey,
+            config.recordingHotkey,
+        ].filter { $0 != current }
+        return ShortcutAvailability.message(for: spec, ownedKeys: owned)
     }
 
     private func pretty(_ raw: String) -> String {
