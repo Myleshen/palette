@@ -113,7 +113,7 @@ struct OnboardingView: View {
             }
             .padding(16)
         }
-        .frame(width: 640, height: 520)
+        .frame(width: 640, height: 640)
         .background(
             ZStack {
                 GlassBackdrop(material: .hudWindow)
@@ -134,6 +134,15 @@ struct OnboardingView: View {
                     ShortcutRecorder(value: $config.clipboardHotkey, label: "Clipboard shortcut")
                         .frame(width: 190, height: 26)
                 }
+            }
+            Section("Capture shortcuts") {
+                LabeledContent("Full screen") { Text(pretty(config.screenshotHotkey)) }
+                LabeledContent("Region") { Text(pretty(config.regionScreenshotHotkey)) }
+                LabeledContent("Window") { Text(pretty(config.windowScreenshotHotkey)) }
+                LabeledContent("Recording") { Text(pretty(config.recordingHotkey)) }
+                Text("Palette takes these keys while it runs, so they replace macOS's own screenshot shortcuts. Clear one later in Settings → Shortcuts to give it back.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Startup") {
                 Toggle("Open Palette at login", isOn: $launchAtLogin)
@@ -204,11 +213,25 @@ struct OnboardingView: View {
             .first { ToolLocator.shared.appPath(named: $0) != nil }
     }
 
+    private func pretty(_ raw: String) -> String {
+        raw.isEmpty ? "Off" : (HotKeySpec.parse(raw)?.prettyDisplay ?? raw)
+    }
+
     private func finish() {
-        let wanted = preset.providerIDs
-        config.disabledProviders = providers
-            .filter { $0.id != "apps" && $0.trigger != nil && !wanted.contains($0.id) }
+        onFinish(Self.applying(preset, to: config, providers: providers))
+    }
+
+    /// The starting set is also what Skip applies, so declining setup never
+    /// leaves all 30+ providers in the rail.
+    static func applying(
+        _ preset: Preset,
+        to config: PaletteConfig,
+        providers: [ProviderSettingsInfo]
+    ) -> PaletteConfig {
+        var updated = config
+        updated.disabledProviders = providers
+            .filter { $0.id != "apps" && $0.trigger != nil && !preset.providerIDs.contains($0.id) }
             .map(\.id)
-        onFinish(config)
+        return updated
     }
 }

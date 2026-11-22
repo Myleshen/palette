@@ -323,7 +323,13 @@ final class AskWindowState: ObservableObject {
                 if notify, unseen {
                     Log.shared.info("Ask completion notification: sound + Dock bounce", source: "ask")
                     NSSound(named: "Glass")?.play()
-                    if !NSApp.isActive { NSApp.requestUserAttention(.informationalRequest) }
+                    if !NSApp.isActive {
+                        NSApp.requestUserAttention(.informationalRequest)
+                        SystemNotification.post(
+                            title: "Answer ready",
+                            body: turns[index].question
+                        )
+                    }
                 }
             } catch {
                 guard !Task.isCancelled,

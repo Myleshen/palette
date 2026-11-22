@@ -400,7 +400,7 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   password prompt. A saved web app opened as
   `Helium --app=https://music.youtube.com --user-data-dir=…/Palette/WebApps/helium`,
   producing a standalone YouTube Music window with no tabs or address bar.
-  Pressing the Hammerspoon shortcut `ctrl+alt+m` launched the identical app-mode
+  Pressing the saved shortcut `ctrl+alt+m` launched the identical app-mode
   command instead of Safari. The 1.6.0 build offered a segmented
   Top/Center/Bottom control; the Bottom option was removed in 1.7.1 because it
   inverted the layout, and old `bottom` configs now open in the center.
@@ -461,10 +461,8 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   The installed app launched, logged `Hotkey registered: opt+space` and
   `Clipboard hotkey registered: opt+v`, and the embedded `AppIcon.icns` rendered
   from the bundle.
-- Web-app shortcuts: added an app with `ctrl+alt+f`; Palette exported
-  `~/.hammerspoon/palette-webapps.lua`, Hammerspoon reloaded and the shortcut
-  opened the URL. The generated file, `init.lua`, and `keybinds.lua` pass
-  `luajit -bl` syntax checks.
+- Web-app shortcuts: added an app with `ctrl+alt+f`; Palette registered the
+  shortcut itself and it opened the URL in its standalone app window.
 - Snapshots confirmed: app list and selection, calculator, `/neo` browse and
   freeform, `/neof`, `/zj`, `/bw` login/unlock, `/clip` text and image entries,
   `/sys`, `/theme`, external `/hello`, web search, favicon, Settings, and the

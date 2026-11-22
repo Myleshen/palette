@@ -98,16 +98,22 @@ final class AtlasProviderTests: XCTestCase {
         XCTAssertEqual(byTitle["Marked"]?.group, "proj")
         XCTAssertEqual(byTitle["Marked"]?.icon, .file(marked.path))
 
-        // .md with a rendered preview and .html use the document renderer;
-        // a .md without one falls back to QuickLook on the file itself.
-        guard case .document(let url, let kind)? = byTitle["Marked"]?.preview else {
-            return XCTFail("Marked should preview its atlas HTML")
+        // Markdown is previewed as its own source: the generated HTML page renders
+        // at a fraction of its size in the pane and is unreadable there.
+        guard case .text(let body)? = byTitle["Marked"]?.preview else {
+            return XCTFail("Marked should preview its markdown source")
         }
-        XCTAssertEqual(url, previewPath(for: marked))
-        XCTAssertEqual(kind, "html")
+        XCTAssertTrue(body.contains("# Marked"), body)
+        // HTML artifacts still use the document renderer.
         XCTAssertEqual(byTitle["Page"]?.preview, .document(url: page.path, kind: "html"))
-        XCTAssertEqual(byTitle["Edited"]?.preview, .files(paths: [edited.path]))
-        XCTAssertEqual(byTitle["Reviewed"]?.preview, .document(url: previewPath(for: reviewed), kind: "html"))
+        guard case .text(let editedBody)? = byTitle["Edited"]?.preview else {
+            return XCTFail("Edited should preview its markdown source")
+        }
+        XCTAssertTrue(editedBody.contains("# Edited"), editedBody)
+        guard case .text(let reviewedBody)? = byTitle["Reviewed"]?.preview else {
+            return XCTFail("Reviewed should preview its markdown source")
+        }
+        XCTAssertTrue(reviewedBody.contains("# Reviewed"), reviewedBody)
     }
 
     func testSearchRanksAndFilters() async throws {

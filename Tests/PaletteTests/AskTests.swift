@@ -97,16 +97,16 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(AskEndpoint.allCases.count, 2)
     }
 
-    func testAskWebSearchDefaultsOffAndParsesOn() throws {
-        XCTAssertFalse(AskConfig().webSearch)
-        XCTAssertTrue(ConfigLoader.defaultTOML().contains("web_search = false"))
+    func testAskWebSearchDefaultsOnAndParsesOff() throws {
+        XCTAssertTrue(AskConfig().webSearch)
+        XCTAssertTrue(ConfigLoader.defaultTOML().contains("web_search = true"))
         let table = try TOMLTable(string: """
         [ask]
-        web_search = true
+        web_search = false
         """)
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
-        XCTAssertTrue(parsed.ask.webSearch)
+        XCTAssertFalse(parsed.ask.webSearch)
         XCTAssertTrue(diagnostics.isEmpty)
     }
 

@@ -177,10 +177,18 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private func preview(_ entry: Entry) -> ItemPreview {
+        // The generated HTML is a whole page; inside the pane it renders at a
+        // fraction of its size and is unreadable. Show the source text instead.
+        let ext = (entry.path as NSString).pathExtension.lowercased()
+        if ext == "md" || ext == "markdown",
+           let text = try? String(contentsOfFile: entry.path, encoding: .utf8) {
+            let body = AtlasProvider.stripFrontMatter(text)
+            let limit = 6_000
+            return .text(body.count > limit ? String(body.prefix(limit)) + "\n…" : body)
+        }
         if let preview = entry.preview {
             return .document(url: preview, kind: "html")
         }
-        let ext = (entry.path as NSString).pathExtension.lowercased()
         if ext == "html" || ext == "htm" {
             return .document(url: entry.path, kind: "html")
         }

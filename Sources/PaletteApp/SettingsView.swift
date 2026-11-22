@@ -164,59 +164,6 @@ private extension View {
     }
 }
 
-/// An editable family field with type-ahead over the installed fonts. One
-/// control per family, shared by Appearance and the embedded terminal.
-private struct FontFamilyField: NSViewRepresentable {
-    @Binding var text: String
-    var families: [String]
-    var placeholder: String
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
-    }
-
-    func makeNSView(context: Context) -> NSComboBox {
-        let box = NSComboBox()
-        box.isEditable = true
-        box.completes = true
-        box.usesDataSource = false
-        box.numberOfVisibleItems = 12
-        box.addItems(withObjectValues: families)
-        box.placeholderString = placeholder
-        box.controlSize = .regular
-        box.delegate = context.coordinator
-        return box
-    }
-
-    func updateNSView(_ box: NSComboBox, context: Context) {
-        context.coordinator.text = $text
-        if box.stringValue != text { box.stringValue = text }
-        if box.objectValues.count != families.count {
-            box.removeAllItems()
-            box.addItems(withObjectValues: families)
-        }
-        box.placeholderString = placeholder
-    }
-
-    final class Coordinator: NSObject, NSComboBoxDelegate, NSTextFieldDelegate {
-        var text: Binding<String>
-
-        init(text: Binding<String>) {
-            self.text = text
-        }
-
-        func controlTextDidChange(_ notification: Notification) {
-            guard let box = notification.object as? NSComboBox else { return }
-            text.wrappedValue = box.stringValue
-        }
-
-        func comboBoxSelectionDidChange(_ notification: Notification) {
-            guard let box = notification.object as? NSComboBox else { return }
-            text.wrappedValue = box.stringValue
-        }
-    }
-}
-
 private enum SaveState: Equatable {
     case idle
     case pending
@@ -247,6 +194,8 @@ struct SettingsView: View {
     @State private var regionRecordToken = 0
     @State private var windowRecordToken = 0
     @State private var recordingRecordToken = 0
+    /// Validation messages from a recorder, keyed like `shortcutRow`'s id.
+    @State private var shortcutErrors: [String: String] = [:]
     @State private var settingsSearch = ""
     @FocusState private var settingsSearchFocused: Bool
     @State private var settingsJump: SettingsJump?
@@ -277,11 +226,13 @@ struct SettingsView: View {
     private let keepAwake: KeepAwakeService
     private let themesDirectory: URL
     private let providers: [ProviderSettingsInfo]
+    private let commands: [CatalogCommand]
     private let diagnostics: [String]
     private let initialWebAppBrowser: String
     private let onApply: (PaletteConfig) -> String?
     private let onOpen: (URL) -> Void
     private let onExportBackup: () -> Void
+    private let panelHeightForRows: (Int) -> CGFloat
 
     private let contentWidth: CGFloat = 640
     private let providerTabWidth: CGFloat = 26
@@ -297,10 +248,12 @@ struct SettingsView: View {
         themesDirectory: URL,
         accessibilityTrusted: Bool,
         providers: [ProviderSettingsInfo],
+        commands: [CatalogCommand],
         diagnostics: [String],
         onApply: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
-        onExportBackup: @escaping () -> Void
+        onExportBackup: @escaping () -> Void,
+        panelHeightForRows: @escaping (Int) -> CGFloat
     ) {
         _config = State(initialValue: config)
         _savedConfig = State(initialValue: config)
@@ -345,16 +298,23 @@ struct SettingsView: View {
         self.keepAwake = keepAwake
         self.themesDirectory = themesDirectory
         self.providers = providers
+        self.commands = commands
         self.diagnostics = diagnostics
         self.initialWebAppBrowser = config.webAppBrowser
         self.onApply = onApply
         self.onOpen = onOpen
         self.onExportBackup = onExportBackup
+        self.panelHeightForRows = panelHeightForRows
     }
 
     private var theme: Theme { themeManager.theme }
     private var muted: Color { theme.color(theme.palette.fgMuted) }
     private var danger: Color { theme.color(theme.palette.danger) }
+
+    /// Exactly what the panel renders for the current rows and screen.
+    private var derivedPanelHeight: CGFloat {
+        panelHeightForRows(config.window.launcherRows(for: screenSize))
+    }
 
     /// The light palette's accent is only 3.4:1 on the card fill; darken it
     /// just for light mode so links stay readable.
@@ -435,6 +395,10 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsEdit)) { note in
             guard let edit = note.object as? [String: String] else { return }
             applyScriptEdit(edit)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsJump)) { note in
+            guard let anchor = note.object as? String else { return }
+            settingsJump = SettingsJump(anchor: anchor, token: (settingsJump?.token ?? 0) + 1)
         }
         .frame(minWidth: 820, minHeight: 560)
         .background {
@@ -881,7 +845,7 @@ struct SettingsView: View {
     private var visibleRowsBinding: Binding<Int> {
         Binding(
             get: { config.window.launcherRows(for: screenSize) },
-            set: { config.window.visibleRows = min(10, max(5, $0)) }
+            set: { config.window.visibleRows = min(11, max(6, $0)) }
         )
     }
 
@@ -981,6 +945,7 @@ struct SettingsView: View {
             .init(title: "Terminal app", tab: .general, anchor: "row-Terminal", keywords: "terminal kitty ghostty external app"),
             .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries poll clear retention secrets"),
             .init(title: "Launcher position", tab: .launcher, anchor: "launcher-position", keywords: "top center position"),
+            .init(title: "Provider bar", tab: .launcher, anchor: "launcher-tabs", keywords: "provider bar top left hidden tabs"),
             .init(title: "Search placeholder", tab: .launcher, anchor: "row-Placeholder", keywords: "search hint placeholder text"),
             .init(title: "App order", tab: .launcher, anchor: "launcher-tabs", keywords: "alphabetical frequent sorting"),
             .init(title: "Fit to the active screen", tab: .launcher, anchor: "launcher-tabs", keywords: "fit screen auto size"),
@@ -1002,6 +967,7 @@ struct SettingsView: View {
             .init(title: "Scratchpad shortcut", tab: .shortcuts, anchor: "row-Scratchpad shortcut", keywords: "hotkey shortcut scratchpad"),
             .init(title: "Ask shortcut", tab: .shortcuts, anchor: "row-Ask shortcut", keywords: "hotkey shortcut ask"),
             .init(title: "Screenshot shortcuts", tab: .shortcuts, anchor: "shortcuts-capture", keywords: "screenshot screen region window recording hotkey"),
+            .init(title: "Custom hotkeys", tab: .shortcuts, anchor: "shortcuts-bindings", keywords: "binding launch command provider url shortcut hotkey"),
             .init(title: "Web search", tab: .search, anchor: "row-Show web results in search", keywords: "web search engine google duckduckgo github youtube"),
             .init(title: "Search engines", tab: .search, anchor: "search-engines", keywords: "engine url keyword bang !g"),
             .init(title: "Bookmarks", tab: .search, anchor: "search-bookmarks", keywords: "bookmark url keywords browser"),
@@ -1156,6 +1122,16 @@ struct SettingsView: View {
         }
 
         next.webSearchEngines = engines.filter { engineIssue($0) == nil }
+        // Rows still being filled in stay on screen but are not written. An
+        // invalid or duplicate key keeps the same rule as the built-in rows.
+        next.bindings = config.bindings.enumerated().compactMap { index, binding in
+            let keys = binding.keys.trimmingCharacters(in: .whitespaces)
+            let value = binding.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !keys.isEmpty, !value.isEmpty, bindingIssue(keys: keys, index: index) == nil else {
+                return nil
+            }
+            return binding
+        }
         let aliasProblems = aliasIssues
         var aliasMap: [String: [String]] = [:]
         for provider in providers {
@@ -1228,6 +1204,8 @@ struct SettingsView: View {
         case "editor_open_with": config.editorOpenWith = value
         case "web_app_browser": config.webAppBrowser = value
         case "search_position": config.searchPosition = SearchPosition(rawValue: value) ?? .top
+        case "provider_bar": config.window.providerBar = ProviderBarPlacement(rawValue: value) ?? .top
+        case "width": config.window.width = Double(value) ?? 0
         case "visible_rows": config.window.visibleRows = Int(value) ?? 0
         case "provider_filter": providerFilter = value
         case "settings_search": settingsSearch = value
@@ -1518,6 +1496,16 @@ struct SettingsView: View {
             }
 
             card("Tabs and order", anchor: "launcher-tabs") {
+                pickerRow("Provider bar") {
+                    Picker("Provider bar", selection: $config.window.providerBar) {
+                        Text("Top").tag(ProviderBarPlacement.top)
+                        Text("Left").tag(ProviderBarPlacement.left)
+                        Text("Hidden").tag(ProviderBarPlacement.hidden)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+                }
                 pickerRow("App order") {
                     Picker("App order", selection: $config.appSort) {
                         Text("Alphabetical").tag(AppSort.alphabetical)
@@ -1528,16 +1516,19 @@ struct SettingsView: View {
                 }
                 toggleRow("Fit to the active screen", isOn: $config.window.autoSize)
             } footer: {
-                Text("Provider tabs are the chip strip above the list. Turn individual providers on or off under Providers. Fit sizes the launcher to the screen under the pointer.")
+                Text("Provider tabs are the chip strip above the list, or the rail on the left. Hidden keeps Tab and /trigger for switching. Turn individual providers on or off under Providers. Fit sizes the launcher to the screen under the pointer.")
             }
 
             card("Size", anchor: "launcher-size") {
                 numericRow("Width", value: widthBinding, in: 560...1_400, step: 20, unit: "pt",
                            automatic: widthAutomatic,
                            automaticValue: "\(Int(config.window.launcherWidth(for: screenSize))) pt")
-                numericRow("Visible rows", value: visibleRowsBinding, in: 5...10, step: 1,
+                numericRow("Rows", value: visibleRowsBinding, in: 6...11, step: 1,
                            automatic: rowsAutomatic,
                            automaticValue: "\(config.window.launcherRows(for: screenSize))")
+                Text("\(Int(derivedPanelHeight.rounded())) pt on this display")
+                    .font(.caption)
+                    .foregroundStyle(muted)
                 numericRow("Scale", value: scalePercentBinding, in: 80...160, step: 5, unit: "%")
                 pickerRow("Preview") {
                     Picker("Preview", selection: $config.window.previewLayout) {
@@ -1594,12 +1585,7 @@ struct SettingsView: View {
                     }
                 }
                 fieldRow("Font family") {
-                    FontFamilyField(
-                        text: $config.terminalSession.font,
-                        families: fontFamilies,
-                        placeholder: "\(theme.typography.mono) — inherited"
-                    )
-                    .frame(maxWidth: 380, alignment: .leading)
+                    fontFamilyPicker($config.terminalSession.font, inherited: theme.typography.mono)
                 }
                 numericRow("Font size", value: $config.terminalSession.fontSize,
                            in: 0...48, step: 1, unit: "pt")
@@ -1644,25 +1630,15 @@ struct SettingsView: View {
             }
 
             card("Typography", anchor: "appearance-typography") {
-                fieldRow("UI family", help: "Leave empty to inherit the theme's \(theme.typography.family).") {
-                    FontFamilyField(
-                        text: $config.typography.uiFamily,
-                        families: fontFamilies,
-                        placeholder: "\(theme.typography.family) — inherited"
-                    )
-                    .frame(maxWidth: 380, alignment: .leading)
+                fieldRow("UI family", help: "Leave on Inherit to use the theme's \(theme.typography.family).") {
+                    fontFamilyPicker($config.typography.uiFamily, inherited: theme.typography.family)
                 }
                 numericRow("UI size", value: $config.typography.uiSize,
                            in: 9...48, step: 1, unit: "pt",
                            automatic: uiSizeAutomatic,
                            automaticValue: "\(Int(theme.typography.size)) pt")
-                fieldRow("Mono family", help: "Used by code, terminal previews, and monospaced values.") {
-                    FontFamilyField(
-                        text: $config.typography.monoFamily,
-                        families: fontFamilies,
-                        placeholder: "\(theme.typography.mono) — inherited"
-                    )
-                    .frame(maxWidth: 380, alignment: .leading)
+                fieldRow("Mono family", help: "Used by code, terminal previews, and monospaced values. Inherit uses the theme's \(theme.typography.mono).") {
+                    fontFamilyPicker($config.typography.monoFamily, inherited: theme.typography.mono)
                 }
                 numericRow("Mono size", value: $config.typography.monoSize,
                            in: 9...48, step: 1, unit: "pt",
@@ -1686,7 +1662,7 @@ struct SettingsView: View {
                     config.typography = TypographyConfig()
                 }
             } footer: {
-                Text("Automatic uses the theme's size. Family fields accept any installed font and suggest matches as you type.")
+                Text("Automatic uses the theme's size. Family pickers list installed fonts. Inherit uses the theme's font; a configured family that is no longer installed stays selected and is marked missing.")
             }
 
             card("Glass and materials") {
@@ -1708,6 +1684,27 @@ struct SettingsView: View {
         NSFontManager.shared.availableFontFamilies.sorted()
     }
 
+    /// Installed fonts plus the configured family even when it is gone, so a
+    /// stale value is shown as missing instead of silently reset to Inherit.
+    private func fontChoices(_ selected: String, installed: [String]) -> [String] {
+        let clean = selected.trimmingCharacters(in: .whitespaces)
+        guard !clean.isEmpty, !installed.contains(clean) else { return installed }
+        return [clean] + installed
+    }
+
+    private func fontFamilyPicker(_ value: Binding<String>, inherited: String) -> some View {
+        let installed = fontFamilies
+        return Picker("Font family", selection: value) {
+            Text("Inherit — \(inherited)").tag("")
+            ForEach(fontChoices(value.wrappedValue, installed: installed), id: \.self) { family in
+                Text(installed.contains(family) ? family : "\(family) (missing)")
+                    .tag(family)
+            }
+        }
+        .labelsHidden()
+        .frame(maxWidth: 380, alignment: .leading)
+    }
+
     private func displayName(_ name: String) -> String {
         ThemeLoader.catalog(themesDirectory: themesDirectory).first(where: { $0.name == name })?.displayName
             ?? name.split(separator: "-").map { $0.capitalized }.joined(separator: " ")
@@ -1718,37 +1715,154 @@ struct SettingsView: View {
     private var shortcuts: some View {
         VStack(alignment: .leading, spacing: 20) {
             card("Global shortcuts", anchor: "shortcuts-global") {
-                shortcutRow("Launcher shortcut", value: $config.hotkey,
+                shortcutRow("Launcher shortcut", id: "launcher", value: $config.hotkey,
                             token: $launcherRecordToken, label: "Launcher hotkey", required: true)
-                shortcutRow("Clipboard shortcut", value: $config.clipboardHotkey,
+                shortcutRow("Clipboard shortcut", id: "clipboard", value: $config.clipboardHotkey,
                             token: $clipboardRecordToken, label: "Clipboard hotkey", required: true)
-                shortcutRow("Terminal shortcut", value: $config.terminalHotkey,
+                shortcutRow("Terminal shortcut", id: "terminal", value: $config.terminalHotkey,
                             token: $terminalRecordToken, label: "Terminal hotkey")
-                shortcutRow("Scratchpad shortcut", value: $config.scratchpadHotkey,
+                shortcutRow("Scratchpad shortcut", id: "scratchpad", value: $config.scratchpadHotkey,
                             token: $scratchpadRecordToken, label: "Scratchpad hotkey")
-                shortcutRow("Ask shortcut", value: $config.askHotkey,
+                shortcutRow("Ask shortcut", id: "ask", value: $config.askHotkey,
                             token: $askRecordToken, label: "Ask hotkey")
             } footer: {
                 Text("Click a field and press the keys you want. Press Delete to clear it, or click ✕. A cleared shortcut is disabled. The launcher and clipboard shortcuts are required.")
             }
 
             card("Screenshots and recording", anchor: "shortcuts-capture") {
-                shortcutRow("Screen shortcut", value: $config.screenshotHotkey,
+                shortcutRow("Screen shortcut", id: "screen", value: $config.screenshotHotkey,
                             token: $screenshotRecordToken, label: "Screen hotkey")
-                shortcutRow("Region shortcut", value: $config.regionScreenshotHotkey,
+                shortcutRow("Region shortcut", id: "region", value: $config.regionScreenshotHotkey,
                             token: $regionRecordToken, label: "Region hotkey")
-                shortcutRow("Window shortcut", value: $config.windowScreenshotHotkey,
+                shortcutRow("Window shortcut", id: "window", value: $config.windowScreenshotHotkey,
                             token: $windowRecordToken, label: "Window hotkey")
-                shortcutRow("Recording shortcut", value: $config.recordingHotkey,
+                shortcutRow("Recording shortcut", id: "recording", value: $config.recordingHotkey,
                             token: $recordingRecordToken, label: "Recording hotkey")
             } footer: {
                 Text("⌘⇧3 and ⌘⇧4 take over the macOS screenshot keys while they are set here. Clear one to give it back.")
+            }
+
+            card("Providers & actions", anchor: "shortcuts-catalog") {
+                if commands.isEmpty {
+                    Text("Reload the configuration to list the available providers and app commands.")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                }
+                ForEach(commandGroups, id: \.self) { group in
+                    Text(group)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(muted)
+                        .padding(.top, 4)
+                    ForEach(commands.filter { $0.group == group }) { command in
+                        catalogRow(command)
+                    }
+                }
+            } footer: {
+                Text("Every provider and app command can have its own global key; nothing is assigned by default. A key that macOS or another app already owns cannot be recorded: this check only runs when you record, since there is no public API to list other apps' shortcuts.")
+            }
+
+            card("Custom hotkeys", anchor: "shortcuts-bindings") {
+                if config.bindings.isEmpty {
+                    Text("Run an app, a shell command, a provider trigger, or a URL from a global key. Example: ctrl+alt+g → open Ghostty.")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(config.bindings.indices, id: \.self) { index in
+                    bindingRow(index)
+                }
+                Button("Add hotkey") {
+                    config.bindings.append(HotkeyBinding(keys: ""))
+                }
+                .controlSize(.small)
+            } footer: {
+                Text("A binding never replaces the built-in shortcuts. An invalid, repeated, or already-taken key stays on screen with an error and is not written to config.toml.")
             }
 
             Text(shortcutSummary)
                 .font(.caption)
                 .foregroundStyle(hasShortcutConflict ? .red : .secondary)
         }
+    }
+
+    private func bindingRow(_ index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                ShortcutRecorder(
+                    value: $config.bindings[index].keys,
+                    label: "Custom hotkey",
+                    validate: { candidate in
+                        validateCandidate(candidate, id: "binding-\(index)", current: config.bindings[index].keys)
+                    },
+                    onValidation: { message in
+                        recordValidation("binding-\(index)", message: message)
+                    }
+                )
+                .frame(width: 180, height: 26)
+                Picker("Action", selection: $config.bindings[index].action) {
+                    ForEach(HotkeyAction.allCases, id: \.self) { action in
+                        Text(action.title).tag(action)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 130)
+                TextField(bindingPlaceholder(config.bindings[index].action), text: $config.bindings[index].value)
+                    .settingsField()
+                Button {
+                    guard config.bindings.indices.contains(index) else { return }
+                    config.bindings.remove(at: index)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(muted)
+                .help("Delete hotkey")
+                .accessibilityLabel("Delete custom hotkey")
+            }
+            if let issue = shortcutErrors["binding-\(index)"]
+                ?? bindingIssue(keys: config.bindings[index].keys, index: index) {
+                Text(issue)
+                    .font(.caption)
+                    .foregroundStyle(danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func bindingPlaceholder(_ action: HotkeyAction) -> String {
+        switch action {
+        case .launch: return "App name, path, or URL"
+        case .command: return "Shell command"
+        case .provider: return "Provider trigger, e.g. calc"
+        case .url: return "https://…"
+        }
+    }
+
+    /// Nil when the row is usable (or still being filled in). Reports the same
+    /// conditions the runtime drops with a log warning.
+    private func bindingIssue(keys: String, index: Int) -> String? {
+        let trimmed = keys.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        guard let spec = HotKeySpec.parse(trimmed) else {
+            return "Not a valid shortcut. Click the field and press the keys you want."
+        }
+        let reserved = hotkeyValues
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .compactMap { HotKeySpec.parse($0) }
+        if reserved.contains(where: { $0.identity == spec.identity }) {
+            return "This shortcut is already used by a built-in hotkey."
+        }
+        for (other, binding) in config.bindings.enumerated() where other != index {
+            if HotKeySpec.parse(binding.keys)?.identity == spec.identity {
+                return "This shortcut is used more than once. Each binding must be unique."
+            }
+        }
+        for shortcut in config.shortcuts {
+            if HotKeySpec.parse(shortcut.keys)?.identity == spec.identity {
+                return "This shortcut is already used by a provider or app command."
+            }
+        }
+        return nil
     }
 
     private var shortcutSummary: String {
@@ -1774,8 +1888,142 @@ struct SettingsView: View {
         return Set(values).count != values.count
     }
 
+    // MARK: Catalogue shortcuts
+
+    private var commandGroups: [String] {
+        var groups: [String] = []
+        for command in commands where !groups.contains(command.group) {
+            groups.append(command.group)
+        }
+        return groups
+    }
+
+    private func shortcutBinding(for command: String) -> Binding<String> {
+        Binding(
+            get: { config.shortcuts.first(where: { $0.command == command })?.keys ?? "" },
+            set: { keys in
+                if let index = config.shortcuts.firstIndex(where: { $0.command == command }) {
+                    config.shortcuts[index].keys = keys
+                } else {
+                    config.shortcuts.append(ShortcutBinding(command: command, keys: keys))
+                }
+            }
+        )
+    }
+
+    private func shortcutState(_ command: String) -> String {
+        let keys = config.shortcuts.first(where: { $0.command == command })?.keys ?? ""
+        guard !keys.isEmpty else { return "Not set" }
+        return HotKeySpec.parse(keys)?.prettyDisplay ?? keys
+    }
+
+    /// Every key Palette itself owns right now, by stable row id. Web-app keys
+    /// are not in this list; the probe's live set catches those.
+    private var ownShortcutKeys: [(id: String, keys: String)] {
+        [
+            ("launcher", config.hotkey), ("clipboard", config.clipboardHotkey),
+            ("terminal", config.terminalHotkey), ("scratchpad", config.scratchpadHotkey),
+            ("ask", config.askHotkey), ("screen", config.screenshotHotkey),
+            ("region", config.regionScreenshotHotkey), ("window", config.windowScreenshotHotkey),
+            ("recording", config.recordingHotkey),
+        ] + config.shortcuts.map { ($0.command, $0.keys) }
+            + config.bindings.enumerated().map { ("binding-\($0.offset)", $0.element.keys) }
+    }
+
+    private func paletteConflict(_ candidate: HotKeySpec, excluding id: String) -> Bool {
+        ownShortcutKeys.contains { entry in
+            guard entry.id != id, let spec = HotKeySpec.parse(entry.keys) else { return false }
+            return spec.identity == candidate.identity
+        }
+    }
+
+    /// Recorder gate: our own keys first, then a throwaway Carbon registration
+    /// to learn whether macOS or another app already owns the pair.
+    private func validateCandidate(_ display: String, id: String, current: String) -> String? {
+        guard let spec = HotKeySpec.parse(display) else {
+            return "Not a valid shortcut."
+        }
+        // Recording the key a row already has is a no-op, not a conflict.
+        if let currentSpec = HotKeySpec.parse(current), currentSpec.identity == spec.identity {
+            return nil
+        }
+        return ShortcutAvailability.message(
+            for: spec,
+            ownedKeys: ownShortcutKeys.filter { $0.id != id }.map(\.keys)
+        )
+    }
+
+    private func recordValidation(_ id: String, message: String?) {
+        if let message {
+            shortcutErrors[id] = message
+        } else {
+            shortcutErrors[id] = nil
+        }
+    }
+
+    private func catalogIssue(_ command: CatalogCommand) -> String? {
+        if let error = shortcutErrors[command.id] { return error }
+        let keys = config.shortcuts.first(where: { $0.command == command.id })?.keys ?? ""
+        guard !keys.isEmpty else { return nil }
+        guard let spec = HotKeySpec.parse(keys) else {
+            return "Not a valid shortcut. Click the field and press the keys you want."
+        }
+        if paletteConflict(spec, excluding: command.id) {
+            return "This shortcut is used more than once."
+        }
+        return nil
+    }
+
+    private func catalogRow(_ command: CatalogCommand) -> some View {
+        let value = shortcutBinding(for: command.id)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text(command.title)
+                    .font(theme.font(size: 13))
+                    .lineLimit(1)
+                    .frame(width: 180, alignment: .leading)
+                Text(shortcutState(command.id))
+                    .font(.caption)
+                    .foregroundStyle(muted)
+                    .lineLimit(1)
+                    .frame(width: 90, alignment: .leading)
+                ShortcutRecorder(
+                    value: value,
+                    label: command.title,
+                    validate: { candidate in
+                        validateCandidate(candidate, id: command.id, current: value.wrappedValue)
+                    },
+                    onValidation: { message in
+                        recordValidation(command.id, message: message)
+                    }
+                )
+                .frame(width: 180, height: 26)
+                if !value.wrappedValue.isEmpty {
+                    Button {
+                        value.wrappedValue = ""
+                        recordValidation(command.id, message: nil)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(muted)
+                    .help("Clear \(command.title)")
+                    .accessibilityLabel("Clear \(command.title)")
+                }
+                Spacer(minLength: 0)
+            }
+            if let issue = catalogIssue(command) {
+                Text(issue)
+                    .font(.caption)
+                    .foregroundStyle(danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private func shortcutRow(
         _ title: String,
+        id: String,
         value: Binding<String>,
         token: Binding<Int>,
         label: String,
@@ -1785,11 +2033,22 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(theme.font(size: 13))
             HStack(spacing: 8) {
-                ShortcutRecorder(value: value, label: label, recordToken: token.wrappedValue)
-                    .frame(width: 210, height: 26)
+                ShortcutRecorder(
+                    value: value,
+                    label: label,
+                    recordToken: token.wrappedValue,
+                    validate: { candidate in
+                        validateCandidate(candidate, id: id, current: value.wrappedValue)
+                    },
+                    onValidation: { message in
+                        recordValidation(id, message: message)
+                    }
+                )
+                .frame(width: 210, height: 26)
                 if !value.wrappedValue.isEmpty {
                     Button {
                         value.wrappedValue = ""
+                        recordValidation(id, message: nil)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                     }
@@ -1803,7 +2062,7 @@ struct SettingsView: View {
                     .accessibilityLabel("Record \(label)")
                 Spacer(minLength: 0)
             }
-            if let issue = hotkeyIssue(value.wrappedValue, required: required, among: "") {
+            if let issue = shortcutErrors[id] ?? hotkeyIssue(value.wrappedValue, required: required, among: "") {
                 Text(issue).font(.caption).foregroundStyle(danger)
             }
         }
@@ -2209,13 +2468,17 @@ struct SettingsView: View {
                 numericRow("Max answer tokens", value: $config.ask.maxTokens,
                            in: 32...8_192, step: 32)
                 toggleRow("Fall back to free or small models when quota runs out", isOn: $config.ask.fallback)
-                toggleRow("Play a sound when an answer arrives", isOn: $config.ask.notify)
+                toggleRow("Notify when an answer arrives (sound, banner, Dock badge)", isOn: $config.ask.notify)
+                Text("Banners need Palette allowed in System Settings → Notifications. Sound and the Dock badge work either way.")
+                    .font(.caption)
+                    .foregroundStyle(muted)
                 toggleRow("Search the web once per turn (DuckDuckGo)", isOn: $config.ask.webSearch)
             } footer: {
                 Text("Free models are listed first. If a free model is rate-limited, Ask tries the next free option, then the cheapest paid model from an endpoint where you have a key.")
             }
 
             card("API key") {
+
                 if askKeyStored {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
@@ -2710,7 +2973,7 @@ struct SettingsView: View {
         case .appearance:
             return "Restores the default theme and the theme's typography."
         case .shortcuts:
-            return "Restores every global shortcut to its default."
+            return "Restores every global shortcut to its default. Custom hotkeys are left alone."
         case .search:
             return "Restores web search, engines, the web-app browser, screenshots, recordings, and cheatsheet folders. Bookmarks and saved files are left alone."
         case .ask:
@@ -2811,6 +3074,8 @@ extension Notification.Name {
     /// Script-only hook: posted with a one-entry dictionary so `PALETTE_SCRIPT`
     /// can exercise the same auto-apply path a control uses.
     static let paletteSettingsEdit = Notification.Name("palette.settings.edit")
+    /// Script-only hook: scrolls the Settings detail pane to a search anchor.
+    static let paletteSettingsJump = Notification.Name("palette.settings.jump")
     /// Clears the Settings search field so a scripted snapshot is canonical.
     static let paletteSettingsClearSearch = Notification.Name("palette.settings.clearSearch")
 }
@@ -2821,6 +3086,10 @@ struct ShortcutRecorder: NSViewRepresentable {
     @Binding var value: String
     var label: String
     var recordToken: Int = 0
+    /// Returns an error message to refuse the key, or nil to accept it.
+    var validate: ((String) -> String?)?
+    /// Called with the refusal message, or nil when a key is accepted.
+    var onValidation: ((String?) -> Void)?
 
     final class Coordinator {
         var lastToken: Int = 0
@@ -2835,6 +3104,8 @@ struct ShortcutRecorder: NSViewRepresentable {
         view.onChange = { recorded in
             value = recorded
         }
+        view.validate = validate
+        view.onValidation = onValidation
         context.coordinator.lastToken = recordToken
         return view
     }
@@ -2842,6 +3113,8 @@ struct ShortcutRecorder: NSViewRepresentable {
     func updateNSView(_ nsView: RecorderView, context: Context) {
         nsView.label = label
         nsView.value = value
+        nsView.validate = validate
+        nsView.onValidation = onValidation
         guard recordToken != context.coordinator.lastToken else { return }
         context.coordinator.lastToken = recordToken
         DispatchQueue.main.async {
@@ -2861,6 +3134,8 @@ final class RecorderView: NSView {
         didSet { setAccessibilityLabel(label) }
     }
     var onChange: ((String) -> Void)?
+    var validate: ((String) -> String?)?
+    var onValidation: ((String?) -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -2997,16 +3272,22 @@ final class RecorderView: NSView {
             NSSound.beep()
             return nil
         }
+        if let message = validate?(spec.display) {
+            NSSound.beep()
+            finishRecording(nil, rejection: message)
+            return nil
+        }
         finishRecording(spec.display)
         return nil
     }
 
-    private func finishRecording(_ display: String?) {
+    private func finishRecording(_ display: String?, rejection: String? = nil) {
         stopRecording()
         if let display {
             value = display
             onChange?(display)
         }
+        onValidation?(rejection)
         window?.makeFirstResponder(nil)
         needsDisplay = true
     }
@@ -3022,6 +3303,11 @@ final class RecorderView: NSView {
         }
         guard let spec = HotKeySpec.from(event: event) else {
             NSSound.beep()
+            return
+        }
+        if let message = validate?(spec.display) {
+            NSSound.beep()
+            finishRecording(nil, rejection: message)
             return
         }
         finishRecording(spec.display)

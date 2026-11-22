@@ -129,10 +129,10 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 6)
 
         try "visible_rows = 99\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 10)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 11)
 
         try "visible_rows = 2\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 5)
+        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 6)
     }
 
     func testUnitConversion() throws {
@@ -292,13 +292,13 @@ final class CoreTests: XCTestCase {
     func testWindowConfigScaleAndOverrides() {
         var window = WindowConfig()
         XCTAssertEqual(window.launcherWidth, 680)
-        XCTAssertEqual(window.launcherMaxHeight, 720)
+        XCTAssertEqual(window.launcherMaxHeight, 820)
         XCTAssertEqual(window.launcherRows, 7)
         XCTAssertEqual(window.terminalPanelWidth, 1000)
 
         window.scale = 1.25
         XCTAssertEqual(window.launcherWidth, 850)
-        XCTAssertEqual(window.launcherMaxHeight, 900)
+        XCTAssertEqual(window.launcherMaxHeight, 1025)
         XCTAssertEqual(window.launcherRows, 9)
         XCTAssertEqual(window.clipboardPanelWidth, 1100)
 
@@ -308,34 +308,36 @@ final class CoreTests: XCTestCase {
         window.scale = 3
         XCTAssertEqual(window.effectiveScale, 1.6, "scale clamps to 1.6")
         window.visibleRows = 20
-        XCTAssertEqual(window.launcherRows, 10, "rows clamp to 10")
+        XCTAssertEqual(window.launcherRows, 11, "rows clamp to 11")
     }
 
     func testAutoSizeFollowsTheScreen() {
         var window = WindowConfig()
         window.autoSize = true
 
-        // MacBook 13" (landscape 1470 x 830 usable)
-        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 662)
-        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1470, height: 830)), 6)
-
-        // 1440p ultrawide
-        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 5120, height: 1400)), 980)
-        XCTAssertEqual(window.launcherRows(for: CGSize(width: 5120, height: 1400)), 9)
-
-        // Portrait 1080 x 1920: most of the width, fewer rows than it could fit
-        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1080, height: 1880)), 886)
-        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1080, height: 1880)), 10)
+        // A 13" laptop is the reference; bigger displays scale up and clamp.
+        let sizes: [(Double, Double, Double, Int)] = [
+            (1440, 900, 700, 7),
+            (1680, 1050, 816, 8),
+            (1920, 1080, 933, 8),
+            (2560, 1440, 1000, 11),
+            (3440, 1440, 1000, 11),
+        ]
+        for (width, height, expectedWidth, expectedRows) in sizes {
+            let screen = CGSize(width: width, height: height)
+            XCTAssertEqual(window.launcherWidth(for: screen), expectedWidth)
+            XCTAssertEqual(window.launcherRows(for: screen), expectedRows)
+        }
 
         // An explicit width still wins over auto
         window.width = 900
-        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 900)
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1440, height: 900)), 900)
 
         // Turning auto off falls back to the fixed default
         window.width = 0
         window.autoSize = false
-        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1470, height: 830)), 680)
-        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1470, height: 830)), 7)
+        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1440, height: 900)), 680)
+        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1440, height: 900)), 7)
     }
 
     func testWindowConfigParsesFromTOML() throws {
@@ -390,8 +392,9 @@ final class CoreTests: XCTestCase {
 
         let loaded = ConfigLoader.load(paths: paths).config.window
         XCTAssertEqual(loaded.previewLayout, .auto)
-        // Portrait: the beside pane (~880) does not fit inside 1080 - 24.
-        let portrait = CGSize(width: 1080, height: 1920)
+        // A narrow portrait screen: the beside pane (~828) does not fit in
+        // 800 - 24 once auto width clamps to its 640pt floor.
+        let portrait = CGSize(width: 800, height: 1280)
         XCTAssertEqual(loaded.resolvedPreviewLayout(
             screenWidth: Double(portrait.width),
             previewPanelWidth: loaded.previewWidth(for: portrait)), .below)
@@ -671,6 +674,65 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(HotKeySpec.parse("cmd+shift+3")?.display, "cmd+shift+3")
     }
 
+    func testHotkeyBindingsParseRenderAndRoundTrip() throws {
+        var config = PaletteConfig()
+        config.bindings = [
+            HotkeyBinding(keys: "ctrl+alt+g", action: .launch, value: "Ghostty"),
+            HotkeyBinding(keys: "ctrl+alt+k", action: .command, value: "echo hi >> /tmp/palette-bindings"),
+            HotkeyBinding(keys: "ctrl+alt+c", action: .provider, value: "calc"),
+            HotkeyBinding(keys: "ctrl+alt+d", action: .url, value: "https://example.com"),
+        ]
+        let rendered = ConfigWriter.render(config)
+        XCTAssertEqual(rendered.components(separatedBy: "[[binding]]").count - 1, 4)
+        let table = try TOMLTable(string: rendered)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.bindings, config.bindings)
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testHotkeyBindingParseSkipsInvalidRows() throws {
+        let table = try TOMLTable(string: """
+        [[binding]]
+        keys = "ctrl+alt+g"
+        action = "launch"
+        value = "Ghostty"
+
+        [[binding]]
+        keys = ""
+        action = "command"
+        value = "echo hi"
+
+        [[binding]]
+        keys = "ctrl+alt+x"
+        action = "explode"
+        value = "x"
+
+        [[binding]]
+        keys = "ctrl+alt+y"
+        action = "url"
+        value = "https://example.com"
+        """)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.bindings.map(\.keys), ["ctrl+alt+g", "ctrl+alt+y"])
+        XCTAssertEqual(diagnostics.count, 2)
+    }
+
+    func testHotkeyBindingsRejectInvalidDuplicateAndReservedKeys() {
+        let bindings = [
+            HotkeyBinding(keys: "ctrl+alt+g", action: .launch, value: "Ghostty"),
+            HotkeyBinding(keys: "alt+ctrl+g", action: .url, value: "https://example.com"),
+            HotkeyBinding(keys: "ctrl+shift+nonsense", action: .command, value: "echo hi"),
+            HotkeyBinding(keys: "cmd+shift+3", action: .launch, value: "Photos"),
+            HotkeyBinding(keys: "ctrl+alt+k", action: .command, value: ""),
+            HotkeyBinding(keys: "ctrl+alt+l", action: .provider, value: "calc"),
+        ]
+        let plan = HotKeyBindings.usable(bindings, reserved: ["cmd+shift+3"])
+        XCTAssertEqual(plan.usable.map(\.keys), ["ctrl+alt+g", "ctrl+alt+l"])
+        XCTAssertEqual(plan.issues.count, 4)
+    }
+
     func testShortcutRecorderTurnsKeyPressIntoCanonicalSpec() {
         let event = NSEvent.keyEvent(
             with: .keyDown,
@@ -747,5 +809,132 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(result.theme.effectiveRowHeight, 38, accuracy: 0.01)
         XCTAssertEqual(result.theme.list.selection, "bar")
         XCTAssertTrue(result.diagnostics.isEmpty)
+    }
+
+    func testProviderBarDefaultsToTopAndRoundTrips() throws {
+        XCTAssertEqual(PaletteConfig().window.providerBar, .top)
+        for placement in ProviderBarPlacement.allCases {
+            var config = PaletteConfig()
+            config.window.providerBar = placement
+            let rendered = ConfigWriter.render(config)
+            XCTAssertTrue(rendered.contains("provider_bar = \"\(placement.rawValue)\""))
+            var diagnostics: [Diagnostic] = []
+            let parsed = try ConfigLoader.parse(
+                TOMLTable(string: rendered),
+                diagnostics: &diagnostics
+            )
+            XCTAssertEqual(parsed.window.providerBar, placement)
+            XCTAssertTrue(diagnostics.isEmpty)
+        }
+        var parseDiagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(
+            TOMLTable(string: "[window]\nprovider_bar = \"hidden\"\n"),
+            diagnostics: &parseDiagnostics
+        )
+        XCTAssertEqual(parsed.window.providerBar, .hidden)
+    }
+
+    func testShortcutRowsRoundTripAndKeepUnknownCommands() throws {
+        var config = PaletteConfig()
+        config.shortcuts = [
+            ShortcutBinding(command: "provider.calc", keys: "ctrl+alt+c"),
+            ShortcutBinding(command: "app.quit", keys: ""),
+            ShortcutBinding(command: "provider.future", keys: "ctrl+alt+f"),
+        ]
+        let rendered = ConfigWriter.render(config)
+        XCTAssertEqual(rendered.components(separatedBy: "[[shortcut]]").count - 1, 3)
+        var diagnostics: [Diagnostic] = []
+        let parsed = try ConfigLoader.parse(TOMLTable(string: rendered), diagnostics: &diagnostics)
+        XCTAssertEqual(parsed.shortcuts, config.shortcuts)
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testShortcutResolverRejectsDuplicatesAndUnknownCommands() {
+        let commands = [
+            CatalogCommand(
+                id: "provider.calc",
+                title: "Open /calc",
+                group: CommandCatalog.providerGroup,
+                action: .provider(trigger: "calc")
+            ),
+            CatalogCommand(
+                id: "app.settings",
+                title: "Open Settings",
+                group: CommandCatalog.appGroup,
+                action: .app(.settings)
+            ),
+        ]
+        let plan = ShortcutResolver.resolve(
+            [
+                ShortcutBinding(command: "provider.calc", keys: "ctrl+alt+c"),
+                ShortcutBinding(command: "app.settings", keys: "alt+ctrl+c"),
+                ShortcutBinding(command: "app.settings", keys: "cmd+shift+3"),
+                ShortcutBinding(command: "provider.gone", keys: "ctrl+alt+g"),
+                ShortcutBinding(command: "app.settings", keys: ""),
+            ],
+            commands: commands,
+            reserved: ["cmd+shift+3"]
+        )
+        XCTAssertEqual(plan.resolved, [ShortcutBinding(command: "provider.calc", keys: "ctrl+alt+c")])
+        XCTAssertEqual(plan.issues.count, 3)
+    }
+
+    func testCatalogIdsAreStableAndProvidersComeFromTheRegistry() {
+        let commands = CommandCatalog.commands(providers: [
+            CommandCatalog.ProviderEntry(id: "calc", trigger: "calc"),
+            CommandCatalog.ProviderEntry(id: "apps", trigger: nil),
+            CommandCatalog.ProviderEntry(id: "clip", trigger: "clip"),
+        ])
+        XCTAssertEqual(
+            commands.map(\.id),
+            ["provider.calc", "provider.clip", "app.settings", "app.reload",
+             "app.toggle-launcher", "app.quit"]
+        )
+        XCTAssertEqual(commands.first?.title, "Open /calc")
+        XCTAssertFalse(commands.contains { $0.id == "provider.apps" })
+        XCTAssertEqual(CommandCatalog.commands(providers: [], prefix: ":").map(\.id),
+                       ["app.settings", "app.reload", "app.toggle-launcher", "app.quit"])
+    }
+
+    func testHotKeyProbeMapsStatuses() {
+        XCTAssertEqual(HotKeyProbe.classify(isLive: false, status: noErr), .available)
+        XCTAssertEqual(HotKeyProbe.classify(isLive: false, status: -9878), .usedBySystem)
+        XCTAssertEqual(HotKeyProbe.classify(isLive: true, status: noErr), .usedByPalette)
+        // A live registration of ours must not be blamed on another app even
+        // when a fresh registration would fail.
+        XCTAssertEqual(HotKeyProbe.classify(isLive: true, status: -9878), .usedByPalette)
+    }
+
+    func testShortcutAvailabilityPrefersPaletteOverTheProbe() throws {
+        let spec = try XCTUnwrap(HotKeySpec.parse("cmd+space"))
+        var probed = false
+        let palette = ShortcutAvailability.message(
+            for: spec,
+            ownedKeys: ["cmd+space"],
+            probe: { _ in probed = true; return .usedBySystem }
+        )
+        XCTAssertEqual(palette, "Used by Palette")
+        XCTAssertFalse(probed, "a configured key must not fall through to the probe")
+
+        let system = ShortcutAvailability.message(
+            for: spec,
+            ownedKeys: ["opt+space"],
+            probe: { _ in .usedBySystem }
+        )
+        XCTAssertEqual(system, "Already used by another app")
+        let free = ShortcutAvailability.message(
+            for: spec,
+            ownedKeys: [],
+            probe: { _ in .available }
+        )
+        XCTAssertNil(free)
+        // Re-recording a row's own key drops it from the owned list before the
+        // probe, so a live registration of ours is not reported as a conflict.
+        let same = ShortcutAvailability.message(
+            for: spec,
+            ownedKeys: [],
+            probe: { _ in .usedByPalette }
+        )
+        XCTAssertEqual(same, "Used by Palette", "the live probe still owns it")
     }
 }

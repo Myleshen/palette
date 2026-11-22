@@ -339,7 +339,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         }
 
         guard !query.isEmpty else { return (items, nil) }
-        return (items.filter { "\($0.title) \($0.subtitle ?? "")".lowercased().contains(query.lowercased()) }, nil)
+        return (items.filter { Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "")") != nil }, nil)
     }
 
     /// The account's open PRs, which works with no repository and no cwd.

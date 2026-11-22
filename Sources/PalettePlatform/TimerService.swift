@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import UserNotifications
 
 public struct TimerSnapshot: Sendable {
     public var isRunning: Bool
@@ -24,7 +23,6 @@ public final class TimerService {
     private var total: TimeInterval = 0
     private var label = ""
     private var ticker: Timer?
-    private var askedForNotificationPermission = false
 
     public init() {}
 
@@ -100,26 +98,9 @@ public final class TimerService {
             NSSound(named: NSSound.Name("Glass"))?.play()
         }
         guard notificationsEnabled else { return }
-        Task {
-            let center = UNUserNotificationCenter.current()
-            if !askedForNotificationPermission {
-                askedForNotificationPermission = true
-                let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
-                if !granted {
-                    Log.shared.warn("Timer finished, but notifications are not allowed", source: "timer")
-                    return
-                }
-            }
-            let content = UNMutableNotificationContent()
-            content.title = "Timer finished"
-            content.body = finished.isEmpty ? "Your timer is done." : "\(finished) is done."
-            content.sound = nil
-            let request = UNNotificationRequest(identifier: "palette.timer.\(UUID().uuidString)", content: content, trigger: nil)
-            do {
-                try await center.add(request)
-            } catch {
-                Log.shared.warn("Could not show timer notification: \(error.localizedDescription)", source: "timer")
-            }
-        }
+        SystemNotification.post(
+            title: "Timer finished",
+            body: finished.isEmpty ? "Your timer is done." : "\(finished) is done."
+        )
     }
 }

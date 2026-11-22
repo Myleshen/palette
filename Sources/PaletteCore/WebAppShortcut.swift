@@ -1,9 +1,9 @@
 import Foundation
 
-/// A Hammerspoon-compatible shortcut such as `ctrl+alt+f`.
+/// A canonical global shortcut such as `ctrl+alt+f`.
 ///
 /// Shortcuts are stored canonically so duplicates are easy to detect and the
-/// generated Hammerspoon file never has to normalize anything.
+/// registrar never has to normalize anything.
 public struct WebAppShortcut: Equatable, Sendable {
     public let modifiers: [String]
     public let key: String
