@@ -6,13 +6,15 @@ import Foundation
 public enum AnnotationShape: Equatable {
     case arrow(from: CGPoint, to: CGPoint, color: NSColor, width: CGFloat)
     case rectangle(rect: CGRect, color: NSColor, width: CGFloat)
-    case text(at: CGPoint, text: String, size: CGFloat, color: NSColor)
+    /// `box` is the measured glyph extent as image fractions, so hit-testing
+    /// and the selection outline use the same box the text was laid out in.
+    case text(at: CGPoint, text: String, size: CGFloat, color: NSColor, box: CGSize)
 
     public var color: NSColor {
         switch self {
         case let .arrow(_, _, color, _): return color
         case let .rectangle(_, color, _): return color
-        case let .text(_, _, _, color): return color
+        case let .text(_, _, _, color, _): return color
         }
     }
 
@@ -28,8 +30,14 @@ public enum AnnotationShape: Equatable {
             )
         case let .rectangle(rect, color, width):
             return .rectangle(rect: rect.offsetBy(dx: delta.x, dy: delta.y), color: color, width: width)
-        case let .text(at, text, size, color):
-            return .text(at: CGPoint(x: at.x + delta.x, y: at.y + delta.y), text: text, size: size, color: color)
+        case let .text(at, text, size, color, box):
+            return .text(
+                at: CGPoint(x: at.x + delta.x, y: at.y + delta.y),
+                text: text,
+                size: size,
+                color: color,
+                box: box
+            )
         }
     }
 }
@@ -105,7 +113,7 @@ public final class AnnotationEditor: ObservableObject {
 
     public func add(_ shape: AnnotationShape) {
         pushUndo()
-        shapes.append(shape)
+        shapes.append(measured(shape))
         selected = shapes.count - 1
     }
 
@@ -116,7 +124,42 @@ public final class AnnotationEditor: ObservableObject {
 
     public func replace(_ index: Int, with shape: AnnotationShape) {
         guard shapes.indices.contains(index) else { return }
-        shapes[index] = shape
+        shapes[index] = measured(shape)
+    }
+
+    /// Adds a text mark and measures its glyph box once. The box is reused for
+    /// hit-testing and the selection outline instead of counting characters.
+    public func addText(at point: CGPoint, text: String) {
+        add(.text(
+            at: point,
+            text: text,
+            size: textSize,
+            color: color,
+            box: textBox(text: text, size: textSize)
+        ))
+    }
+
+    /// The rendered extent of `text` at `size`, as fractions of the image.
+    public func textBox(text: String, size: CGFloat) -> CGSize {
+        let pixels = image.pixelSize
+        guard pixels.width > 0, pixels.height > 0 else { return .zero }
+        let fontSize = max(6, size * pixels.height)
+        let string = NSAttributedString(
+            string: text,
+            attributes: [.font: NSFont.systemFont(ofSize: fontSize, weight: .semibold)]
+        )
+        let rect = string.boundingRect(
+            with: NSSize(width: pixels.width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin]
+        )
+        return CGSize(width: rect.width / pixels.width, height: rect.height / pixels.height)
+    }
+
+    /// Fills in a text shape's measured box the first time it is added or
+    /// replaced. A moved shape keeps the box it was laid out with.
+    private func measured(_ shape: AnnotationShape) -> AnnotationShape {
+        guard case let .text(at, text, size, color, box) = shape, box == .zero else { return shape }
+        return .text(at: at, text: text, size: size, color: color, box: textBox(text: text, size: size))
     }
 
     public func remove(at index: Int) {
@@ -159,16 +202,15 @@ public final class AnnotationEditor: ObservableObject {
             let pad = max(0.006, width)
             return rect.insetBy(dx: -pad, dy: -pad).contains(point)
 
-        case let .text(at, text, size, _):
+        case let .text(at, text, size, _, box):
             let pixels = image.pixelSize
             guard pixels.width > 0, pixels.height > 0 else { return false }
-            let height = size * pixels.height
-            let boxWidth = max(height, Double(text.count) * height * 0.62)
+            let measured = box == .zero ? textBox(text: text, size: size) : box
             let rect = CGRect(
                 x: at.x * pixels.width,
                 y: at.y * pixels.height,
-                width: boxWidth,
-                height: height * 1.3
+                width: max(1, measured.width * pixels.width),
+                height: max(1, measured.height * pixels.height)
             )
             let inPixels = CGPoint(x: point.x * pixels.width, y: point.y * pixels.height)
             return rect.contains(inPixels)
@@ -212,8 +254,14 @@ public final class AnnotationEditor: ObservableObject {
                     height: rect.height / clamped.height
                 )
                 return .rectangle(rect: new, color: color, width: width)
-            case let .text(at, text, size, color):
-                return .text(at: remap(at), text: text, size: size, color: color)
+            case let .text(at, text, size, color, box):
+                return .text(
+                    at: remap(at),
+                    text: text,
+                    size: size,
+                    color: color,
+                    box: CGSize(width: box.width / clamped.width, height: box.height / clamped.height)
+                )
             }
         }
         image = cropped
@@ -292,7 +340,7 @@ public final class AnnotationEditor: ObservableObject {
             path.lineWidth = max(1, width * size.width)
             path.stroke()
 
-        case let .text(at, text, sizeFraction, color):
+        case let .text(at, text, sizeFraction, color, _):
             let fontSize = max(6, sizeFraction * size.height)
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
@@ -312,14 +360,11 @@ public final class AnnotationEditor: ObservableObject {
     }
 
     public func save(to url: URL) throws -> URL {
-        let data: Data?
-        if ["jpg", "jpeg"].contains(url.pathExtension.lowercased()) {
-            data = rendered().jpegData(compression: 0.92)
-        } else {
-            data = rendered().pngData()
-        }
-        guard let data else { throw AnnotationError.encodeFailed }
+        guard let data = encodedData(for: url) else { throw AnnotationError.encodeFailed }
         let temp = url.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).tmp")
+        // replaceItemAt consumes the temp on success; a failed write/replace
+        // must not leave a hidden .tmp behind.
+        defer { try? FileManager.default.removeItem(at: temp) }
         try data.write(to: temp)
         _ = try FileManager.default.replaceItemAt(url, withItemAt: temp)
         return url
@@ -328,18 +373,14 @@ public final class AnnotationEditor: ObservableObject {
     @discardableResult
     public func save() throws -> URL {
         guard let sourceURL else { throw AnnotationError.noDestination }
-        let data: Data?
-        if ["jpg", "jpeg"].contains(sourceURL.pathExtension.lowercased()) {
-            data = rendered().jpegData(compression: 0.92)
-        } else {
-            data = rendered().pngData()
+        return try save(to: sourceURL)
+    }
+
+    private func encodedData(for url: URL) -> Data? {
+        if ["jpg", "jpeg"].contains(url.pathExtension.lowercased()) {
+            return rendered().jpegData(compression: 0.92)
         }
-        guard let data else { throw AnnotationError.encodeFailed }
-        let temp = sourceURL.deletingLastPathComponent()
-            .appendingPathComponent(".\(UUID().uuidString).tmp")
-        try data.write(to: temp)
-        _ = try FileManager.default.replaceItemAt(sourceURL, withItemAt: temp)
-        return sourceURL
+        return rendered().pngData()
     }
 
     public func renderedPNG() -> Data? { rendered().pngData() }

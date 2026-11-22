@@ -211,7 +211,14 @@ struct SettingsView: View {
     @State private var globalProviders: [String]
     @State private var providerFilter = ""
     @State private var bookmarks: [Bookmark]
+    @State private var bookmarksError: String?
     @State private var bookmarksDirty = false
+    @State private var bookmarksSaveError: String?
+    @State private var bindingRowIDs: [UUID]
+    /// Typed binding values stay here until commit (Return or focus loss), so
+    /// quitting mid-typing never registers a truncated shell command.
+    @State private var bindingValueDrafts: [UUID: String] = [:]
+    @FocusState private var focusedBindingID: UUID?
     @State private var terminalShellChoice: String
     @State private var cheatsheetFolders: [String]
     @State private var cheatsheetExtensions: String
@@ -219,6 +226,7 @@ struct SettingsView: View {
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
     @State private var appsMessage: String?
+    @State private var copiedDiagnostics = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -260,7 +268,15 @@ struct SettingsView: View {
         _engines = State(initialValue: config.webSearchEngines)
         _accessibilityTrusted = State(initialValue: accessibilityTrusted)
         _askKeyStored = State(initialValue: AskKeychain.hasStoredKey(for: config.ask.endpoint))
-        _bookmarks = State(initialValue: BookmarkStore.load(from: PalettePaths.resolve().bookmarksFile))
+        do {
+            _bookmarks = State(initialValue: try BookmarkStore.load(from: PalettePaths.resolve().bookmarksFile))
+        } catch {
+            // Keep the rows empty and report the parse failure; saving is
+            // blocked below so the broken file is never overwritten.
+            _bookmarks = State(initialValue: [])
+            _bookmarksError = State(initialValue: error.localizedDescription)
+        }
+        _bindingRowIDs = State(initialValue: config.bindings.map { _ in UUID() })
         let order = config.providerOrder.isEmpty ? providers.map(\.id) : config.providerOrder
         let ordered = order.filter { id in providers.contains { $0.id == id } }
             + providers.map(\.id).filter { !order.contains($0) }
@@ -369,6 +385,9 @@ struct SettingsView: View {
             .onChange(of: globalProviders) { _, _ in schedulePersist() }
             .onChange(of: providerAliasesDraft) { _, _ in schedulePersist() }
             .onChange(of: terminalShellChoice) { _, _ in schedulePersist() }
+            .onChange(of: focusedBindingID) { old, _ in
+                if let old { commitBindingValue(old) }
+            }
             .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
             .onChange(of: config.ask.endpoint) { _, _ in
                 normalizeAskModel()
@@ -390,6 +409,11 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsClearSearch)) { _ in
             settingsSearch = ""
+            settingsSearchFocused = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsSearch)) { note in
+            guard let query = note.object as? String else { return }
+            settingsSearch = query
             settingsSearchFocused = false
         }
         .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsEdit)) { note in
@@ -788,7 +812,7 @@ struct SettingsView: View {
                     numberField(title, value: bound, unit: unit)
                 }
                 if range.upperBound - range.lowerBound <= 1_200 {
-                    Stepper("", value: bound, in: range, step: step)
+                    Stepper(title, value: bound, in: range, step: step)
                         .labelsHidden()
                         .disabled(automatic?.wrappedValue == true)
                         .tint(muted)
@@ -823,7 +847,7 @@ struct SettingsView: View {
                     numberField(title, value: bound, unit: unit)
                 }
                 if range.upperBound - range.lowerBound <= 1_200 {
-                    Stepper("", value: bound, in: range, step: step)
+                    Stepper(title, value: bound, in: range, step: step)
                         .labelsHidden()
                         .disabled(automatic?.wrappedValue == true)
                         .tint(muted)
@@ -872,6 +896,13 @@ struct SettingsView: View {
         )
     }
 
+    private var maxClipboardImageMBBinding: Binding<Int> {
+        Binding(
+            get: { config.clipboard.maxImageBytes / (1024 * 1024) },
+            set: { config.clipboard.maxImageBytes = $0 * 1024 * 1024 }
+        )
+    }
+
     private var uiSizeAutomatic: Binding<Bool> {
         Binding(
             get: { config.typography.uiSize == 0 },
@@ -886,6 +917,16 @@ struct SettingsView: View {
             get: { config.typography.monoSize == 0 },
             set: { automatic in
                 config.typography.monoSize = automatic ? 0 : 12
+            }
+        )
+    }
+
+    /// 0 is the loader's sentinel for "Kitty's size, then the theme".
+    private var terminalFontSizeAutomatic: Binding<Bool> {
+        Binding(
+            get: { config.terminalSession.fontSize == 0 },
+            set: { automatic in
+                config.terminalSession.fontSize = automatic ? 0 : 13
             }
         )
     }
@@ -942,7 +983,8 @@ struct SettingsView: View {
             .init(title: "Timer sound", tab: .general, anchor: "row-Play a sound when a timer finishes", keywords: "timer sound notification finish"),
             .init(title: "Timer notification", tab: .general, anchor: "row-Show a notification when a timer finishes", keywords: "timer sound notification finish"),
             .init(title: "Editor", tab: .general, anchor: "row-Editor", keywords: "editor neovide vscode cursor zed"),
-            .init(title: "Terminal app", tab: .general, anchor: "row-Terminal", keywords: "terminal kitty ghostty external app"),
+            .init(title: "Terminal", tab: .general, anchor: "row-Terminal", keywords: "terminal binary zellij project command embedded"),
+            .init(title: "Terminal app", tab: .general, anchor: "row-Terminal app", keywords: "terminal kitty ghostty ssh docker github external app"),
             .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries poll clear retention secrets"),
             .init(title: "Launcher position", tab: .launcher, anchor: "launcher-position", keywords: "top center position"),
             .init(title: "Provider bar", tab: .launcher, anchor: "launcher-tabs", keywords: "provider bar top left hidden tabs"),
@@ -986,6 +1028,7 @@ struct SettingsView: View {
             .init(title: "Provider aliases", tab: .providers, anchor: "providers-default", keywords: "provider alias shortcut"),
             .init(title: "Provider files", tab: .providers, anchor: "providers-files", keywords: "provider commands.toml folder"),
             .init(title: "Config file and logs", tab: .providers, anchor: "providers-config", keywords: "config log crash backup export diagnostics"),
+            .init(title: "About Palette", tab: .general, anchor: "settings-about", keywords: "about version build commit chip macos architecture config state logs reveal diagnostics github releases issue author myleshen licence"),
         ]
     }
 
@@ -1121,7 +1164,7 @@ struct SettingsView: View {
             next.webAppBrowser = firstInstalled
         }
 
-        next.webSearchEngines = engines.filter { engineIssue($0) == nil }
+        next.webSearchEngines = WebSearchEngine.persisting(engines, over: savedConfig.webSearchEngines)
         // Rows still being filled in stay on screen but are not written. An
         // invalid or duplicate key keeps the same rule as the built-in rows.
         next.bindings = config.bindings.enumerated().compactMap { index, binding in
@@ -1172,13 +1215,21 @@ struct SettingsView: View {
         // An empty list would silently hide every file; keep the defaults.
         next.cheatsheets.extensions = extensions.isEmpty ? CheatsheetConfig().extensions : extensions
 
-        if bookmarksDirty {
-            try? BookmarkStore.save(bookmarks, to: PalettePaths.resolve().bookmarksFile)
-            bookmarksDirty = false
+        if bookmarksDirty, bookmarksError == nil {
+            do {
+                try BookmarkStore.save(bookmarks, to: PalettePaths.resolve().bookmarksFile)
+                bookmarksDirty = false
+                bookmarksSaveError = nil
+            } catch {
+                bookmarksSaveError = error.localizedDescription
+            }
         }
 
         if let error = onApply(next) {
             saveState = .failed(error)
+        } else if let bookmarksSaveError {
+            savedConfig = next
+            saveState = .failed("bookmarks.toml: \(bookmarksSaveError)")
         } else {
             savedConfig = next
             saveState = .saved
@@ -1230,23 +1281,31 @@ struct SettingsView: View {
         if trimmed.isEmpty {
             return required ? "Enter a shortcut. The launcher and clipboard need one." : nil
         }
-        guard HotKeySpec.parse(trimmed) != nil else {
+        guard let spec = HotKeySpec.parse(trimmed) else {
             return "Not a valid shortcut. Click the field and press the keys you want."
         }
-        let duplicates = hotkeyValues
-            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-            .filter { !$0.isEmpty }
-            .reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
-        if (duplicates[trimmed.lowercased()] ?? 0) > 1 {
+        // Carbon identities ignore modifier order and aliases, so opt+cmd+a
+        // and cmd+opt+a are the same key even though the strings differ.
+        let matches = hotkeyValues.compactMap {
+            HotKeySpec.parse($0.trimmingCharacters(in: .whitespaces))
+        }.filter { $0.identity == spec.identity }
+        if matches.count > 1 {
             return "This shortcut is used more than once. Each one must be unique."
         }
         return nil
     }
 
     private var providerPrefixIssue: String? {
-        config.providerPrefix.trimmingCharacters(in: .whitespaces).isEmpty
-            ? "Enter a prefix, usually /."
-            : nil
+        let prefix = config.providerPrefix
+        if prefix.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "Enter a prefix, usually /."
+        }
+        // Match the loader exactly: anything but one character is replaced by
+        // "/" on the next launch, so reject it here instead.
+        if prefix.count != 1 {
+            return "Use exactly one character, usually /."
+        }
+        return nil
     }
 
     private var installedChromium: [String] {
@@ -1271,13 +1330,7 @@ struct SettingsView: View {
     }
 
     private func engineIssue(_ engine: WebSearchEngine) -> String? {
-        if engine.name.trimmingCharacters(in: .whitespaces).isEmpty {
-            return "Give the engine a name."
-        }
-        if !engine.urlTemplate.contains("{query}") {
-            return "The search URL needs a {query} placeholder."
-        }
-        return nil
+        engine.validationIssue(among: engines)
     }
 
     private var issueCount: Int {
@@ -1295,6 +1348,11 @@ struct SettingsView: View {
         if webAppBrowserIssue != nil { count += 1 }
         count += engines.filter { engineIssue($0) != nil }.count
         count += aliasIssues.count
+        count += config.bindings.indices.filter {
+            bindingIssue(keys: config.bindings[$0].keys, index: $0) != nil
+        }.count
+        count += bindingRowIDs.filter { shortcutErrors[$0.uuidString] != nil }.count
+        count += commands.filter { catalogIssue($0) != nil }.count
         return count
     }
 
@@ -1360,7 +1418,11 @@ struct SettingsView: View {
                         .settingsField()
                 }
                 fieldRow("Terminal") {
-                    TextField("Terminal", text: $config.terminalApp)
+                    TextField("Terminal", text: $config.terminal)
+                        .settingsField()
+                }
+                fieldRow("Terminal app") {
+                    TextField("Terminal app", text: $config.terminalApp)
                         .settingsField()
                 }
                 HStack(spacing: 8) {
@@ -1370,7 +1432,7 @@ struct SettingsView: View {
                     Text(appsMessage).font(.caption).foregroundStyle(muted)
                 }
             } footer: {
-                Text("Used by projects, commands, Zellij, and Bitwarden. Examples: neovide, Visual Studio Code, Cursor, kitty, Terminal.")
+                Text("Terminal is what Zellij, projects, and commands launch. Terminal app is the macOS app used for SSH, Docker, and GitHub logins. Examples: neovide, Visual Studio Code, Cursor, kitty, Terminal.")
             }
 
             card("Clipboard history", anchor: "general-clipboard") {
@@ -1381,10 +1443,106 @@ struct SettingsView: View {
                            in: 200...2_000, step: 50, unit: "ms")
                 numericRow("Clear copied secrets after", value: clearAfterSecondsBinding,
                            in: 0...300, step: 5, unit: "s")
+                numericRow("Delete history older than", value: $config.clipboard.retentionDays,
+                           in: 0...3_650, step: 1, unit: "days")
+                numericRow("Image storage cap", value: maxClipboardImageMBBinding,
+                           in: 0...2_048, step: 50, unit: "MB")
             } footer: {
                 Text("Text and PNG images are stored. Anything another app marks concealed is never recorded. Zero seconds keeps secrets until you clear the history.")
             }
+
+            card("About", anchor: "settings-about") {
+                aboutRow("Version", about.versionBuild)
+                if let commit = about.commit {
+                    aboutRow("Commit", commit)
+                }
+                aboutRow("macOS", AboutInfo.macOS)
+                aboutRow("Chip", AboutInfo.chip)
+                aboutLinkRow("Licence", "MIT", AboutInfo.licence)
+                Divider()
+                aboutFolderRow("Config folder", url: palettePaths.configDir)
+                aboutFolderRow("State folder", url: palettePaths.stateDir)
+                aboutFolderRow("Logs folder", url: palettePaths.logsDir)
+                Divider()
+                HStack(spacing: 12) {
+                    aboutLink("GitHub", AboutInfo.repo)
+                    aboutLink("Releases", AboutInfo.releases)
+                    aboutLink("Report an Issue", AboutInfo.issues)
+                }
+                HStack(spacing: 4) {
+                    Text("Built by")
+                    Text(AboutInfo.author).fontWeight(.semibold)
+                    Text("·").foregroundStyle(muted)
+                    Link(AboutInfo.email, destination: URL(string: "mailto:\(AboutInfo.email)")!)
+                        .foregroundStyle(linkColor)
+                }
+                .font(theme.font(size: 12))
+                Button(copiedDiagnostics ? "Copied" : "Copy Diagnostics") {
+                    AboutInfo.copyDiagnostics()
+                    copiedDiagnostics = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        copiedDiagnostics = false
+                    }
+                }
+                .controlSize(.small)
+            } footer: {
+                Text("Palette is a keyboard-first launcher for macOS. Built with SwiftUI + AppKit.")
+            }
         }
+    }
+
+    private var about: AboutInfo { AboutInfo() }
+    private var palettePaths: PalettePaths { PalettePaths.resolve() }
+
+    private func aboutRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(theme.font(size: 13))
+            Spacer(minLength: 12)
+            Text(value)
+                .font(theme.font(size: 13))
+                .foregroundStyle(muted)
+                .textSelection(.enabled)
+                .multilineTextAlignment(.trailing)
+        }
+        .searchTarget("row-\(title)")
+    }
+
+    private func aboutLinkRow(_ title: String, _ value: String, _ url: URL) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+            Spacer(minLength: 12)
+            Link(value, destination: url)
+        }
+        .font(theme.font(size: 13))
+        .searchTarget("row-\(title)")
+    }
+
+    private func aboutFolderRow(_ title: String, url: URL) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(theme.font(size: 13))
+                Spacer(minLength: 12)
+                Button("Reveal in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+                .controlSize(.small)
+            }
+            Text(url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                .font(.caption)
+                .foregroundStyle(muted)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .searchTarget("row-\(title)")
+    }
+
+    private func aboutLink(_ title: String, _ url: URL) -> some View {
+        Button(title) { NSWorkspace.shared.open(url) }
+            .buttonStyle(.link)
+            .font(theme.font(size: 12))
     }
 
     private var keepAwakeBinding: Binding<Bool> {
@@ -1422,7 +1580,14 @@ struct SettingsView: View {
     }
 
     private var keepAwakeSummary: String {
-        let clamshell = keepAwakeStatus.clamshell ? "Clamshell on" : "Clamshell off"
+        let clamshell: String
+        if keepAwakeStatus.clamshell {
+            clamshell = keepAwakeStatus.clamshellRequiresPower
+                ? "Clamshell armed but inactive — needs AC power"
+                : "Clamshell on"
+        } else {
+            clamshell = "Clamshell off"
+        }
         if keepAwakeStatus.active {
             if let endsAt = keepAwakeStatus.endsAt {
                 return "Awake until \(Self.timeFormatter.string(from: endsAt)) · \(clamshell)"
@@ -1445,10 +1610,7 @@ struct SettingsView: View {
         }) {
             config.editorOpenWith = editor
         }
-        if let browser = installedChromium.first {
-            config.webAppBrowser = browser
-        }
-        appsMessage = "Detected installed editor and browser where available."
+        appsMessage = "Detected an installed editor where available."
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
@@ -1515,8 +1677,9 @@ struct SettingsView: View {
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 toggleRow("Fit to the active screen", isOn: $config.window.autoSize)
+                toggleRow("Site favicons", isOn: $config.window.favicons)
             } footer: {
-                Text("Provider tabs are the chip strip above the list, or the rail on the left. Hidden keeps Tab and /trigger for switching. Turn individual providers on or off under Providers. Fit sizes the launcher to the screen under the pointer.")
+                Text("Provider tabs are the chip strip above the list, or the rail on the left. Hidden keeps Tab and /trigger for switching. Turn individual providers on or off under Providers. Fit sizes the launcher to the screen under the pointer. Site favicons fetch web-app icons from Google; turn them off to keep hostnames on this Mac.")
             }
 
             card("Size", anchor: "launcher-size") {
@@ -1588,7 +1751,9 @@ struct SettingsView: View {
                     fontFamilyPicker($config.terminalSession.font, inherited: theme.typography.mono)
                 }
                 numericRow("Font size", value: $config.terminalSession.fontSize,
-                           in: 0...48, step: 1, unit: "pt")
+                           in: 8...48, step: 1, unit: "pt",
+                           automatic: terminalFontSizeAutomatic,
+                           automaticValue: "Automatic")
             } footer: {
                 Text("Auto uses Zellij, then tmux, then a plain shell. Plain shells end when the panel closes. A size of 0 uses Kitty's font size, then the theme. Use a Nerd Font for icons.")
             }
@@ -1612,14 +1777,18 @@ struct SettingsView: View {
                 }
                 pickerRow("Dark theme") {
                     Picker("Dark theme", selection: $config.theme.dark) {
-                        ForEach(themeNames, id: \.self) { Text(displayName($0)).tag($0) }
+                        ForEach(themeChoices(config.theme.dark), id: \.self) { name in
+                            Text(themeLabel(name)).tag(name)
+                        }
                     }
                     .labelsHidden()
                     .frame(maxWidth: 320, alignment: .leading)
                 }
                 pickerRow("Light theme") {
                     Picker("Light theme", selection: $config.theme.light) {
-                        ForEach(themeNames, id: \.self) { Text(displayName($0)).tag($0) }
+                        ForEach(themeChoices(config.theme.light), id: \.self) { name in
+                            Text(themeLabel(name)).tag(name)
+                        }
                     }
                     .labelsHidden()
                     .frame(maxWidth: 320, alignment: .leading)
@@ -1678,6 +1847,27 @@ struct SettingsView: View {
 
     private var themeNames: [String] {
         ThemeLoader.catalog(themesDirectory: themesDirectory).map(\.name)
+    }
+
+    private var microphones: [(id: String, name: String)] {
+        CaptureMicrophones.active()
+    }
+
+    private var captureDisplays: [CaptureDisplay] {
+        CaptureDisplays.active()
+    }
+
+    /// Installed themes plus the configured name even when its file is gone,
+    /// so a deleted theme stays visible as missing instead of blank.
+    private func themeChoices(_ selected: String) -> [String] {
+        let names = themeNames
+        guard !selected.isEmpty, !names.contains(selected) else { return names }
+        return [selected] + names
+    }
+
+    private func themeLabel(_ name: String) -> String {
+        let label = displayName(name)
+        return themeNames.contains(name) ? label : "\(label) (missing)"
     }
 
     private var fontFamilies: [String] {
@@ -1768,11 +1958,14 @@ struct SettingsView: View {
                         .foregroundStyle(muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ForEach(config.bindings.indices, id: \.self) { index in
-                    bindingRow(index)
+                ForEach(Array(bindingRowIDs.enumerated()), id: \.element) { index, id in
+                    if index < config.bindings.count {
+                        bindingRow(index, id: id)
+                    }
                 }
                 Button("Add hotkey") {
                     config.bindings.append(HotkeyBinding(keys: ""))
+                    bindingRowIDs.append(UUID())
                 }
                 .controlSize(.small)
             } footer: {
@@ -1785,17 +1978,17 @@ struct SettingsView: View {
         }
     }
 
-    private func bindingRow(_ index: Int) -> some View {
+    private func bindingRow(_ index: Int, id: UUID) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 ShortcutRecorder(
                     value: $config.bindings[index].keys,
                     label: "Custom hotkey",
                     validate: { candidate in
-                        validateCandidate(candidate, id: "binding-\(index)", current: config.bindings[index].keys)
+                        validateCandidate(candidate, id: id.uuidString, current: config.bindings[index].keys)
                     },
                     onValidation: { message in
-                        recordValidation("binding-\(index)", message: message)
+                        recordValidation(id.uuidString, message: message)
                     }
                 )
                 .frame(width: 180, height: 26)
@@ -1806,11 +1999,19 @@ struct SettingsView: View {
                 }
                 .labelsHidden()
                 .frame(width: 130)
-                TextField(bindingPlaceholder(config.bindings[index].action), text: $config.bindings[index].value)
-                    .settingsField()
+                TextField(
+                    bindingPlaceholder(config.bindings[index].action),
+                    text: bindingValue(index: index, id: id)
+                )
+                .settingsField()
+                .focused($focusedBindingID, equals: id)
+                .onSubmit { commitBindingValue(id) }
                 Button {
                     guard config.bindings.indices.contains(index) else { return }
                     config.bindings.remove(at: index)
+                    bindingRowIDs.removeAll { $0 == id }
+                    bindingValueDrafts[id] = nil
+                    shortcutErrors[id.uuidString] = nil
                 } label: {
                     Image(systemName: "trash")
                 }
@@ -1819,14 +2020,34 @@ struct SettingsView: View {
                 .help("Delete hotkey")
                 .accessibilityLabel("Delete custom hotkey")
             }
-            if let issue = shortcutErrors["binding-\(index)"]
+            if let issue = shortcutErrors[id.uuidString]
                 ?? bindingIssue(keys: config.bindings[index].keys, index: index) {
                 Text(issue)
                     .font(.caption)
                     .foregroundStyle(danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let unavailable = HotKeyRegistry.unavailable(id: "binding-\(index)") {
+                Text(unavailable)
+                    .font(.caption)
+                    .foregroundStyle(danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    private func bindingValue(index: Int, id: UUID) -> Binding<String> {
+        Binding(
+            get: { bindingValueDrafts[id] ?? config.bindings[index].value },
+            set: { bindingValueDrafts[id] = $0 }
+        )
+    }
+
+    private func commitBindingValue(_ id: UUID) {
+        guard let index = bindingRowIDs.firstIndex(of: id),
+              let draft = bindingValueDrafts[id] else { return }
+        config.bindings[index].value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        bindingValueDrafts[id] = nil
     }
 
     private func bindingPlaceholder(_ action: HotkeyAction) -> String {
@@ -1884,8 +2105,11 @@ struct SettingsView: View {
     }
 
     private var hasShortcutConflict: Bool {
-        let values = hotkeyValues.filter { !$0.isEmpty }.map { $0.lowercased() }
-        return Set(values).count != values.count
+        let identities = hotkeyValues
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .compactMap { HotKeySpec.parse($0)?.identity }
+        return Set(identities).count != identities.count
     }
 
     // MARK: Catalogue shortcuts
@@ -1927,7 +2151,7 @@ struct SettingsView: View {
             ("region", config.regionScreenshotHotkey), ("window", config.windowScreenshotHotkey),
             ("recording", config.recordingHotkey),
         ] + config.shortcuts.map { ($0.command, $0.keys) }
-            + config.bindings.enumerated().map { ("binding-\($0.offset)", $0.element.keys) }
+            + zip(bindingRowIDs, config.bindings).map { (id: $0.uuidString, keys: $1.keys) }
     }
 
     private func paletteConflict(_ candidate: HotKeySpec, excluding id: String) -> Bool {
@@ -2018,6 +2242,12 @@ struct SettingsView: View {
                     .foregroundStyle(danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let unavailable = HotKeyRegistry.unavailable(id: command.id) {
+                Text(unavailable)
+                    .font(.caption)
+                    .foregroundStyle(danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -2065,6 +2295,12 @@ struct SettingsView: View {
             if let issue = shortcutErrors[id] ?? hotkeyIssue(value.wrappedValue, required: required, among: "") {
                 Text(issue).font(.caption).foregroundStyle(danger)
             }
+            if let unavailable = HotKeyRegistry.unavailable(id: id) {
+                Text(unavailable)
+                    .font(.caption)
+                    .foregroundStyle(danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .searchTarget(anchor ?? "row-\(title)")
     }
@@ -2081,8 +2317,8 @@ struct SettingsView: View {
 
             card("Search engines", anchor: "search-engines") {
                 engineHeader
-                ForEach($engines) { $engine in
-                    engineRow($engine)
+                ForEach(engines.indices, id: \.self) { index in
+                    engineRow($engines[index], index: index)
                 }
                 HStack(spacing: 8) {
                     Button("Add engine") {
@@ -2101,47 +2337,56 @@ struct SettingsView: View {
             }
 
             card("Bookmarks", anchor: "search-bookmarks") {
-                ForEach($bookmarks) { $bookmark in
-                    VStack(alignment: .leading, spacing: 8) {
-                        fieldRow("Name", anchor: "row-bookmark-\(bookmark.id)-name") {
-                            HStack(spacing: 8) {
-                                TextField("Name", text: $bookmark.name)
-                                    .settingsField()
-                                Button {
-                                    bookmarks.removeAll { $0.id == bookmark.id }
-                                } label: {
-                                    Image(systemName: "trash")
+                if let bookmarksError {
+                    Text("\(bookmarksError) The file is left untouched; fix or restore bookmarks.toml, then reopen Settings.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach($bookmarks) { $bookmark in
+                        VStack(alignment: .leading, spacing: 8) {
+                            fieldRow("Name", anchor: "row-bookmark-\(bookmark.id)-name") {
+                                HStack(spacing: 8) {
+                                    TextField("Name", text: $bookmark.name)
+                                        .settingsField()
+                                    Button {
+                                        bookmarks.removeAll { $0.id == bookmark.id }
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Remove bookmark")
+                                    .accessibilityLabel("Remove bookmark")
                                 }
-                                .buttonStyle(.borderless)
-                                .help("Remove bookmark")
-                                .accessibilityLabel("Remove bookmark")
+                            }
+                            fieldRow("URL", anchor: "row-bookmark-\(bookmark.id)-url") {
+                                TextField("URL", text: $bookmark.url)
+                                    .settingsField()
+                            }
+                            fieldRow("Browser", anchor: "row-bookmark-\(bookmark.id)-browser") {
+                                BrowserPicker(browser: $bookmark.browser)
+                            }
+                            fieldRow("Keywords", anchor: "row-bookmark-\(bookmark.id)-keywords") {
+                                TextField("Keywords (comma separated)", text: Binding(
+                                    get: { bookmark.keywords.joined(separator: ", ") },
+                                    set: { text in
+                                        bookmark.keywords = text
+                                            .split(separator: ",")
+                                            .map { $0.trimmingCharacters(in: .whitespaces) }
+                                            .filter { !$0.isEmpty }
+                                    }
+                                ))
+                                .settingsField()
                             }
                         }
-                        fieldRow("URL", anchor: "row-bookmark-\(bookmark.id)-url") {
-                            TextField("URL", text: $bookmark.url)
-                                .settingsField()
-                        }
-                        fieldRow("Browser", anchor: "row-bookmark-\(bookmark.id)-browser") {
-                            BrowserPicker(browser: $bookmark.browser)
-                        }
-                        fieldRow("Keywords", anchor: "row-bookmark-\(bookmark.id)-keywords") {
-                            TextField("Keywords (comma separated)", text: Binding(
-                                get: { bookmark.keywords.joined(separator: ", ") },
-                                set: { text in
-                                    bookmark.keywords = text
-                                        .split(separator: ",")
-                                        .map { $0.trimmingCharacters(in: .whitespaces) }
-                                        .filter { !$0.isEmpty }
-                                }
-                            ))
-                            .settingsField()
-                        }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
                 }
                 HStack(spacing: 8) {
-                    Button("Add bookmark") {
-                        bookmarks.append(Bookmark(name: "", url: "", browser: ""))
+                    if bookmarksError == nil {
+                        Button("Add bookmark") {
+                            bookmarks.append(Bookmark(name: "", url: "", browser: ""))
+                        }
                     }
                     Button("Reveal in Finder") {
                         reveal(PalettePaths.resolve().bookmarksFile.path)
@@ -2149,7 +2394,13 @@ struct SettingsView: View {
                     .help("Show bookmarks.toml in Finder")
                 }
             } footer: {
-                Text("Bookmarks open in a normal browser window, in the browser you pick. They live in bookmarks.toml; Reveal in Finder shows that file.")
+                VStack(alignment: .leading, spacing: 4) {
+                    if let bookmarksSaveError {
+                        Text("Could not save bookmarks.toml: \(bookmarksSaveError)")
+                            .foregroundStyle(danger)
+                    }
+                    Text("Bookmarks open in a normal browser window, in the browser you pick. They live in bookmarks.toml; Reveal in Finder shows that file.")
+                }
             }
 
             card("Cheatsheets", anchor: "search-cheatsheets") {
@@ -2281,8 +2532,12 @@ struct SettingsView: View {
                 if config.capture.recordingTarget == "display" {
                     pickerRow("Display") {
                         Picker("Display", selection: $config.capture.recordingDisplay) {
-                            ForEach(CaptureDisplays.active()) { display in
+                            ForEach(captureDisplays) { display in
                                 Text(display.label).tag(display.index)
+                            }
+                            if !captureDisplays.contains(where: { $0.index == config.capture.recordingDisplay }) {
+                                Text("Display \(config.capture.recordingDisplay) (missing)")
+                                    .tag(config.capture.recordingDisplay)
                             }
                         }
                         .labelsHidden()
@@ -2307,8 +2562,13 @@ struct SettingsView: View {
                 pickerRow("Microphone") {
                     Picker("Microphone", selection: $config.capture.recordingMicrophone) {
                         Text("System default").tag("")
-                        ForEach(CaptureMicrophones.active(), id: \.id) { microphone in
+                        ForEach(microphones, id: \.id) { microphone in
                             Text(microphone.name).tag(microphone.id)
+                        }
+                        if !config.capture.recordingMicrophone.isEmpty,
+                           !microphones.contains(where: { $0.id == config.capture.recordingMicrophone }) {
+                            Text("\(config.capture.recordingMicrophone) (missing)")
+                                .tag(config.capture.recordingMicrophone)
                         }
                     }
                     .labelsHidden()
@@ -2356,7 +2616,7 @@ struct SettingsView: View {
         .foregroundStyle(muted)
     }
 
-    private func engineRow(_ engine: Binding<WebSearchEngine>) -> some View {
+    private func engineRow(_ engine: Binding<WebSearchEngine>, index: Int) -> some View {
         let keyword = Binding(
             get: { engine.wrappedValue.keyword ?? "" },
             set: { engine.wrappedValue.keyword = $0.isEmpty ? nil : $0 }
@@ -2382,7 +2642,8 @@ struct SettingsView: View {
                 engineBrowserButton(engine)
                     .frame(width: 92, alignment: .leading)
                 Button {
-                    engines.removeAll { $0.id == engine.wrappedValue.id }
+                    guard engines.indices.contains(index) else { return }
+                    engines.remove(at: index)
                 } label: {
                     Image(systemName: "trash")
                 }
@@ -2604,6 +2865,7 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Button("Open config.toml") { onOpen(configURL) }
                     Button("Reveal in Finder") { reveal(configURL.path) }
+                    Button("Open config.toml.bak") { onOpen(configURL.appendingPathExtension("bak")) }
                 }
                 HStack(spacing: 8) {
                     Button("Open log") { onOpen(PalettePaths.resolve().logFile) }
@@ -2613,7 +2875,7 @@ struct SettingsView: View {
                 }
                 Button("Export backup…") { onExportBackup() }
             } footer: {
-                Text("Settings writes config.toml for you. Edit it directly only for options that are not in this window, then press ⌘R.")
+                Text("Settings writes config.toml for you. Edit it directly only for options that are not in this window, then press ⌘R. Backups include config, themes, providers, history and encrypted Ask keys: plain-text clipboard entries are removed, image and file entries stay.")
             }
 
             card("Diagnostics") {
@@ -2967,7 +3229,7 @@ struct SettingsView: View {
     private var resetSummary: String {
         switch selectedTab {
         case .general:
-            return "Restores the editor, terminal app, notification, and clipboard-history defaults. Startup, permissions, and power are left alone."
+            return "Restores the editor, terminal, terminal app, notification, and clipboard-history defaults. Startup, permissions, and power are left alone."
         case .launcher:
             return "Restores launcher position, size, behaviour, command prefix, and the embedded terminal defaults."
         case .appearance:
@@ -2988,6 +3250,7 @@ struct SettingsView: View {
         switch selectedTab {
         case .general:
             config.editorOpenWith = defaults.editorOpenWith
+            config.terminal = defaults.terminal
             config.terminalApp = defaults.terminalApp
             config.timer = TimerConfig()
             config.clipboard = ClipboardConfig()
@@ -3078,6 +3341,8 @@ extension Notification.Name {
     static let paletteSettingsJump = Notification.Name("palette.settings.jump")
     /// Clears the Settings search field so a scripted snapshot is canonical.
     static let paletteSettingsClearSearch = Notification.Name("palette.settings.clearSearch")
+    /// Sets the Settings search field from a script, for the same reason.
+    static let paletteSettingsSearch = Notification.Name("palette.settings.search")
 }
 
 /// Borderless AppKit field that records a real key press instead of asking the

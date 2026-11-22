@@ -30,7 +30,12 @@ final class AskImageCache {
             request.setValue("image/*", forHTTPHeaderField: "Accept")
             request.setValue("Palette/1.8 (macOS)", forHTTPHeaderField: "User-Agent")
             guard let (data, response) = try? await session.data(for: request),
-                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  let http = response as? HTTPURLResponse,
+                  http.statusCode == 200,
+                  AskMarkdown.ImagePolicy.accepts(
+                      data: data,
+                      expectedContentLength: http.expectedContentLength
+                  ),
                   let image = NSImage(data: data),
                   image.size.width > 0, image.size.height > 0 else {
                 return nil

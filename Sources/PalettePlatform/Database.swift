@@ -91,10 +91,36 @@ public struct AskChatMessage: Identifiable, Equatable, Sendable {
     }
 }
 
+public struct MaintenanceReport: Sendable, Equatable {
+    public var clipboardRemoved: Int
+    public var chatsRemoved: Int
+    public var bytesBefore: Int64
+    public var bytesAfter: Int64
+    public var vacuumed: Bool
+
+    public init(
+        clipboardRemoved: Int = 0,
+        chatsRemoved: Int = 0,
+        bytesBefore: Int64 = 0,
+        bytesAfter: Int64 = 0,
+        vacuumed: Bool = false
+    ) {
+        self.clipboardRemoved = clipboardRemoved
+        self.chatsRemoved = chatsRemoved
+        self.bytesBefore = bytesBefore
+        self.bytesAfter = bytesAfter
+        self.vacuumed = vacuumed
+    }
+}
+
 public actor PaletteStore {
     private var database: OpaquePointer?
+    private let filePath: String
+    /// VACUUM rewrites the whole file, so at most once per launch.
+    private var hasVacuumed = false
 
     public init(path: String) throws {
+        self.filePath = path
         try FileManager.default.createDirectory(
             at: URL(fileURLWithPath: path).deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -1072,12 +1098,113 @@ public actor PaletteStore {
         let statement = try prepare("""
         DELETE FROM clipboard
         WHERE pinned = 0 AND id NOT IN (
-            SELECT id FROM clipboard ORDER BY pinned DESC, created DESC LIMIT ?
+            SELECT id FROM clipboard WHERE pinned = 0 ORDER BY created DESC LIMIT ?
         );
         """)
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_int(statement, 1, Int32(max(1, maxEntries)))
         try step(statement)
+    }
+
+    // MARK: - Retention
+
+    /// Age-based clipboard retention, an image byte cap (oldest first) and the
+    /// same `[ask] retention_days` applied to saved chats. Safe to call on
+    /// launch and periodically; a large trim checkpoints the WAL, and a file
+    /// that shrank by more than 20% is vacuumed once per launch.
+    @discardableResult
+    public func maintain(
+        clipboardRetentionDays: Int,
+        maxImageBytes: Int,
+        askRetentionDays: Int,
+        now: Date = Date()
+    ) throws -> MaintenanceReport {
+        let before = Self.totalBytes(of: filePath)
+        var report = MaintenanceReport(bytesBefore: before)
+
+        if clipboardRetentionDays > 0 {
+            let cutoff = now.timeIntervalSince1970 - TimeInterval(clipboardRetentionDays * 24 * 60 * 60)
+            let expired = try prepare("DELETE FROM clipboard WHERE pinned = 0 AND created < ?;")
+            sqlite3_bind_double(expired, 1, cutoff)
+            try step(expired)
+            sqlite3_finalize(expired)
+            report.clipboardRemoved += Int(sqlite3_changes(database))
+        }
+
+        if maxImageBytes >= 0 {
+            let total = try intValue("SELECT COALESCE(SUM(LENGTH(image)), 0) FROM clipboard WHERE kind = 'image';")
+            if total > maxImageBytes {
+                let statement = try prepare("""
+                SELECT id, COALESCE(LENGTH(image), 0) FROM clipboard
+                WHERE kind = 'image' AND pinned = 0 ORDER BY created ASC;
+                """)
+                var excess = total - maxImageBytes
+                var doomed: [String] = []
+                while sqlite3_step(statement) == SQLITE_ROW, excess > 0 {
+                    if let idText = sqlite3_column_text(statement, 0) {
+                        doomed.append(String(cString: idText))
+                    }
+                    excess -= Int(sqlite3_column_int64(statement, 1))
+                }
+                sqlite3_finalize(statement)
+                for id in doomed {
+                    let delete = try prepare("DELETE FROM clipboard WHERE id = ?;")
+                    bind(delete, 1, id)
+                    try step(delete)
+                    sqlite3_finalize(delete)
+                }
+                report.clipboardRemoved += doomed.count
+            }
+        }
+
+        if askRetentionDays > 0 {
+            let cutoff = now.timeIntervalSince1970 - TimeInterval(askRetentionDays * 24 * 60 * 60)
+            // Deleting a chat cascades its messages (foreign_keys=ON).
+            let expired = try prepare("DELETE FROM ask_chats WHERE updated < ?;")
+            sqlite3_bind_double(expired, 1, cutoff)
+            try step(expired)
+            sqlite3_finalize(expired)
+            report.chatsRemoved = Int(sqlite3_changes(database))
+        }
+
+        if report.clipboardRemoved > 0 || report.chatsRemoved > 0 {
+            try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        }
+
+        var after = Self.totalBytes(of: filePath)
+        // Deleted pages go on SQLite's freelist, so the file itself does not
+        // shrink until VACUUM. Treat >20% free pages (or an actual shrink) as
+        // "large enough to rewrite", at most once per launch.
+        let pageSize = try intValue("PRAGMA page_size;")
+        let freeBytes = Int64(try intValue("PRAGMA freelist_count;") * max(1, pageSize))
+        let shrank = before > 0 && Double(before - after) / Double(before) > 0.2
+        if !hasVacuumed, before > 0, shrank || Double(freeBytes) / Double(before) > 0.2 {
+            hasVacuumed = true
+            try execute("VACUUM;")
+            // VACUUM writes the rewritten pages through the WAL in WAL mode;
+            // checkpoint so the reported size is the file actually on disk.
+            try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            report.vacuumed = true
+            after = Self.totalBytes(of: filePath)
+        }
+        report.bytesAfter = after
+        return report
+    }
+
+    private func intValue(_ sql: String) throws -> Int {
+        let statement = try prepare(sql)
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
+        return Int(sqlite3_column_int64(statement, 0))
+    }
+
+    /// SQLite's own size: the main file plus a possibly large WAL.
+    private static func totalBytes(of path: String) -> Int64 {
+        let manager = FileManager.default
+        return ["", "-wal", "-shm"].reduce(Int64(0)) { total, suffix in
+            let attributes = try? manager.attributesOfItem(atPath: path + suffix)
+            return total + Int64((attributes?[.size] as? NSNumber)?.int64Value ?? 0)
+        }
     }
 
     // MARK: - SQLite helpers

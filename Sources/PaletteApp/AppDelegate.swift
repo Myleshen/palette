@@ -65,30 +65,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var clamshellObserver: NSObjectProtocol?
     private var searchController: SearchController!
     private var panel: PanelController!
-    private var hotkey: HotKeyManager!
-    private var clipboardHotkey: HotKeyManager!
-    private var terminalHotkey: HotKeyManager!
-    private var scratchpadHotkey: HotKeyManager!
-    private var screenshotHotkey: HotKeyManager!
-    private var regionHotkey: HotKeyManager!
-    private var windowHotkey: HotKeyManager!
-    private var recordingHotkey: HotKeyManager!
-    private var currentScreenshotHotKey: HotKeySpec?
-    private var currentRegionHotKey: HotKeySpec?
-    private var currentWindowHotKey: HotKeySpec?
-    private var currentRecordingHotKey: HotKeySpec?
+    /// Every live manager, keyed by the row id Settings uses.
+    private var hotkeyManagers: [String: HotKeyManager] = [:]
+    private var currentHotKey: HotKeySpec?
+    private var hotKeyInstallTask: Task<Void, Never>?
     private var statusItem: NSStatusItem!
     private var hostProxy: HostBridgeProxy!
     private var appIndex: AppIndex!
-    private var currentHotKey: HotKeySpec?
-    private var currentClipboardHotKey: HotKeySpec?
-    private var currentTerminalHotKey: HotKeySpec?
-    private var currentScratchpadHotKey: HotKeySpec?
-    private var askHotkey: HotKeyManager!
-    private var currentAskHotKey: HotKeySpec?
-    private var webAppHotkeys: [HotKeyManager] = []
-    private var bindingHotkeys: [HotKeyManager] = []
-    private var catalogHotkeys: [HotKeyManager] = []
     /// Bindable catalogue, rebuilt with the registry so provider ids never lie.
     private var catalogCommands: [CatalogCommand] = []
     private var recordingMenuItem: NSMenuItem?
@@ -97,11 +80,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
     private var askWindow: AskWindowController?
+    private var aboutWindow: AboutWindowController?
     private var systemIsShuttingDown = false
     private var askService: AskService?
     private var startupDiagnostics: [Diagnostic] = []
+    /// Set when config.toml cannot be parsed; auto-apply must not overwrite it.
+    private var configErrorMessage: String?
     private var themeObserver: NSObjectProtocol?
     private var watcherTimer: Timer?
+    private var maintenanceTimer: Timer?
+    private var configChangeTask: DispatchWorkItem?
+    private var maintenanceRunning = false
+    private var pendingLaunchStatus: String?
     private var lastConfigModification: Date?
     private var lastThemesSignature: Date?
     private var lastProvidersSignature: Date?
@@ -167,6 +157,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let configResult = ConfigLoader.load(paths: paths)
         configuration = configResult.config
         startupDiagnostics = configResult.diagnostics
+        configErrorMessage = configResult.parseError
+        captureService.stateFile = paths.stateDir.appendingPathComponent("recording.json")
+        let recordingAdoption = captureService.adoptPendingRecording()
         let forceOnboarding = ProcessInfo.processInfo.environment["PALETTE_FORCE_ONBOARDING"] == "1"
         shouldShowOnboarding = (configResult.createdDefault || forceOnboarding)
             && (forceOnboarding || !UserDefaults.standard.bool(forKey: "onboardingCompleted"))
@@ -178,14 +171,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
 
+        removeStaleLegacyFiles()
+        let fallbackDatabase = paths.stateDir.appendingPathComponent("palette-fallback.sqlite")
         do {
             store = try PaletteStore(path: paths.databaseFile.path)
+            // A fallback from an old failed launch is stale once the real file
+            // opens. Keep it, renamed, rather than merging histories (out of
+            // scope for this release) or deleting user data silently.
+            if FileManager.default.fileExists(atPath: fallbackDatabase.path) {
+                let kept = fallbackDatabase.appendingPathExtension("bak")
+                try? FileManager.default.removeItem(at: kept)
+                do {
+                    try FileManager.default.moveItem(at: fallbackDatabase, to: kept)
+                    Log.shared.warn("Recovered from a fallback database; old file kept at \(kept.path)", source: "storage")
+                    pendingLaunchStatus = "Recovered from a fallback database; the old file is kept at \(kept.path)"
+                } catch {
+                    Log.shared.warn("Could not archive the fallback database: \(error.localizedDescription)", source: "storage")
+                }
+            }
         } catch {
             Log.shared.error("Database failed: \(error.localizedDescription)", source: "app")
-            let fallback = paths.stateDir.appendingPathComponent("palette-fallback.sqlite")
             do {
-                store = try PaletteStore(path: fallback.path)
-                startupDiagnostics.append(Diagnostic(.warning, "Primary database unavailable; using \(fallback.lastPathComponent).", source: "storage"))
+                store = try PaletteStore(path: fallbackDatabase.path)
+                startupDiagnostics.append(Diagnostic(.warning, "Primary database unavailable; using \(fallbackDatabase.lastPathComponent).", source: "storage"))
             } catch {
                 fputs("Palette: database unavailable: \(error)\n", stderr)
                 NSApp.terminate(nil)
@@ -199,6 +207,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         registerLoginItemOnFirstLaunch()
         launcher = LauncherService()
         pasteboard = PasteboardService()
+        pasteboard.stateFile = paths.stateDir.appendingPathComponent("clipboard-clear.json")
+        pasteboard.resumePendingClear()
+
         Log.shared.info("Accessibility trusted=\(pasteboard.isAccessibilityTrusted)", source: "app")
         if !pasteboard.isAccessibilityTrusted {
             // Make the permission gap visible instead of silently copying.
@@ -213,7 +224,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.window = configuration.window
         themeManager.searchPlaceholder = configuration.searchPlaceholder
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
+        captureService.requestsPermission = !isScriptMode
         captureService.config = configuration.capture
+        // A timer that outlived a quit resumes here; one that expired while the
+        // app was closed announces itself once and is cleared.
+        let timerAdoption = timerService.adopt(stateDir: paths.stateDir)
+        captureService.onConfigChanged = { [weak self] capture in
+            guard let self, self.configuration.capture != capture else { return }
+            self.configuration.capture = capture
+            do {
+                try self.writeConfig(self.configuration)
+            } catch {
+                Log.shared.warn("Could not save the recording target: \(error.localizedDescription)", source: "capture")
+            }
+        }
         themeManager.reload()
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
@@ -224,6 +248,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let builtRegistry = buildRegistry()
         registry = builtRegistry
+        // A badge left by an answer that landed while Palette was quitting
+        // comes back with the chat that owns it.
+        Task { [weak self] in
+            guard let self, let askService = self.askService,
+                  await askService.unseenChatID() != nil else { return }
+            NSApp.dockTile.badgeLabel = "1"
+        }
         // Warm `/edit` and `/neo` off the main thread: the walk is cached to
         // disk, so the first bound query after this launch is instant.
         if ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] == nil {
@@ -233,7 +264,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
-        Task { await refreshWebAppHotkeys() }
         searchController = SearchController(
             registry: registry,
             configuration: configuration,
@@ -246,6 +276,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         hostProxy.setTarget(searchController)
         searchController.observeTimerTicks()
+        if case .expired = timerAdoption {
+            searchController.setStatus("Timer finished while Palette was closed", duration: 8)
+        }
         captureService.onStatus = { [weak self] message in
             self?.searchController.setStatus(message, duration: 4)
         }
@@ -293,7 +326,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installHotKey()
         configureClipboard()
         buildStatusItem()
+        if case .adopted = recordingAdoption {
+            updateRecordingMenuItem()
+            startRecordingTicker()
+            searchController?.setStatus("Recording in progress", duration: nil)
+        }
+
         installThemeObserver()
+        configureWatchers()
+        scheduleDatabaseMaintenance()
         showOnboardingIfNeeded()
 
         if let firstError = startupDiagnostics.first(where: { $0.level == .error }) {
@@ -301,9 +342,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else if let warning = startupDiagnostics.first(where: { $0.level == .warning }) {
             Log.shared.warn(warning.message, source: warning.source ?? "app")
         }
+        if let pendingLaunchStatus {
+            searchController.setStatus(pendingLaunchStatus, duration: nil)
+        }
 
         Task { [weak self] in
             await self?.themeManager.restore()
+        }
+        // Adopt a caffeinate session and a clamshell guard that outlived the
+        // last run, so Settings and the menu show what is really on.
+        Task { [weak self] in
+            await self?.keepAwake.restore()
+            await self?.refreshKeepAwakeMenu()
+            self?.searchController.refreshResults()
         }
 
         if ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] != nil {
@@ -355,6 +406,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.toggleRecording()
                 } else if step == "clamshell" {
                     try? await self.keepAwake.setClamshell(true)
+                } else if step == "awake_stop" {
+                    await self.keepAwake.stop()
                 } else if let value = step.dropPrefix("awake=") {
                     try? await self.keepAwake.start(duration: Double(value))
                 } else if let value = step.dropPrefix("annotate=") {
@@ -374,6 +427,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     try? await Task.sleep(nanoseconds: 300_000_000)
                 } else if step == "settings" {
                     self.showSettings()
+                } else if step == "about" {
+                    self.showAboutWindow()
                 } else if let value = step.dropPrefix("settings_tab="), let index = Int(value) {
                     self.showSettings()
                     try? await Task.sleep(nanoseconds: 300_000_000)
@@ -390,6 +445,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.showSettings()
                     try? await Task.sleep(nanoseconds: 300_000_000)
                     NotificationCenter.default.post(name: .paletteSettingsJump, object: value)
+                } else if let value = step.dropPrefix("settings_search=") {
+                    self.showSettings()
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    NotificationCenter.default.post(name: .paletteSettingsSearch, object: value)
                 } else if let value = step.dropPrefix("config=") {
                     let parts = value.split(separator: "=", maxSplits: 1).map(String.init)
                     if parts.count == 2, var updated: PaletteConfig = self.configuration {
@@ -405,6 +464,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             break
                         }
                         _ = self.applySettings(updated)
+                    }
+                } else if let value = step.dropPrefix("export_backup=") {
+                    if !self.writeBackup(to: URL(fileURLWithPath: value)) {
+                        self.recordScriptFailure("backup export failed")
                     }
                 } else if let value = step.dropPrefix("screen_override=") {
                     let parts = value.lowercased().split(separator: "x").compactMap { Double($0) }
@@ -426,6 +489,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     NotificationCenter.default.post(name: .paletteSettingsClearSearch, object: nil)
                 } else if step == "clipboard" {
                     self.showClipboard()
+                } else if let value = step.dropPrefix("clipboard_test=") {
+                    // Script-only: exercises the persisted clear window.
+                    let parts = value.split(separator: "|", maxSplits: 1).map(String.init)
+                    let clearAfterMs = parts.count == 2 ? Int(parts[1]) ?? 0 : 0
+                    self.pasteboard.write(text: parts[0], concealed: true, clearAfterMs: clearAfterMs)
                 } else if step == "scratchpad" {
                     self.searchController.openScratchpad()
                 } else if let question = step.dropPrefix("askwindow=") {
@@ -467,6 +535,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.fireBinding(keys: value)
                 } else if let value = step.dropPrefix("query=") {
                     self.searchController.query = value
+                } else if step == "refresh" {
+                    self.searchController.refreshResults()
                 } else if let value = step.dropPrefix("snapshot=") {
                     self.writeSnapshot(to: value)
                 } else if let value = step.dropPrefix("probe=") {
@@ -481,6 +551,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.write(view: hud.contentView ?? NSView(), to: value)
                     } else if let hudView = self.screenshotHUD.view {
                         self.write(view: hudView, to: value)
+                    } else if let about = self.aboutWindow?.window {
+                        // Include the titlebar, as the ask window does above.
+                        self.write(view: about.contentView?.superview ?? NSView(), to: value)
                     } else if let other = NSApp.keyWindow ?? NSApp.windows.last(where: { $0.isVisible }) {
                         self.write(view: other.contentView ?? NSView(), to: value)
                     }
@@ -845,11 +918,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // A raw screencapture child outlives us unless we stop it here; SIGINT
+        // lets it finalise the file before the app disappears.
+        captureService.stopRecordingOnQuit()
         watcherTimer?.invalidate()
         clipboardMonitor?.stop()
-        hotkey?.unregister()
-        // Restore normal lid sleep even if the async cleanup does not finish.
-        ClamshellGuard.clearFlag()
+        hotkeyManagers.values.forEach { $0.unregister() }
+        // A draft that was never explicitly closed must survive the quit.
+        searchController?.saveScratchpadOnTerminate()
+        // Keep the clamshell flag: the next launch reads it back and shows the
+        // real state. The root guard itself restores normal lid sleep when this
+        // process disappears. The caffeinate child is left running on purpose.
         if let themeObserver {
             DistributedNotificationCenter.default().removeObserver(themeObserver)
         }
@@ -896,7 +975,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ColorProvider(bridge: hostProxy))
         providers.append(StatsProvider(bridge: hostProxy))
         providers.append(SSHProvider(launcher: launcher, terminalApp: configuration.terminalApp))
-        providers.append(DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp))
+        let docker = DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp, bridge: hostProxy)
+        docker.onRefresh = { [weak self] in self?.searchController?.refreshResults() }
+        providers.append(docker)
         providers.append(UnitsProvider(bridge: hostProxy))
         providers.append(WindowProvider(launcher: launcher))
         providers.append(ShotsProvider(service: captureService, bridge: hostProxy))
@@ -915,8 +996,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ClipboardProvider(store: store, bridge: hostProxy))
         let askService = AskService(store: store, configuration: configuration.ask)
         self.askService = askService
-        providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, onChange: { [weak self] in
-            await self?.refreshWebAppHotkeys()
+        providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, favicons: configuration.window.favicons, onChange: { [weak self] in
+            await self?.installHotKey()
         }))
         providers.append(BookmarkProvider())
         providers.append(AtlasProvider(bridge: hostProxy))
@@ -948,7 +1029,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let themes = ThemeProvider(
             themesDirectory: paths.themesDir,
             launcher: launcher,
-            onSelect: { [weak self] name in self?.themeManager.select(name) },
+            onSelect: { [weak self] name in self?.pickTheme(name) },
             currentName: { [weak self] in self?.themeManager.currentThemeID ?? "" }
         )
         providers.append(themes)
@@ -1047,101 +1128,131 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] != nil
     }
 
+    /// Scripted runs skip Carbon by default. The opt-in exists so a snapshot
+    /// can prove the unavailable rows Settings draws for a real registration.
+    private var registersGlobalHotKeys: Bool {
+        !isScriptMode || ProcessInfo.processInfo.environment["PALETTE_FORCE_HOTKEYS"] == "1"
+    }
+
     private func installHotKey() {
-        guard !isScriptMode else { return }
-        installLauncherHotKey()
-        installClipboardHotKey()
-        installTerminalHotKey()
-        installScratchpadHotKey()
-        installAskHotKey()
-        installScreenshotHotKey()
-        installRegionHotKey()
-        installWindowHotKey()
-        installRecordingHotKey()
-        installBindingHotKeys()
-        installCatalogHotKeys()
+        guard registersGlobalHotKeys else { return }
+        hotKeyInstallTask?.cancel()
+        hotKeyInstallTask = Task { [weak self] in
+            guard let self else { return }
+            let apps = (try? await self.store.webApps()) ?? []
+            guard !Task.isCancelled else { return }
+            self.applyHotKeys(webApps: apps)
+        }
     }
 
-    /// User `[[binding]]` rows live above 200 so they never collide with the
-    /// 1–9 app hotkeys or the 100+ web-app range. A shortcut that is invalid,
-    /// repeated, or already taken by a built-in key is logged and skipped, not
-    /// allowed to take the app down.
-    private func installBindingHotKeys() {
-        bindingHotkeys.forEach { $0.unregister() }
-        bindingHotkeys.removeAll()
-        let reserved = [
-            configuration.hotkey, configuration.clipboardHotkey,
-            configuration.terminalHotkey, configuration.scratchpadHotkey,
-            configuration.askHotkey, configuration.screenshotHotkey,
-            configuration.regionScreenshotHotkey, configuration.windowScreenshotHotkey,
-            configuration.recordingHotkey,
+    /// One ordered pass: built-ins, web apps, `[[binding]]`, catalogue. A later
+    /// duplicate loses to the earlier owner, so launch, ⌘R and a web-app change
+    /// all resolve the same way. Registration failures (another app owns the
+    /// key) land in `HotKeyRegistry` for Settings.
+    private func applyHotKeys(webApps: [WebApp]) {
+        guard registersGlobalHotKeys else { return }
+        hotkeyManagers.values.forEach { $0.unregister() }
+        hotkeyManagers.removeAll()
+        currentHotKey = nil
+
+        struct Desired {
+            var id: String
+            var label: String
+            var keys: String
+            var press: () -> Void
+            var isLauncher = false
+        }
+
+        var desired: [Desired] = [
+            Desired(id: "launcher", label: "Launcher shortcut", keys: configuration.hotkey,
+                    press: { [weak self] in self?.togglePalette() }, isLauncher: true),
+            Desired(id: "clipboard", label: "Clipboard shortcut", keys: configuration.clipboardHotkey,
+                    press: { [weak self] in self?.showClipboard() }),
+            Desired(id: "terminal", label: "Terminal shortcut", keys: configuration.terminalHotkey,
+                    press: { [weak self] in self?.toggleTerminalPanel() }),
+            Desired(id: "scratchpad", label: "Scratchpad shortcut", keys: configuration.scratchpadHotkey,
+                    press: { [weak self] in self?.toggleScratchpad() }),
+            Desired(id: "ask", label: "Ask shortcut", keys: configuration.askHotkey,
+                    press: { [weak self] in self?.toggleAskWindow() }),
+            Desired(id: "screen", label: "Screen shortcut", keys: configuration.screenshotHotkey,
+                    press: { [weak self] in self?.captureScreenshot() }),
+            Desired(id: "region", label: "Region shortcut", keys: configuration.regionScreenshotHotkey,
+                    press: { [weak self] in self?.captureScreenshot(mode: .region) }),
+            Desired(id: "window", label: "Window shortcut", keys: configuration.windowScreenshotHotkey,
+                    press: { [weak self] in self?.captureScreenshot(mode: .window) }),
+            Desired(id: "recording", label: "Recording shortcut", keys: configuration.recordingHotkey,
+                    press: { [weak self] in self?.toggleRecording() }),
         ]
-        let plan = HotKeyBindings.usable(configuration.bindings, reserved: reserved)
-        plan.issues.forEach { Log.shared.warn($0, source: "hotkey") }
-        var nextID: UInt32 = 200
-        for binding in plan.usable {
-            let manager = HotKeyManager(hotKeyID: nextID)
-            manager.onPressed = { [weak self] in self?.performBinding(binding) }
-            do {
-                try manager.register(binding.keys)
-                bindingHotkeys.append(manager)
-                Log.shared.info(
-                    "Binding registered: \(HotKeySpec.parse(binding.keys)?.prettyDisplay ?? binding.keys) → \(binding.action.rawValue) \(binding.value)",
-                    source: "hotkey"
-                )
-                nextID += 1
-            } catch {
-                Log.shared.warn(
-                    "Binding \(binding.keys) → \(binding.value) is unavailable: \(error.localizedDescription)",
-                    source: "hotkey"
-                )
-            }
-        }
-    }
 
-    /// Catalogue shortcuts live above 300. Rows are user data: an unknown
-    /// command, invalid key, duplicate, or collision with a built-in or
-    /// `[[binding]]` key is logged and skipped, never fatal.
-    private func installCatalogHotKeys() {
-        catalogHotkeys.forEach { $0.unregister() }
-        catalogHotkeys.removeAll()
-        let reserved = [
-            configuration.hotkey, configuration.clipboardHotkey,
-            configuration.terminalHotkey, configuration.scratchpadHotkey,
-            configuration.askHotkey, configuration.screenshotHotkey,
-            configuration.regionScreenshotHotkey, configuration.windowScreenshotHotkey,
-            configuration.recordingHotkey,
-        ] + configuration.bindings.map(\.keys)
-        let plan = ShortcutResolver.resolve(
-            configuration.shortcuts,
-            commands: catalogCommands,
-            reserved: reserved
-        )
-        plan.issues.forEach {
-            Log.shared.warn($0, source: "hotkey")
-            startupDiagnostics.append(Diagnostic(.warning, $0, source: "hotkey"))
+        for app in webApps {
+            guard let raw = app.shortcut, !raw.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            let browser = configuration.webAppBrowser
+            Log.shared.info("Web app hotkey target: \(app.name) → \(browser.isEmpty ? "system default" : browser)", source: "hotkey")
+            desired.append(Desired(id: "web:\(app.id)", label: app.name, keys: raw,
+                                   press: { [weak self] in self?.launcher.openWebApp(app.url, browser: browser) }))
         }
+
+        for (index, binding) in configuration.bindings.enumerated() {
+            let keys = binding.keys.trimmingCharacters(in: .whitespaces)
+            guard !keys.isEmpty else { continue }
+            let value = binding.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else {
+                Log.shared.warn("Binding '\(keys)' skipped: keys and a value are required.", source: "hotkey")
+                continue
+            }
+            desired.append(Desired(id: "binding-\(index)", label: "Custom hotkey \(index + 1)", keys: keys,
+                                   press: { [weak self] in self?.performBinding(binding) }))
+        }
+
         let byID = Dictionary(uniqueKeysWithValues: catalogCommands.map { ($0.id, $0) })
-        var nextID: UInt32 = 300
-        for shortcut in plan.resolved {
-            guard let command = byID[shortcut.command] else { continue }
+        for shortcut in configuration.shortcuts {
+            let keys = shortcut.keys.trimmingCharacters(in: .whitespaces)
+            guard !keys.isEmpty else { continue }
+            guard let command = byID[shortcut.command] else {
+                Log.shared.warn("Shortcut '\(shortcut.command)' skipped: unknown command.", source: "hotkey")
+                continue
+            }
+            desired.append(Desired(id: shortcut.command, label: command.title, keys: keys,
+                                   press: { [weak self] in self?.performCatalogCommand(command) }))
+        }
+
+        let plan = HotKeyPlan.resolve(desired.map {
+            HotKeyRequest(id: $0.id, label: $0.label, keys: $0.keys)
+        })
+        var statuses: [HotKeyStatus] = []
+        var nextID: UInt32 = 1
+        for (index, result) in plan.enumerated() {
+            let item = desired[index]
+            guard !result.request.keys.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            if let unavailable = result.unavailable {
+                statuses.append(HotKeyStatus(id: item.id, label: item.label, keys: item.keys, unavailable: unavailable))
+                Log.shared.warn("Hotkey \(item.keys) for \(item.label): \(unavailable)", source: "hotkey")
+                continue
+            }
             let manager = HotKeyManager(hotKeyID: nextID)
-            manager.onPressed = { [weak self] in self?.performCatalogCommand(command) }
+            nextID += 1
+            manager.onPressed = item.press
             do {
-                try manager.register(shortcut.keys)
-                catalogHotkeys.append(manager)
-                Log.shared.info(
-                    "Command shortcut registered: \(HotKeySpec.parse(shortcut.keys)?.prettyDisplay ?? shortcut.keys) → \(command.title)",
-                    source: "hotkey"
-                )
-                nextID += 1
+                let spec = try manager.register(item.keys)
+                hotkeyManagers[item.id] = manager
+                statuses.append(HotKeyStatus(id: item.id, label: item.label, keys: item.keys))
+                if item.isLauncher { currentHotKey = spec }
+                Log.shared.info("Hotkey registered: \(spec.prettyDisplay) → \(item.label)", source: "hotkey")
             } catch {
+                statuses.append(HotKeyStatus(
+                    id: item.id, label: item.label, keys: item.keys, unavailable: HotKeyUnavailable.anotherApp
+                ))
                 Log.shared.warn(
-                    "Command shortcut \(shortcut.keys) for \(command.title) is unavailable: \(error.localizedDescription)",
+                    "Hotkey \(item.keys) for \(item.label) is unavailable: \(error.localizedDescription)",
                     source: "hotkey"
                 )
+                if item.isLauncher {
+                    startupDiagnostics.append(Diagnostic(.error, error.localizedDescription, source: "hotkey"))
+                    searchController?.setStatus("Hotkey unavailable: \(error.localizedDescription)", duration: nil)
+                }
             }
         }
+        HotKeyRegistry.replaceAll(statuses)
     }
 
     private func performCatalogCommand(_ command: CatalogCommand) {
@@ -1235,138 +1346,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func installLauncherHotKey() {
-        let previous = currentHotKey
-        if hotkey == nil {
-            hotkey = HotKeyManager()
-            hotkey.onPressed = { [weak self] in self?.togglePalette() }
-        }
-        let manager = hotkey!
-        do {
-            currentHotKey = try manager.register(configuration.hotkey)
-            Log.shared.info("Hotkey registered: \(currentHotKey?.display ?? configuration.hotkey)", source: "hotkey")
-        } catch {
-            currentHotKey = nil
-            if let previous, (try? manager.register(previous.display)) != nil {
-                currentHotKey = previous
-                Log.shared.warn("Hotkey '\(configuration.hotkey)' unavailable; kept '\(previous.display)'", source: "hotkey")
-                searchController?.setStatus("Hotkey unavailable; kept \(previous.display)", duration: 4)
-                return
-            }
-            startupDiagnostics.append(Diagnostic(.error, error.localizedDescription, source: "hotkey"))
-            Log.shared.error("Hotkey registration failed: \(error.localizedDescription)", source: "hotkey")
-            searchController?.setStatus("Hotkey unavailable: \(error.localizedDescription)", duration: nil)
-        }
-    }
-
-    private func installClipboardHotKey() {
-        guard !configuration.clipboardHotkey.isEmpty else {
-            clipboardHotkey?.unregister()
-            currentClipboardHotKey = nil
-            return
-        }
-        if clipboardHotkey == nil {
-            clipboardHotkey = HotKeyManager(hotKeyID: 2)
-            clipboardHotkey.onPressed = { [weak self] in self?.showClipboard() }
-        }
-        do {
-            currentClipboardHotKey = try clipboardHotkey.register(configuration.clipboardHotkey)
-            Log.shared.info("Clipboard hotkey registered: \(currentClipboardHotKey?.display ?? configuration.clipboardHotkey)", source: "hotkey")
-        } catch {
-            currentClipboardHotKey = nil
-            Log.shared.warn(
-                "Clipboard hotkey '\(configuration.clipboardHotkey)' unavailable: \(error.localizedDescription)",
-                source: "hotkey"
-            )
-        }
-    }
-
-    private func installScreenshotHotKey() {
-        guard !configuration.screenshotHotkey.isEmpty else {
-            screenshotHotkey?.unregister()
-            currentScreenshotHotKey = nil
-            return
-        }
-        if screenshotHotkey == nil {
-            screenshotHotkey = HotKeyManager(hotKeyID: 6)
-            screenshotHotkey.onPressed = { [weak self] in self?.captureScreenshot() }
-        }
-        do {
-            currentScreenshotHotKey = try screenshotHotkey.register(configuration.screenshotHotkey)
-            Log.shared.info("Screenshot hotkey registered: \(currentScreenshotHotKey?.display ?? configuration.screenshotHotkey)", source: "hotkey")
-        } catch {
-            currentScreenshotHotKey = nil
-            Log.shared.warn("Screenshot hotkey '\(configuration.screenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
-            searchController?.setStatus(hotkeyTaken("\u{2318}\u{21E7}3"), duration: 8)
-        }
-    }
-
-    private func installRegionHotKey() {
-        guard !configuration.regionScreenshotHotkey.isEmpty else {
-            regionHotkey?.unregister()
-            currentRegionHotKey = nil
-            return
-        }
-        if regionHotkey == nil {
-            regionHotkey = HotKeyManager(hotKeyID: 8)
-            regionHotkey.onPressed = { [weak self] in self?.captureScreenshot(mode: .region) }
-        }
-        do {
-            currentRegionHotKey = try regionHotkey.register(configuration.regionScreenshotHotkey)
-            Log.shared.info("Region hotkey registered: \(currentRegionHotKey?.display ?? configuration.regionScreenshotHotkey)", source: "hotkey")
-        } catch {
-            currentRegionHotKey = nil
-            Log.shared.warn("Region hotkey '\(configuration.regionScreenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
-            searchController?.setStatus(hotkeyTaken(configuration.regionScreenshotHotkey), duration: 8)
-        }
-    }
-
-    private func installWindowHotKey() {
-        guard !configuration.windowScreenshotHotkey.isEmpty else {
-            windowHotkey?.unregister()
-            currentWindowHotKey = nil
-            return
-        }
-        if windowHotkey == nil {
-            windowHotkey = HotKeyManager(hotKeyID: 9)
-            windowHotkey.onPressed = { [weak self] in self?.captureScreenshot(mode: .window) }
-        }
-        do {
-            currentWindowHotKey = try windowHotkey.register(configuration.windowScreenshotHotkey)
-            Log.shared.info("Window hotkey registered: \(currentWindowHotKey?.display ?? configuration.windowScreenshotHotkey)", source: "hotkey")
-        } catch {
-            currentWindowHotKey = nil
-            Log.shared.warn("Window hotkey '\(configuration.windowScreenshotHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
-            searchController?.setStatus(hotkeyTaken(configuration.windowScreenshotHotkey), duration: 8)
-        }
-    }
-
-    private func installRecordingHotKey() {
-        guard !configuration.recordingHotkey.isEmpty else {
-            recordingHotkey?.unregister()
-            currentRecordingHotKey = nil
-            return
-        }
-        if recordingHotkey == nil {
-            recordingHotkey = HotKeyManager(hotKeyID: 7)
-            recordingHotkey.onPressed = { [weak self] in self?.toggleRecording() }
-        }
-        do {
-            currentRecordingHotKey = try recordingHotkey.register(configuration.recordingHotkey)
-            Log.shared.info("Recording hotkey registered: \(currentRecordingHotKey?.display ?? configuration.recordingHotkey)", source: "hotkey")
-        } catch {
-            currentRecordingHotKey = nil
-            Log.shared.warn("Recording hotkey '\(configuration.recordingHotkey)' unavailable: \(error.localizedDescription)", source: "hotkey")
-            searchController?.setStatus(hotkeyTaken(configuration.recordingHotkey), duration: 8)
-        }
-    }
-
-    /// A taken shortcut is not an error the user can fix silently: say which key
-    /// and where to change it.
-    private func hotkeyTaken(_ key: String) -> String {
-        "\(key) is already used by another app (Shottr, Raycast…). Pick another in Settings → Shortcuts."
-    }
-
     // MARK: - Capture actions
 
     /// Runs a capture with the launcher left open and key: the screenshot should
@@ -1381,8 +1360,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         await body()
         if wasVisible,
            annotateWindows.count + mediaPreviews.count == editorsBefore,
-           let panel, panel.isVisible, !panel.panel.isKeyWindow {
-            panel.panel.makeKeyAndOrderFront(nil)
+           let panel {
+            // The capture can trigger a system permission dialog and hide the
+            // panel. show() also restores PanelController's own state, which
+            // makeKeyAndOrderFront alone does not.
+            if panel.isVisible {
+                if !panel.panel.isKeyWindow { panel.panel.makeKeyAndOrderFront(nil) }
+            } else {
+                panel.show()
+            }
         }
         panel?.suppressAutoHide = previousSuppress
     }
@@ -1393,7 +1379,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             await self.captureKeepingPanel {
                 do {
                     let result = try await self.captureService.screenshot(mode)
-                    self.searchController.setStatus("Saved \(result.url.lastPathComponent)", duration: 4)
+                    if FileManager.default.fileExists(atPath: result.url.path) {
+                        self.searchController.setStatus("Saved \(result.url.lastPathComponent)", duration: 4)
+                    } else {
+                        self.searchController.setStatus("Screenshot copied", duration: 4)
+                    }
                 } catch CaptureError.cancelled {
                     self.searchController.setStatus("Screenshot cancelled", duration: 3)
                 } catch {
@@ -1428,12 +1418,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         await self.searchController.notify("Recording failed: \(error.localizedDescription)")
                     }
                     self.updateRecordingMenuItem()
-                    self.recordingTicker?.invalidate()
-                    self.recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                        Task { @MainActor in self?.updateRecordingMenuItem() }
-                    }
+                    self.startRecordingTicker()
                 }
             }
+        }
+    }
+
+    private func startRecordingTicker() {
+        recordingTicker?.invalidate()
+        recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateRecordingMenuItem() }
         }
     }
 
@@ -1493,7 +1487,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             color: .systemBlue,
             width: 0.004
         ))
-        editor.add(.text(at: CGPoint(x: 0.1, y: 0.6), text: "Palette", size: 0.06, color: .systemYellow))
+        editor.color = .systemYellow
+        editor.textSize = 0.06
+        editor.addText(at: CGPoint(x: 0.1, y: 0.6), text: "Palette")
         editor.crop(to: CGRect(x: 0.05, y: 0.05, width: 0.8, height: 0.8))
         guard let data = editor.renderedPNG() else {
             Log.shared.error("annotate_export could not encode", source: "capture")
@@ -1629,6 +1625,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.updateActivationPolicy()
             let panelFrame = self.panel?.isVisible == true ? self.panel?.panel.frame : nil
             controller.show(below: panelFrame)
+            // Reopening with no question restores the last chat instead of an
+            // empty transcript.
+            if trimmed.isEmpty,
+               let lastID = await askService.lastChatID(),
+               let chat = (try? await askService.chats(limit: 200))?
+                   .first(where: { $0.id == lastID }) {
+                controller.open(chat: chat)
+            }
         }
     }
 
@@ -1659,6 +1663,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleAskWindow()
     }
 
+    private func showAboutWindow() {
+        if aboutWindow == nil {
+            aboutWindow = AboutWindowController(themeManager: themeManager)
+        }
+        aboutWindow?.show()
+    }
+
+    @objc private func showAboutWindowFromMenu() {
+        showAboutWindow()
+    }
+
     /// Opens the Nth saved chat in the current ask window. Script-only hook so
     /// the relaunch test can restore a transcript without mouse input.
     private func openSavedChat(at index: Int) {
@@ -1678,6 +1693,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for controller in annotateWindows { controller.apply(theme: theme) }
         for controller in mediaPreviews { controller.apply(theme: theme) }
         askWindow?.apply(theme: theme)
+        aboutWindow?.apply(theme: theme)
     }
 
     @objc private func stopRecordingFromMenu() {
@@ -1711,72 +1727,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func installTerminalHotKey() {
-        guard !configuration.terminalHotkey.isEmpty else {
-            terminalHotkey?.unregister()
-            currentTerminalHotKey = nil
-            return
-        }
-        if terminalHotkey == nil {
-            terminalHotkey = HotKeyManager(hotKeyID: 3)
-            terminalHotkey.onPressed = { [weak self] in self?.toggleTerminalPanel() }
-        }
-        do {
-            currentTerminalHotKey = try terminalHotkey.register(configuration.terminalHotkey)
-            Log.shared.info("Terminal hotkey registered: \(currentTerminalHotKey?.display ?? configuration.terminalHotkey)", source: "hotkey")
-        } catch {
-            currentTerminalHotKey = nil
-            Log.shared.warn(
-                "Terminal hotkey '\(configuration.terminalHotkey)' unavailable: \(error.localizedDescription)",
-                source: "hotkey"
-            )
-        }
-    }
-
-    private func installScratchpadHotKey() {
-        guard !configuration.scratchpadHotkey.isEmpty else {
-            scratchpadHotkey?.unregister()
-            currentScratchpadHotKey = nil
-            return
-        }
-        if scratchpadHotkey == nil {
-            scratchpadHotkey = HotKeyManager(hotKeyID: 4)
-            scratchpadHotkey.onPressed = { [weak self] in self?.toggleScratchpad() }
-        }
-        do {
-            currentScratchpadHotKey = try scratchpadHotkey.register(configuration.scratchpadHotkey)
-            Log.shared.info("Scratchpad hotkey registered: \(currentScratchpadHotKey?.display ?? configuration.scratchpadHotkey)", source: "hotkey")
-        } catch {
-            currentScratchpadHotKey = nil
-            Log.shared.warn(
-                "Scratchpad hotkey '\(configuration.scratchpadHotkey)' unavailable: \(error.localizedDescription)",
-                source: "hotkey"
-            )
-        }
-    }
-
-    private func installAskHotKey() {
-        guard !configuration.askHotkey.isEmpty else {
-            askHotkey?.unregister()
-            currentAskHotKey = nil
-            return
-        }
-        if askHotkey == nil {
-            askHotkey = HotKeyManager(hotKeyID: 5)
-            askHotkey.onPressed = { [weak self] in self?.toggleAskWindow() }
-        }
-        do {
-            currentAskHotKey = try askHotkey.register(configuration.askHotkey)
-            Log.shared.info("Ask hotkey registered: \(currentAskHotKey?.display ?? configuration.askHotkey)", source: "hotkey")
-        } catch {
-            currentAskHotKey = nil
-            Log.shared.warn(
-                "Ask hotkey '\(configuration.askHotkey)' unavailable: \(error.localizedDescription)",
-                source: "hotkey"
-            )
-        }
-    }
-
     private func toggleTerminalPanel() {
         guard let controller = searchController else { return }
         if controller.terminalActive {
@@ -1802,14 +1752,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func configureClipboard() {
-        clipboardMonitor?.stop()
         guard !isScriptMode, configuration.clipboard.enabled else {
+            clipboardMonitor?.stop()
             clipboardMonitor = nil
             return
         }
         let store = store!
         let limit = configuration.clipboard.maxEntries
-        let monitor = ClipboardMonitor()
+        // A reload (including every Settings keystroke) must not drop a copy
+        // that landed while the config was being applied, so an existing
+        // monitor keeps its last change count.
+        let monitor = clipboardMonitor ?? ClipboardMonitor()
         let controller = searchController
         monitor.onCapture = { capture in
             Task {
@@ -1836,7 +1789,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
-        monitor.start(intervalMs: configuration.clipboard.pollMs)
+        monitor.start(intervalMs: configuration.clipboard.pollMs, preserveChangeCount: clipboardMonitor != nil)
         clipboardMonitor = monitor
     }
 
@@ -1860,7 +1813,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             providers: providerSettingsInfo()
         )
         do {
-            try ConfigWriter.render(essentials).write(to: paths.configFile, atomically: true, encoding: .utf8)
+            try writeConfig(essentials)
         } catch {
             Log.shared.warn("Could not save the Essentials preset: \(error.localizedDescription)", source: "onboarding")
         }
@@ -1881,7 +1834,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onFinish: { [weak self] updated in
                 guard let self else { return }
                 do {
-                    try ConfigWriter.render(updated).write(to: self.paths.configFile, atomically: true, encoding: .utf8)
+                    try self.writeConfig(updated)
                 } catch {
                     self.searchController.setStatus("Could not save setup: \(error.localizedDescription)", duration: 4)
                 }
@@ -1944,18 +1897,138 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let isInstalled = bundlePath.hasPrefix("/Applications/")
             || bundlePath.hasPrefix(NSHomeDirectory() + "/Applications/")
         // A debug build must never become the login item or consume the seed.
-        guard isInstalled else { return }
+        guard isInstalled else {
+            Log.shared.info("Login item left alone: Palette is not running from /Applications", source: "app")
+            return
+        }
         let seeded = "loginItemSeeded"
-        guard !UserDefaults.standard.bool(forKey: seeded) else { return }
-        UserDefaults.standard.set(true, forKey: seeded)
-        // mainApp reports .notFound until it has been registered at least once.
-        guard SMAppService.mainApp.status != .enabled else { return }
+        if !UserDefaults.standard.bool(forKey: seeded) {
+            UserDefaults.standard.set(true, forKey: seeded)
+            // mainApp reports .notFound until it has been registered at least once.
+            if SMAppService.mainApp.status == .enabled {
+                UserDefaults.standard.set(bundlePath, forKey: Self.loginItemPathKey)
+            } else {
+                do {
+                    try SMAppService.mainApp.register()
+                    UserDefaults.standard.set(bundlePath, forKey: Self.loginItemPathKey)
+                    Log.shared.info("Registered login item to \(bundlePath)", source: "app")
+                } catch {
+                    Log.shared.warn("Could not register login item: \(error.localizedDescription)", source: "app")
+                }
+            }
+        }
+        reconcileLoginItem(currentPath: bundlePath)
+    }
+
+    private static let loginItemPathKey = "loginItemBundlePath"
+
+    /// A login item can outlive the bundle it points at (a deleted worktree
+    /// build). Re-register the running /Applications copy when the recorded
+    /// path is different or gone; otherwise leave the user's setting alone.
+    private func reconcileLoginItem(currentPath: String) {
+        switch SMAppService.mainApp.status {
+        case .enabled:
+            break
+        case .requiresApproval:
+            Log.shared.info("Login item needs approval in System Settings; leaving it alone", source: "app")
+            return
+        default:
+            Log.shared.info("Login item is off; leaving it alone", source: "app")
+            return
+        }
+        guard let recorded = UserDefaults.standard.string(forKey: Self.loginItemPathKey)
+            ?? recordedLoginItemPath() else {
+            Log.shared.warn(
+                "Login item is on but its recorded path is unknown; re-registering \(currentPath)",
+                source: "app"
+            )
+            refreshLoginItem(currentPath: currentPath)
+            return
+        }
+        UserDefaults.standard.set(recorded, forKey: Self.loginItemPathKey)
+        if recorded == currentPath {
+            Log.shared.info("Login item already points at \(currentPath)", source: "app")
+            return
+        }
+        if FileManager.default.fileExists(atPath: recorded) {
+            Log.shared.warn(
+                "Login item points at \(recorded); re-registering \(currentPath)",
+                source: "app"
+            )
+        } else {
+            Log.shared.warn(
+                "Login item points at a missing bundle \(recorded); re-registering \(currentPath)",
+                source: "app"
+            )
+        }
+        refreshLoginItem(currentPath: currentPath)
+    }
+
+    private func refreshLoginItem(currentPath: String) {
+        // The login item stores the path LaunchServices resolves for the bundle
+        // id. Repointing it first stops a stale worktree path from sticking.
+        refreshLaunchServicesRecord(bundlePath: currentPath)
+        do {
+            try SMAppService.mainApp.unregister()
+        } catch {
+            Log.shared.warn("Could not unregister the stale login item: \(error.localizedDescription)", source: "app")
+        }
         do {
             try SMAppService.mainApp.register()
-            Log.shared.info("Registered login item", source: "app")
+            UserDefaults.standard.set(currentPath, forKey: Self.loginItemPathKey)
+            Log.shared.info("Login item now points at \(currentPath)", source: "app")
         } catch {
-            Log.shared.warn("Could not register login item: \(error.localizedDescription)", source: "app")
+            Log.shared.warn("Could not register the login item: \(error.localizedDescription)", source: "app")
         }
+    }
+
+    /// `lsregister -f` re-associates the bundle id with this copy, which is what
+    /// the background-task record follows after a worktree build is deleted.
+    private func refreshLaunchServicesRecord(bundlePath: String) {
+        let tool = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = ["-f", bundlePath]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            Log.shared.warn("Could not refresh the LaunchServices record: \(error.localizedDescription)", source: "app")
+        }
+    }
+
+    /// Reads the path the system has on file. `SMAppService` does not expose it,
+    /// so ask the same tool support uses to diagnose login items.
+    private func recordedLoginItemPath() -> String? {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sfltool")
+        process.arguments = ["dumpbtm"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let identifier = "2." + bundleID
+        var currentIdentifier: String?
+        for line in output.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("Identifier: ") {
+                currentIdentifier = String(trimmed.dropFirst("Identifier: ".count))
+            } else if trimmed.hasPrefix("URL: "), currentIdentifier == identifier {
+                let path = String(trimmed.dropFirst("URL: ".count))
+                return path == "(null)" ? nil : path
+            }
+        }
+        return nil
     }
 
     private func seedUserProviders() {
@@ -2035,7 +2108,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "About Palette", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: "About Palette", action: #selector(showAboutWindowFromMenu), keyEquivalent: "")
+        about.target = self
+        appMenu.addItem(about)
         let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))"
         let versionItem = NSMenuItem(title: "Version \(version)", action: nil, keyEquivalent: "")
         versionItem.isEnabled = false
@@ -2243,6 +2318,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    // MARK: - Housekeeping
+
+    /// Two paths only, both written by <= 2.15 and unread by 2.16: the old
+    /// Hammerspoon exporter and its profile directory.
+    private func removeStaleLegacyFiles() {
+        guard !isScriptMode else { return }
+        let home = NSHomeDirectory()
+        let stale = [
+            home + "/.hammerspoon/palette-webapps.lua",
+            home + "/Library/Caches/Palette/WebApps",
+        ]
+        for path in stale where FileManager.default.fileExists(atPath: path) {
+            do {
+                try FileManager.default.removeItem(atPath: path)
+                Log.shared.info("Removed stale \(path)", source: "cleanup")
+            } catch {
+                Log.shared.warn("Could not remove stale \(path): \(error.localizedDescription)", source: "cleanup")
+            }
+        }
+    }
+
+    /// Every config write goes through here so the watcher can tell our save
+    /// from an external edit and never reload in a loop.
+    private func writeConfig(_ config: PaletteConfig) throws {
+        try ConfigWriter.write(config, to: paths.configFile)
+        lastConfigModification = modificationDate(paths.configFile)
+    }
+
+    private func scheduleDatabaseMaintenance() {
+        runDatabaseMaintenance()
+        maintenanceTimer?.invalidate()
+        let timer = Timer(timeInterval: 30 * 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.runDatabaseMaintenance() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        maintenanceTimer = timer
+    }
+
+    private func runDatabaseMaintenance() {
+        guard !maintenanceRunning else { return }
+        maintenanceRunning = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.maintenanceRunning = false }
+            do {
+                let report = try await self.store.maintain(
+                    clipboardRetentionDays: self.configuration.clipboard.retentionDays,
+                    maxImageBytes: self.configuration.clipboard.maxImageBytes,
+                    askRetentionDays: self.configuration.ask.retentionDays
+                )
+                guard report.clipboardRemoved > 0 || report.chatsRemoved > 0 else { return }
+                Log.shared.info(
+                    "Retention removed \(report.clipboardRemoved) clip(s) and \(report.chatsRemoved) chat(s); \(report.bytesBefore) → \(report.bytesAfter) bytes\(report.vacuumed ? " (vacuumed)" : "")",
+                    source: "storage"
+                )
+                self.searchController?.clipboardDidChange()
+            } catch {
+                Log.shared.warn("Database maintenance failed: \(error.localizedDescription)", source: "storage")
+            }
+        }
+    }
+
+    /// `/theme` is a real choice: store it in `[theme]` so a relaunch keeps it,
+    /// instead of the old meta key that was written and deleted every launch.
+    private func pickTheme(_ name: String) {
+        themeManager.select(name)
+        let appearance = themeManager.theme.appearance
+        if appearance == "light" {
+            configuration.theme.mode = .light
+            configuration.theme.light = name
+        } else {
+            configuration.theme.mode = .dark
+            configuration.theme.dark = name
+        }
+        themeManager.selection = configuration.theme
+        do {
+            try writeConfig(configuration)
+        } catch {
+            Log.shared.warn("Could not save the theme choice: \(error.localizedDescription)", source: "theme")
+        }
+    }
+
     private func configureWatchers() {
         lastConfigModification = modificationDate(paths.configFile)
         lastThemesSignature = themesSignature()
@@ -2262,19 +2419,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let configDate = modificationDate(paths.configFile)
         if configDate != lastConfigModification {
             lastConfigModification = configDate
-            reload(quiet: true)
+            scheduleConfigReload()
             return
         }
         let signature = themesSignature()
         if signature != lastThemesSignature {
             lastThemesSignature = signature
-            themeManager.reload()
+            scheduleConfigReload()
+            return
         }
         let providers = providersSignature()
         if providers != lastProvidersSignature {
             lastProvidersSignature = providers
-            reload(quiet: true)
+            scheduleConfigReload()
         }
+    }
+
+    /// Editors touch a file several times per save; wait for the burst to end.
+    private func scheduleConfigReload() {
+        configChangeTask?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            Task { @MainActor in self?.reload(quiet: true) }
+        }
+        configChangeTask = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     private func modificationDate(_ url: URL) -> Date? {
@@ -2309,43 +2477,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Reload
 
-    private func refreshWebAppHotkeys() async {
-        do {
-            let apps = try await store.webApps()
-            registerWebAppHotkeys(apps)
-        } catch {
-            Log.shared.warn("Could not load web apps: \(error.localizedDescription)", source: "hotkey")
-        }
-    }
-
-    /// Web app shortcuts are registered by Palette itself so Carbon owns every
-    /// global key exactly once.
-    private func registerWebAppHotkeys(_ apps: [WebApp]) {
-        webAppHotkeys.forEach { $0.unregister() }
-        webAppHotkeys.removeAll()
-        // 1–9 belong to the app hotkeys; 100+ is the web app range.
-        var nextID: UInt32 = 100
-        for app in apps {
-            guard let raw = app.shortcut, let spec = HotKeySpec.parse(raw) else { continue }
-            let browser = configuration.webAppBrowser
-            let manager = HotKeyManager(hotKeyID: nextID)
-            manager.onPressed = { [weak self] in
-                self?.launcher.openWebApp(app.url, browser: browser)
-            }
-            do {
-                try manager.register(raw)
-                webAppHotkeys.append(manager)
-                Log.shared.info("Web app hotkey registered: \(spec.prettyDisplay) → \(app.name)", source: "hotkey")
-                nextID += 1
-            } catch {
-                Log.shared.warn(
-                    "Web app shortcut \(spec.prettyDisplay) for \(app.name) is unavailable: \(error.localizedDescription)",
-                    source: "hotkey"
-                )
-            }
-        }
-    }
-
     /// Dock/undock or a resolution change: re-measure rows on the new screen,
     /// re-apply the width, and reposition even if the panel is already open.
     @objc private func screenParametersChanged() {
@@ -2362,6 +2493,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let result = ConfigLoader.load(paths: paths)
         configuration = result.config
         startupDiagnostics = result.diagnostics
+        configErrorMessage = result.parseError
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
         themeManager.window = configuration.window
@@ -2377,24 +2509,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let newRegistry = buildRegistry()
         registry = newRegistry
         searchController.replace(registry: newRegistry, configuration: configuration)
+        // An open chat must follow the new config, not keep the old service.
+        if let askService, let askWindow {
+            askWindow.reconfigure(
+                service: askService,
+                notify: configuration.ask.notify,
+                webSearch: configuration.ask.webSearch
+            )
+            Log.shared.info("Ask window reconfigured after reload", source: "ask")
+        }
 
-        if currentHotKey?.display.lowercased() != configuration.hotkey.lowercased()
-            || currentClipboardHotKey?.display.lowercased() != configuration.clipboardHotkey.lowercased()
-            || currentTerminalHotKey?.display.lowercased() != configuration.terminalHotkey.lowercased()
-            || currentScratchpadHotKey?.display.lowercased() != configuration.scratchpadHotkey.lowercased()
-            || currentAskHotKey?.display.lowercased() != configuration.askHotkey.lowercased()
-            || currentScreenshotHotKey?.display.lowercased() != configuration.screenshotHotkey.lowercased()
-            || currentRegionHotKey?.display.lowercased() != configuration.regionScreenshotHotkey.lowercased()
-            || currentWindowHotKey?.display.lowercased() != configuration.windowScreenshotHotkey.lowercased()
-            || currentRecordingHotKey?.display.lowercased() != configuration.recordingHotkey.lowercased() {
-            installHotKey()
-        }
-        // Bindings can change without touching a built-in key, so they always
-        // re-register on reload. Scripted runs leave Carbon alone.
-        if !isScriptMode {
-            installBindingHotKeys()
-            installCatalogHotKeys()
-        }
+        // Rebuild every global key in one pass: built-ins, web apps (which also
+        // picks up a changed `web_app_browser`), bindings and the catalogue.
+        // Scripted runs leave Carbon alone.
+        installHotKey()
         configureClipboard()
         if refreshSettings { refreshSettingsWindow() }
         if !quiet {
@@ -2432,7 +2560,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configuration.searchPosition = position
         panel?.anchorOverride = position.rawValue
         do {
-            try ConfigWriter.render(configuration).write(to: paths.configFile, atomically: true, encoding: .utf8)
+            try writeConfig(configuration)
         } catch {
             Log.shared.warn("Could not save launcher position: \(error.localizedDescription)", source: "app")
         }
@@ -2521,27 +2649,87 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func exportBackup() {
+        let confirm = NSAlert()
+        confirm.messageText = "Export a backup without clipboard text?"
+        confirm.informativeText = """
+        The backup includes config.toml, themes, providers, history and the encrypted Ask key files. \
+        Plain-text clipboard entries are removed before zipping because they can hold pasted secrets. \
+        Image and file entries stay because they hold paths and pictures, not the text you typed.
+        """
+        confirm.addButton(withTitle: "Export")
+        confirm.addButton(withTitle: "Cancel")
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+
         let panel = NSSavePanel()
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         panel.nameFieldStringValue = "Palette-Backup-\(stamp).zip"
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let destination = panel.url else { return }
+        writeBackup(to: destination)
+    }
 
+    /// The full user state: config, themes, providers, database and the small
+    /// TOML files that used to be left out. The ask key files are encrypted.
+    @discardableResult
+    private func writeBackup(to destination: URL) -> Bool {
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("Palette-Backup-\(UUID().uuidString)", isDirectory: true)
         let manager = FileManager.default
+        defer { try? manager.removeItem(at: temp) }
         do {
             try manager.createDirectory(at: temp, withIntermediateDirectories: true)
-            try? manager.copyItem(at: paths.configFile, to: temp.appendingPathComponent("config.toml"))
-            try? manager.copyItem(at: paths.themesDir, to: temp.appendingPathComponent("themes"))
-            try? manager.copyItem(at: paths.providersDir, to: temp.appendingPathComponent("providers"))
-            try? manager.copyItem(at: paths.databaseFile, to: temp.appendingPathComponent("palette.sqlite"))
-            for suffix in ["-wal", "-shm"] {
-                let source = URL(fileURLWithPath: paths.databaseFile.path + suffix)
-                if manager.fileExists(atPath: source.path) {
-                    try? manager.copyItem(at: source, to: temp.appendingPathComponent("palette.sqlite" + suffix))
+            var included: [String] = []
+
+            func copy(_ source: URL, as name: String) {
+                guard manager.fileExists(atPath: source.path) else { return }
+                if (try? manager.copyItem(at: source, to: temp.appendingPathComponent(name))) != nil {
+                    included.append(name)
                 }
             }
+
+            copy(paths.configFile, as: "config.toml")
+            copy(paths.themesDir, as: "themes")
+            copy(paths.providersDir, as: "providers")
+            copy(paths.databaseFile, as: "palette.sqlite")
+            for suffix in ["-wal", "-shm"] {
+                copy(URL(fileURLWithPath: paths.databaseFile.path + suffix), as: "palette.sqlite" + suffix)
+            }
+            copy(paths.configDir.appendingPathComponent("ask-key.bin"), as: "ask-key.bin")
+            copy(paths.configDir.appendingPathComponent("ask-keys.bin"), as: "ask-keys.bin")
+            copy(paths.bookmarksFile, as: "bookmarks.toml")
+            copy(paths.configDir.appendingPathComponent("commands.toml"), as: "commands.toml")
+            copy(paths.configDir.appendingPathComponent("snippets.toml"), as: "snippets.toml")
+
+            // Pasted text is the sensitive part of the clipboard history. Fold
+            // the WAL into the copy, drop text rows, then vacuum so no deleted
+            // page survives in the zip.
+            let database = temp.appendingPathComponent("palette.sqlite")
+            let sqlite = Process()
+            sqlite.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+            sqlite.arguments = [
+                database.path,
+                "PRAGMA journal_mode=DELETE; DELETE FROM clipboard WHERE kind = 'text'; VACUUM;",
+            ]
+            try sqlite.run()
+            sqlite.waitUntilExit()
+            guard sqlite.terminationStatus == 0 else {
+                throw NSError(domain: "PaletteBackup", code: Int(sqlite.terminationStatus))
+            }
+            for suffix in ["-wal", "-shm"] {
+                try? manager.removeItem(at: URL(fileURLWithPath: database.path + suffix))
+            }
+
+            let readme = """
+            Palette backup
+            ==============
+            Included in this archive:
+            \(included.map { "- \($0)" }.joined(separator: "\n"))
+
+            ask-key.bin and ask-keys.bin hold API keys stored by Palette; they
+            are encrypted. Everything else is plain text or a normal SQLite
+            database. Clipboard history is included without its text entries.
+            """
+            try readme.write(to: temp.appendingPathComponent("README.txt"), atomically: true, encoding: .utf8)
 
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
@@ -2552,10 +2740,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 throw NSError(domain: "PaletteBackup", code: Int(process.terminationStatus))
             }
             searchController.setStatus("Backup exported to \(destination.lastPathComponent)", duration: 4)
+            return true
         } catch {
             searchController.setStatus("Backup failed: \(error.localizedDescription)", duration: 5)
+            return false
         }
-        try? manager.removeItem(at: temp)
     }
 
     private func makeSettingsView() -> SettingsView {
@@ -2593,8 +2782,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// reloads the app in place. The Settings view is not rebuilt, so the field
     /// the user is typing in keeps focus.
     private func applySettings(_ updated: PaletteConfig) -> String? {
+        // A file Palette cannot parse is the user's, not ours: writing defaults
+        // over it would erase comments and every unknown key.
+        if let configErrorMessage {
+            return configErrorMessage
+        }
         do {
-            try ConfigWriter.render(updated).write(to: paths.configFile, atomically: true, encoding: .utf8)
+            try writeConfig(updated)
         } catch {
             return "Could not save settings: \(error.localizedDescription)"
         }
@@ -2697,7 +2891,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let status = await keepAwake.snapshot()
         keepAwakeToggleItem?.title = status.active ? "Stop Keeping Awake" : "Keep Mac Awake (Indefinitely)"
         keepAwakeToggleItem?.state = status.active ? .on : .off
-        keepAwakeClamshellItem?.title = "Clamshell (Lid Closed)"
+        keepAwakeClamshellItem?.title = status.clamshell && status.clamshellRequiresPower
+            ? "Clamshell (Lid Closed) — armed, inactive"
+            : "Clamshell (Lid Closed)"
         keepAwakeClamshellItem?.state = status.clamshell ? .on : .off
         keepAwakeStopItem?.isEnabled = status.active
     }

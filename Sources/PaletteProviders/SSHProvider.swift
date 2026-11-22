@@ -29,7 +29,7 @@ public final class SSHProvider: PaletteProvider, @unchecked Sendable {
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let text = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
-        let hosts = SSHConfig.parse(text)
+        let hosts = SSHConfig.parse(text, directory: configURL.deletingLastPathComponent())
 
         guard !hosts.isEmpty else {
             return [PaletteItem(
@@ -90,7 +90,9 @@ public final class SSHProvider: PaletteProvider, @unchecked Sendable {
         } else if raw.hasPrefix("ssh:") {
             let alias = String(raw.dropFirst("ssh:".count))
             let app = terminalApp
-            try await MainActor.run { try launcher.openTerminal(command: "ssh \(alias)", app: app) }
+            try await MainActor.run {
+                try launcher.openTerminal(command: "ssh \(ProjectProvider.shellQuote(alias))", app: app)
+            }
         }
     }
 }

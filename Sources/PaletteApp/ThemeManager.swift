@@ -42,12 +42,12 @@ public final class ThemeManager: ObservableObject {
 
     public func restore() async {
         guard let store else { return }
-        // A `/theme` pick is a live preview, not a persisted override. Config is
-        // authoritative on launch, so clear any override saved by older builds.
-        if let saved = try? await store.metaValue("theme.override"), !saved.isEmpty {
+        // Older builds used this meta key for a preview. The `/theme` pick is
+        // persisted into config now, so drop the stale key and leave config as
+        // the only source of truth.
+        if (try? await store.metaValue("theme.override")) != nil {
             overrideName = nil
             try? await store.setMeta("theme.override", value: nil)
-            apply()
         }
     }
 
@@ -59,9 +59,6 @@ public final class ThemeManager: ObservableObject {
     public func resetToConfig() {
         overrideName = nil
         apply()
-        Task { [store] in
-            try? await store?.setMeta("theme.override", value: nil)
-        }
     }
 
     /// A config save is authoritative: a live `/theme` pick must not shadow it.

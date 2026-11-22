@@ -82,13 +82,14 @@ public final class FDEnumerator: PathEnumerating {
             }
             let canonicalRoot = Self.canonicalPath(root)
 
-            var arguments = [
-                fd,
-                "--absolute-path",
-                "--no-ignore",
+            var arguments = [fd, "--absolute-path"]
+            if !scope.respectGitignore {
+                arguments.append("--no-ignore")
+            }
+            arguments.append(contentsOf: [
                 "--print0",
                 "--max-depth", String(max(1, scope.maxDepth)),
-            ]
+            ])
             if scope.includeHidden {
                 arguments.append("--hidden")
             }
@@ -119,7 +120,9 @@ public final class FDEnumerator: PathEnumerating {
             for path in Self.splitNUL(result.stdout) {
                 try Task.checkCancellation()
                 guard !path.isEmpty else { continue }
-                guard path.hasPrefix(canonicalRoot + "/") else { continue }
+                // A "/" root must not turn its prefix into "//".
+                let prefix = canonicalRoot == "/" ? "/" : canonicalRoot + "/"
+                guard path.hasPrefix(prefix) else { continue }
                 guard matcher.allows(path: path, isDirectory: kind != .files, root: canonicalRoot) else { continue }
                 guard let isDirectory = PathFilter.inspect(path, expected: kind) else { continue }
                 guard !seen.contains(path) else { continue }

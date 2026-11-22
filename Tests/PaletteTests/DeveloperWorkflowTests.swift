@@ -158,4 +158,26 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertEqual(commands[0].workingDirectory, "~/dev/project")
         XCTAssertTrue(commands[0].confirm)
     }
+
+    func testCommandRowsWithTheSameTitleAndExecutableGetDistinctIDs() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("commands-\(UUID().uuidString).toml")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        [[command]]
+        title = "Go"
+        executable = "go"
+        args = ["build", "./..."]
+
+        [[command]]
+        title = "Go"
+        executable = "go"
+        args = ["test", "./..."]
+        """.write(to: url, atomically: true, encoding: .utf8)
+
+        let commands = CommandProvider.load(from: url)
+        XCTAssertEqual(commands.count, 2)
+        XCTAssertNotEqual(commands[0].id, commands[1].id)
+        XCTAssertEqual(commands[0].arguments, ["build", "./..."])
+        XCTAssertEqual(commands[1].arguments, ["test", "./..."])
+    }
 }

@@ -56,8 +56,34 @@ final class StorageTests: XCTestCase {
         XCTAssertEqual(cleared, 0)
     }
 
-    func testClipboardImages() async throws {
+    func testPinnedClipboardRowsDoNotConsumeTheUnpinnedBudget() async throws {
         let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        for index in 0..<3 {
+            _ = try await store.insertClipboard(
+                text: "pinned \(index)",
+                maxEntries: 2,
+                at: Date(timeIntervalSince1970: Double(index))
+            )
+            let entries = try await store.clipboardEntries(limit: 10)
+            let id = try XCTUnwrap(entries.first { $0.text == "pinned \(index)" }?.id)
+            try await store.setClipboardPinned(id: id, pinned: true)
+        }
+        for index in 0..<4 {
+            _ = try await store.insertClipboard(
+                text: "copy \(index)",
+                maxEntries: 2,
+                at: Date(timeIntervalSince1970: 100 + Double(index))
+            )
+        }
+
+        let entries = try await store.clipboardEntries(limit: 10)
+        XCTAssertEqual(entries.filter(\.pinned).count, 3)
+        XCTAssertEqual(entries.filter { !$0.pinned }.map(\.text), ["copy 3", "copy 2"])
+    }
+
+    func testClipboardImages() async throws {        let (store, url) = try makeStore()
         defer { try? FileManager.default.removeItem(at: url) }
 
         let image = Data("not-a-real-png-but-stored-as-blob".utf8)

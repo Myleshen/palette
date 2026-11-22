@@ -677,14 +677,17 @@ template, or opens the expansion in the scratchpad. Supported placeholders:
 minutes, 30 minutes, 1, 2, 4, or 8 hours, or until you stop it. It also has a
 **Clamshell Mode (Lid Closed)** toggle and a menu-bar **Keep Awake** submenu.
 
-Normal keep-awake uses native power assertions, so it needs no password. The
-assertions are recreated after wake and display changes, and a timer restores
-normal sleep automatically. Clamshell mode is different: macOS treats a lid
-close as forced sleep, so Palette arms a tiny root guard through the standard
-administrator prompt. The guard disables lid sleep only while Palette is
-running, clamshell mode is on, and the Mac is on AC power. Unplugging power,
-turning clamshell off, or quitting Palette restores normal lid sleep within a
-few seconds. Never leave an awake, closed MacBook in a bag.
+Normal keep-awake runs `/usr/bin/caffeinate` as a detached child, so it needs
+no password and keeps the Mac awake even after Palette quits. Timed sessions
+expire on their own; an indefinite session lasts until you choose **Stop**.
+Palette records the session in `keepawake.json` under its state directory and
+restores the toggle and remaining time on the next launch. Clamshell mode is
+different: macOS treats a lid close as forced sleep, so Palette arms a tiny
+root guard through the standard administrator prompt. The guard keeps lid sleep
+disabled while the flag exists, even after Palette quits. It disarms and exits
+on battery power; launchd rechecks every 30 seconds and re-arms it when AC
+returns. Turning clamshell off, or reaching the 12-hour safety cap, disarms it
+for good. Never leave an awake, closed MacBook in a bag.
 
 ### Projects, ports, and Git
 
@@ -801,7 +804,6 @@ visible_rows = 0               # 5-10; 0 = 7 * scale, sets the panel height
 clipboard_width = 0            # 0 = follow the panel width
 preview_width = 0
 terminal_width = 0             # 0 = 1000 * scale
-scratchpad_width = 0
 preview_layout = "auto"        # auto | beside | below
 
 [timer]
@@ -955,3 +957,7 @@ Security → Accessibility, then relaunch.
 
 **A provider misbehaves.** Check `~/.local/state/palette/logs/palette.log` and
 the provider's stderr in the same log.
+
+## License
+
+Palette is released under the [MIT License](LICENSE). © 2026 Myleshen.

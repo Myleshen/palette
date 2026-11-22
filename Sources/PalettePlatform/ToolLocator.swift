@@ -8,6 +8,9 @@ public final class ToolLocator: @unchecked Sendable {
 
     private let lock = NSLock()
     private var cached: [String: String] = [:]
+    /// Tools already proven missing. A global provider asks on every search, so
+    /// without this an absent tool costs the full directory probe each time.
+    private var missing: Set<String> = []
     private var extraPaths: [String] = []
 
     public init() {}
@@ -16,6 +19,7 @@ public final class ToolLocator: @unchecked Sendable {
         lock.lock()
         self.extraPaths = extraPaths.map { PathExpansion.expand($0) }
         cached.removeAll()
+        missing.removeAll()
         lock.unlock()
     }
 
@@ -28,6 +32,10 @@ public final class ToolLocator: @unchecked Sendable {
         if let cached = cached[tool] {
             lock.unlock()
             return cached
+        }
+        if missing.contains(tool) {
+            lock.unlock()
+            return nil
         }
         let extra = extraPaths
         lock.unlock()
@@ -69,6 +77,10 @@ public final class ToolLocator: @unchecked Sendable {
         if let found {
             lock.lock()
             cached[tool] = found
+            lock.unlock()
+        } else {
+            lock.lock()
+            missing.insert(tool)
             lock.unlock()
         }
         return found

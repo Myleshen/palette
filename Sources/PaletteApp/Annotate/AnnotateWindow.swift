@@ -4,10 +4,19 @@ import PalettePlatform
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Shared between the AppKit window and the SwiftUI canvas so the close
+/// button (and app quit) can see whether anything is unsaved.
+@MainActor
+final class AnnotateDraftState: ObservableObject {
+    @Published var unsaved = false
+}
+
 /// Annotate window: a screenshot, a small tool strip, and Save/Copy.
 @MainActor
 final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     private let editor: AnnotationEditor
+    private let draft = AnnotateDraftState()
+    private var terminateObserver: NSObjectProtocol?
     var onClose: (() -> Void)?
     var shapeCount: Int { editor.shapes.count }
 
@@ -49,10 +58,113 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
         window.delegate = self
         window.contentView = NSHostingView(rootView: AnnotateView(
             editor: editor,
+            draft: draft,
             themeManager: themeManager,
             close: { [weak self] in self?.close() }
         ))
         window.center()
+        // App quit does not call `windowShouldClose`; save before the process
+        // goes away instead of dropping the shapes.
+        terminateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.saveForTermination() }
+        }
+    }
+
+    private func saveForTermination() {
+        guard draft.unsaved else { return }
+        if let saved = persist() {
+            Log.shared.info("Annotator: saved to \(saved.path) while quitting", source: "capture")
+        }
+    }
+
+    private var saveError: String?
+
+    /// The original file when there is one, otherwise a temp copy. Returns the
+    /// path actually written so the caller can tell the user.
+    private func persist() -> URL? {
+        saveError = nil
+        if editor.sourceURL != nil, let url = try? editor.save() {
+            draft.unsaved = false
+            return url
+        }
+        do {
+            let url = try editor.save(to: tempDestination())
+            draft.unsaved = false
+            return url
+        } catch {
+            saveError = error.localizedDescription
+            Log.shared.error("Annotator: could not save annotations: \(error.localizedDescription)", source: "capture")
+            return nil
+        }
+    }
+
+    private func presentSaveError() {
+        let alert = NSAlert()
+        alert.messageText = "Could not save the annotations"
+        alert.informativeText = saveError ?? "The file could not be written."
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "OK")
+        if let window {
+            alert.beginSheetModal(for: window)
+        } else {
+            alert.runModal()
+        }
+    }
+
+    private func tempDestination() -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Palette Annotations", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let stamp = Int(Date().timeIntervalSince1970)
+        return directory.appendingPathComponent("annotated-\(stamp).png")
+    }
+
+    private var closePromptText: String {
+        if let source = editor.sourceURL {
+            return "Save changes to \(source.lastPathComponent)? If Palette quits, they are saved there automatically."
+        }
+        return "This image has no file yet. Save writes a copy to a temporary file; if Palette quits, it saves there automatically."
+    }
+
+    /// Red button, ⌘W and File > Close all land here.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard draft.unsaved else { return true }
+        Log.shared.info("Annotator: close prompted with unsaved changes", source: "capture")
+        let alert = NSAlert()
+        alert.messageText = "Save annotations?"
+        alert.informativeText = closePromptText
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: sender) { [weak self] response in
+            Task { @MainActor in
+                guard let self else { return }
+                switch response {
+                case .alertFirstButtonReturn:
+                    if self.persist() != nil {
+                        self.forceClose()
+                    } else {
+                        self.presentSaveError()
+                    }
+                case .alertSecondButtonReturn:
+                    self.draft.unsaved = false
+                    self.forceClose()
+                default:
+                    break
+                }
+            }
+        }
+        return false
+    }
+
+    private func forceClose() {
+        draft.unsaved = false
+        window?.close()
     }
 
     required init?(coder: NSCoder) {
@@ -78,6 +190,10 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        if let terminateObserver {
+            NotificationCenter.default.removeObserver(terminateObserver)
+            self.terminateObserver = nil
+        }
         onClose?()
     }
 }
@@ -107,17 +223,18 @@ struct PillButton: ButtonStyle {
 
 struct AnnotateView: View {
     @ObservedObject var editor: AnnotationEditor
+    @ObservedObject var draft: AnnotateDraftState
     @ObservedObject var themeManager: ThemeManager
     var close: () -> Void
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
     @State private var moving: Moving?
+    @State private var changeBegun = false
     @State private var textEntry: TextEntry?
     @State private var zoom: CGFloat = 1
     @State private var toast: String?
     @State private var toastToken = 0
-    @State private var unsaved = false
     @FocusState private var textFocused: Bool
 
     private struct Moving {
@@ -166,13 +283,13 @@ struct AnnotateView: View {
         .onKeyPress(.delete) {
             guard editor.selected != nil else { return .ignored }
             editor.removeSelected()
-            unsaved = true
+            draft.unsaved = true
             return .handled
         }
         .onKeyPress(.deleteForward) {
             guard editor.selected != nil else { return .ignored }
             editor.removeSelected()
-            unsaved = true
+            draft.unsaved = true
             return .handled
         }
         .onKeyPress(.escape) {
@@ -385,7 +502,7 @@ struct AnnotateView: View {
             )
             context.stroke(Path(target), with: .color(colour), lineWidth: max(1, width * fitted.width))
 
-        case let .text(at, text, size, _):
+        case let .text(at, text, size, _, _):
             let fontSize = max(7, size * fitted.height)
             var resolved = context.resolve(
                 Text(text).font(.system(size: fontSize, weight: .semibold)).foregroundColor(colour)
@@ -415,13 +532,12 @@ struct AnnotateView: View {
                 width: rect.width * fitted.width,
                 height: rect.height * fitted.height
             )
-        case let .text(at, text, size, _):
-            let fontSize = max(7, size * fitted.height)
+        case let .text(at, _, _, _, measured):
             box = CGRect(
                 x: fitted.minX + at.x * fitted.width,
                 y: fitted.minY + at.y * fitted.height,
-                width: max(fontSize, CGFloat(text.count) * fontSize * 0.62),
-                height: fontSize * 1.3
+                width: measured.width * fitted.width,
+                height: measured.height * fitted.height
             )
         }
         let padded = box.insetBy(dx: -4, dy: -4)
@@ -479,7 +595,7 @@ struct AnnotateView: View {
                         if let index = editor.hitTest(startFraction) {
                             editor.selected = index
                             moving = Moving(index: index, original: editor.shapes[index], start: startFraction)
-                            editor.beginChange()
+                            changeBegun = false
                         } else {
                             editor.selected = nil
                         }
@@ -490,18 +606,27 @@ struct AnnotateView: View {
                 if let moving {
                     let current = fraction(value.location, in: rect)
                     let delta = CGPoint(x: current.x - moving.start.x, y: current.y - moving.start.y)
-                    editor.replace(moving.index, with: moving.original.offset(by: delta))
+                    // A click that selects without moving must not add an undo
+                    // step; the first real movement records one.
+                    if delta != .zero, !changeBegun {
+                        editor.beginChange()
+                        changeBegun = true
+                    }
+                    if changeBegun {
+                        editor.replace(moving.index, with: moving.original.offset(by: delta))
+                    }
                 }
             }
             .onEnded { value in
                 defer {
                     dragStart = nil
                     dragCurrent = nil
+                    changeBegun = false
                 }
                 if self.moving != nil {
                     self.moving = nil
                     let distance = hypot(value.location.x - value.startLocation.x, value.location.y - value.startLocation.y)
-                    if distance > 1 { unsaved = true }
+                    if distance > 1 { draft.unsaved = true }
                     return
                 }
                 guard editor.tool != .pointer else { return }
@@ -513,7 +638,7 @@ struct AnnotateView: View {
                 case .arrow:
                     guard hypot(end.x - start.x, end.y - start.y) > 0.01 else { return }
                     editor.add(.arrow(from: start, to: end, color: editor.color, width: editor.lineWidth))
-                    unsaved = true
+                    draft.unsaved = true
                 case .rectangle:
                     let box = CGRect(
                         x: min(start.x, end.x),
@@ -523,7 +648,7 @@ struct AnnotateView: View {
                     )
                     guard box.width > 0.01, box.height > 0.01 else { return }
                     editor.add(.rectangle(rect: box, color: editor.color, width: editor.lineWidth))
-                    unsaved = true
+                    draft.unsaved = true
                 case .text:
                     textEntry = TextEntry(point: start, value: "")
                     DispatchQueue.main.async { textFocused = true }
@@ -535,7 +660,7 @@ struct AnnotateView: View {
                         height: abs(end.y - start.y)
                     )
                     editor.crop(to: box)
-                    unsaved = true
+                    draft.unsaved = true
                     notify("Cropped · ⌘Z to undo")
                 }
             }
@@ -546,8 +671,8 @@ struct AnnotateView: View {
         let text = entry.value.trimmingCharacters(in: .whitespacesAndNewlines)
         textEntry = nil
         guard !text.isEmpty else { return }
-        editor.add(.text(at: entry.point, text: text, size: editor.textSize, color: editor.color))
-        unsaved = true
+        editor.addText(at: entry.point, text: text)
+        draft.unsaved = true
     }
 
     // MARK: - Actions
@@ -564,6 +689,7 @@ struct AnnotateView: View {
 
     private func copyImage() {
         editor.copy()
+        draft.unsaved = false
         notify("Copied to the clipboard")
         closeAfterToast()
     }
@@ -579,7 +705,7 @@ struct AnnotateView: View {
     private func save() -> Bool {
         do {
             let url = try editor.save()
-            unsaved = false
+            draft.unsaved = false
             notify("Saved \(url.lastPathComponent)")
             closeAfterToast()
             return true
@@ -604,7 +730,7 @@ struct AnnotateView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             _ = try editor.save(to: url)
-            unsaved = false
+            draft.unsaved = false
             notify("Saved \(url.lastPathComponent)")
             closeAfterToast()
         } catch {
@@ -613,7 +739,7 @@ struct AnnotateView: View {
     }
 
     private func finish() {
-        if unsaved, !save() { return }
+        if draft.unsaved, !save() { return }
         close()
     }
 }

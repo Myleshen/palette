@@ -30,6 +30,12 @@ public final class SearchController: ObservableObject, HostBridge {
     private var actionsOwner: PaletteItem?
     private var allActions: [PaletteAction] = []
     private var queryBeforeActions = ""
+    /// Bumped on every scratchpad open/close so an in-flight load cannot write
+    /// over newer text.
+    private var scratchpadGeneration = 0
+    /// The close-path save; the next open waits for it so it cannot read the
+    /// snapshot from before the save.
+    private var scratchpadSaveTask: Task<Void, Never>?
     @Published public var actionIndex = 0
     /// The rail has keyboard focus after a click; arrows move providers then,
     /// while the search field keeps the actual typing focus.
@@ -170,6 +176,11 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func panelDidHide() {
+        // The panel auto-hides when another app takes focus; that must keep a
+        // half-written draft, not throw it away.
+        if scratchpadActive {
+            saveScratchpad()
+        }
         searchTask?.cancel()
         isSearching = false
         cancelPrompt()
@@ -369,7 +380,16 @@ public final class SearchController: ObservableObject, HostBridge {
             selectionIndex = 0
         }
         if actionsMode {
-            if let owner = actionsOwnerID, items[selectionIndex].stableID != owner {
+            if !items.indices.contains(selectionIndex) {
+                // An external refresh can empty the list while ⌘K is open.
+                actionsMode = false
+                actionItems = []
+                allActions = []
+                actionsOwner = nil
+                actionsOwnerID = nil
+                queryBeforeActions = ""
+                actionIndex = 0
+            } else if let owner = actionsOwnerID, items[selectionIndex].stableID != owner {
                 actionsMode = false
                 actionItems = []
                 actionIndex = 0
@@ -584,15 +604,14 @@ public final class SearchController: ObservableObject, HostBridge {
         public var icon: String?
     }
 
-    /// Everything first, then one row per provider in registry order. `askh`
-    /// shares the Ask row; the rail has no grouped chips.
+    /// Everything first, then one row per provider in registry order.
     public var railEntries: [RailEntry] {
         var entries: [RailEntry] = [
             RailEntry(id: "everything", title: "Everything", trigger: nil, icon: "symbol:square.grid.2x2"),
         ]
         for provider in registry.providers {
             let descriptor = provider.descriptor
-            guard let trigger = descriptor.trigger, descriptor.id != "askh" else { continue }
+            guard let trigger = descriptor.trigger else { continue }
             entries.append(RailEntry(
                 id: descriptor.id,
                 title: descriptor.name,
@@ -607,7 +626,6 @@ public final class SearchController: ObservableObject, HostBridge {
     public var activeRailID: String {
         let provider = registry.parser.parse(query).providerID
         if provider == nil || provider == "apps" { return "everything" }
-        if provider == "askh" { return "ask" }
         return provider ?? "everything"
     }
 
@@ -857,6 +875,7 @@ public final class SearchController: ObservableObject, HostBridge {
                     _ = pasteboard.paste(
                         text: text,
                         concealed: action.concealed,
+                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
                         into: previous
                     )
                 }
@@ -879,7 +898,12 @@ public final class SearchController: ObservableObject, HostBridge {
                     }
                     let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(image: image, concealed: action.concealed, into: previous)
+                    _ = pasteboard.paste(
+                        image: image,
+                        concealed: action.concealed,
+                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
+                        into: previous
+                    )
                 }
 
             case .copyFiles:
@@ -898,7 +922,11 @@ public final class SearchController: ObservableObject, HostBridge {
                     }
                     let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(files: paths, into: previous)
+                    _ = pasteboard.paste(
+                        files: paths,
+                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
+                        into: previous
+                    )
                 }
 
             case .run:
@@ -1279,6 +1307,7 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func openTerminalPanel(command: String? = nil, sessionName: String? = nil) {
+        scratchpadGeneration += 1
         terminalInitialCommand = command
         terminalSessionName = sessionName
         terminalActive = true
@@ -1308,6 +1337,8 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
         if terminalActive { closeTerminalPanel() }
+        scratchpadGeneration += 1
+        let generation = scratchpadGeneration
         panel?.show()
         panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
         scratchpadActive = true
@@ -1322,19 +1353,25 @@ public final class SearchController: ObservableObject, HostBridge {
 
         if let noteID {
             Task { [weak self] in
-                guard let self, let note = try? await self.store.scratchNote(id: noteID) else { return }
+                guard let self else { return }
+                await self.scratchpadSaveTask?.value
+                guard let note = try? await self.store.scratchNote(id: noteID) else { return }
+                guard self.scratchpadGeneration == generation, self.scratchpadNoteID == noteID else { return }
                 self.scratchpadTitle = note.title
                 self.scratchpadText = note.text
             }
         } else if seed == nil {
             Task { [weak self] in
                 guard let self else { return }
+                await self.scratchpadSaveTask?.value
                 if let note = try? await self.store.scratchNotes(limit: 1).first {
+                    guard self.scratchpadGeneration == generation else { return }
                     self.scratchpadNoteID = note.id
                     self.scratchpadTitle = note.title
                     self.scratchpadText = note.text
                 } else if let legacy = try? await self.store.metaValue("scratchpad.text"),
                           !legacy.isEmpty {
+                    guard self.scratchpadGeneration == generation else { return }
                     self.scratchpadText = legacy
                 }
             }
@@ -1345,19 +1382,22 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func closeScratchpad(save: Bool) {
         guard scratchpadActive else { return }
+        scratchpadGeneration += 1
+        let generation = scratchpadGeneration
         if save {
             let title = scratchpadTitle
             let text = scratchpadText
             let noteID = scratchpadNoteID
             if !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Task { [weak self] in
+                scratchpadSaveTask = Task { [weak self] in
                     guard let self,
                           let note = try? await self.store.saveScratchNote(
                             id: noteID,
                             title: title,
                             text: text
                           ) else { return }
+                    guard self.scratchpadGeneration == generation else { return }
                     self.scratchpadNoteID = note.id
                 }
             }
@@ -1371,6 +1411,42 @@ public final class SearchController: ObservableObject, HostBridge {
         scheduleSearch(debounce: false)
         updatePanelHeight()
         requestFocus()
+    }
+
+    /// Saves the open draft under the note it was opened from, so reopening
+    /// restores it instead of creating a duplicate note.
+    private func saveScratchpad() {
+        let title = scratchpadTitle
+        let text = scratchpadText
+        let noteID = scratchpadNoteID
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        Task { [weak self] in
+            guard let self,
+                  let note = try? await self.store.saveScratchNote(
+                    id: noteID,
+                    title: title,
+                    text: text
+                  ) else { return }
+            self.scratchpadNoteID = note.id
+        }
+    }
+
+    /// `applicationWillTerminate` cannot await, so block briefly on a detached
+    /// save (the store actor is not main-actor bound) before the process exits.
+    public func saveScratchpadOnTerminate() {
+        let title = scratchpadTitle
+        let text = scratchpadText
+        let noteID = scratchpadNoteID
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let store = self.store
+        let done = DispatchSemaphore(value: 0)
+        Task.detached(priority: .userInitiated) {
+            _ = try? await store.saveScratchNote(id: noteID, title: title, text: text)
+            done.signal()
+        }
+        _ = done.wait(timeout: .now() + 1)
     }
 
     public func copyScratchpad() {

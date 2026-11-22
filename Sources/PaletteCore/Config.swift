@@ -118,6 +118,63 @@ public struct WebSearchEngine: Sendable, Equatable, Identifiable {
         }
         return result
     }
+
+    /// Why this row cannot be written, or nil when it is usable. Names and
+    /// bangs are matched case-insensitively, the way the launcher resolves
+    /// them, so a second "Google" or a repeated `!g` is caught here rather
+    /// than silently making the later engine unreachable.
+    public func validationIssue(among engines: [WebSearchEngine]) -> String? {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        if name.isEmpty {
+            return "Give the engine a name."
+        }
+        if !urlTemplate.contains("{query}") {
+            return "The search URL needs a {query} placeholder."
+        }
+        if engines.filter({
+            $0.name.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(name) == .orderedSame
+        }).count > 1 {
+            return "Another engine already uses this name."
+        }
+        let bang = (keyword ?? "").trimmingCharacters(in: .whitespaces)
+        if !bang.isEmpty, engines.filter({
+            ($0.keyword ?? "").trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(bang) == .orderedSame
+        }).count > 1 {
+            return "Another engine already uses !\(bang)."
+        }
+        return nil
+    }
+
+    /// Builds the list to write from what is on screen, falling back to the
+    /// saved value for an invalid edit and dropping rows the user deleted.
+    /// A valid rename replaces the saved row at the same position; a new row
+    /// past the saved list is appended.
+    public static func persisting(
+        _ drafts: [WebSearchEngine],
+        over saved: [WebSearchEngine]
+    ) -> [WebSearchEngine] {
+        var merged = saved
+        var kept = Set<Int>()
+        for (index, engine) in drafts.enumerated() {
+            if engine.validationIssue(among: drafts) == nil {
+                if let match = merged.firstIndex(where: { $0.id == engine.id }) {
+                    merged[match] = engine
+                    kept.insert(match)
+                } else if merged.indices.contains(index), !kept.contains(index) {
+                    merged[index] = engine
+                    kept.insert(index)
+                } else {
+                    merged.append(engine)
+                    kept.insert(merged.count - 1)
+                }
+            } else if let match = merged.firstIndex(where: { $0.id == engine.id }) {
+                kept.insert(match)
+            } else if merged.indices.contains(index), !kept.contains(index) {
+                kept.insert(index)
+            }
+        }
+        return merged.enumerated().filter { kept.contains($0.offset) }.map(\.element)
+    }
 }
 
 public struct ClipboardConfig: Sendable, Equatable {
@@ -125,12 +182,26 @@ public struct ClipboardConfig: Sendable, Equatable {
     public var maxEntries: Int
     public var pollMs: Int
     public var clearAfterMs: Int
+    /// Clipboard rows older than this many days are dropped on launch and
+    /// periodically. Pinned rows are kept.
+    public var retentionDays: Int
+    /// Total bytes of image blobs; the oldest images are evicted first.
+    public var maxImageBytes: Int
 
-    public init(enabled: Bool = true, maxEntries: Int = 5_000, pollMs: Int = 500, clearAfterMs: Int = 30_000) {
+    public init(
+        enabled: Bool = true,
+        maxEntries: Int = 5_000,
+        pollMs: Int = 500,
+        clearAfterMs: Int = 30_000,
+        retentionDays: Int = 30,
+        maxImageBytes: Int = 200 * 1024 * 1024
+    ) {
         self.enabled = enabled
         self.maxEntries = maxEntries
         self.pollMs = pollMs
         self.clearAfterMs = clearAfterMs
+        self.retentionDays = retentionDays
+        self.maxImageBytes = maxImageBytes
     }
 }
 
@@ -179,8 +250,10 @@ public struct WindowConfig: Sendable, Equatable {
     public var clipboardWidth: Double = 0
     public var previewWidth: Double = 0
     public var terminalWidth: Double = 0
-    public var scratchpadWidth: Double = 0
     public var previewLayout: PreviewPlacement = .auto
+    /// Fetch site icons for web apps. Turning it off stops any request to the
+    /// third-party favicon service; cached icons stay local.
+    public var favicons: Bool = true
 
     public init() {}
 
@@ -256,14 +329,9 @@ public struct WindowConfig: Sendable, Equatable {
     public func terminalWidth(for visible: CGSize) -> Double {
         panelWidth(terminalWidth, Self.defaultTerminalWidth, for: visible)
     }
-    public func scratchpadWidth(for visible: CGSize) -> Double {
-        panelWidth(scratchpadWidth, Self.defaultPanelWidth, for: visible)
-    }
-
     public var clipboardPanelWidth: Double { size(clipboardWidth, Self.defaultPanelWidth) }
     public var previewPanelWidth: Double { size(previewWidth, Self.defaultPanelWidth) }
     public var terminalPanelWidth: Double { size(terminalWidth, Self.defaultTerminalWidth) }
-    public var scratchpadPanelWidth: Double { size(scratchpadWidth, Self.defaultPanelWidth) }
 }
 
 public enum CaptureAction: String, Sendable, Equatable {
@@ -580,6 +648,9 @@ public struct ConfigLoadResult: Sendable {
     public var config: PaletteConfig
     public var diagnostics: [Diagnostic]
     public var createdDefault: Bool
+    /// Set when config.toml on disk could not be parsed. Auto-apply refuses to
+    /// write in this state so the user's file and comments survive.
+    public var parseError: String?
 }
 
 public enum ConfigLoader {
@@ -608,13 +679,31 @@ public enum ConfigLoader {
             let config = try parse(table, diagnostics: &diagnostics)
             return ConfigLoadResult(config: config, diagnostics: diagnostics, createdDefault: created)
         } catch {
-            diagnostics.append(Diagnostic(.error, "Invalid config.toml: \(error.localizedDescription). Using defaults.", source: "config"))
-            return ConfigLoadResult(config: PaletteConfig(), diagnostics: diagnostics, createdDefault: created)
+            let backup = ConfigWriter.backupURL(for: paths.configFile)
+            let message = "config.toml has an error; fix it or restore \(backup.path) before changing settings here (\(error.localizedDescription))."
+            diagnostics.append(Diagnostic(.error, message, source: "config"))
+            return ConfigLoadResult(
+                config: PaletteConfig(),
+                diagnostics: diagnostics,
+                createdDefault: created,
+                parseError: message
+            )
         }
+    }
+
+    /// A list written before `[meta] config_version` meant extras on top of the
+    /// old three globals. A list naming only providers that already default
+    /// today is a deliberate narrowing from a later release, not legacy.
+    static func usesLegacyGlobalSemantics(_ list: [String]) -> Bool {
+        let oldBaseline: Set<String> = ["system", "timer", "awake"]
+        let today = Set(PaletteConfig.defaultGlobalProviders)
+        return list.allSatisfy { oldBaseline.contains($0) || !today.contains($0) }
     }
 
     public static func parse(_ table: TOMLTable, diagnostics: inout [Diagnostic]) throws -> PaletteConfig {
         var config = PaletteConfig()
+        // Missing means a config written before the version key existed.
+        let schemaVersion = table.table("meta")?.int("config_version") ?? 0
 
         if let hotkey = table.str("hotkey"), !hotkey.isEmpty {
             config.hotkey = hotkey
@@ -696,7 +785,6 @@ public enum ConfigLoader {
             if let value = window.number("clipboard_width"), value > 0 { config.window.clipboardWidth = value }
             if let value = window.number("preview_width"), value > 0 { config.window.previewWidth = value }
             if let value = window.number("terminal_width"), value > 0 { config.window.terminalWidth = value }
-            if let value = window.number("scratchpad_width"), value > 0 { config.window.scratchpadWidth = value }
             if let raw = window.str("preview_layout"), let layout = PreviewPlacement(rawValue: raw.lowercased()) {
                 config.window.previewLayout = layout
             }
@@ -704,6 +792,7 @@ public enum ConfigLoader {
                let placement = ProviderBarPlacement(rawValue: raw.lowercased()) {
                 config.window.providerBar = placement
             }
+            config.window.favicons = window.bool("favicons") ?? config.window.favicons
         }
         // 2.3.2 wrote a root-level key; keep reading it for one release.
         if let rows = table.int("visible_rows"), rows > 0, config.window.visibleRows == 0 {
@@ -796,13 +885,22 @@ public enum ConfigLoader {
                 let parsed = global
                     .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
                     .filter { !$0.isEmpty }
-                // 2.12.x read this key as extras on top of the built-in
-                // globals, so an untouched config lists only those extras.
-                // Upgrade it to the full allowlist rather than losing the
-                // built-ins it used to get for free.
-                config.globalProviders = parsed == ["system", "timer", "awake"]
-                    ? PaletteConfig.defaultGlobalProviders
-                    : parsed
+                if parsed.isEmpty {
+                    // An explicit `global = []` opts out of everything but apps.
+                    config.globalProviders = []
+                } else if schemaVersion < ConfigWriter.configVersion,
+                          Self.usesLegacyGlobalSemantics(parsed) {
+                    // Before the version key, this list meant extras on top of
+                    // the built-in globals. Upgrade it to the full allowlist,
+                    // keeping ids the user added themselves.
+                    var merged = PaletteConfig.defaultGlobalProviders
+                    for id in parsed where !merged.contains(id) {
+                        merged.append(id)
+                    }
+                    config.globalProviders = merged
+                } else {
+                    config.globalProviders = parsed
+                }
             }
             if let aliases = providers.table("aliases") {
                 var parsed = config.providerAliases
@@ -929,9 +1027,6 @@ public enum ConfigLoader {
             if let webSearch = askTable.bool("web_search") {
                 ask.webSearch = webSearch
             }
-            if AskModel.find(id: ask.model)?.endpoint != ask.endpoint {
-                ask.model = AskModel.models(for: ask.endpoint).first?.id ?? AskModel.defaultModel.id
-            }
             config.ask = ask
         }
 
@@ -977,6 +1072,10 @@ public enum ConfigLoader {
             clipboard.maxEntries = max(10, clipboardTable.int("max_entries") ?? clipboard.maxEntries)
             clipboard.pollMs = max(150, clipboardTable.int("poll_ms") ?? clipboard.pollMs)
             clipboard.clearAfterMs = max(0, clipboardTable.int("clear_after_ms") ?? clipboard.clearAfterMs)
+            clipboard.retentionDays = max(0, clipboardTable.int("retention_days") ?? clipboard.retentionDays)
+            if let bytes = clipboardTable.int("max_image_bytes") {
+                clipboard.maxImageBytes = max(0, bytes)
+            }
             config.clipboard = clipboard
         }
 
@@ -1054,9 +1153,9 @@ public enum ConfigLoader {
         clipboard_width = 0            # 0 = 880 * scale
         preview_width = 0
         terminal_width = 0             # 0 = 1000 * scale
-        scratchpad_width = 0
         preview_layout = "auto"        # beside | below | auto
         provider_bar = "top"           # top | left | hidden
+        favicons = true                # fetch web-app site icons from Google
 
         # Screenshots and recordings.
         [capture]
@@ -1105,7 +1204,7 @@ public enum ConfigLoader {
         # targets one.
         global = [
           "calc", "search", "web", "win", "unit", "zj",
-          "bookmark", "pins", "system", "timer", "awake",
+          "bookmark", "pins", "system", "timer", "awake", "cheat",
         ]
 
         [providers.aliases]
@@ -1191,12 +1290,40 @@ public enum ConfigLoader {
         max_entries = 5000
         poll_ms = 500
         clear_after_ms = 30000
+        retention_days = 30
+        max_image_bytes = 209715200
+
+        # Written by Palette. Missing means the file predates schema versioning.
+        [meta]
+        config_version = 2
 
         """
     }
 }
 
 public enum ConfigWriter {
+    /// Bumped when a key's on-disk meaning changes. Written as
+    /// `[meta] config_version`.
+    public static let configVersion = 2
+
+    public static func backupURL(for url: URL) -> URL {
+        url.appendingPathExtension("bak")
+    }
+
+    /// Saves the canonical render, keeping the exact previous file as a single
+    /// rolling backup. The backup is written first: if it fails, the original
+    /// file stays untouched.
+    public static func write(_ config: PaletteConfig, to url: URL) throws {
+        let manager = FileManager.default
+        if manager.fileExists(atPath: url.path) {
+            let previous = try Data(contentsOf: url)
+            let backup = backupURL(for: url)
+            try previous.write(to: backup, options: .atomic)
+            try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: backup.path)
+        }
+        try render(config).write(to: url, atomically: true, encoding: .utf8)
+    }
+
     public static func render(_ config: PaletteConfig) -> String {
         var out: [String] = []
         out.append("# Palette configuration")
@@ -1229,9 +1356,9 @@ public enum ConfigWriter {
         if config.window.clipboardWidth > 0 { out.append("clipboard_width = \(config.window.clipboardWidth)") }
         if config.window.previewWidth > 0 { out.append("preview_width = \(config.window.previewWidth)") }
         if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
-        if config.window.scratchpadWidth > 0 { out.append("scratchpad_width = \(config.window.scratchpadWidth)") }
         out.append("preview_layout = \"\(config.window.previewLayout.rawValue)\"")
         out.append("provider_bar = \"\(config.window.providerBar.rawValue)\"")
+        out.append("favicons = \(config.window.favicons)")
         out.append("")
         out.append("[capture]")
         out.append("directory = \(quote(config.capture.directory))")
@@ -1343,6 +1470,11 @@ public enum ConfigWriter {
         out.append("max_entries = \(config.clipboard.maxEntries)")
         out.append("poll_ms = \(config.clipboard.pollMs)")
         out.append("clear_after_ms = \(config.clipboard.clearAfterMs)")
+        out.append("retention_days = \(config.clipboard.retentionDays)")
+        out.append("max_image_bytes = \(config.clipboard.maxImageBytes)")
+        out.append("")
+        out.append("[meta]")
+        out.append("config_version = \(configVersion)")
         out.append("")
         return out.joined(separator: "\n")
     }

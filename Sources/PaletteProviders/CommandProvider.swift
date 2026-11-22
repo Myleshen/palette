@@ -121,7 +121,7 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
         guard let text = try? String(contentsOf: url, encoding: .utf8),
               let table = try? TOMLTable(string: text),
               let entries = table["command"]?.array else { return [] }
-        return entries.compactMap { value in
+        return entries.enumerated().compactMap { index, value in
             guard let row = value.table,
                   let title = row["title"]?.string,
                   let executable = row["executable"]?.string,
@@ -130,7 +130,9 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
             let keywords = row["keywords"]?.array?.compactMap { $0.string } ?? []
             let cwd = row["cwd"]?.string
             return Command(
-                id: "\(title)-\(executable)",
+                // Two rows can share a title and executable but differ in args;
+                // the row index keeps Enter on the row that was picked.
+                id: "\(title)-\(executable)-\(index)",
                 title: title,
                 keywords: keywords,
                 executable: executable,
