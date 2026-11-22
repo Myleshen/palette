@@ -118,6 +118,63 @@ public struct WebSearchEngine: Sendable, Equatable, Identifiable {
         }
         return result
     }
+
+    /// Why this row cannot be written, or nil when it is usable. Names and
+    /// bangs are matched case-insensitively, the way the launcher resolves
+    /// them, so a second "Google" or a repeated `!g` is caught here rather
+    /// than silently making the later engine unreachable.
+    public func validationIssue(among engines: [WebSearchEngine]) -> String? {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        if name.isEmpty {
+            return "Give the engine a name."
+        }
+        if !urlTemplate.contains("{query}") {
+            return "The search URL needs a {query} placeholder."
+        }
+        if engines.filter({
+            $0.name.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(name) == .orderedSame
+        }).count > 1 {
+            return "Another engine already uses this name."
+        }
+        let bang = (keyword ?? "").trimmingCharacters(in: .whitespaces)
+        if !bang.isEmpty, engines.filter({
+            ($0.keyword ?? "").trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(bang) == .orderedSame
+        }).count > 1 {
+            return "Another engine already uses !\(bang)."
+        }
+        return nil
+    }
+
+    /// Builds the list to write from what is on screen, falling back to the
+    /// saved value for an invalid edit and dropping rows the user deleted.
+    /// A valid rename replaces the saved row at the same position; a new row
+    /// past the saved list is appended.
+    public static func persisting(
+        _ drafts: [WebSearchEngine],
+        over saved: [WebSearchEngine]
+    ) -> [WebSearchEngine] {
+        var merged = saved
+        var kept = Set<Int>()
+        for (index, engine) in drafts.enumerated() {
+            if engine.validationIssue(among: drafts) == nil {
+                if let match = merged.firstIndex(where: { $0.id == engine.id }) {
+                    merged[match] = engine
+                    kept.insert(match)
+                } else if merged.indices.contains(index), !kept.contains(index) {
+                    merged[index] = engine
+                    kept.insert(index)
+                } else {
+                    merged.append(engine)
+                    kept.insert(merged.count - 1)
+                }
+            } else if let match = merged.firstIndex(where: { $0.id == engine.id }) {
+                kept.insert(match)
+            } else if merged.indices.contains(index), !kept.contains(index) {
+                kept.insert(index)
+            }
+        }
+        return merged.enumerated().filter { kept.contains($0.offset) }.map(\.element)
+    }
 }
 
 public struct ClipboardConfig: Sendable, Equatable {
@@ -1105,7 +1162,7 @@ public enum ConfigLoader {
         # targets one.
         global = [
           "calc", "search", "web", "win", "unit", "zj",
-          "bookmark", "pins", "system", "timer", "awake",
+          "bookmark", "pins", "system", "timer", "awake", "cheat",
         ]
 
         [providers.aliases]
