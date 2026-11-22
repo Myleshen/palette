@@ -312,14 +312,11 @@ public final class AnnotationEditor: ObservableObject {
     }
 
     public func save(to url: URL) throws -> URL {
-        let data: Data?
-        if ["jpg", "jpeg"].contains(url.pathExtension.lowercased()) {
-            data = rendered().jpegData(compression: 0.92)
-        } else {
-            data = rendered().pngData()
-        }
-        guard let data else { throw AnnotationError.encodeFailed }
+        guard let data = encodedData(for: url) else { throw AnnotationError.encodeFailed }
         let temp = url.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).tmp")
+        // replaceItemAt consumes the temp on success; a failed write/replace
+        // must not leave a hidden .tmp behind.
+        defer { try? FileManager.default.removeItem(at: temp) }
         try data.write(to: temp)
         _ = try FileManager.default.replaceItemAt(url, withItemAt: temp)
         return url
@@ -328,18 +325,14 @@ public final class AnnotationEditor: ObservableObject {
     @discardableResult
     public func save() throws -> URL {
         guard let sourceURL else { throw AnnotationError.noDestination }
-        let data: Data?
-        if ["jpg", "jpeg"].contains(sourceURL.pathExtension.lowercased()) {
-            data = rendered().jpegData(compression: 0.92)
-        } else {
-            data = rendered().pngData()
+        return try save(to: sourceURL)
+    }
+
+    private func encodedData(for url: URL) -> Data? {
+        if ["jpg", "jpeg"].contains(url.pathExtension.lowercased()) {
+            return rendered().jpegData(compression: 0.92)
         }
-        guard let data else { throw AnnotationError.encodeFailed }
-        let temp = sourceURL.deletingLastPathComponent()
-            .appendingPathComponent(".\(UUID().uuidString).tmp")
-        try data.write(to: temp)
-        _ = try FileManager.default.replaceItemAt(sourceURL, withItemAt: temp)
-        return sourceURL
+        return rendered().pngData()
     }
 
     public func renderedPNG() -> Data? { rendered().pngData() }

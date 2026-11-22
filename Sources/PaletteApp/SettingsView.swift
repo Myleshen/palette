@@ -872,6 +872,13 @@ struct SettingsView: View {
         )
     }
 
+    private var maxClipboardImageMBBinding: Binding<Int> {
+        Binding(
+            get: { config.clipboard.maxImageBytes / (1024 * 1024) },
+            set: { config.clipboard.maxImageBytes = $0 * 1024 * 1024 }
+        )
+    }
+
     private var uiSizeAutomatic: Binding<Bool> {
         Binding(
             get: { config.typography.uiSize == 0 },
@@ -1381,6 +1388,10 @@ struct SettingsView: View {
                            in: 200...2_000, step: 50, unit: "ms")
                 numericRow("Clear copied secrets after", value: clearAfterSecondsBinding,
                            in: 0...300, step: 5, unit: "s")
+                numericRow("Delete history older than", value: $config.clipboard.retentionDays,
+                           in: 0...3_650, step: 1, unit: "days")
+                numericRow("Image storage cap", value: maxClipboardImageMBBinding,
+                           in: 0...2_048, step: 50, unit: "MB")
             } footer: {
                 Text("Text and PNG images are stored. Anything another app marks concealed is never recorded. Zero seconds keeps secrets until you clear the history.")
             }
@@ -1833,6 +1844,12 @@ struct SettingsView: View {
                     .foregroundStyle(danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let unavailable = HotKeyRegistry.unavailable(id: "binding-\(index)") {
+                Text(unavailable)
+                    .font(.caption)
+                    .foregroundStyle(danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -2025,6 +2042,12 @@ struct SettingsView: View {
                     .foregroundStyle(danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let unavailable = HotKeyRegistry.unavailable(id: command.id) {
+                Text(unavailable)
+                    .font(.caption)
+                    .foregroundStyle(danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -2071,6 +2094,12 @@ struct SettingsView: View {
             }
             if let issue = shortcutErrors[id] ?? hotkeyIssue(value.wrappedValue, required: required, among: "") {
                 Text(issue).font(.caption).foregroundStyle(danger)
+            }
+            if let unavailable = HotKeyRegistry.unavailable(id: id) {
+                Text(unavailable)
+                    .font(.caption)
+                    .foregroundStyle(danger)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .searchTarget(anchor ?? "row-\(title)")

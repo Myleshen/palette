@@ -51,12 +51,23 @@ public enum RecordingAdoption: Equatable, Sendable {
 /// the saved file, clipboard copy, and errors surfaced instead of swallowed.
 @MainActor
 public final class CaptureService {
-    public var config: CaptureConfig
+    public var config: CaptureConfig {
+        didSet {
+            guard config != oldValue else { return }
+            onConfigChanged?(config)
+        }
+    }
+    /// A `/rec` choice writes through to config.toml instead of dying with the
+    /// process.
+    public var onConfigChanged: ((CaptureConfig) -> Void)?
     public var onStatus: ((String) -> Void)?
     /// Called with the saved file after a screenshot, and after a recording
     /// stops, so the app can show the annotator or the player.
     public var onScreenshot: ((URL) -> Void)?
     public var onRecordingStopped: ((URL) -> Void)?
+    /// Set false for scripted runs: a TCC dialog steals focus from the panel
+    /// the flow is checking, and CI cannot grant Screen Recording anyway.
+    public var requestsPermission = true
     /// Set by the "capture and annotate" rows.
     public var annotateNextCapture = false
     /// Failures the user is not looking at: the panel is hidden while
@@ -195,10 +206,17 @@ public final class CaptureService {
     // MARK: - Screenshots
 
     public func screenshot(_ mode: CaptureMode) async throws -> CaptureResult {
-        try Self.requireScreenRecording()
+        // A cancelled capture must not leave "annotate next" armed for a plain
+        // shot days later. onScreenshot still sees the flag inside this call.
+        let annotate = annotateNextCapture
+        defer { annotateNextCapture = false }
+        try requireScreenRecording()
         let directory = try destinationDirectory()
+        // Ask screencapture for the real format: a jpg config used to leave PNG
+        // bytes under a .jpg name.
+        let format = config.screenshotFormat == "jpg" ? "jpg" : "png"
         let temp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("palette-shot-\(UUID().uuidString).png")
+            .appendingPathComponent("palette-shot-\(UUID().uuidString).\(format)")
 
         var arguments = ["-x"]
         switch mode {
@@ -211,6 +229,7 @@ public final class CaptureService {
         }
         if config.captureCursor { arguments.append("-C") }
         if config.delay > 0 { arguments.append(contentsOf: ["-T", String(config.delay)]) }
+        arguments.append(contentsOf: ["-t", format])
         arguments.append(temp.path)
 
         let result = try await ProcessRunner.run([toolPath] + arguments, timeout: 120)
@@ -223,11 +242,15 @@ public final class CaptureService {
         }
 
         var saved: URL?
-        // The annotator can only save over a real file, so a copy-only action
-        // still writes one when this capture is going to the editor.
-        if config.screenshotAction.savesFile || annotateNextCapture {
-            let target = directory.appendingPathComponent(fileName(kind: "shot", extension: config.screenshotFormat))
-            try? FileManager.default.removeItem(at: target)
+        // The annotator can only save over a real file, so a copy-only (or
+        // edit) action still writes one when this capture is going to the
+        // editor. Deleting the temp first is what broke "Could not open …".
+        if config.screenshotAction.savesFile || annotate || config.editAfterCapture {
+            let target = directory.appendingPathComponent(
+                fileName(kind: "shot", ext: format, in: directory)
+            )
+            // Never remove an existing capture: the unique name guarantees a
+            // free slot even for two shots in the same second.
             try FileManager.default.moveItem(at: temp, to: target)
             saved = target
         }
@@ -238,12 +261,14 @@ public final class CaptureService {
         if config.screenshotAction == .preview, let saved {
             NSWorkspace.shared.open(saved)
         }
-        if saved == nil { try? FileManager.default.removeItem(at: temp) }
-
-        guard let final = saved else {
+        // Keep the temp until after onScreenshot: that callback is what opens
+        // the annotator or reads the image for the confirmation HUD.
+        if saved == nil {
             onScreenshot?(temp)
+            try? FileManager.default.removeItem(at: temp)
             return CaptureResult(url: temp, copied: copied)
         }
+        let final = saved ?? temp
         let message = copied ? "Saved and copied \(final.lastPathComponent)" : "Saved \(final.lastPathComponent)"
         onStatus?(message)
         onScreenshot?(final)
@@ -254,9 +279,9 @@ public final class CaptureService {
 
     /// screencapture just says "could not create image from display" when the
     /// grant is missing, so ask for the permission and say what to do.
-    private static func requireScreenRecording() throws {
+    private func requireScreenRecording() throws {
         if CGPreflightScreenCaptureAccess() { return }
-        if CGRequestScreenCaptureAccess() { return }
+        if requestsPermission, CGRequestScreenCaptureAccess() { return }
         throw CaptureError.failed(
             "Screen Recording is off for Palette. Enable it in System Settings → Privacy & Security → Screen Recording, then try again."
         )
@@ -264,9 +289,11 @@ public final class CaptureService {
 
     public func startRecording() throws {
         guard !isRecording else { return }
-        try Self.requireScreenRecording()
+        try requireScreenRecording()
         let directory = try destinationDirectory()
-        let target = directory.appendingPathComponent(fileName(kind: "rec", extension: "mov"))
+        let target = directory.appendingPathComponent(
+            fileName(kind: "rec", ext: "mov", in: directory)
+        )
         let process = Process()
         process.executableURL = URL(fileURLWithPath: toolPath)
         let arguments = Self.recordingArguments(config: config, path: target.path)
@@ -437,23 +464,47 @@ public final class CaptureService {
         return url
     }
 
-    private func fileName(kind: String, extension ext: String) -> String {
+    /// Millisecond resolution plus a free-name check: two captures in the same
+    /// second used to delete the earlier file.
+    private func fileName(kind: String, ext: String, in directory: URL) -> String {
+        Self.uniqueFileName(kind: kind, ext: ext, in: directory, date: Date())
+    }
+
+    /// The name is deterministic for a given date, so tests can prove two
+    /// captures in the same second never collide.
+    public nonisolated static func uniqueFileName(
+        kind: String,
+        ext: String,
+        in directory: URL,
+        date: Date
+    ) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        return "\(kind)-\(formatter.string(from: Date())).\(ext)"
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss-SSS"
+        let stem = "\(kind)-\(formatter.string(from: date))"
+        let manager = FileManager.default
+        var candidate = "\(stem).\(ext)"
+        var suffix = 2
+        while manager.fileExists(atPath: directory.appendingPathComponent(candidate).path) {
+            candidate = "\(stem)-\(suffix).\(ext)"
+            suffix += 1
+        }
+        return candidate
     }
 
     private func copyImageToPasteboard(_ url: URL) -> Bool {
         guard let image = NSImage(contentsOf: url) else { return false }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        return pasteboard.writeObjects([image])
+        let copied = pasteboard.writeObjects([image])
+        if copied { ClipboardMonitor.notePaletteWrite(pasteboard.changeCount) }
+        return copied
     }
 
     private func copyFileToPasteboard(_ url: URL) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([url as NSURL])
+        ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
     }
 
     private static func message(_ result: ProcessResult, fallback: String) -> String {

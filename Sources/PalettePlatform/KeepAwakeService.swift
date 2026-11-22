@@ -655,6 +655,13 @@ public actor ClamshellGuard: ClamshellControlling {
     public func disable() async {
         Log.shared.info("Clamshell: disarming the root guard", source: "awake")
         try? FileManager.default.removeItem(at: flagURL)
+        // The guard normally removes its own job; bootout is a defensive
+        // second try for a deleted plist that launchd still remembers. It
+        // legitimately fails without root and is not fatal.
+        _ = try? await ProcessRunner.run(
+            ["/bin/launchctl", "bootout", "system/\(Self.daemonLabel)"],
+            timeout: 5
+        )
         // The root loop notices the missing flag within three seconds and
         // restores normal sleep. Wait briefly so "off" is not just cosmetic.
         // If the daemon had exited on battery, the loaded job starts again
@@ -693,22 +700,29 @@ public actor ClamshellGuard: ClamshellControlling {
         let sleeper = shellQuote(sleepBinary)
         let cleanup = cleanUpPlist
             ? """
-              /bin/rm -f \(shellQuote(daemonPlistPath))
+              /bin/rm -f \(shellQuote(daemonScriptPath)) \(shellQuote(daemonPlistPath))
               /bin/launchctl bootout system/\(daemonLabel) >/dev/null 2>&1 || true
               """
             : ""
         // Written by root so a guard that dies right after arming is visible
         // instead of looking like a silent success.
         let log = shellQuote("/tmp/palette-clamshell-guard.log")
+        // The guard runs as root, so a permanent exit also drops the log it has
+        // been growing; an exit that launchd will recheck (battery) keeps it.
+        let truncateLog = cleanUpPlist ? ": > \(log)" : ""
         return """
         exec >>\(log) 2>&1
         note() { echo "$(/bin/date '+%F %T') [guard] $1"; }
         disarm() { \(tool) -a disablesleep 0 >/dev/null 2>&1; }
+        cleanup() {
+          disarm
+        \(cleanup)
+          \(truncateLog)
+        }
         finish() {
           trap - EXIT INT TERM HUP
-          disarm
           note "$1"
-        \(cleanup)
+          cleanup
           exit 0
         }
         onBattery() {

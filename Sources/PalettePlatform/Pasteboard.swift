@@ -18,6 +18,25 @@ public final class ClipboardMonitor: @unchecked Sendable {
 
     public var onCapture: (@Sendable (ClipboardCapture) -> Void)?
 
+    /// Change counts Palette wrote itself. Their content is already in history
+    /// (or is a save-copy screenshot), so recording it again is noise.
+    nonisolated(unsafe) private static var paletteWrite: Int = -1
+    private static let paletteWriteLock = NSLock()
+
+    public static func notePaletteWrite(_ changeCount: Int) {
+        paletteWriteLock.lock()
+        paletteWrite = changeCount
+        paletteWriteLock.unlock()
+    }
+
+    private static func consumePaletteWrite(_ changeCount: Int) -> Bool {
+        paletteWriteLock.lock()
+        defer { paletteWriteLock.unlock() }
+        guard paletteWrite == changeCount else { return false }
+        paletteWrite = -1
+        return true
+    }
+
     private static let ignoredTypes: Set<NSPasteboard.PasteboardType> = [
         NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"),
         NSPasteboard.PasteboardType("org.nspasteboard.TransientType"),
@@ -28,10 +47,15 @@ public final class ClipboardMonitor: @unchecked Sendable {
         lastChangeCount = NSPasteboard.general.changeCount
     }
 
-    public func start(intervalMs: Int) {
+    public func start(intervalMs: Int, preserveChangeCount: Bool = false) {
         stop()
         self.intervalMs = max(150, intervalMs)
-        lastChangeCount = pasteboard.changeCount
+        // A reload restarts polling; keep the last seen count so a copy made
+        // during the reload window is still captured. A cold start must skip
+        // whatever was already on the clipboard.
+        if !preserveChangeCount {
+            lastChangeCount = pasteboard.changeCount
+        }
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + .milliseconds(self.intervalMs), repeating: .milliseconds(self.intervalMs))
         timer.setEventHandler { [weak self] in
@@ -56,6 +80,7 @@ public final class ClipboardMonitor: @unchecked Sendable {
         let current = pasteboard.changeCount
         guard force || current != lastChangeCount else { return }
         lastChangeCount = current
+        guard !Self.consumePaletteWrite(current) else { return }
 
         let types = Set(pasteboard.types ?? [])
         guard types.isDisjoint(with: Self.ignoredTypes) else { return }
@@ -191,6 +216,7 @@ public final class PasteboardService {
         pasteboard.writeObjects([item])
         let changeCount = pasteboard.changeCount
         writtenChangeCount = changeCount
+        ClipboardMonitor.notePaletteWrite(changeCount)
 
         if let clearAfterMs, clearAfterMs > 0 {
             scheduleClear(
@@ -219,6 +245,7 @@ public final class PasteboardService {
         pasteboard.writeObjects([item])
         let changeCount = pasteboard.changeCount
         writtenChangeCount = changeCount
+        ClipboardMonitor.notePaletteWrite(changeCount)
 
         if let clearAfterMs, clearAfterMs > 0 {
             scheduleClear(
@@ -238,6 +265,7 @@ public final class PasteboardService {
         pasteboard.writeObjects(paths.map { URL(fileURLWithPath: $0) as NSURL })
         let changeCount = pasteboard.changeCount
         writtenChangeCount = changeCount
+        ClipboardMonitor.notePaletteWrite(changeCount)
 
         if let clearAfterMs, clearAfterMs > 0 {
             scheduleClear(
