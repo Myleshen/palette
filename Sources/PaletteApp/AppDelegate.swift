@@ -256,11 +256,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.dockTile.badgeLabel = "1"
         }
         // Warm `/edit` and `/neo` off the main thread: the walk is cached to
-        // disk, so the first bound query after this launch is instant.
+        // disk, so the first bound query after this launch is instant. The
+        // whole-home walk waits for the one-time consent below.
+        let homeConsent = askForHomeIndexingConsent(registry: builtRegistry)
         if ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] == nil {
             Task.detached(priority: .utility) {
                 for case let provider as PathsProvider in builtRegistry.providers {
-                    await provider.prewarm()
+                    await provider.prewarm(homeConsent: homeConsent)
                 }
             }
         }
@@ -324,6 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         buildPanel()
         buildMainMenu()
         installHotKey()
+        checkDefaultProviderTools()
         configureClipboard()
         buildStatusItem()
         if case .adopted = recordingAdoption {
@@ -1067,7 +1070,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 id: $0.descriptor.id,
                 name: $0.descriptor.name,
                 trigger: $0.descriptor.trigger,
-                isGlobal: $0.descriptor.isGlobal
+                isGlobal: $0.descriptor.isGlobal,
+                requirements: ProviderToolRequirements.requirements(for: $0)
             )
         }
         let registry = ProviderRegistry(
@@ -2029,6 +2033,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         return nil
+    }
+
+    // MARK: - First-run prompts
+
+    /// One-time consent for the whole-home walk. A dismissed prompt means "no"
+    /// until the user opts in from Settings; the narrow scopes still prewarm.
+    private func askForHomeIndexingConsent(registry: ProviderRegistry) -> Bool {
+        if let consent = configuration.indexingHomeConsent { return consent }
+        let usesHome = registry.providers.contains { provider in
+            guard let paths = provider as? PathsProvider else { return false }
+            return paths.indexesHomeFolder
+        }
+        guard usesHome, !isScriptMode, !shouldShowOnboarding else { return false }
+        let alert = NSAlert()
+        alert.messageText = "Index your home folder for /edit?"
+        alert.informativeText = """
+        Palette will read file names under ~ so the file picker can find them. \
+        macOS may ask for folder access; Desktop, Documents, Downloads, Library \
+        and the other system folders are skipped. You can answer again in Settings.
+        """
+        alert.addButton(withTitle: "Index Home Folder")
+        alert.addButton(withTitle: "Not Now")
+        let consent = alert.runModal() == .alertFirstButtonReturn
+        configuration.indexingHomeConsent = consent
+        try? writeConfig(configuration)
+        return consent
+    }
+
+    /// One prompt for a tool a default provider cannot run without. The answer
+    /// is stored, so it is never asked twice — and never from inside a search.
+    private func checkDefaultProviderTools() {
+        guard !isScriptMode, !shouldShowOnboarding else { return }
+        let acknowledged = Set(configuration.missingToolAcknowledged)
+        let enabled = Set(configuration.globalProviders).union(["apps"])
+        let pending: [(provider: any PaletteProvider, missing: [ProviderRequirement])] =
+            registry.providers.compactMap { provider in
+                let id = provider.descriptor.id
+                guard enabled.contains(id), !acknowledged.contains(id) else { return nil }
+                let missing = ProviderRequirements.missing(ProviderToolRequirements.requirements(for: provider))
+                return missing.isEmpty ? nil : (provider, missing)
+            }
+        guard !pending.isEmpty else { return }
+        let commands = pending.flatMap { $0.missing.map(\.install) }
+        let alert = NSAlert()
+        alert.messageText = pending.count == 1
+            ? "A source needs a tool that is not installed"
+            : "\(pending.count) sources need tools that are not installed"
+        alert.informativeText = pending.map { provider, missing in
+            "\(provider.descriptor.name) needs \(missing.map(\.tool).joined(separator: ", ")) — "
+                + missing.map(\.why).joined(separator: " · ")
+                + "\n"
+                + missing.map(\.install).joined(separator: "\n")
+        }.joined(separator: "\n\n")
+        alert.addButton(withTitle: "Keep Enabled")
+        alert.addButton(withTitle: "Copy Commands")
+        alert.addButton(withTitle: "Disable")
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(commands.joined(separator: "\n"), forType: .string)
+        }
+        configuration.missingToolAcknowledged += pending.map { $0.provider.descriptor.id }
+        if response == .alertThirdButtonReturn {
+            configuration.disabledProviders += pending.map { $0.provider.descriptor.id }
+            try? writeConfig(configuration)
+            reload(quiet: true)
+        } else if !commands.isEmpty {
+            try? writeConfig(configuration)
+        }
     }
 
     private func seedUserProviders() {

@@ -15,6 +15,7 @@ public final class CheatsheetProvider: PaletteProvider, @unchecked Sendable {
     )
 
     private let config: CheatsheetConfig
+    private let cache = ShortCache<[Entry]>(ttl: 5)
 
     public init(config: CheatsheetConfig) {
         self.config = config
@@ -32,7 +33,14 @@ public final class CheatsheetProvider: PaletteProvider, @unchecked Sendable {
         // the user asked for cheatsheets explicitly.
         guard !config.folders.isEmpty else { return request.isBound ? [setupRow] : [] }
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let entries = Self.entries(in: config)
+        let entries: [Entry]
+        let key = Self.cacheKey(config)
+        if let cached = await cache.get(key) {
+            entries = cached
+        } else {
+            entries = Self.entries(in: config)
+            await cache.set(entries, key: key)
+        }
         let matches = query.isEmpty
             ? entries
             : entries.compactMap { entry -> (Entry, Double)? in
@@ -103,6 +111,19 @@ public final class CheatsheetProvider: PaletteProvider, @unchecked Sendable {
     }
 
     // MARK: - Files
+
+    /// Folders, extensions and each folder's mtime: a new file or a settings
+    /// change misses, an unchanged folder is not re-enumerated per keystroke.
+    private static func cacheKey(_ config: CheatsheetConfig) -> String {
+        var parts = config.extensions.map { $0.lowercased() }
+        for folder in config.folders {
+            let url = URL(fileURLWithPath: (folder as NSString).expandingTildeInPath)
+            let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate?.timeIntervalSince1970 ?? 0
+            parts.append("\(folder)#\(Int(date))")
+        }
+        return parts.joined(separator: "|")
+    }
 
     private static func entries(in config: CheatsheetConfig) -> [Entry] {
         let allowed = Set(config.extensions.map { $0.lowercased() })

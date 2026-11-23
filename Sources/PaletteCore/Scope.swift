@@ -47,11 +47,16 @@ public struct Scope: Equatable, Sendable {
         maxDepth: 12
     )
 
-    /// The whole home directory, with the noisy and generated directories
-    /// excluded. Used by `/neo`, matching Noctalia's file launcher.
+    /// The whole home directory, without the noisy, generated or TCC-guarded
+    /// places: walking Desktop/Documents/Downloads/Library triggers a macOS
+    /// folder-access prompt and rarely names something a launcher should offer.
+    /// A scope that explicitly roots one of them still sees it.
     public static let home = Scope(
         roots: ["~"],
-        exclude: defaultExcludes + [".Trash", "Movies", "Music", "Pictures"],
+        exclude: defaultExcludes + [
+            ".Trash", "Library", "Desktop", "Documents", "Downloads",
+            "Movies", "Music", "Pictures", "Applications",
+        ],
         maxDepth: 12
     )
 

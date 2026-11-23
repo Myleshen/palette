@@ -11,6 +11,9 @@ struct ProviderSettingsInfo: Identifiable, Equatable {
     var name: String
     var trigger: String?
     var isGlobal: Bool
+    /// Tools this provider cannot run without, checked once here rather than
+    /// from inside a search.
+    var requirements: [ProviderRequirement] = []
 }
 
 /// One editable alias row. `enabled` is the effective set written to config;
@@ -1027,6 +1030,8 @@ struct SettingsView: View {
             .init(title: "Provider order", tab: .providers, anchor: "providers-default", keywords: "provider order visibility trigger"),
             .init(title: "Provider aliases", tab: .providers, anchor: "providers-default", keywords: "provider alias shortcut"),
             .init(title: "Provider files", tab: .providers, anchor: "providers-files", keywords: "provider commands.toml folder"),
+            .init(title: "Missing tools", tab: .providers, anchor: "providers-missing-tools", keywords: "install brew missing tool devx gh fzf copy command"),
+            .init(title: "File indexing", tab: .providers, anchor: "providers-indexing", keywords: "home folder index consent fd walk permissions privacy"),
             .init(title: "Config file and logs", tab: .providers, anchor: "providers-config", keywords: "config log crash backup export diagnostics"),
             .init(title: "About Palette", tab: .general, anchor: "settings-about", keywords: "about version build commit chip macos architecture config state logs reveal diagnostics github releases issue author myleshen licence"),
         ]
@@ -2824,6 +2829,9 @@ struct SettingsView: View {
     /// and order live in the same table so a provider is configured in one place.
     private var providerSettings: some View {
         VStack(alignment: .leading, spacing: 20) {
+            if !pendingToolRows.isEmpty {
+                missingToolsCard
+            }
             card("Providers", anchor: "providers-default") {
                 providerFilterField
                 providerHeader
@@ -2861,6 +2869,17 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            card("File indexing", anchor: "providers-indexing") {
+                Toggle("Index my home folder for file providers", isOn: Binding(
+                    get: { config.indexingHomeConsent ?? false },
+                    set: { config.indexingHomeConsent = $0 }
+                ))
+                Text("The home walk runs at launch and is cached. macOS may ask for folder access the first time; Desktop, Documents, Downloads, Library and the other system folders are skipped either way.")
+                    .font(.caption)
+                    .foregroundStyle(muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             card("Configuration", anchor: "providers-config") {
                 HStack(spacing: 8) {
                     Button("Open config.toml") { onOpen(configURL) }
@@ -2889,6 +2908,71 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    /// Providers that are on but cannot run until a tool is installed. The
+    /// answer is written to `[providers] missing_tool_acknowledged`, so this
+    /// card disappears for good once it is answered.
+    private var pendingToolRows: [(provider: ProviderSettingsInfo, missing: [ProviderRequirement])] {
+        let acknowledged = Set(config.missingToolAcknowledged)
+        return providers.compactMap { provider in
+            guard !disabledProviders.contains(provider.id), !acknowledged.contains(provider.id) else { return nil }
+            let missing = ProviderRequirements.missing(provider.requirements)
+            return missing.isEmpty ? nil : (provider, missing)
+        }
+    }
+
+    private var missingToolsCard: some View {
+        card("Missing tools", anchor: "providers-missing-tools") {
+            ForEach(pendingToolRows, id: \.provider.id) { row in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(row.provider.name) needs \(row.missing.map(\.tool).joined(separator: ", "))")
+                        .fontWeight(.medium)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(row.missing.map(\.why).joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(row.missing, id: \.tool) { requirement in
+                        HStack(spacing: 8) {
+                            Text(requirement.install)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button("Copy") { copyToPasteboard(requirement.install) }
+                                .controlSize(.small)
+                            if let docs = requirement.docs, let url = URL(string: docs) {
+                                Link("Docs", destination: url).font(.caption)
+                            }
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Button("Keep enabled") { acknowledgeTool(row.provider.id) }
+                            .controlSize(.small)
+                        Button("Disable \(row.provider.name)") {
+                            if !disabledProviders.contains(row.provider.id) {
+                                disabledProviders.append(row.provider.id)
+                            }
+                            acknowledgeTool(row.provider.id)
+                        }
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        } footer: {
+            Text("Palette asks once. Answering here is stored in config.toml and is not asked again; the launcher never prompts from inside a search.")
+        }
+    }
+
+    private func acknowledgeTool(_ id: String) {
+        guard !config.missingToolAcknowledged.contains(id) else { return }
+        config.missingToolAcknowledged.append(id)
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     private var providerFilterField: some View {
@@ -2962,6 +3046,10 @@ struct SettingsView: View {
         providers.first(where: { $0.id == id })?.trigger
     }
 
+    private func requirements(for id: String) -> [ProviderRequirement] {
+        providers.first(where: { $0.id == id })?.requirements ?? []
+    }
+
     /// Plain queries follow the allowlist saved to `[providers] global`. Apps is
     /// always searched, so its box is checked and read-only.
     private func providerDefaultBinding(_ id: String) -> Binding<Bool> {
@@ -3015,10 +3103,18 @@ struct SettingsView: View {
                 .allowsHitTesting(id != "apps")
                 .help("Include \(providerName(id)) in the registry and show its tab")
 
-            Text(providerName(id))
-                .fontWeight(.medium)
-                .lineLimit(2)
-                .frame(width: providerNameWidth, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(providerName(id))
+                    .fontWeight(.medium)
+                    .lineLimit(2)
+                if let missing = ProviderRequirements.missing(requirements(for: id)).first {
+                    Text("needs \(missing.tool)")
+                        .font(.caption2)
+                        .foregroundStyle(muted)
+                        .help(missing.install)
+                }
+            }
+            .frame(width: providerNameWidth, alignment: .leading)
 
             Toggle("Plain queries for \(providerName(id))", isOn: providerDefaultBinding(id))
                 .toggleStyle(.checkbox)

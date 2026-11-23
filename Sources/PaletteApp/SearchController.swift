@@ -79,6 +79,7 @@ public final class SearchController: ObservableObject, HostBridge {
     private let clipboardMonitor: ClipboardMonitor?
 
     private var searchTask: Task<Void, Never>?
+    private var previewTask: Task<Void, Never>?
     private var statusTask: Task<Void, Never>?
     private var promptContinuation: CheckedContinuation<String?, Never>?
     private var resetting = false
@@ -182,6 +183,7 @@ public final class SearchController: ObservableObject, HostBridge {
             saveScratchpad()
         }
         searchTask?.cancel()
+        previewTask?.cancel()
         isSearching = false
         cancelPrompt()
         actionsMode = false
@@ -409,7 +411,39 @@ public final class SearchController: ObservableObject, HostBridge {
         if let diagnostic = result.diagnostics.first(where: { $0.level != .info }) {
             setStatus(diagnostic.message, duration: 6)
         }
+        fillPreview()
         updatePanelHeight()
+    }
+
+    /// A preview that costs a process call (git status, a file digest) is
+    /// fetched for the selected row only, after its list is already on screen.
+    private func fillPreview() {
+        previewTask?.cancel()
+        guard previewEnabled, items.indices.contains(selectionIndex) else { return }
+        let item = items[selectionIndex]
+        guard let provider = registry.providers.first(where: { $0.descriptor.id == item.providerID })
+            as? AsyncPreviewProviding else { return }
+        let index = selectionIndex
+        let stableID = item.stableID
+        previewTask = Task { [weak self] in
+            let preview = await provider.preview(for: item)
+            guard let preview, let self, !Task.isCancelled,
+                  self.items.indices.contains(index),
+                  self.items[index].stableID == stableID else { return }
+            self.items[index].preview = preview
+        }
+    }
+
+    /// The bound provider has nothing to show because a tool is missing.
+    public var missingToolHint: String? {
+        let parsed = registry.parser.parse(query)
+        guard parsed.isBound,
+              let id = parsed.providerID,
+              let provider = registry.providers.first(where: { $0.descriptor.id == id }),
+              let missing = ProviderRequirements.missing(
+                ProviderToolRequirements.requirements(for: provider)
+              ).first else { return nil }
+        return "\(provider.descriptor.name) needs \(missing.tool) — \(missing.install)"
     }
 
     // MARK: - Keyboard
@@ -592,6 +626,7 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         guard !items.isEmpty else { return }
         selectionIndex = (selectionIndex + delta + items.count) % items.count
+        fillPreview()
         if previewEnabled { updatePanelHeight() }
     }
 
@@ -716,6 +751,7 @@ public final class SearchController: ObservableObject, HostBridge {
         guard actionsMode == false, items.indices.contains(index) else { return }
         railFocused = false
         selectionIndex = index
+        fillPreview()
         if previewEnabled { updatePanelHeight() }
     }
 
