@@ -224,7 +224,6 @@ public final class SearchController: ObservableObject, HostBridge {
         scopeProviderID = nil
         terminalActive = false
         terminalSessionName = nil
-        panel?.terminalFrame = false
         panel?.suppressAutoHide = false
     }
 
@@ -1496,7 +1495,6 @@ public final class SearchController: ObservableObject, HostBridge {
         previewFocused = false
         actionsMode = false
         actionItems = []
-        panel?.terminalFrame = true
         panel?.show()
         requestFocus()
     }
@@ -1506,7 +1504,6 @@ public final class SearchController: ObservableObject, HostBridge {
         terminalActive = false
         terminalExitCode = nil
         terminalSessionName = nil
-        panel?.terminalFrame = false
         NotificationCenter.default.post(name: .paletteTerminalStop, object: nil)
         focusZone = .search
         resetting = true
@@ -1553,7 +1550,6 @@ public final class SearchController: ObservableObject, HostBridge {
     public func openScratchpad(noteID: String? = nil, seed: String? = nil) {        if terminalActive { closeTerminalPanel() }
         scratchpadGeneration += 1
         let generation = scratchpadGeneration
-        panel?.terminalFrame = false
         panel?.show()
         scratchpadActive = true
         previewEnabled = false
