@@ -54,8 +54,8 @@ info = "#89b4fa"
 badge_bg = "#45475a"
 badge_fg = "#cdd6f4"
 
-# Panel size, position, and per-view widths live in config.toml under [window],
-# not here: a theme describes how Palette looks, config describes how big it is.
+# Panel position lives here; geometry is one fixed frame per screen, and
+# preview direction / provider bar placement live in config.toml under [window].
 [window]
 anchor = "top"                     # top | center
 offset_y = 120                     # points, or "18%" of screen height
@@ -162,9 +162,10 @@ both the check and the repair.
 `window.offset_y`, `window.corner_radius`, `search.height`, `list.row_height`,
 `list.spacing`, `list.icon_size`, `motion.duration_ms`.
 
-Panel width, height, row count, and the per-view widths are not theme keys.
-They live in `config.toml` under `[window]` (see README), so a theme stays
-portable across screen sizes.
+Panel width and height are not theme keys. The launcher uses one fixed frame per
+screen (near full width on landscape, narrower and full height on portrait), so
+a theme stays portable across screen sizes. `config.toml` under `[window]` only
+picks the preview direction, provider bar placement and favicons.
 
 `anchor = "top"` centers horizontally and places the panel `offset_y` from the
 top of the active screen. `center` ignores `offset_y`.
@@ -193,9 +194,10 @@ anchor, row height, spacing, density, icons, subtitles, selection style,
 typography, match emphasis, motion, footer hints. Grid `columns` is reserved for
 a later release.
 
-Not controlled by themes: panel width, panel height, visible rows, and the
-clipboard/preview/terminal/scratchpad widths. Those are in `config.toml`
-under `[window]`.
+Not controlled by themes: panel width and height. The launcher uses one fixed
+frame per screen; the preview shares that frame instead of resizing it. Preview
+direction, provider bar placement and favicons live in `config.toml` under
+`[window]`.
 
 Not controlled: the order of results, provider behavior, arbitrary views, custom
 CSS, per-item layout. Extensions can attach an icon, subtitle, badge, group, and

@@ -2,6 +2,20 @@
 
 ## 2.17.1 — 2026-11-22
 
+### Changed
+
+- **One fixed launcher frame per screen.** The panel opens at the same large
+  landscape size on every landscape display (a narrower, full-height frame on
+  portrait screens) and no longer grows or shrinks with result count, preview,
+  provider rail or mode. The provider rail keeps one width and scrolls its
+  list, and the preview takes room from the list card without resizing the
+  window. Terminal and scratchpad use the same frame.
+- Settings lost the manual **Size** card, and `[window]` no longer reads
+  `auto_size`, `scale`, `width`, `max_height`, `visible_rows`,
+  `clipboard_width`, `preview_width` or `terminal_width`. Old files still parse
+  and those keys are dropped on the next save; `preview_layout`,
+  `provider_bar` and `favicons` remain.
+
 ### Fixed
 
 - **Return pastes** for every text result: emoji (previously copied only),

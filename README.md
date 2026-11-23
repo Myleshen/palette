@@ -427,10 +427,12 @@ provider rail and a content card. There is no alternate classic layout.
 ### Preview layout
 
 `preview_layout = "auto"` is the default: the preview sits beside the list when
-the screen is wide enough and below it on narrow or portrait displays.
-`beside` and `below` remain explicit overrides. Panel width is clamped to the
-screen, so the preview pane stays inside a narrow display instead of running
-off the right edge.
+the fixed frame is wide enough and below it on portrait frames.
+`beside` and `below` remain explicit overrides. The pane takes room from the
+list card; it never resizes the window. The launcher opens at one fixed frame
+per display — near full width and tall on landscape, narrower and full height
+on portrait — and does not grow or shrink with result count, preview, provider
+bar or mode.
 
 ### Pinned items
 
@@ -796,15 +798,9 @@ action = "launch"              # launch | command | provider | url
 value = "Ghostty"
 
 [window]
-auto_size = true               # size to the screen under the cursor
-scale = 1.0                    # 0.8-1.6; multiplies every size below, like rem
-width = 0                      # points; 0 = 680 * scale
-max_height = 0                 # points; 0 = 720 * scale
-visible_rows = 0               # 5-10; 0 = 7 * scale, sets the panel height
-clipboard_width = 0            # 0 = follow the panel width
-preview_width = 0
-terminal_width = 0             # 0 = 1000 * scale
 preview_layout = "auto"        # auto | beside | below
+provider_bar = "top"           # top | left | hidden
+favicons = true                # fetch web-app site icons
 
 [timer]
 presets = [5, 10, 15, 25, 30, 45, 60]   # minutes, shown in /timer

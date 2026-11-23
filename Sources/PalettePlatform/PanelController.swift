@@ -24,13 +24,9 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     public var activatePreviousOnHide = true
 
     public private(set) var previousApplication: NSRunningApplication?
-    /// Wider panel for preview layouts (clipboard window). Nil uses the theme.
-    public var widthOverride: CGFloat? {
-        didSet { if isShowing { position() } }
-    }
 
-    /// Sizing from config.toml. Auto mode re-measures on the screen under the
-    /// cursor every time the panel is positioned.
+    /// Sizing comes from config's fixed per-screen frame. The panel never
+    /// sizes itself to its content, a preview, or a mode.
     public var windowConfig = WindowConfig() {
         didSet { if isShowing { position() } }
     }
@@ -41,14 +37,14 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     }
 
     private var keyMonitor: Any?
-    private var contentHeight: CGFloat = 200
     private var theme: Theme
     private var isShowing = false
 
     public init(theme: Theme, content: NSView) {
         self.theme = theme
+        let initial = WindowConfig().launcherSize(for: CGSize(width: 1440, height: 900))
         let panel = PalettePanel(
-            contentRect: NSRect(x: 0, y: 0, width: theme.window.width, height: contentHeight),
+            contentRect: NSRect(x: 0, y: 0, width: initial.width, height: initial.height),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -103,11 +99,6 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
             view.topAnchor.constraint(equalTo: contentContainer.topAnchor),
             view.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
         ])
-    }
-
-    public func setContentHeight(_ height: CGFloat) {
-        contentHeight = max(92, min(height, CGFloat(theme.window.maxHeight)))
-        if isShowing { position() }
     }
 
     public func apply(theme: Theme) {
@@ -168,26 +159,15 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     /// exercised on a single-display machine.
     public var screenSizeOverride: CGSize?
 
-    /// Rows that fit on the screen the cursor is on.
-    public func effectiveRows() -> Int {
-        let visible = screenSizeOverride
-            ?? (Self.screenUnderPointer() ?? panel.screen)?.visibleFrame.size
-            ?? CGSize(width: 1440, height: 900)
-        return windowConfig.launcherRows(for: visible)
-    }
-
     private func position() {
         let screen = Self.screenUnderPointer()
         guard let screen else { return }
         let visible = screen.visibleFrame
-        // Never grow past the usable screen area, whatever the theme or an
-        // override asks for.
+        // Never grow past the usable screen area, whatever an override asks for.
         let metrics = screenSizeOverride ?? visible.size
-        let width = min(
-            widthOverride ?? CGFloat(windowConfig.launcherWidth(for: metrics)),
-            visible.width - 24
-        )
-        let height = max(92, min(contentHeight, CGFloat(theme.window.maxHeight), visible.height - 24))
+        let size = windowConfig.launcherSize(for: metrics)
+        let width = min(size.width, visible.width - 24)
+        let height = min(size.height, visible.height - 24)
         var x = visible.midX - width / 2
         var y: CGFloat
 
