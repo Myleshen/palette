@@ -68,6 +68,31 @@ public enum SystemNotification {
         }
     }
 
+    /// Posts only when the user already granted notifications. A background
+    /// release check must never open a permission prompt; the ask window still
+    /// owns that first request.
+    public static func postIfPermitted(title: String, body: String, identifier: String) {
+        guard Bundle.main.bundlePath.hasSuffix(".app") else { return }
+        Task.detached(priority: .utility) {
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
+            let granted = settings.authorizationStatus == .authorized
+                || settings.authorizationStatus == .provisional
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = nil
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+            do {
+                try await center.add(request)
+                Log.shared.info("Notification posted: \(title)", source: "notify")
+            } catch {
+                Log.shared.warn("Could not show a notification: \(error.localizedDescription)", source: "notify")
+            }
+        }
+    }
+
     /// The live permission state, re-read at most once a second.
     private static func permissionAllowed(_ center: UNUserNotificationCenter) async -> Bool {
         let state = permissionCacheState()

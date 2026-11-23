@@ -374,6 +374,14 @@ public struct TimerConfig: Sendable, Equatable {
     public init() {}
 }
 
+public struct UpdateConfig: Sendable, Equatable {
+    /// Look for a newer release at most once a day. Palette never installs it;
+    /// the menu item hands that to Homebrew.
+    public var automatic = true
+
+    public init() {}
+}
+
 public enum HotkeyAction: String, Sendable, Equatable, CaseIterable {
     case launch
     case command
@@ -469,6 +477,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var timer: TimerConfig
     public var capture: CaptureConfig
     public var cheatsheets: CheatsheetConfig
+    public var updates: UpdateConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -510,7 +519,8 @@ public struct PaletteConfig: Sendable, Equatable {
         terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
         timer: TimerConfig = TimerConfig(),
         capture: CaptureConfig = CaptureConfig(),
-        cheatsheets: CheatsheetConfig = CheatsheetConfig()
+        cheatsheets: CheatsheetConfig = CheatsheetConfig(),
+        updates: UpdateConfig = UpdateConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -551,6 +561,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.timer = timer
         self.capture = capture
         self.cheatsheets = cheatsheets
+        self.updates = updates
     }
 }
 
@@ -854,6 +865,10 @@ public enum ConfigLoader {
             }
             config.timer.sound = timer.bool("sound") ?? config.timer.sound
             config.timer.notify = timer.bool("notify") ?? config.timer.notify
+        }
+
+        if let updates = table.table("updates") {
+            config.updates.automatic = updates.bool("automatic") ?? config.updates.automatic
         }
 
         if let providers = table.table("providers") {
@@ -1175,6 +1190,11 @@ public enum ConfigLoader {
         sound = true
         notify = true
 
+        # Look for a newer release once a day. Homebrew still installs it;
+        # Palette only offers the command.
+        [updates]
+        automatic = true
+
         # Font overrides. Empty family or 0 size inherits the active theme.
         [typography]
         ui_family = ""
@@ -1378,6 +1398,9 @@ public enum ConfigWriter {
         out.append("presets = [\(config.timer.presets.map(String.init).joined(separator: ", "))]")
         out.append("sound = \(config.timer.sound)")
         out.append("notify = \(config.timer.notify)")
+        out.append("")
+        out.append("[updates]")
+        out.append("automatic = \(config.updates.automatic)")
         out.append("")
         out.append("[typography]")
         out.append("ui_family = \(quote(config.typography.uiFamily))")
