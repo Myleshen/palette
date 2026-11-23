@@ -113,7 +113,7 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(diagnostics.isEmpty)
     }
 
-    func testLegacyRootVisibleRowsStillClamps() throws {
+    func testLegacySizingKeysAreIgnored() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-rows-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let paths = PalettePaths(
@@ -124,15 +124,33 @@ final class CoreTests: XCTestCase {
         )
         try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
 
-        // 2.3.2 wrote this key at the root; it still maps into [window].
-        try "visible_rows = 6\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 6)
+        // 2.17.1 dropped manual sizing. Older files keep parsing, and the next
+        // save rewrites [window] without the dead keys.
+        try """
+        visible_rows = 6
+        [window]
+        auto_size = false
+        scale = 1.4
+        width = 1200
+        max_height = 400
+        visible_rows = 3
+        clipboard_width = 900
+        preview_width = 700
+        terminal_width = 1200
+        provider_bar = "left"
+        preview_layout = "below"
+        favicons = false
+        """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
-        try "visible_rows = 99\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 11)
+        let loaded = ConfigLoader.load(paths: paths).config
+        XCTAssertEqual(loaded.window.providerBar, .left)
+        XCTAssertEqual(loaded.window.previewLayout, .below)
+        XCTAssertFalse(loaded.window.favicons)
 
-        try "visible_rows = 2\n".write(to: paths.configFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(ConfigLoader.load(paths: paths).config.window.visibleRows, 6)
+        let rendered = ConfigWriter.render(loaded)
+        XCTAssertFalse(rendered.contains("width ="), "the writer drops the removed sizing keys")
+        XCTAssertFalse(rendered.contains("visible_rows"))
+        XCTAssertFalse(rendered.contains("scale ="))
     }
 
     func testUnitConversion() throws {
@@ -321,57 +339,6 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(TimerDuration.label(5400), "1 hour 30 minutes")
     }
 
-    func testWindowConfigScaleAndOverrides() {
-        var window = WindowConfig()
-        XCTAssertEqual(window.launcherWidth, 680)
-        XCTAssertEqual(window.launcherMaxHeight, 820)
-        XCTAssertEqual(window.launcherRows, 7)
-        XCTAssertEqual(window.terminalPanelWidth, 1000)
-
-        window.scale = 1.25
-        XCTAssertEqual(window.launcherWidth, 850)
-        XCTAssertEqual(window.launcherMaxHeight, 1025)
-        XCTAssertEqual(window.launcherRows, 9)
-        XCTAssertEqual(window.clipboardPanelWidth, 1100)
-
-        window.width = 900
-        XCTAssertEqual(window.launcherWidth, 900, "explicit width wins over scale")
-
-        window.scale = 3
-        XCTAssertEqual(window.effectiveScale, 1.6, "scale clamps to 1.6")
-        window.visibleRows = 20
-        XCTAssertEqual(window.launcherRows, 11, "rows clamp to 11")
-    }
-
-    func testAutoSizeFollowsTheScreen() {
-        var window = WindowConfig()
-        window.autoSize = true
-
-        // A 13" laptop is the reference; bigger displays scale up and clamp.
-        let sizes: [(Double, Double, Double, Int)] = [
-            (1440, 900, 700, 7),
-            (1680, 1050, 816, 8),
-            (1920, 1080, 933, 8),
-            (2560, 1440, 1000, 11),
-            (3440, 1440, 1000, 11),
-        ]
-        for (width, height, expectedWidth, expectedRows) in sizes {
-            let screen = CGSize(width: width, height: height)
-            XCTAssertEqual(window.launcherWidth(for: screen), expectedWidth)
-            XCTAssertEqual(window.launcherRows(for: screen), expectedRows)
-        }
-
-        // An explicit width still wins over auto
-        window.width = 900
-        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1440, height: 900)), 900)
-
-        // Turning auto off falls back to the fixed default
-        window.width = 0
-        window.autoSize = false
-        XCTAssertEqual(window.launcherWidth(for: CGSize(width: 1440, height: 900)), 680)
-        XCTAssertEqual(window.launcherRows(for: CGSize(width: 1440, height: 900)), 7)
-    }
-
     func testWindowConfigParsesFromTOML() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-window-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
@@ -384,32 +351,26 @@ final class CoreTests: XCTestCase {
         try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
         try """
         [window]
-        scale = 1.2
-        width = 900
-        visible_rows = 9
-        terminal_width = 1200
+        provider_bar = "left"
         preview_layout = "beside"
+        favicons = false
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         var loaded = ConfigLoader.load(paths: paths).config
-        XCTAssertEqual(loaded.window.scale, 1.2)
-        XCTAssertEqual(loaded.window.width, 900)
-        XCTAssertEqual(loaded.window.visibleRows, 9)
-        XCTAssertEqual(loaded.window.terminalWidth, 1200)
-        XCTAssertEqual(loaded.window.launcherWidth, 900)
-        XCTAssertEqual(loaded.window.launcherRows, 9)
+        XCTAssertEqual(loaded.window.providerBar, .left)
         XCTAssertEqual(loaded.window.previewLayout, .beside)
+        XCTAssertFalse(loaded.window.favicons)
 
-        // A settings save must round-trip the [window] table.
-        loaded.window.scale = 1.1
+        // A settings save must round-trip the surviving [window] table.
+        loaded.window.previewLayout = .below
         try ConfigWriter.render(loaded).write(to: paths.configFile, atomically: true, encoding: .utf8)
         let reloaded = ConfigLoader.load(paths: paths).config.window
-        XCTAssertEqual(reloaded.scale, 1.1)
-        XCTAssertEqual(reloaded.width, 900)
-        XCTAssertEqual(reloaded.previewLayout, .beside)
+        XCTAssertEqual(reloaded.providerBar, .left)
+        XCTAssertEqual(reloaded.previewLayout, .below)
+        XCTAssertFalse(reloaded.favicons)
     }
 
-    func testAutoPreviewLayoutFitsTheScreen() throws {
+    func testAutoPreviewLayoutChoosesASidePerFrame() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("palette-window-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let paths = PalettePaths(
@@ -419,22 +380,17 @@ final class CoreTests: XCTestCase {
             cacheDir: root.appendingPathComponent("cache")
         )
         try FileManager.default.createDirectory(at: paths.configDir, withIntermediateDirectories: true)
-        try "[window]\npreview_layout = \"auto\"\nscale = 1.0\n"
+        try "[window]\npreview_layout = \"auto\"\n"
             .write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         let loaded = ConfigLoader.load(paths: paths).config.window
         XCTAssertEqual(loaded.previewLayout, .auto)
-        // A narrow portrait screen: the beside pane (~828) does not fit in
-        // 800 - 24 once auto width clamps to its 640pt floor.
-        let portrait = CGSize(width: 800, height: 1280)
-        XCTAssertEqual(loaded.resolvedPreviewLayout(
-            screenWidth: Double(portrait.width),
-            previewPanelWidth: loaded.previewWidth(for: portrait)), .below)
-        // Landscape: it does.
-        let landscape = CGSize(width: 1440, height: 900)
-        XCTAssertEqual(loaded.resolvedPreviewLayout(
-            screenWidth: Double(landscape.width),
-            previewPanelWidth: loaded.previewWidth(for: landscape)), .beside)
+        // Auto reads the fixed frame, not the screen: a portrait frame is too
+        // narrow for a list beside the pane, a landscape frame is not.
+        let portrait = loaded.launcherSize(for: CGSize(width: 800, height: 1280))
+        XCTAssertEqual(loaded.resolvedPreviewLayout(frameWidth: Double(portrait.width)), .below)
+        let landscape = loaded.launcherSize(for: CGSize(width: 1440, height: 900))
+        XCTAssertEqual(loaded.resolvedPreviewLayout(frameWidth: Double(landscape.width)), .beside)
     }
 
     func testThemeLoaderFallsBackAndValidates() {

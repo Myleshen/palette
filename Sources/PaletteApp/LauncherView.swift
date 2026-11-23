@@ -1,5 +1,7 @@
 import AppKit
 import class SwiftTerm.LocalProcessTerminalView
+import class SwiftTerm.TerminalView
+import protocol SwiftTerm.LocalProcessTerminalViewDelegate
 import PaletteCore
 import PalettePlatform
 import QuickLookUI
@@ -236,6 +238,9 @@ enum LauncherMetrics {
     static let providerChipPadding: CGFloat = 12
     /// A long provider name widens its chip only up to this, then ellipsizes.
     static let providerChipMaxWidth: CGFloat = 220
+    /// The left provider rail is always this wide. It never collapses: if the
+    /// providers do not fit, its scroll view does the work.
+    static let railWidth: CGFloat = 220
 }
 
 /// The glass + theme fill + hairline used by every launcher card. Cards share
@@ -419,7 +424,7 @@ private struct ChipButton: View {    var title: String
 /// One provider chip for the top strip: the rail's glyph and label in a 26pt
 /// rounded chip. Selection uses the rail's solid palette pair.
 private struct ProviderBarChip: View {
-    var entry: SearchController.RailEntry
+    var entry: ProviderRailEntry
     var width: CGFloat
     var selected: Bool
     var theme: Theme
@@ -444,7 +449,7 @@ private struct ProviderBarChip: View {
                     .fill(
                         selected
                             ? theme.color(theme.palette.accent)
-                            : theme.color(theme.palette.elevated).opacity(hovered ? 1 : 0.65)
+                            : theme.color(theme.palette.elevated).opacity(hovered ? 0.8 : 0)
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous))
@@ -460,9 +465,8 @@ private struct ProviderBarChip: View {
 /// The provider's real icon when it ships one, otherwise a two-letter tile.
 /// Shared by the left rail and the top strip so both read the same.
 private struct ProviderGlyph: View {
-    var entry: SearchController.RailEntry
+    var entry: ProviderRailEntry
     var theme: Theme
-    var collapsed: Bool = false
 
     private var symbol: String? {
         entry.icon.flatMap { raw -> String? in
@@ -479,24 +483,16 @@ private struct ProviderGlyph: View {
         if let symbol {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .medium))
-                .frame(width: collapsed ? 24 : 16)
+                .frame(width: 16)
         } else {
             Text(initials)
                 .font(.system(size: 10, weight: .bold))
-                .frame(width: collapsed ? 22 : 16, height: 16)
+                .frame(width: 16, height: 16)
                 .background(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(theme.color(theme.palette.elevated))
                 )
         }
-    }
-}
-
-/// Reports the strip's rendered height so the panel can reserve exactly that.
-private struct ProviderBarHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 
@@ -546,12 +542,18 @@ struct ResultRow: View {
                     weight: .regular,
                     lineLimit: titleLineLimit
                 )
-                if theme.list.showSubtitles, let subtitle = item.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: theme.typography.subtitleSize))
-                        .foregroundColor(theme.color(subtitleColor))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                if theme.list.showSubtitles, let subtitle = item.subtitle ?? item.trouble?.detail, !subtitle.isEmpty {
+                    HStack(spacing: 3) {
+                        if item.trouble != nil {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: theme.typography.subtitleSize))
+                        }
+                        Text(subtitle)
+                            .font(.system(size: theme.typography.subtitleSize))
+                            .foregroundColor(theme.color(subtitleColor))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
             }
             Spacer(minLength: 8)
@@ -739,11 +741,22 @@ struct LauncherRootView: View {
     private var theme: Theme { themeManager.theme }
     private var isPill: Bool { true }
 
+    /// One focus indicator for the whole launcher: the zone Tab and the arrows
+    /// act on gets a ring, never a second row painted like the selection.
+    private func zoneRing(_ zone: LauncherZone, radius: CGFloat = LauncherMetrics.cardRadius) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .strokeBorder(
+                theme.color(theme.palette.accent)
+                    .opacity(controller.focusZone == zone ? 0.55 : 0),
+                lineWidth: 1
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
     var body: some View {
-        GeometryReader { proxy in
-            pillLayout(railCollapsed: controller.previewVisible || proxy.size.width < 700)
-        }
-        .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
+        pillLayout()
+            .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
         .onAppear {
             DispatchQueue.main.async { searchFocused = true }
         }
@@ -755,10 +768,13 @@ struct LauncherRootView: View {
         .onChange(of: controller.prompt?.id) { _, _ in
             DispatchQueue.main.async { promptFocused = controller.prompt != nil }
         }
+        .onChange(of: searchFocused) { _, focused in
+            if focused { controller.focusZone = .search }
+        }
     }
 
     /// One grid: search pill, the provider switcher, cards, then the footer.
-    private func pillLayout(railCollapsed: Bool) -> some View {
+    private func pillLayout() -> some View {
         VStack(spacing: LauncherMetrics.cardGap) {
             searchBar
             if controller.showsProviderBar {
@@ -766,7 +782,7 @@ struct LauncherRootView: View {
             }
             HStack(alignment: .top, spacing: LauncherMetrics.cardGap) {
                 if controller.providerBar == .left {
-                    rail(collapsed: railCollapsed)
+                    rail()
                 }
                 contentArea
             }
@@ -837,14 +853,6 @@ struct LauncherRootView: View {
         }
         .frame(height: LauncherMetrics.providerBarHeight)
         .background(theme.color(theme.palette.bg))
-        .background(
-            GeometryReader { measured in
-                Color.clear.preference(key: ProviderBarHeightKey.self, value: measured.size.height)
-            }
-        )
-        .onPreferenceChange(ProviderBarHeightKey.self) { height in
-            controller.setProviderBarHeight(height)
-        }
         .cardSurface(theme: theme)
         .onHover { inside in
             barHovered = inside
@@ -857,7 +865,7 @@ struct LauncherRootView: View {
     }
 
     private struct ProviderBarWindow {
-        var entries: [SearchController.RailEntry]
+        var entries: [ProviderRailEntry]
         var startIndex: Int
         var endIndex: Int
         var count: Int { entries.count }
@@ -919,7 +927,7 @@ struct LauncherRootView: View {
 
     /// Chip widths are measured from the same 11pt label the chip draws, plus
     /// its 16pt glyph, 6pt gap and 12pt padding on each side.
-    private func chipWidth(_ entry: SearchController.RailEntry) -> CGFloat {
+    private func chipWidth(_ entry: ProviderRailEntry) -> CGFloat {
         let label = (entry.title as NSString).size(
             withAttributes: [.font: theme.nsFont(size: 11, weight: .medium)]
         ).width
@@ -987,9 +995,9 @@ struct LauncherRootView: View {
     }
 
     /// Vertical provider rail: Everything first, one row per provider, full
-    /// height between the search pill and the footer. Icons only when the
-    /// preview is open or the panel is narrow.
-    private func rail(collapsed: Bool) -> some View {
+    /// height between the search pill and the footer. Fixed width: providers
+    /// scroll inside it, the rail never narrows to fit.
+    private func rail() -> some View {
         GeometryReader { proxy in
             // Whole rows only: the scroll viewport is trimmed to a row
             // boundary so the last provider cannot be cut by the card edge.
@@ -1001,7 +1009,7 @@ struct LauncherRootView: View {
                 // Everything is pinned: the default scope must always be
                 // one click away, even while the provider list scrolls.
                 if let everything = controller.railEntries.first {
-                    railRow(everything, collapsed: collapsed)
+                    railRow(everything)
                         .padding(.horizontal, LauncherMetrics.innerPadding)
                         .padding(.top, LauncherMetrics.innerPadding)
                         .onTapGesture {
@@ -1012,7 +1020,7 @@ struct LauncherRootView: View {
                 ScrollView {
                     VStack(spacing: 2) {
                         ForEach(Array(controller.railEntries.dropFirst())) { entry in
-                            railRow(entry, collapsed: collapsed)
+                            railRow(entry)
                                 .id(entry.id)
                                 .onTapGesture {
                                     controller.selectRail(entry.id)
@@ -1034,9 +1042,10 @@ struct LauncherRootView: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(width: collapsed ? 56 : 220)
+        .frame(width: LauncherMetrics.railWidth)
         .frame(maxHeight: .infinity)
         .cardSurface(theme: theme)
+        .overlay(zoneRing(.rail))
     }
 
     /// Drop a redundant provider prefix before truncating a label mid-word.
@@ -1062,22 +1071,20 @@ struct LauncherRootView: View {
     }
 
 
-    private func railRow(_ entry: SearchController.RailEntry, collapsed: Bool) -> some View {
+    private func railRow(_ entry: ProviderRailEntry) -> some View {
         let selected = controller.activeRailID == entry.id
-        return HStack(spacing: collapsed ? 0 : 8) {
-            ProviderGlyph(entry: entry, theme: theme, collapsed: collapsed)
-            if !collapsed {
-                Text(railTitle(entry.title, width: 220))
-                    .font(theme.font(size: 11, weight: .medium))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
+        return HStack(spacing: 8) {
+            ProviderGlyph(entry: entry, theme: theme)
+            Text(railTitle(entry.title, width: LauncherMetrics.railWidth))
+                .font(theme.font(size: 11, weight: .medium))
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
         // Accent, not a slightly lighter grey: the active provider has to be
         // obvious at a glance.
         .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
-        .padding(.horizontal, collapsed ? 0 : 10)
-        .frame(maxWidth: .infinity, minHeight: 32, alignment: collapsed ? .center : .leading)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
                 .fill(selected ? theme.color(theme.palette.accent) : Color.clear)
@@ -1110,11 +1117,60 @@ struct LauncherRootView: View {
 
     private var listCard: some View {
         VStack(spacing: 0) {
+            groupStrip
             modeHeader
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .cardSurface(theme: theme)
+        .overlay(zoneRing(.list))
+    }
+
+    /// Secondary strip for a grouped rail row. It lives in the content column
+    /// in every mode, so the top bar and the left rail share one placement.
+    @ViewBuilder
+    private var groupStrip: some View {
+        if let group = controller.activeGroupEntry {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    HStack(spacing: LauncherMetrics.providerChipGap) {
+                        ForEach(group.children) { child in
+                            let entry = ProviderRailEntry(
+                                id: child.id,
+                                title: child.title,
+                                icon: child.icon,
+                                trigger: child.trigger
+                            )
+                            ProviderBarChip(
+                                entry: entry,
+                                width: chipWidth(entry),
+                                selected: controller.activeProviderID == child.id,
+                                theme: theme
+                            ) {
+                                controller.selectGroupChild(child)
+                                controller.stripFocused = true
+                            }
+                            .id(child.id)
+                        }
+                    }
+                    .padding(.horizontal, LauncherMetrics.innerPadding)
+                    .padding(.vertical, LauncherMetrics.providerBarVerticalPadding)
+                }
+                .scrollIndicators(.hidden)
+                .frame(height: LauncherMetrics.providerBarHeight)
+                .onChange(of: controller.activeProviderID, initial: true) { _, id in
+                    withAnimation(reduceMotion ? nil : theme.scrollAnimation) {
+                        proxy.scrollTo(id, anchor: .center)
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(theme.color(theme.palette.separator).opacity(0.5))
+                        .frame(height: 1)
+                }
+                .overlay(zoneRing(.strip, radius: 10))
+            }
+        }
     }
 
     private var previewCard: some View {
@@ -1214,7 +1270,8 @@ struct LauncherRootView: View {
                     LinearGradient(
                         colors: [
                             theme.color(theme.palette.fg).opacity(isPill && theme.window.glass ? 0.14 : 0),
-                            theme.color(theme.palette.accent).opacity(isPill ? 0.30 : 0),
+                            theme.color(theme.palette.accent)
+                                .opacity(isPill ? (controller.focusZone == .search ? 0.65 : 0.30) : 0),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1222,13 +1279,16 @@ struct LauncherRootView: View {
                     lineWidth: 1
                 )
         )
+        .simultaneousGesture(TapGesture().onEnded {
+            controller.focusZone = .search
+        })
 
     }
 
     @ViewBuilder
     private var content: some View {
         if controller.terminalActive {
-            TerminalPane(theme: theme, initialCommand: controller.terminalInitialCommand, session: controller.terminalSession)
+            TerminalPane(controller: controller, theme: theme)
                 .padding(LauncherMetrics.innerPadding)
         } else if controller.scratchpadActive {
             ScratchpadView(controller: controller, theme: theme)
@@ -1304,9 +1364,9 @@ struct LauncherRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// One sentence for VoiceOver: title, subtitle, provider.
+    /// One sentence for VoiceOver: title, subtitle, provider, and any trouble.
     private func rowAccessibilityLabel(_ item: PaletteItem) -> String {
-        [item.title, item.subtitle, item.providerName]
+        [item.title, item.trouble?.title, item.subtitle, item.providerName]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
@@ -1447,6 +1507,7 @@ struct LauncherRootView: View {
     private var emptyDetail: String {
         if controller.isSearching { return "Results appear as each source responds." }
         if controller.query.isEmpty { return "Search apps, files, clipboard, snippets and more." }
+        if let hint = controller.missingToolHint { return hint }
         if controller.scopeLabel != nil { return "Nothing here yet." }
         return "Try a different spelling, or press ⌘, to enable more sources."
     }
@@ -1473,9 +1534,10 @@ struct LauncherRootView: View {
                     .truncationMode(.tail)
             } else if controller.actionsMode {
                 hint("esc", "Back")
-            } else if let item = controller.selectedItem, let action = item.primaryAction {
-                // No primary action means Return does nothing; never advertise it.
-                primaryActionPill(action.title)
+            } else if controller.terminalActive {
+                hint("esc", "Close")
+            } else if let title = controller.returnHint {
+                primaryActionPill(title)
             }
             Spacer(minLength: 4)
             if !controller.actionsMode {
@@ -1555,6 +1617,7 @@ struct PromptView: View {
                 .padding(8)
                 .background(theme.color(theme.palette.surface).opacity(0.9))
                 .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
+                .frame(maxWidth: 380, alignment: .leading)
                 .focused(focused)
                 .onSubmit { controller.submitPrompt() }
             } else {
@@ -1567,8 +1630,14 @@ struct PromptView: View {
                 .padding(8)
                 .background(theme.color(theme.palette.surface).opacity(0.9))
                 .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
+                .frame(maxWidth: 380, alignment: .leading)
                 .focused(focused)
                 .onSubmit { controller.submitPrompt() }
+            }
+            if let message = controller.promptValidationMessage {
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.color(theme.palette.danger))
             }
             HStack(spacing: 8) {
                 Spacer()
@@ -1585,6 +1654,8 @@ struct PromptView: View {
                     .padding(.vertical, 6)
                     .background(theme.color(theme.palette.accent))
                     .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
+                    .opacity(controller.canSubmitPrompt ? 1 : 0.45)
+                    .disabled(!controller.canSubmitPrompt)
             }
             .font(.system(size: 12, weight: .medium))
         }
@@ -2018,10 +2089,70 @@ extension Notification.Name {
     static let paletteTerminalStop = Notification.Name("palette.terminal.stop")
 }
 
-struct TerminalPane: NSViewRepresentable {
+/// The terminal card: the live pane plus an end card, so a finished session is
+/// obviously over instead of looking like a hung pane showing stale output.
+struct TerminalPane: View {
+    @ObservedObject var controller: SearchController
+    var theme: Theme
+
+    var body: some View {
+        // The card takes its own row instead of covering the last lines of
+        // output, so nothing the user may still need to read is hidden.
+        VStack(spacing: 0) {
+            TerminalSurface(
+                theme: theme,
+                initialCommand: controller.terminalInitialCommand,
+                session: controller.terminalSession,
+                restartToken: controller.terminalRestartToken,
+                onExit: { [weak controller] code in controller?.noteTerminalExited(code) }
+            )
+            if let code = controller.terminalExitCode {
+                endCard(code)
+            }
+        }
+    }
+
+    private func endCard(_ code: Int32?) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "terminal")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.color(theme.palette.accent))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(code.map { "Session ended (exit \($0))" } ?? "Session ended (terminated)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.color(theme.palette.fg))
+                Text("Output stays until you close · esc or ⌘W")
+                    .font(.system(size: 10))
+                    .foregroundColor(theme.color(theme.palette.fgMuted))
+            }
+            Spacer()
+            Button("Restart") { controller.restartTerminal() }
+            Button("Close") { controller.closeTerminalPanel() }
+        }
+        .buttonStyle(.borderless)
+        .font(.system(size: 11))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            GlassSurface(
+                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                tint: theme.color(theme.palette.elevated).opacity(0.9)
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(theme.color(theme.palette.border).opacity(0.6), lineWidth: 1)
+        )
+        .padding(LauncherMetrics.innerPadding)
+    }
+}
+
+struct TerminalSurface: NSViewRepresentable {
     var theme: Theme
     var initialCommand: String?
     var session: TerminalSessionConfig
+    var restartToken: Int
+    var onExit: (Int32?) -> Void
 
     /// The stop observer runs on the main queue but is `@Sendable`; the view
     /// itself is main-actor UI.
@@ -2033,13 +2164,153 @@ struct TerminalPane: NSViewRepresentable {
         }
     }
 
-    final class Coordinator {
+    @MainActor
+    final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         weak var view: LocalProcessTerminalView?
         var observer: NSObjectProtocol?
-        var started = false
+        var token = 0
+        var cancelled = false
+        var session: TerminalSessionConfig
+        var initialCommand: String?
+        var onExit: (Int32?) -> Void
+        /// Sanitized zellij session name; set only while a zellij pane runs.
+        private var zellijName: String?
+        /// Automatic stale-session rebuilds already spent for this pane.
+        private var rebuilds = 0
+
+        init(session: TerminalSessionConfig, initialCommand: String?, token: Int, onExit: @escaping (Int32?) -> Void) {
+            self.session = session
+            self.initialCommand = initialCommand
+            self.token = token
+            self.onExit = onExit
+        }
+
+        func start(restarting: Bool) {
+            guard let view, !cancelled else { return }
+            if restarting {
+                rebuilds = 0
+                zellijName = nil
+                // Keep the old output readable, but mark the new run.
+                view.feed(text: "\r\n")
+            }
+            let shell = Self.shell(session)
+            let environment = Self.environment(shell: shell)
+            let name = session.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Palette" : session.name
+            let zellij = ToolLocator.shared.path(for: "zellij")
+            let tmux = ToolLocator.shared.path(for: "tmux")
+            let zellijWanted = session.multiplexer == .zellij || session.multiplexer == .auto
+            let tmuxWanted = session.multiplexer == .tmux || session.multiplexer == .auto
+
+            if zellijWanted, let zellij {
+                // Decide before the PTY starts: an exited session of the same
+                // name would make attach resurrect stale panes or fail.
+                Task { @MainActor in
+                    let preparation = await ZellijLauncher.prepare(name: name)
+                    guard !self.cancelled, self.view === view else { return }
+                    self.zellijName = preparation.name
+                    if let warning = preparation.warning {
+                        view.feed(text: "\r\nzellij: \(warning)\r\n")
+                    }
+                    view.startProcess(
+                        executable: zellij,
+                        args: ["attach", "--create", preparation.name],
+                        environment: environment,
+                        execName: "zellij",
+                        currentDirectory: NSHomeDirectory()
+                    )
+                    self.didStart(view)
+                }
+                return
+            }
+
+            if tmuxWanted, let tmux {
+                view.startProcess(
+                    executable: tmux,
+                    args: ["new-session", "-A", "-s", name, "--", shell, "-l"],
+                    environment: environment,
+                    execName: "tmux",
+                    currentDirectory: NSHomeDirectory()
+                )
+            } else {
+                view.startProcess(
+                    executable: shell,
+                    args: ["-l"],
+                    environment: environment,
+                    execName: (shell as NSString).lastPathComponent,
+                    currentDirectory: NSHomeDirectory()
+                )
+            }
+            didStart(view)
+        }
+
+        private func didStart(_ view: LocalProcessTerminalView) {
+            view.window?.makeFirstResponder(view)
+            if let command = initialCommand, !command.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak view] in
+                    view?.send(txt: command + "\n")
+                }
+            }
+            if ProcessInfo.processInfo.environment["PALETTE_TERMINAL_DEBUG"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    let rows = view.terminalStateSnapshot().visibleRows
+                        .map(\.text)
+                        .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    Log.shared.info("Terminal font: \(view.font.fontName) \(view.font.pointSize)", source: "terminal")
+                    Log.shared.info("Terminal rows: \(rows.joined(separator: " | "))", source: "terminal")
+                }
+            }
+        }
+
+        // MARK: LocalProcessTerminalViewDelegate
+
+        func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
+
+        func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
+
+        func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+
+        func processTerminated(source: TerminalView, exitCode: Int32?) {
+            guard let view else { return }
+            // A stale zellij attach (dead session, resurrect prompt) gets one
+            // rebuild; anything else is a real end the user has to see.
+            if let name = zellijName, rebuilds == 0, exitCode != 0,
+               ZellijAttach.isStaleSessionFailure(Self.visibleText(view)) {
+                rebuilds = 1
+                view.feed(text: "\r\n↻ zellij session \"\(name)\" was stale, rebuilding it\r\n")
+                start(restarting: false)
+                return
+            }
+            onExit(exitCode)
+        }
+
+        private static func visibleText(_ view: LocalProcessTerminalView) -> String {
+            view.terminalStateSnapshot().visibleRows.map(\.text).joined(separator: "\n")
+        }
+
+        static func shell(_ session: TerminalSessionConfig) -> String {
+            let configured = session.shell.trimmingCharacters(in: .whitespacesAndNewlines)
+            if configured.isEmpty {
+                return ToolLocator.shared.path(for: "fish") ?? "/bin/zsh"
+            }
+            if configured.contains("/") {
+                return FileManager.default.isExecutableFile(atPath: configured) ? configured : "/bin/zsh"
+            }
+            return ToolLocator.shared.path(for: configured) ?? "/bin/zsh"
+        }
+
+        private static func environment(shell: String) -> [String] {
+            var environment = ProcessInfo.processInfo.environment
+                .filter { $0.key != "SHELL" && $0.key != "TERM" }
+                .map { "\($0.key)=\($0.value)" }
+            environment.append("SHELL=\(shell)")
+            environment.append("TERM=xterm-256color")
+            return environment
+        }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(session: session, initialCommand: initialCommand, token: restartToken, onExit: onExit)
+    }
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let terminal = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 560))
@@ -2052,6 +2323,7 @@ struct TerminalPane: NSViewRepresentable {
         terminal.layer?.cornerRadius = 10
         terminal.font = resolvedFont()
         context.coordinator.view = terminal
+        terminal.processDelegate = context.coordinator
         let stoppable = Stoppable(terminal)
         context.coordinator.observer = NotificationCenter.default.addObserver(
             forName: .paletteTerminalStop,
@@ -2061,52 +2333,7 @@ struct TerminalPane: NSViewRepresentable {
             stoppable.view.terminate()
         }
         DispatchQueue.main.async {
-            let shell = resolvedShell()
-            let environment = terminalEnvironment(shell: shell)
-            let zellij = ToolLocator.shared.path(for: "zellij")
-            let tmux = ToolLocator.shared.path(for: "tmux")
-            let name = session.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Palette" : session.name
-            switch session.multiplexer {
-            case .zellij where zellij != nil, .auto where zellij != nil:
-                terminal.startProcess(
-                    executable: zellij!,
-                    args: ["attach", "--create", name],
-                    environment: environment,
-                    execName: "zellij",
-                    currentDirectory: NSHomeDirectory()
-                )
-            case .tmux where tmux != nil, .auto where tmux != nil:
-                terminal.startProcess(
-                    executable: tmux!,
-                    args: ["new-session", "-A", "-s", name, "--", shell, "-l"],
-                    environment: environment,
-                    execName: "tmux",
-                    currentDirectory: NSHomeDirectory()
-                )
-            default:
-                terminal.startProcess(
-                    executable: shell,
-                    args: ["-l"],
-                    environment: environment,
-                    execName: (shell as NSString).lastPathComponent,
-                    currentDirectory: NSHomeDirectory()
-                )
-            }
-            terminal.window?.makeFirstResponder(terminal)
-            if let command = initialCommand, !command.isEmpty {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-                    terminal.send(txt: command + "\n")
-                }
-            }
-            if ProcessInfo.processInfo.environment["PALETTE_TERMINAL_DEBUG"] == "1" {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    let rows = terminal.terminalStateSnapshot().visibleRows
-                        .map(\.text)
-                        .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                    Log.shared.info("Terminal font: \(terminal.font.fontName) \(terminal.font.pointSize)", source: "terminal")
-                    Log.shared.info("Terminal rows: \(rows.joined(separator: " | "))", source: "terminal")
-                }
-            }
+            context.coordinator.start(restarting: false)
         }
         return terminal
     }
@@ -2161,37 +2388,26 @@ struct TerminalPane: NSViewRepresentable {
         return (family, size ?? 13)
     }
 
-    private func resolvedShell() -> String {
-        let configured = session.shell.trimmingCharacters(in: .whitespacesAndNewlines)
-        if configured.isEmpty {
-            return ToolLocator.shared.path(for: "fish") ?? "/bin/zsh"
-        }
-        if configured.contains("/") {
-            return FileManager.default.isExecutableFile(atPath: configured) ? configured : "/bin/zsh"
-        }
-        return ToolLocator.shared.path(for: configured) ?? "/bin/zsh"
-    }
-
-    private func terminalEnvironment(shell: String) -> [String] {
-        var environment = ProcessInfo.processInfo.environment
-            .filter { $0.key != "SHELL" && $0.key != "TERM" }
-            .map { "\($0.key)=\($0.value)" }
-        environment.append("SHELL=\(shell)")
-        environment.append("TERM=xterm-256color")
-        return environment
-    }
-
     func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
         terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
         terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
         terminal.font = resolvedFont()
         terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
+        context.coordinator.session = session
+        context.coordinator.initialCommand = initialCommand
+        context.coordinator.onExit = onExit
+        if context.coordinator.token != restartToken {
+            context.coordinator.token = restartToken
+            context.coordinator.start(restarting: true)
+        }
     }
 
     static func dismantleNSView(_ terminal: LocalProcessTerminalView, coordinator: Coordinator) {
+        coordinator.cancelled = true
         if let observer = coordinator.observer {
             NotificationCenter.default.removeObserver(observer)
         }
+        terminal.processDelegate = nil
         terminal.terminate()
     }
 }

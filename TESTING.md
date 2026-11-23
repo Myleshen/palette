@@ -13,6 +13,8 @@ provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
 |---|---|
 | `CoreTests` | query parsing and completion, ranking, frecency math, calculator, scope globs, config defaults, theme composition, app lookup |
 | `StorageTests` | SQLite migrations, frecency round-trip, metadata, clipboard dedupe/cap |
+| `ClipboardCaptureTests` | capture policy (concealed wins, ignored apps), `ignored_apps` config round-trip, copy-only paste targets |
+| `ClipboardSearchIndexTests` | the clipboard search snapshot: rebuild on history change, pinned ranking, folded scoring, per-keystroke timing at 5k entries |
 | `PathsEngineTests` | fd enumeration, excludes, fzf ranking, weird filenames |
 | `ManifestTests` | provider manifest parsing and validation diagnostics |
 | `AskTests` | Ask config round-trip without secrets, free-first model order, endpoint scoping, response/error parsing, quota fallback, invalid-key endpoint skipping, Settings model precedence, streaming, saved chats and sources, markdown blocks/tables/images, web-search parsing and the untrusted system note |
@@ -45,7 +47,9 @@ PALETTE_SCRIPT='show; query=Safari; wait=1.2; actions; \
 ```
 
 Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
-`query=<text>`, `snapshot=<path>`, `shot`, `settings_tab=<index>`,
+`query=<text>`, `rail=<id>`, `railfocus`, `focus=<search|list|rail|strip>`,
+`scratchlist`, `snapshot=<path>`, `shot`,
+`settings_tab=<index>`,
 `settings_size=<w>x<h>`, `settings_edit=<field>=<value>`,
 `settings_clear_search`, `awake=<seconds>`, `settings_snapshot=<path>`,
 `window_snapshot=<path>`, `askwindow=<question>`, `chatwindow`,
@@ -56,6 +60,13 @@ Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `comma`, `k`, `r`, `w`, `1`…`9`, optionally prefixed with `cmd+`, `opt+`, or
 `shift+` (for example `key=cmd+k`). `snapshot` writes the panel content without
 screen-recording permission, so it works on a locked display.
+
+A scripted run never takes focus. Windows are ordered to the back of the normal
+level, panels never become key, the app stays an accessory (no Dock icon), and a
+resign-key auto-hide is ignored so clicking elsewhere cannot break a flow.
+Typing and `key=` steps call the controller directly, so they need no key
+window. The app logs `Script mode: … shown without activation` for every quiet
+presentation, and `assert=appActive=false` proves it from inside the app.
 
 Other hooks: `PALETTE_QUERY`, `PALETTE_SHOW_ON_LAUNCH`,
 `PALETTE_SNAPSHOT`, `PALETTE_SNAPSHOT_DELAY`, `PALETTE_EXIT_AFTER_SNAPSHOT`,
@@ -71,9 +82,13 @@ it does not test Carbon hotkey delivery or real typing. Check those manually.
 make e2e           # Scripts/e2e.sh; builds build/Palette.app if it is missing
 ```
 
-`Scripts/e2e.sh` runs one flow per launch, each with its own temp config, state,
-and cache directory, and fails on a non-zero exit, a missing `SCRIPT OK` in the
-log, or a missing artifact:
+`Scripts/e2e.sh` runs one flow per launch. Each flow gets its own temp
+`PALETTE_CONFIG_DIR`, `PALETTE_STATE_DIR` (SQLite database and logs),
+`PALETTE_CACHE_DIR`, and `PALETTE_SUPPORT_DIR` (Ask key file and web-app
+profiles), so the real `~/.config/palette` and `~/Library/Application Support`
+stay untouched. It fails on a non-zero exit, a missing `SCRIPT OK` in the log,
+a missing quiet-presentation log line, or a missing artifact, and it kills a
+leftover Palette process before exiting:
 
 | Flow | What it asserts |
 |---|---|
@@ -88,6 +103,11 @@ log, or a missing artifact:
 The capture flow asserts panel visibility only: a real capture needs Screen
 Recording TCC, which CI does not grant.
 
+`make test`, `make e2e`, and `make layout-check` run under `taskpolicy -b` and
+`nice -n 10`, and the scripts do the same for their internal builds and app
+launches, so a run yields to whatever the user is doing. Timing-sensitive flows
+use `wait_until=` instead of a fixed sleep for that reason.
+
 `make debug-app` builds `build/Palette Debug.app` with its own bundle id and
 isolated config, then launches it through LaunchServices so permission prompts
 attribute to Palette Debug instead of the terminal. E2E still launches
@@ -101,8 +121,8 @@ false, and `wait_until=<condition>;timeout=<seconds>` polls until it holds
 ## Layout check
 
 Unit tests cannot see a clipped label or a squashed stepper. `make layout-check`
-renders all seven Settings panes headlessly and compares each with the
-reference in `Tests/Snapshots/`:
+renders every Settings pane headlessly — all 19 of them — and compares each with
+the reference in `Tests/Snapshots/`:
 
 ```sh
 make layout-check                  # fail if any section drifts more than 2%

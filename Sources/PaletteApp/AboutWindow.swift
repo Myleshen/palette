@@ -1,5 +1,6 @@
 import AppKit
 import PaletteCore
+import PalettePlatform
 import SwiftUI
 
 /// Facts shared by the About window and the Settings card. Read from the built
@@ -217,8 +218,7 @@ final class AboutWindowController: NSWindowController {
 
     func show() {
         window?.center()
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
-        window?.orderFrontRegardless()
+        guard let window else { return }
+        WindowPresentation.present(window)
     }
 }

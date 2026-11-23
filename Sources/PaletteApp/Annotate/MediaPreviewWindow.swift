@@ -1,13 +1,19 @@
 import AVKit
 import AppKit
 import PaletteCore
+import PalettePlatform
 import SwiftUI
 
 /// Preview for a finished recording: play it, reveal it, or copy its path.
 @MainActor
 final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
+    static let frameAutosaveName = "PaletteMediaPreview"
+
     private let player: AVPlayer
     var onClose: (() -> Void)?
+    /// Buttons in the preview report through the same visible feedback as the
+    /// menu bar, instead of silently doing their work.
+    var onFeedback: ((String) -> Void)?
 
     init(url: URL, themeManager: ThemeManager) {
         player = AVPlayer(url: url)
@@ -20,6 +26,9 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
         )
         window.isFloatingPanel = true
         window.becomesKeyOnlyIfNeeded = false
+        // A preview must survive switching apps; it used to vanish and take the
+        // only route to the recording with it.
+        window.hidesOnDeactivate = false
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.setAccessibilitySubrole(.dialog)
@@ -36,12 +45,18 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
             player: player,
             url: url,
             themeManager: themeManager,
+            feedback: { [weak self] message in self?.onFeedback?(message) },
             close: { [weak self] in
                 self?.player.pause()
                 self?.close()
             }
         ))
-        window.center()
+        // One remembered spot instead of a new recording stacking exactly on
+        // the last one.
+        if !window.setFrameUsingName(Self.frameAutosaveName) {
+            window.center()
+        }
+        window.setFrameAutosaveName(Self.frameAutosaveName)
     }
 
     required init?(coder: NSCoder) {
@@ -60,12 +75,17 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func show() {
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
+        guard let window else { return }
+        if WindowPresentation.isScripted {
+            WindowPresentation.present(window)
+        } else {
+            if NSApp.activationPolicy() != .regular {
+                NSApp.setActivationPolicy(.regular)
+            }
+            showWindow(nil)
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate()
         }
-        showWindow(nil)
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate()
         player.play()
     }
 }
@@ -74,6 +94,7 @@ private struct MediaPreviewView: View {
     let player: AVPlayer
     let url: URL
     @ObservedObject var themeManager: ThemeManager
+    var feedback: (String) -> Void
     var close: () -> Void
 
     private var theme: Theme { themeManager.theme }
@@ -91,10 +112,14 @@ private struct MediaPreviewView: View {
                 Spacer()
                 Button("Reveal in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
+                    feedback("Revealed in Finder")
                 }
                 Button("Copy Path") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url.path, forType: .string)
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setString(url.path, forType: .string)
+                    ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+                    feedback("Path copied")
                 }
                 Button("Done") { close() }
                     .keyboardShortcut(.defaultAction)

@@ -29,6 +29,21 @@ final class HostBridgeProxy: HostBridge, @unchecked Sendable {
         return await target.prompt(kind: kind, title: title, placeholder: placeholder)
     }
 
+    func prompt(
+        kind: PromptKind,
+        title: String,
+        placeholder: String?,
+        validation: PromptValidation
+    ) async -> String? {
+        guard let target = current() else { return nil }
+        return await target.prompt(
+            kind: kind,
+            title: title,
+            placeholder: placeholder,
+            validation: validation
+        )
+    }
+
     func notify(_ message: String) async {
         guard let target = current() else { return }
         await target.notify(message)
@@ -74,11 +89,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var appIndex: AppIndex!
     /// Bindable catalogue, rebuilt with the registry so provider ids never lie.
     private var catalogCommands: [CatalogCommand] = []
-    private var recordingMenuItem: NSMenuItem?
     private var recordingTicker: Timer?
+    private var recordingOptionsPanel: RecordingOptionsPanelController?
+    private var captureMenuItems: [CaptureMenuCommand: NSMenuItem] = [:]
+    private var lastCaptureURL: URL?
+    private var lastRecordingURL: URL?
+    private var lastScreenshotURL: URL?
+    private var menuBarFlashTask: Task<Void, Never>?
     private let screenshotHUD = ScreenshotHUD()
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
+    private let pinnedScreenshots = PinnedScreenshotManager()
     private var askWindow: AskWindowController?
     private var aboutWindow: AboutWindowController?
     private var systemIsShuttingDown = false
@@ -104,6 +125,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var keepAwakeToggleItem: NSMenuItem?
     private var keepAwakeClamshellItem: NSMenuItem?
     private var keepAwakeStopItem: NSMenuItem?
+    private let updates = UpdateService()
+    private var updateMenuItem: NSMenuItem?
+    private var releaseNotesMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -211,8 +235,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pasteboard.resumePendingClear()
 
         Log.shared.info("Accessibility trusted=\(pasteboard.isAccessibilityTrusted)", source: "app")
-        if !pasteboard.isAccessibilityTrusted {
-            // Make the permission gap visible instead of silently copying.
+        if !pasteboard.isAccessibilityTrusted, !isScriptMode {
+            // Make the permission gap visible instead of silently copying. A
+            // scripted run must not raise a TCC prompt over the user's screen.
             pasteboard.requestAccessibility()
         }
         appIndex = AppIndex()
@@ -221,7 +246,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager = ThemeManager(paths: paths, selection: configuration.theme, store: store)
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
-        themeManager.window = configuration.window
         themeManager.searchPlaceholder = configuration.searchPlaceholder
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.requestsPermission = !isScriptMode
@@ -242,7 +266,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
             self.panel?.apply(theme: theme)
-            self.searchController?.refreshTheme()
             self.applyThemeToCaptureWindows(theme)
         }
 
@@ -256,11 +279,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.dockTile.badgeLabel = "1"
         }
         // Warm `/edit` and `/neo` off the main thread: the walk is cached to
-        // disk, so the first bound query after this launch is instant.
+        // disk, so the first bound query after this launch is instant. The
+        // whole-home walk waits for the one-time consent below.
+        let homeConsent = askForHomeIndexingConsent(registry: builtRegistry)
         if ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] == nil {
             Task.detached(priority: .utility) {
                 for case let provider as PathsProvider in builtRegistry.providers {
-                    await provider.prewarm()
+                    await provider.prewarm(homeConsent: homeConsent)
                 }
             }
         }
@@ -280,14 +305,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             searchController.setStatus("Timer finished while Palette was closed", duration: 8)
         }
         captureService.onStatus = { [weak self] message in
-            self?.searchController.setStatus(message, duration: 4)
+            self?.captureFeedback(message)
         }
         captureService.onFailure = { [weak self] message in
-            self?.captureService.annotateNextCapture = false
-            Task { await self?.searchController.notify(message) }
+            guard let self else { return }
+            self.captureService.annotateNextCapture = false
+            self.recordingTicker?.invalidate()
+            self.recordingTicker = nil
+            self.updateCaptureMenu()
+            self.captureFeedback(message)
         }
         captureService.onScreenshot = { [weak self] url in
             guard let self else { return }
+            self.rememberCapture(url, recording: false)
             let forced = self.captureService.annotateNextCapture
             self.captureService.annotateNextCapture = false
             if forced || self.configuration.capture.editAfterCapture {
@@ -297,7 +327,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.confirmCapture(url)
         }
         captureService.onRecordingStopped = { [weak self] url in
-            guard let self, self.configuration.capture.previewRecording else { return }
+            guard let self else { return }
+            self.rememberCapture(url, recording: true)
+            guard self.configuration.capture.previewRecording else { return }
             self.openMediaPreview(url)
         }
         NotificationCenter.default.addObserver(
@@ -307,6 +339,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ) { [weak self] note in
             guard let path = note.object as? String else { return }
             Task { @MainActor in self?.openAnnotator(URL(fileURLWithPath: path)) }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .palettePinRequest,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let path = note.object as? String else { return }
+            Task { @MainActor in self?.pinScreenshot(URL(fileURLWithPath: path)) }
         }
         clamshellObserver = NotificationCenter.default.addObserver(
             forName: .paletteClamshellDropped,
@@ -324,10 +364,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         buildPanel()
         buildMainMenu()
         installHotKey()
+        checkDefaultProviderTools()
         configureClipboard()
         buildStatusItem()
+        updates.onAvailabilityChange = { [weak self] in self?.refreshUpdateMenu() }
+        updates.start(automatic: !isScriptMode && configuration.updates.automatic)
         if case .adopted = recordingAdoption {
-            updateRecordingMenuItem()
+            updateCaptureMenu()
             startRecordingTicker()
             searchController?.setStatus("Recording in progress", duration: nil)
         }
@@ -387,6 +430,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         steps = merged
+        Log.shared.info(
+            "Script mode: \(steps.count) steps, activation policy \(NSApp.activationPolicy() == .accessory ? "accessory" : "other"), appActive=\(NSApp.isActive)",
+            source: "app"
+        )
         Task { @MainActor [weak self] in
             for step in steps {
                 guard let self else { return }
@@ -424,6 +471,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else if step == "close_windows" {
                     self.annotateWindows.forEach { $0.close() }
                     self.mediaPreviews.forEach { $0.close() }
+                    self.pinnedScreenshots.closeAll()
                     try? await Task.sleep(nanoseconds: 300_000_000)
                 } else if step == "settings" {
                     self.showSettings()
@@ -456,10 +504,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         case "provider_bar":
                             updated.window.providerBar = ProviderBarPlacement(rawValue: parts[1])
                                 ?? updated.window.providerBar
-                        case "width":
-                            updated.window.width = Double(parts[1]) ?? updated.window.width
-                        case "visible_rows":
-                            updated.window.visibleRows = Int(parts[1]) ?? updated.window.visibleRows
                         default:
                             break
                         }
@@ -496,6 +540,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.pasteboard.write(text: parts[0], concealed: true, clearAfterMs: clearAfterMs)
                 } else if step == "scratchpad" {
                     self.searchController.openScratchpad()
+                } else if step == "scratchlist" {
+                    self.toggleScratchpad()
+                } else if let value = step.dropPrefix("focus=") {
+                    if let zone = LauncherZone(rawValue: value) {
+                        self.searchController.focusZone = zone
+                    } else {
+                        self.recordScriptFailure("unknown focus zone '\(value)'")
+                    }
                 } else if let question = step.dropPrefix("askwindow=") {
                     self.showAskWindow(question: question)
                 } else if step == "chatwindow" {
@@ -535,17 +587,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.fireBinding(keys: value)
                 } else if let value = step.dropPrefix("query=") {
                     self.searchController.query = value
+                } else if let value = step.dropPrefix("rail=") {
+                    self.searchController.selectRail(value)
+                } else if step == "railfocus" {
+                    self.searchController.railFocused = true
                 } else if step == "refresh" {
                     self.searchController.refreshResults()
                 } else if let value = step.dropPrefix("snapshot=") {
                     self.writeSnapshot(to: value)
                 } else if let value = step.dropPrefix("probe=") {
                     self.scriptProbeResult = self.probeShortcut(value)
+                } else if step == "record_options" {
+                    self.presentRecordingOptions()
+                } else if let value = step.dropPrefix("last_capture=") {
+                    let url = URL(fileURLWithPath: value)
+                    self.rememberCapture(
+                        url,
+                        recording: ["mov", "mp4"].contains(url.pathExtension.lowercased())
+                    )
+                } else if let value = step.dropPrefix("capture_menu=") {
+                    self.writeCaptureMenu(to: value)
                 } else if let value = step.dropPrefix("window_snapshot=") {
                     if let ask = self.askWindow?.window {
                         // Include the titlebar: it is transparent, so only the
                         // frame view shows whether the title is legible.
                         self.write(view: ask.contentView?.superview ?? NSView(), to: value)
+                    } else if let options = self.recordingOptionsPanel?.window {
+                        self.write(view: options.contentView ?? NSView(), to: value)
                     } else if let hud = self.annotateWindows.last?.window
                         ?? self.mediaPreviews.last?.window {
                         self.write(view: hud.contentView ?? NSView(), to: value)
@@ -563,6 +631,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.writeOnboardingSnapshot(to: value)
                 } else if step == "onboarding_skip" {
                     self.skipOnboarding()
+                } else if let value = step.dropPrefix("term=") {
+                    self.searchController.openTerminalPanel(command: value.isEmpty ? nil : value)
+                } else if step == "term_restart" {
+                    self.searchController.restartTerminal()
                 } else if let value = step.dropPrefix("prompt=") {
                     self.searchController.promptValue = value
                 } else if let value = step.dropPrefix("wait=") {
@@ -616,20 +688,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// controller and panel.
     private struct ScriptObservation {
         var panelVisible: Bool
+        var appActive: Bool
         var query: String
         var scopeLabel: String
         var selectionIndex: Int
         var itemCount: Int
         var actionsMode: Bool
         var previewEnabled: Bool
+        var railFocused: Bool
+        var stripFocused: Bool
+        var focusZone: String
+        var railID: String
         var scratchpadActive: Bool
         var terminalActive: Bool
+        var terminalExited: Bool
         var askWindows: Int
         var askStreaming: Bool
         var askTurns: Int
         var askChats: Int
         var askBadge: String
         var statusMessage: String
+        var promptTitle: String
+        var promptError: String
         var probeResult: String
         var panelHeight: CGFloat
         var panelWidth: CGFloat
@@ -643,34 +723,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var scriptFailureReasons: [String] = []
 
     private static let scriptKeys = [
-        "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
-        "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "askWindows",
+        "panelVisible", "appActive", "query", "scopeLabel", "selectionIndex", "itemCount",
+        "actionsMode", "previewEnabled", "railFocused", "stripFocused",
+        "focusZone", "railID",
+        "scratchpadActive", "terminalActive", "terminalExited", "askWindows",
         "askStreaming", "askTurns", "askChats", "askBadge",
         "firstTitle", "firstProvider", "statusMessage", "probeResult",
+        "promptTitle", "promptError",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
     ]
 
     private func scriptObservation() -> ScriptObservation {
         ScriptObservation(
             panelVisible: panel?.isVisible == true,
+            appActive: NSApp.isActive,
             query: searchController?.query ?? "",
             scopeLabel: searchController?.scopeLabel ?? "",
             selectionIndex: searchController?.selectionIndex ?? 0,
             itemCount: searchController?.items.count ?? 0,
             actionsMode: searchController?.actionsMode ?? false,
             previewEnabled: searchController?.previewEnabled ?? false,
+            railFocused: searchController?.railFocused ?? false,
+            stripFocused: searchController?.stripFocused ?? false,
+            focusZone: searchController?.focusZone.rawValue ?? "search",
+            railID: searchController?.activeRailID ?? "",
             scratchpadActive: searchController?.scratchpadActive ?? false,
             terminalActive: searchController?.terminalActive ?? false,
+            terminalExited: searchController?.terminalExitCode != nil,
             askWindows: askWindow == nil ? 0 : 1,
             askStreaming: askWindow?.isStreaming ?? false,
             askTurns: askWindow?.turnCount ?? 0,
             askChats: askWindow?.chatCount ?? 0,
             askBadge: NSApp.dockTile.badgeLabel ?? "",
             statusMessage: searchController?.statusMessage ?? "",
+            promptTitle: searchController?.prompt?.title ?? "",
+            promptError: searchController?.promptValidationMessage ?? "",
             probeResult: scriptProbeResult,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
-            derivedPanelHeight: searchController?.panelHeightForEffectiveRows() ?? 0,
+            derivedPanelHeight: panel?.panel.frame.height ?? 0,
             providerCount: searchController?.railEntries.count ?? 0,
             providerBarMode: searchController?.providerBar.rawValue ?? "",
             items: searchController?.items ?? []
@@ -680,12 +771,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func scriptValue(_ key: String, _ observation: ScriptObservation) -> String {
         switch key {
         case "panelVisible": return String(observation.panelVisible)
+        case "appActive": return String(observation.appActive)
         case "selectionIndex": return String(observation.selectionIndex)
         case "itemCount": return String(observation.itemCount)
         case "actionsMode": return String(observation.actionsMode)
         case "previewEnabled": return String(observation.previewEnabled)
+        case "railFocused": return String(observation.railFocused)
+        case "stripFocused": return String(observation.stripFocused)
+        case "focusZone": return observation.focusZone
+        case "railID": return observation.railID
         case "scratchpadActive": return String(observation.scratchpadActive)
         case "terminalActive": return String(observation.terminalActive)
+        case "terminalExited": return String(observation.terminalExited)
         case "askWindows": return String(observation.askWindows)
         case "askStreaming": return String(observation.askStreaming)
         case "askTurns": return String(observation.askTurns)
@@ -696,6 +793,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "firstTitle": return observation.items.first?.title ?? ""
         case "firstProvider": return observation.items.first?.providerID ?? ""
         case "probeResult": return observation.probeResult
+        case "promptTitle": return observation.promptTitle
+        case "promptError": return observation.promptError
         case "panelHeight": return String(format: "%.2f", observation.panelHeight)
         case "panelWidth": return String(format: "%.2f", observation.panelWidth)
         case "derivedPanelHeight": return String(format: "%.2f", observation.derivedPanelHeight)
@@ -720,7 +819,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive":
+        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -771,12 +870,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let observation = scriptObservation()
         let dump: [String: Any] = [
             "panelVisible": observation.panelVisible,
+            "appActive": observation.appActive,
             "query": observation.query,
             "scopeLabel": observation.scopeLabel,
             "selectionIndex": observation.selectionIndex,
             "itemCount": observation.itemCount,
             "actionsMode": observation.actionsMode,
             "previewEnabled": observation.previewEnabled,
+            "railFocused": observation.railFocused,
+            "stripFocused": observation.stripFocused,
+            "focusZone": observation.focusZone,
+            "railID": observation.railID,
             "scratchpadActive": observation.scratchpadActive,
             "terminalActive": observation.terminalActive,
             "askWindows": observation.askWindows,
@@ -785,6 +889,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "askChats": observation.askChats,
             "askBadge": observation.askBadge,
             "statusMessage": observation.statusMessage,
+            "promptTitle": observation.promptTitle,
+            "promptError": observation.promptError,
             "probeResult": observation.probeResult,
             "panelHeight": observation.panelHeight,
             "panelWidth": observation.panelWidth,
@@ -820,6 +926,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// NSApp.terminate always exits 0, so a failed script exits directly.
     private func finishScript() -> Never {
         let reasons = scriptFailureReasons
+        Log.shared.info(
+            "Script finished: failures=\(reasons.count), appActive=\(NSApp.isActive)",
+            source: "app"
+        )
         if reasons.isEmpty && !scriptFailure {
             print("SCRIPT OK")
         } else {
@@ -835,6 +945,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         write(view: view, to: destination)
     }
 
+    /// The status menu's capture section as text, so a scripted run can prove
+    /// the enable/disable rules without opening the menu.
+    private func writeCaptureMenu(to destination: String) {
+        let lines = CaptureMenuCommand.allCases.compactMap { command -> String? in
+            guard let item = captureMenuItems[command] else { return nil }
+            return "\(item.title)|enabled=\(item.isEnabled)|hidden=\(item.isHidden)"
+        }
+        try? (lines.joined(separator: "\n") + "\n")
+            .write(toFile: destination, atomically: true, encoding: .utf8)
+        Log.shared.info("Capture menu written to \(destination)", source: "app")
+    }
+
     private func writeSettingsSnapshot(to destination: String) {
         // Drop the blinking caret: focused text fields made snapshot diffs
         // flicker by a percent between runs.
@@ -845,7 +967,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow?.orderOut(nil)
         guard let view = settingsWindow?.contentView else { return }
         write(view: view, to: destination)
-        settingsWindow?.orderFrontRegardless()
+        // A scripted run stays off the user's screen; the window was never
+        // ordered above other apps, so there is nothing to restore.
+        if !isScriptMode { settingsWindow?.orderFrontRegardless() }
     }
 
     private func writeOnboardingSnapshot(to destination: String) {
@@ -921,6 +1045,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // A raw screencapture child outlives us unless we stop it here; SIGINT
         // lets it finalise the file before the app disappears.
         captureService.stopRecordingOnQuit()
+        pinnedScreenshots.closeAll()
         watcherTimer?.invalidate()
         clipboardMonitor?.stop()
         hotkeyManagers.values.forEach { $0.unregister() }
@@ -983,10 +1108,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ShotsProvider(service: captureService, bridge: hostProxy))
         providers.append(CheatsheetProvider(config: configuration.cheatsheets))
         let hideForCapture: @MainActor () -> Void = { [weak self] in
+            self?.screenshotHUD.dismiss()
             self?.panel?.hide(activatePrevious: false)
         }
-        providers.append(ShotProvider(service: captureService, beforeCapture: hideForCapture))
-        providers.append(RecProvider(service: captureService, beforeStart: hideForCapture))
+        providers.append(ShotProvider(
+            service: captureService,
+            bridge: hostProxy,
+            lastScreenshot: { [weak self] in self?.lastScreenshotURL },
+            beforeCapture: hideForCapture
+        ))
+        providers.append(RecProvider(
+            service: captureService,
+            startRequest: { [weak self] in self?.presentRecordingOptions() }
+        ))
         providers.append(WebSearchProvider(
             engines: configuration.webSearchEngines,
             enabled: configuration.webSearchEnabled,
@@ -994,6 +1128,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ))
         providers.append(PinProvider(store: store, bridge: hostProxy))
         providers.append(ClipboardProvider(store: store, bridge: hostProxy))
+        providers.append(OCRProvider(
+            store: store,
+            bridge: hostProxy,
+            lastScreenshot: { [weak self] in self?.lastScreenshotURL }
+        ))
         let askService = AskService(store: store, configuration: configuration.ask)
         self.askService = askService
         providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, favicons: configuration.window.favicons, onChange: { [weak self] in
@@ -1067,7 +1206,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 id: $0.descriptor.id,
                 name: $0.descriptor.name,
                 trigger: $0.descriptor.trigger,
-                isGlobal: $0.descriptor.isGlobal
+                isGlobal: $0.descriptor.isGlobal,
+                requirements: ProviderToolRequirements.requirements(for: $0),
+                group: $0.descriptor.group
             )
         }
         let registry = ProviderRegistry(
@@ -1100,6 +1241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // which lets a long list grow the window past the bottom of the screen.
         hosting.sizingOptions = []
         let controller = PanelController(theme: themeManager.theme, content: hosting)
+        controller.quiet = isScriptMode
         controller.windowConfig = configuration.window
         controller.onKeyDown = { [weak self] event in
             self?.searchController.handleKey(event) ?? false
@@ -1118,6 +1260,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func wireControllerCallbacks() {
         searchController.onReload = { [weak self] in self?.reload(quiet: false) }
         searchController.onOpenConfig = { [weak self] in self?.showSettings() }
+        searchController.onOpenSettingsAnchor = { [weak self] anchor in
+            self?.showSettings()
+            // The freshly built hosting view subscribes a beat later.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: .paletteSettingsJump, object: anchor)
+            }
+        }
         searchController.onOpenProviders = { [weak self] in self?.openProviders() }
         searchController.onQuit = { NSApp.terminate(nil) }
     }
@@ -1170,7 +1319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     press: { [weak self] in self?.showClipboard() }),
             Desired(id: "terminal", label: "Terminal shortcut", keys: configuration.terminalHotkey,
                     press: { [weak self] in self?.toggleTerminalPanel() }),
-            Desired(id: "scratchpad", label: "Scratchpad shortcut", keys: configuration.scratchpadHotkey,
+            Desired(id: "scratchpad", label: "Scratchpad list shortcut", keys: configuration.scratchpadHotkey,
                     press: { [weak self] in self?.toggleScratchpad() }),
             Desired(id: "ask", label: "Ask shortcut", keys: configuration.askHotkey,
                     press: { [weak self] in self?.toggleAskWindow() }),
@@ -1365,7 +1514,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // panel. show() also restores PanelController's own state, which
             // makeKeyAndOrderFront alone does not.
             if panel.isVisible {
-                if !panel.panel.isKeyWindow { panel.panel.makeKeyAndOrderFront(nil) }
+                if !panel.quiet, !panel.panel.isKeyWindow { panel.panel.makeKeyAndOrderFront(nil) }
             } else {
                 panel.show()
             }
@@ -1374,60 +1523,258 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func captureScreenshot(mode: CaptureMode = .screen) {
+        // A thumbnail from an earlier shot must not end up in this one.
+        screenshotHUD.dismiss()
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.captureKeepingPanel {
                 do {
                     let result = try await self.captureService.screenshot(mode)
-                    if FileManager.default.fileExists(atPath: result.url.path) {
-                        self.searchController.setStatus("Saved \(result.url.lastPathComponent)", duration: 4)
-                    } else {
-                        self.searchController.setStatus("Screenshot copied", duration: 4)
+                    // The service reports a saved file itself; a copy-only shot
+                    // has nothing on disk to name.
+                    if !FileManager.default.fileExists(atPath: result.url.path) {
+                        self.captureFeedback("Screenshot copied")
                     }
                 } catch CaptureError.cancelled {
-                    self.searchController.setStatus("Screenshot cancelled", duration: 3)
+                    self.captureFeedback("Screenshot cancelled")
                 } catch {
-                    // A capture can outlive the launcher, so notify() bounces
-                    // the Dock icon when the panel is gone.
                     Log.shared.error("Screenshot failed: \(error.localizedDescription)", source: "capture")
-                    await self.searchController.notify("Screenshot failed: \(error.localizedDescription)")
+                    self.captureFeedback("Screenshot failed: \(error.localizedDescription)")
                 }
             }
         }
     }
 
-    private func toggleRecording() {
+    /// One place every capture action reports through: the panel when it is
+    /// open, a banner and the menu-bar item when it is not.
+    private func captureFeedback(_ message: String) {
+        guard !message.isEmpty else { return }
+        if panel?.isVisible == true {
+            searchController.setStatus(message, duration: 4)
+        } else {
+            SystemNotification.post(title: "Palette", body: message)
+            flashMenuBar(message)
+        }
+        Log.shared.info("Capture feedback: \(message)", source: "capture")
+    }
+
+    /// Keeps a short status visible in the menu bar while the panel is closed.
+    private func flashMenuBar(_ message: String) {
+        guard let button = statusItem?.button else { return }
+        let text = message.count > 40 ? String(message.prefix(39)) + "…" : message
+        menuBarFlashTask?.cancel()
+        statusItem.length = NSStatusItem.variableLength
+        button.title = " " + text
+        button.toolTip = message
+        menuBarFlashTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.statusItem.length = NSStatusItem.squareLength
+            self.statusItem.button?.title = ""
+            self.statusItem.button?.toolTip = self.statusToolTip
+        }
+    }
+
+    private var statusToolTip: String {
+        "Palette — \(currentHotKey?.prettyDisplay ?? configuration.hotkey)"
+    }
+
+    /// Hotkey and `/rec` both land here: ask for audio, microphone, display and
+    /// area before anything is recorded.
+    private func presentRecordingOptions() {
+        guard !captureService.isRecording else { return }
+        if let existing = recordingOptionsPanel {
+            recordingOptionsPanel = nil
+            existing.discard()
+        }
+        let capture = captureService.config
+        let controller = RecordingOptionsPanelController(
+            options: RecordingOptions(capture: capture),
+            displays: CaptureDisplays.active(),
+            microphones: CaptureMicrophones.active(),
+            format: capture.recordingFormat,
+            themeManager: themeManager,
+            onRecord: { [weak self] options in self?.beginRecording(options) },
+            onCancel: { [weak self] in
+                self?.recordingOptionsPanel = nil
+                self?.captureFeedback("Recording cancelled")
+            }
+        )
+        recordingOptionsPanel = controller
+        // The launcher shares the screen with whatever is about to be recorded.
+        panel?.hide(activatePrevious: false)
+        controller.show()
+    }
+
+    private func beginRecording(_ options: RecordingOptions) {
+        var capture = captureService.config
+        options.apply(to: &capture)
+        // Writing through the service persists the choice for the next press.
+        captureService.config = capture
+        recordingOptionsPanel?.discard()
+        recordingOptionsPanel = nil
+        // The confirmation thumbnail and the options panel must be gone before
+        // screencapture looks at the screen.
+        screenshotHUD.dismiss()
+        if capture.hidePalette { panel?.hide(activatePrevious: false) }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.captureKeepingPanel {
-                if self.captureService.isRecording {
-                    do {
-                        let url = try await self.captureService.stopRecording()
-                        self.searchController.setStatus("Saved \(url.lastPathComponent)", duration: 4)
-                    } catch {
-                        await self.searchController.notify("Recording failed: \(error.localizedDescription)")
-                    }
-                    self.recordingTicker?.invalidate()
-                    self.recordingTicker = nil
-                    self.updateRecordingMenuItem()
-                } else {
-                    do {
-                        try self.captureService.startRecording()
-                        self.searchController.setStatus("Recording started", duration: 3)
-                    } catch {
-                        await self.searchController.notify("Recording failed: \(error.localizedDescription)")
-                    }
-                    self.updateRecordingMenuItem()
-                    self.startRecordingTicker()
-                }
+            // One turn of the run loop plus a beat: closing a panel is not
+            // synchronous with the window server.
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            do {
+                try self.captureService.startRecording()
+                self.startRecordingTicker()
+            } catch {
+                Log.shared.error("Recording failed: \(error.localizedDescription)", source: "capture")
+                self.captureFeedback("Recording failed: \(error.localizedDescription)")
             }
+            self.updateCaptureMenu()
+        }
+    }
+
+    private func toggleRecording() {
+        if captureService.isRecording {
+            stopRecording()
+        } else {
+            presentRecordingOptions()
+        }
+    }
+
+    private func stopRecording() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.captureService.stopRecording()
+            } catch {
+                Log.shared.error("Recording failed: \(error.localizedDescription)", source: "capture")
+                self.captureFeedback("Recording failed: \(error.localizedDescription)")
+            }
+            self.recordingTicker?.invalidate()
+            self.recordingTicker = nil
+            self.updateCaptureMenu()
         }
     }
 
     private func startRecordingTicker() {
         recordingTicker?.invalidate()
         recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateRecordingMenuItem() }
+            Task { @MainActor in self?.updateCaptureMenu() }
+        }
+    }
+
+    // MARK: - Last capture
+
+    private func rememberCapture(_ url: URL, recording: Bool) {
+        lastCaptureURL = url
+        if recording {
+            lastRecordingURL = url
+        } else {
+            lastScreenshotURL = url
+        }
+        updateCaptureMenu()
+    }
+
+    private func copyLastPath() {
+        guard let url = lastCaptureURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("No capture to copy")
+            return
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(url.path, forType: .string)
+        ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+        captureFeedback("Path copied")
+    }
+
+    private func revealLastCapture() {
+        guard let url = lastCaptureURL else {
+            captureFeedback("No capture to reveal")
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        captureFeedback("Revealed \(url.lastPathComponent) in Finder")
+    }
+
+    private func showLastRecording() {
+        guard let url = lastRecordingURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("The last recording is no longer on disk")
+            return
+        }
+        openMediaPreview(url)
+    }
+
+    private func showLastScreenshot() {
+        guard let url = lastScreenshotURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("The last screenshot is no longer on disk")
+            return
+        }
+        openAnnotator(url)
+    }
+
+    private func pinLastScreenshot() {
+        guard let url = lastScreenshotURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("The last screenshot is no longer on disk")
+            return
+        }
+        pinScreenshot(url)
+    }
+
+    /// Pins the bytes already on disk; the pin is session-only.
+    private func pinScreenshot(_ url: URL) {
+        guard pinnedScreenshots.pin(url: url) else {
+            captureFeedback("Could not pin \(url.lastPathComponent)")
+            return
+        }
+        captureFeedback("Pinned \(url.lastPathComponent) · hold ⌥ to move")
+    }
+
+    /// On-device Vision read of the last screenshot, shared by the two menu
+    /// commands. Nothing is uploaded.
+    private func copyTextFromLastScreenshot() {
+        Task { @MainActor in
+            guard let recognition = await lastScreenshotText() else { return }
+            guard !recognition.text.isEmpty else {
+                captureFeedback("No text found")
+                return
+            }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(recognition.text, forType: .string)
+            ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+            captureFeedback("Text copied (\(recognition.text.count) chars)")
+        }
+    }
+
+    private func openLastScreenshotLink() {
+        Task { @MainActor in
+            guard let recognition = await lastScreenshotText() else { return }
+            guard let raw = recognition.firstLink,
+                  ImageTextRecognition.isOpenable(raw),
+                  let url = URL(string: raw) else {
+                captureFeedback("No link found")
+                return
+            }
+            NSWorkspace.shared.open(url)
+            captureFeedback("Opened \(url.host ?? raw)")
+        }
+    }
+
+    private func lastScreenshotText() async -> RecognizedImageText? {
+        guard let url = lastScreenshotURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("The last screenshot is no longer on disk")
+            return nil
+        }
+        guard let image = NSImage(contentsOf: url) else {
+            captureFeedback("Could not read \(url.lastPathComponent)")
+            return nil
+        }
+        do {
+            return try await ImageTextRecognition.recognize(image)
+        } catch {
+            captureFeedback("Text recognition failed")
+            return nil
         }
     }
 
@@ -1438,6 +1785,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// scanning NSApp.windows used to leave the Dock icon behind whenever any
     /// other window happened to be visible.
     private func updateActivationPolicy() {
+        // Scripted runs stay accessory: no Dock icon and no focus change.
+        if isScriptMode {
+            if NSApp.activationPolicy() != .accessory { NSApp.setActivationPolicy(.accessory) }
+            return
+        }
         let askNeedsDock = askWindow?.window?.isVisible == true
             || askWindow?.isStreaming == true
             || (NSApp.dockTile.badgeLabel?.isEmpty == false)
@@ -1573,13 +1925,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func openMediaPreview(_ url: URL) {
+        // One preview at a time: a new recording replaces the old window
+        // instead of stacking a second player exactly on top of it.
+        let previous = mediaPreviews
+        mediaPreviews.removeAll()
+        for controller in previous { controller.close() }
         let controller = MediaPreviewWindowController(url: url, themeManager: themeManager)
+        controller.onFeedback = { [weak self] message in self?.captureFeedback(message) }
         controller.onClose = { [weak self, weak controller] in
             guard let self, let controller else { return }
             self.mediaPreviews.removeAll { $0 === controller }
             self.updateActivationPolicy()
         }
         mediaPreviews.append(controller)
+        updateActivationPolicy()
         controller.show()
     }
 
@@ -1696,34 +2055,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         aboutWindow?.apply(theme: theme)
     }
 
-    @objc private func stopRecordingFromMenu() {
-        toggleRecording()
+    @objc private func captureMenuAction(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let command = CaptureMenuCommand(rawValue: raw) else { return }
+        switch command {
+        case .startRecording:
+            presentRecordingOptions()
+        case .stopRecording:
+            stopRecording()
+        case .copyLastPath:
+            copyLastPath()
+        case .revealLastCapture:
+            revealLastCapture()
+        case .showLastRecording:
+            showLastRecording()
+        case .showLastScreenshot:
+            showLastScreenshot()
+        case .pinLastScreenshot:
+            pinLastScreenshot()
+        case .copyTextFromLastScreenshot:
+            copyTextFromLastScreenshot()
+        case .openLastScreenshotLink:
+            openLastScreenshotLink()
+        }
     }
 
-    /// Keeps the menu bar honest about a running recording.
-    private func updateRecordingMenuItem() {
-        guard let menu = statusItem?.menu else { return }
-        if captureService.isRecording {
-            if recordingMenuItem == nil {
-                Log.shared.info("Recording indicator shown in the menu bar", source: "capture")
-                let item = NSMenuItem(title: "Stop recording", action: #selector(stopRecordingFromMenu), keyEquivalent: "")
-                item.target = self
-                item.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: nil)
-                menu.insertItem(item, at: 0)
-                menu.insertItem(.separator(), at: 1)
-                recordingMenuItem = item
-            }
-            recordingMenuItem?.title = "Stop recording · \(TimerDuration.format(captureService.recordingElapsed))"
-        } else if let item = recordingMenuItem {
-            let index = menu.index(of: item)
-            if index >= 0 {
-                menu.removeItem(at: index)
-                if index < menu.numberOfItems, menu.item(at: index)?.isSeparatorItem == true {
-                    menu.removeItem(at: index)
-                }
-            }
-            recordingMenuItem = nil
-            Log.shared.info("Recording indicator removed from the menu bar", source: "capture")
+    /// Keeps the menu bar honest about a running recording and about the last
+    /// capture, using the same rules the tests pin.
+    private func updateCaptureMenu() {
+        let states = CaptureMenu.items(
+            isRecording: captureService.isRecording,
+            elapsed: captureService.recordingElapsed,
+            lastCapturePath: lastCaptureURL?.path,
+            lastRecordingPath: lastRecordingURL?.path,
+            lastScreenshotPath: lastScreenshotURL?.path
+        )
+        for state in states {
+            guard let item = captureMenuItems[state.command] else { continue }
+            item.title = state.title
+            item.isEnabled = state.enabled
+            item.isHidden = !state.visible
         }
     }
 
@@ -1741,14 +2112,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func toggleScratchpad() {
         guard let controller = searchController else { return }
-        if controller.scratchpadActive {
-            controller.closeScratchpad(save: true)
-            return
+        switch HotkeyTargets.scratchpadAction(
+            panelVisible: panel?.isVisible == true,
+            listActive: controller.scratchpadListActive
+        ) {
+        case .hide:
+            panel?.hide()
+        case .showList:
+            controller.openScratchpadList()
         }
-        if controller.terminalActive {
-            controller.closeTerminalPanel()
-        }
-        controller.openScratchpad()
     }
 
     private func configureClipboard() {
@@ -1764,6 +2136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // monitor keeps its last change count.
         let monitor = clipboardMonitor ?? ClipboardMonitor()
         let controller = searchController
+        monitor.setIgnoredApps(configuration.clipboard.ignoredApps)
         monitor.onCapture = { capture in
             Task {
                 switch capture {
@@ -1799,7 +2172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 id: $0.descriptor.id,
                 name: $0.descriptor.name,
                 trigger: $0.descriptor.trigger,
-                isGlobal: $0.descriptor.isGlobal
+                isGlobal: $0.descriptor.isGlobal,
+                group: $0.descriptor.group
             )
         }
     }
@@ -1863,9 +2237,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.contentViewController = NSHostingController(rootView: view)
         window.center()
         onboardingWindow = window
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+        WindowPresentation.present(window)
     }
 
     private func seedCommandsFile() {
@@ -2029,6 +2401,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         return nil
+    }
+
+    // MARK: - First-run prompts
+
+    /// One-time consent for the whole-home walk. A dismissed prompt means "no"
+    /// until the user opts in from Settings; the narrow scopes still prewarm.
+    private func askForHomeIndexingConsent(registry: ProviderRegistry) -> Bool {
+        if let consent = configuration.indexingHomeConsent { return consent }
+        let usesHome = registry.providers.contains { provider in
+            guard let paths = provider as? PathsProvider else { return false }
+            return paths.indexesHomeFolder
+        }
+        guard usesHome, !isScriptMode, !shouldShowOnboarding else { return false }
+        let alert = NSAlert()
+        alert.messageText = "Index your home folder for /edit?"
+        alert.informativeText = """
+        Palette will read file names under ~ so the file picker can find them. \
+        macOS may ask for folder access; Desktop, Documents, Downloads, Library \
+        and the other system folders are skipped. You can answer again in Settings.
+        """
+        alert.addButton(withTitle: "Index Home Folder")
+        alert.addButton(withTitle: "Not Now")
+        let consent = alert.runModal() == .alertFirstButtonReturn
+        configuration.indexingHomeConsent = consent
+        try? writeConfig(configuration)
+        return consent
+    }
+
+    /// One prompt for a tool a default provider cannot run without. The answer
+    /// is stored, so it is never asked twice — and never from inside a search.
+    private func checkDefaultProviderTools() {
+        guard !isScriptMode, !shouldShowOnboarding else { return }
+        let acknowledged = Set(configuration.missingToolAcknowledged)
+        let enabled = Set(configuration.globalProviders).union(["apps"])
+        let pending: [(provider: any PaletteProvider, missing: [ProviderRequirement])] =
+            registry.providers.compactMap { provider in
+                let id = provider.descriptor.id
+                guard enabled.contains(id), !acknowledged.contains(id) else { return nil }
+                let missing = ProviderRequirements.missing(ProviderToolRequirements.requirements(for: provider))
+                return missing.isEmpty ? nil : (provider, missing)
+            }
+        guard !pending.isEmpty else { return }
+        let commands = pending.flatMap { $0.missing.map(\.install) }
+        let alert = NSAlert()
+        alert.messageText = pending.count == 1
+            ? "A source needs a tool that is not installed"
+            : "\(pending.count) sources need tools that are not installed"
+        alert.informativeText = pending.map { provider, missing in
+            "\(provider.descriptor.name) needs \(missing.map(\.tool).joined(separator: ", ")) — "
+                + missing.map(\.why).joined(separator: " · ")
+                + "\n"
+                + missing.map(\.install).joined(separator: "\n")
+        }.joined(separator: "\n\n")
+        alert.addButton(withTitle: "Keep Enabled")
+        alert.addButton(withTitle: "Copy Commands")
+        alert.addButton(withTitle: "Disable")
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(commands.joined(separator: "\n"), forType: .string)
+        }
+        configuration.missingToolAcknowledged += pending.map { $0.provider.descriptor.id }
+        if response == .alertThirdButtonReturn {
+            configuration.disabledProviders += pending.map { $0.provider.descriptor.id }
+            try? writeConfig(configuration)
+            reload(quiet: true)
+        } else if !commands.isEmpty {
+            try? writeConfig(configuration)
+        }
     }
 
     private func seedUserProviders() {
@@ -2213,12 +2654,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let button = statusItem.button {
             button.image = Self.statusBarIcon()
             button.image?.isTemplate = true
-            button.toolTip = "Palette — \(currentHotKey?.prettyDisplay ?? configuration.hotkey)"
+            button.toolTip = statusToolTip
         }
         let menu = NSMenu()
+        // Capture section first: starting or stopping a recording must never
+        // need a trip through the launcher.
+        for command in CaptureMenuCommand.allCases {
+            let item = NSMenuItem(title: "", action: #selector(captureMenuAction(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = command.rawValue
+            if command == .stopRecording {
+                item.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: nil)
+            }
+            menu.addItem(item)
+            captureMenuItems[command] = item
+        }
+        menu.addItem(.separator())
+        updateCaptureMenu()
+
         let open = NSMenuItem(title: "Open Palette", action: #selector(togglePalette), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
+
+        // Hidden until a check finds something newer; both point at the
+        // release, never at a self-updater.
+        let update = NSMenuItem(
+            title: "Update Palette…",
+            action: #selector(updatePaletteFromMenu),
+            keyEquivalent: ""
+        )
+        update.target = self
+        update.isHidden = true
+        menu.addItem(update)
+        updateMenuItem = update
+        let notes = NSMenuItem(
+            title: "Release notes",
+            action: #selector(openReleaseNotesFromMenu),
+            keyEquivalent: ""
+        )
+        notes.target = self
+        notes.isHidden = true
+        menu.addItem(notes)
+        releaseNotesMenuItem = notes
         menu.addItem(.separator())
 
         let reload = NSMenuItem(title: "Reload Configuration", action: #selector(reloadFromMenu), keyEquivalent: "r")
@@ -2350,7 +2827,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         runDatabaseMaintenance()
         maintenanceTimer?.invalidate()
         let timer = Timer(timeInterval: 30 * 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.runDatabaseMaintenance() }
+            Task { @MainActor in
+                self?.runDatabaseMaintenance()
+                // The daily gate and failure backoff live in UpdateService, so
+                // a long-running app still checks without a relaunch.
+                self?.updates.checkAutomatically()
+            }
         }
         RunLoop.main.add(timer, forMode: .common)
         maintenanceTimer = timer
@@ -2477,11 +2959,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Reload
 
-    /// Dock/undock or a resolution change: re-measure rows on the new screen,
-    /// re-apply the width, and reposition even if the panel is already open.
+    /// Dock/undock or a resolution change: the fixed frame follows the screen
+    /// under the pointer, so reposition even if the panel is already open.
     @objc private func screenParametersChanged() {
         guard let panel else { return }
-        searchController?.updatePanelHeight()
         panel.windowConfig = configuration.window
     }
 
@@ -2496,7 +2977,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configErrorMessage = result.parseError
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
-        themeManager.window = configuration.window
         themeManager.searchPlaceholder = configuration.searchPlaceholder
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.config = configuration.capture
@@ -2592,6 +3072,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         searchController.setStatus("Update command copied", duration: 2)
     }
 
+    /// Shows the nudge only when a check found something newer.
+    private func refreshUpdateMenu() {
+        guard let release = updates.available else {
+            updateMenuItem?.isHidden = true
+            releaseNotesMenuItem?.isHidden = true
+            return
+        }
+        updateMenuItem?.title = "Palette \(release.version) available — Update…"
+        updateMenuItem?.isEnabled = true
+        updateMenuItem?.isHidden = false
+        releaseNotesMenuItem?.isHidden = false
+    }
+
+    /// Homebrew does the install; the embedded terminal is where it runs.
+    @objc private func updatePaletteFromMenu() {
+        guard let release = updates.available else { return }
+        searchController.openTerminalPanel(command: UpdatePolicy.brewCommand)
+        searchController.setStatus("Updating Palette to \(release.version)…", duration: 10)
+        updateMenuItem?.title = "Updating…"
+        updateMenuItem?.isEnabled = false
+        releaseNotesMenuItem?.isHidden = true
+    }
+
+    @objc private func openReleaseNotesFromMenu() {
+        guard let release = updates.available else { return }
+        NSWorkspace.shared.open(release.url)
+    }
+
     @objc private func openAskSettingsFromWindow() {
         showSettings()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -2607,14 +3115,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !settingsWindow.isVisible {
                 settingsWindow.contentView = makeSettingsHostingView()
             }
-            NSApp.activate()
-            settingsWindow.makeKeyAndOrderFront(nil)
-            settingsWindow.orderFrontRegardless()
+            WindowPresentation.present(settingsWindow)
             return
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 620),
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -2624,7 +3130,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.isOpaque = false
         window.contentMinSize = NSSize(width: 820, height: 560)
         window.collectionBehavior.insert(.fullScreenPrimary)
-        window.setFrameAutosaveName("PaletteSettings")
+        // A scripted run must not persist a test frame into the user's prefs.
+        if !isScriptMode { window.setFrameAutosaveName("PaletteSettings") }
         // A themed (not transparent) titlebar keeps AppKit's native window drag.
         window.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
         window.titlebarAppearsTransparent = false
@@ -2636,9 +3143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.center()
         }
         settingsWindow = window
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+        WindowPresentation.present(window)
     }
 
     private func makeSettingsHostingView() -> NSView {
@@ -2757,6 +3262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             providers: allProviderInfo,
             commands: catalogCommands,
             diagnostics: startupDiagnostics.map { "\($0.level.rawValue): \($0.message)" },
+            updates: updates,
             onApply: { [weak self] updated in
                 self?.applySettings(updated)
             },
@@ -2766,8 +3272,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onExportBackup: { [weak self] in
                 self?.exportBackup()
             },
-            panelHeightForRows: { [weak self] rows in
-                self?.searchController?.panelHeight(forRows: rows) ?? 0
+            onForgetLearned: { [weak self] in
+                guard let store = self?.store else { return "The Palette database is not open." }
+                do {
+                    try await store.clearLearnedRanking()
+                    return nil
+                } catch {
+                    return error.localizedDescription
+                }
             }
         )
     }
@@ -2787,12 +3299,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let configErrorMessage {
             return configErrorMessage
         }
+        let updatesAutomaticChanged = configuration.updates.automatic != updated.updates.automatic
         do {
             try writeConfig(updated)
         } catch {
             return "Could not save settings: \(error.localizedDescription)"
         }
         reload(quiet: true, refreshSettings: false)
+        if updatesAutomaticChanged {
+            updates.setAutomatic(updated.updates.automatic)
+        }
         updateSettingsWindowChrome()
         return nil
     }
@@ -2882,6 +3398,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         guard menu === statusItem.menu else { return }
+        updateCaptureMenu()
         Task { @MainActor [weak self] in
             await self?.refreshKeepAwakeMenu()
         }

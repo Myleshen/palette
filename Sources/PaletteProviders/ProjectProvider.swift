@@ -37,6 +37,40 @@ public enum ProjectName {
     }
 }
 
+/// Git's own branch-name rules (`git check-ref-format --branch`), evaluated
+/// without spawning a process so the prompt can reject a name per keystroke.
+public enum BranchName {
+    /// Nil when the name is acceptable; otherwise the reason to show inline.
+    public static func error(for raw: String) -> String? {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return "Enter a branch name." }
+        if name == "@" { return "A branch name cannot be @." }
+        if name.hasPrefix("-") { return "A branch name cannot start with -." }
+        if name.hasSuffix("/") || name.hasSuffix(".") {
+            return "A branch name cannot end with / or ."
+        }
+        if name.contains("//") { return "A branch name cannot contain //." }
+        if name.contains("..") { return "A branch name cannot contain .." }
+        if name.contains("@{") { return "A branch name cannot contain @{." }
+        for component in name.split(separator: "/", omittingEmptySubsequences: false) {
+            if component.isEmpty { return "A branch name cannot contain an empty component." }
+            if component.hasPrefix(".") { return "A path component cannot start with a dot." }
+            if component.hasSuffix(".lock") { return "A path component cannot end with .lock." }
+        }
+        let forbidden = CharacterSet(charactersIn: " ~^:?*[\\")
+        if name.unicodeScalars.contains(where: {
+            $0.value < 0x20 || $0.value == 0x7f || forbidden.contains($0)
+        }) {
+            return "A branch name cannot contain spaces or any of ~ ^ : ? * [ \\."
+        }
+        return nil
+    }
+
+    public static func isValid(_ raw: String) -> Bool {
+        error(for: raw) == nil
+    }
+}
+
 /// Fast project switcher. Mutations go through devx when it is installed, so
 /// its worktree and overlay safety checks stay authoritative.
 public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
@@ -85,33 +119,54 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
     }
     private let cache = Cache()
 
+    /// Git state is only ever read off the row path: `search` returns the list
+    /// from whatever is cached, and the selected row's preview is fetched by the
+    /// host afterwards. Five minutes plus the checkout's own HEAD/index mtimes,
+    /// so a commit or a branch switch shows up on the next look.
     private actor GitCache {
-        private var states: [String: (state: GitState, at: Date)] = [:]
+        private var states: [String: (state: GitState, fingerprint: String, at: Date)] = [:]
+        private let ttl: TimeInterval = 300
 
-        func states(for paths: [String]) async -> [String: GitState] {
-            let now = Date()
+        private func fresh(_ path: String) -> GitState? {
+            guard let entry = states[path],
+                  Date().timeIntervalSince(entry.at) < ttl,
+                  entry.fingerprint == ProjectProvider.fingerprint(path: path) else { return nil }
+            return entry.state
+        }
+
+        /// Only what is already warm. Never runs a command.
+        func cached(for paths: [String]) -> [String: GitState] {
             var result: [String: GitState] = [:]
-            var stale: [String] = []
             for path in paths {
-                if let cached = states[path], now.timeIntervalSince(cached.at) < 15 {
-                    result[path] = cached.state
-                } else {
-                    stale.append(path)
-                }
+                if let state = fresh(path) { result[path] = state }
             }
-            guard !stale.isEmpty else { return result }
+            return result
+        }
+
+        /// One row's state, cached or fetched now.
+        func state(for path: String) async -> GitState? {
+            if let state = fresh(path) { return state }
+            guard let state = await ProjectProvider.gitState(path: path) else { return nil }
+            states[path] = (state, ProjectProvider.fingerprint(path: path), Date())
+            return state
+        }
+
+        /// Warms the top rows so arrowing down does not wait on git.
+        func warm(_ paths: [String]) async {
+            let stale = paths.filter { fresh($0) == nil }
+            guard !stale.isEmpty else { return }
             await withTaskGroup(of: (String, GitState?).self) { group in
                 for path in stale {
                     group.addTask { (path, await ProjectProvider.gitState(path: path)) }
                 }
                 for await (path, state) in group {
                     guard let state else { continue }
-                    states[path] = (state, now)
-                    result[path] = state
+                    states[path] = (state, ProjectProvider.fingerprint(path: path), Date())
                 }
             }
-            return result
         }
+
+        func invalidate() { states.removeAll() }
     }
     private let gitCache = GitCache()
 
@@ -125,30 +180,67 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
         let cached = await cache.projects
         let at = await cache.at
         let projects: [Project]
-        if Date().timeIntervalSince(at) < 10, !cached.isEmpty {
+        if Date().timeIntervalSince(at) < 60, !cached.isEmpty {
             projects = cached
         } else {
             projects = await Self.projects()
             await cache.update(projects)
         }
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let visible = projects.filter { project in
-            query.isEmpty
-                || Ranking.score(query: query, candidate: "\(project.name) \(project.path)") != nil
+        let candidates = projects.map { "\($0.name) \($0.path)" }
+        let indices = await RowFilter.matchingIndices(query: query, candidates: candidates)
+        // Relevance first, then the name: the registry order is not a ranking.
+        let matched = indices.map { index -> (project: Project, score: Double) in
+            let project = projects[index]
+            let score = query.isEmpty ? 0 : (Ranking.score(query: query, candidate: candidates[index]) ?? 0)
+            return (project, score)
+        }.sorted { lhs, rhs in
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            return lhs.project.name.localizedCaseInsensitiveCompare(rhs.project.name) == .orderedAscending
         }
-        let git = await gitCache.states(for: visible.map(\.path))
-        let rows = visible.map { item($0, git: git[$0.path]) }
+        // Rows never wait on git; a preview appears for rows already warm and
+        // the host asks for the selected one through `AsyncPreviewProviding`.
+        let warm = await gitCache.cached(for: matched.prefix(20).map { $0.project.path })
+        let rows = matched.map { item($0.project, git: warm[$0.project.path]) }
+        if !rows.isEmpty {
+            let paths = matched.prefix(4).map { $0.project.path }
+            Task { await gitCache.warm(paths) }
+        }
         guard query.isEmpty else { return rows }
         return actionItems() + rows
+    }
+
+    /// The host asks for the selected row's preview after the list is shown.
+    public func preview(for item: PaletteItem) async -> ItemPreview? {
+        let path = item.actions.compactMap { $0.value.object?["path"] }.first
+            ?? String(item.id.dropFirst("proj:".count))
+        guard let state = await gitCache.state(for: path) else { return nil }
+        return .text(state.preview)
+    }
+
+    /// Repository state also changes under us (a commit, a branch switch), so
+    /// the fingerprint on the entry is what really decides freshness.
+    static func fingerprint(path: String) -> String {
+        func stamp(_ file: String) -> String {
+            guard let date = (try? FileManager.default.attributesOfItem(atPath: file))?[.modificationDate] as? Date else {
+                return "-"
+            }
+            return String(Int(date.timeIntervalSince1970))
+        }
+        // shortcut: a linked worktree keeps HEAD/index in the main checkout, so
+        // its fingerprint is constant and only the TTL refreshes it.
+        return stamp(path + "/.git/HEAD") + ":" + stamp(path + "/.git/index")
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         if action.id == "clone-repo" {
             try await cloneRepository()
+            await invalidateCaches(delayed: true)
             return
         }
         if action.id == "new-project" {
             try await newProject()
+            await invalidateCaches()
             return
         }
         guard let value = action.value.object, let name = value["name"], let path = value["path"] else { return }
@@ -176,10 +268,41 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
                 await bridge.notify("Install devx to create worktrees")
                 return
             }
-            guard let branch = await bridge.prompt(kind: .text, title: "New worktree branch for \(name)", placeholder: "feature/name"),
-                  !branch.isEmpty else { return }
-            try await MainActor.run {
-                try launcher.openTerminal(command: "\(Self.shellQuote(devx)) worktree create \(Self.shellQuote(name)) \(Self.shellQuote(branch))", app: terminal)
+            guard let entered = await bridge.prompt(
+                kind: .text,
+                title: "New worktree branch for \(name)",
+                placeholder: "feature/name",
+                validation: .branchName
+            ) else { return }
+            let branch = entered.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let reason = BranchName.error(for: branch) {
+                await bridge.notify(reason)
+                return
+            }
+            do {
+                // The pure helper drives the inline feedback; git stays the
+                // final authority over the name it will actually create.
+                let check = try await ProcessRunner.run(
+                    ["git", "check-ref-format", "--branch", branch],
+                    timeout: 10
+                )
+                guard check.status == 0 else {
+                    await bridge.notify("Invalid branch: \(Self.firstLine(check.stderrString))")
+                    return
+                }
+                await bridge.beginProgress("Creating worktree \(branch)…")
+                let result = try await ProcessRunner.run(
+                    [devx, "worktree", "create", name, branch],
+                    timeout: 180
+                )
+                guard result.status == 0 else {
+                    await bridge.notify("Worktree failed: \(Self.firstLine(result.stderrString))")
+                    return
+                }
+                await invalidateCaches()
+                await bridge.notify("Worktree created")
+            } catch {
+                await bridge.notify("Worktree failed: \(error.localizedDescription)")
             }
         case "remove-worktree":
             guard let devx else {
@@ -190,6 +313,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
             try await MainActor.run {
                 try launcher.openTerminal(command: "\(Self.shellQuote(devx)) worktree remove \(Self.shellQuote(name))", app: terminal)
             }
+            await invalidateCaches(delayed: true)
         case "apply-config":
             guard let devx else {
                 await bridge.notify("Install devx to apply config overlays")
@@ -208,7 +332,11 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private func actionItems() -> [PaletteItem] {
-        [
+        // Both rows go through devx and git; say so before Return does nothing.
+        let trouble = ProviderRequirements.requirements(forProviderID: descriptor.id)
+            .first { ToolLocator.shared.path(for: $0.tool) == nil }
+            .map(ItemTrouble.missingTool)
+        return [
             PaletteItem(
                 id: "clone-repo",
                 title: "Clone a repository…",
@@ -217,6 +345,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
                 badge: "new",
                 score: 9_000,
                 actions: [PaletteAction(id: "clone-repo", title: "Clone a repository", kind: .custom)],
+                trouble: trouble,
                 providerID: descriptor.id,
                 providerName: descriptor.name
             ),
@@ -228,6 +357,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
                 badge: "new",
                 score: 8_900,
                 actions: [PaletteAction(id: "new-project", title: "New project", kind: .custom)],
+                trouble: trouble,
                 providerID: descriptor.id,
                 providerName: descriptor.name
             ),
@@ -320,8 +450,20 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
             return
         }
 
-        await cache.invalidate()
         await bridge.notify("Created \(name) in \(path)")
+    }
+
+    /// A clone or worktree is created by another process, so the list is
+    /// dropped now and again once the terminal command has had time to run.
+    private func invalidateCaches(delayed: Bool = false) async {
+        await cache.invalidate()
+        await gitCache.invalidate()
+        guard delayed else { return }
+        Task {
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            await cache.invalidate()
+            await gitCache.invalidate()
+        }
     }
 
     static func devxRoots() -> [DevxConfig.Root] {

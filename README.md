@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.16.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.18.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -24,6 +24,7 @@ Where each headline feature landed. Every fix, and everything before 1.8, is in
 
 | Feature | Version |
 |---|---|
+| Pinned screenshots, on-device OCR, learned ranking, provider groups, 19-pane Settings, update nudge | 2.18.0 |
 | Custom hotkey binder — `[[binding]]` launches an app, runs a shell command, opens a provider trigger, or opens a URL | 2.16.0 |
 | Ask web search on by default; installed-font dropdowns; onboarding shows the real capture keys and Skip applies Essentials | 2.16.0 |
 | Ask chat window — multi-turn, streaming, saved chats, markdown (code, tables, images), optional web search | 2.15.0 |
@@ -102,6 +103,12 @@ The cask downloads the latest GitHub release, installs `Palette.app` into
 rather than notarized. No Apple Developer subscription or App Store listing is
 involved. Manual zip downloads may need System Settings > Privacy & Security >
 Open Anyway.
+
+Palette asks GitHub once a day whether a newer release exists. When there is
+one, the menu bar offers **Palette <version> available — Update…**, which runs
+`brew update && brew upgrade --cask palette` in the embedded terminal; Palette
+never installs anything itself. Turn the check off in Settings → General →
+**Updates** (or `[updates] automatic = false`).
 
 To publish a new version: bump `CFBundleShortVersionString` and
 `CFBundleVersion` in `Resources/Info.plist`, add a `CHANGELOG.md` entry, merge
@@ -187,15 +194,15 @@ Caches live in `~/Library/Caches/Palette`.
 | `⌥Space` | show / hide |
 | `⌥V` | clipboard browser with live preview |
 | `⌘⌥T` | embedded terminal |
-| `⌘⌥S` | scratchpad |
+| `⌘⌥S` | scratchpad list |
 | `⌘⌥A` | Ask |
-| `↑` `↓` | move selection |
+| `↑` `↓` | move selection (or the focused rail/strip row) |
 | `⏎` | primary action |
 | `⌘⏎` | secondary action (usually paste, or reveal for paths) |
 | `⌘K` | action list for the selection |
 | `⌘1`…`⌘9` | open the nth result |
-| `Tab` / `⇧Tab` | cycle providers in the rail (`/web`, `/zj`, `/bw`, …) |
-| `Esc` | clear the query, then dismiss |
+| `Tab` / `⇧Tab` | move focus search → list → rail → group strip; never changes the provider |
+| `Esc` | leave the rail/strip/list, then clear the query, then dismiss |
 | `⌘,` | open Settings |
 | `⌘R` | reload config, themes, and providers after manual file edits |
 
@@ -205,11 +212,23 @@ Application rows expose Open, Show in Finder, Copy Bundle ID, and Copy Path in
 ### Provider rail
 
 A full-height rail sits on the left of the search field and cards. **Everything**
-is pinned at the top and is the plain-query scope; below it is one row per
-provider that declares a trigger. Clicking a row opens that provider with an
-empty query, and `Tab` / `⇧Tab` cycle the same rows from the keyboard. The rail
-narrows to icons when the preview pane is open or the panel is under 700 pt
-wide, and scrolls a whole row at a time. Prefixes work with or without the rail.
+is pinned at the top and is the plain-query scope; **Apps** opens the app list.
+Below them is one row per provider group and one per ungrouped provider. A group
+(Bitwarden, GitHub) opens its first member and shows a secondary strip of its
+children above the list; the strip also appears in the top-bar layout. Clicking a
+row opens that provider with an empty query. The rail is always 220 pt wide and
+never collapses; it scrolls a whole row at a time instead. Prefixes work with or
+without the rail.
+
+The launcher has four focus zones: **search**, **list**, **rail**, and the group
+**strip**. `Tab` walks search → list → rail → strip and wraps; `⇧Tab` reverses.
+`Tab` never switches the provider — use the rail, the strip, `⌘1`…`⌘9`, or a
+prefix for that. Arrow keys move the list selection, the rail row, or the group
+child depending on the focused zone; `⏎` acts on the list selection unless the
+rail or strip is focused, where it confirms the provider and moves to the list.
+`Esc` returns to search first, then clears the query, then dismisses. One focus
+ring marks the active zone, and only the selected provider/chip is painted with
+the accent.
 
 ### Prefixes
 
@@ -228,6 +247,7 @@ trigger word:
 | `/bwn <query>` | Bitwarden notes |
 | `/bwo <query>` | Bitwarden URLs |
 | `/clip <query>` | clipboard history, text/images/files |
+| `/ocr <query>` | on-device text and QR/barcode reading of a clipboard image or screenshot |
 | `/port <query>` | listening TCP ports, with process and PID |
 | `/cmd <query>` | commands from `~/.config/palette/commands.toml` |
 | `/proj <query>` | devx projects and worktrees; clone a repository, create a project |
@@ -283,6 +303,12 @@ themes, and Bitwarden vault fields. Clipboard search scans the whole configured
 history instead of only doing a SQL prefix match, so non-contiguous searches
 work there too. `/edit` still delegates path ranking to the real `fzf` binary
 with `--scheme=path`.
+
+Ranking also learns: when a short plain query reliably leads you to one row,
+that row is boosted as a tie-breaker on later queries (never over a clearly
+better text match), so `chr` can open the Chrome you actually choose. The query
+is stored only as a hash, and Settings → Search → **Learning** has the toggle
+and a **Forget** button.
 
 The empty-query screen is deliberately the **app list**: apps in alphabetical
 order (or most-used), with pinned apps and pinned web apps at the top. Unpinned
@@ -359,25 +385,26 @@ fallbacks.
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window with seven panes in
-three sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
-and **Shortcuts**; Features holds **Search** and **Ask**; System holds
-**Providers**. General holds startup, permissions, power, notifications, the
-editor/terminal apps used by providers, and clipboard history; Launcher holds
-where the panel opens, the search placeholder, app order, and the panel size;
-Appearance holds themes, typography, and glass; Shortcuts holds every global
-shortcut, including capture, recording, and your own **Custom hotkeys**.
-**Search** holds the web-results
-toggle, one card per engine (Name · Search URL · `!keyword` · Browser · Open in
-web app), bookmarks, cheatsheets, the web-app browser, and the screenshot and
-recording options. **Ask** selects the endpoint and model, saves a local API
-key, toggles fallback, answer notifications (sound, Notification Center banner,
-Dock badge) and the per-turn web search, and controls how many Q&A rows and how
-many days of history are kept. **Providers** is one table with
-a row per provider — enable, the **Plain queries** checkbox, name,
-trigger, aliases, and order in the same row. Appearance links the themes folder;
-**Providers** also links the providers and commands files, config, log, and
-crash log, exports a backup, and lists startup diagnostics.
+`⌘,` (or the menu-bar icon) opens a native Settings window with nineteen panes in
+four sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
+and **Shortcuts**; Features holds **Search**, **Ask**, **Embedded Terminal**,
+**Bookmarks**, **Cheatsheets**, **Web Apps**, **Screenshots**, **After a
+capture**, **Recordings**, and **Captures**; System holds **About** and
+**Providers**; Advanced holds **Provider Files**, **Config Files**, and
+**Diagnostics**. General holds startup, permissions, power, notifications, the
+editor/terminal apps used by providers, clipboard history, and the command
+prefix; Launcher holds where the panel opens, the search placeholder, app order,
+and the panel size; Appearance holds themes, typography, and glass; Shortcuts
+holds every global shortcut, including capture, recording, and your own **Custom
+hotkeys**. **Search** holds the web-results toggle and one card per engine
+(Name · Search URL · `!keyword` · Browser · Open in web app). **Ask** selects the
+endpoint and model, saves a local API key, toggles fallback, answer
+notifications (sound, Notification Center banner, Dock badge) and the per-turn
+web search, and controls how many Q&A rows and how many days of history are
+kept. **Providers** is one table with a row per provider — enable, the **Plain
+queries** checkbox, name, trigger, aliases, and order in the same row. The
+Advanced panes open the provider and config files, export a backup, and list
+startup diagnostics, separate from the provider table.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
 session event tap, so macOS-reserved combinations such as `⌘Space` are captured
 instead of being swallowed by the system; it stops as soon as Settings loses
@@ -427,10 +454,13 @@ provider rail and a content card. There is no alternate classic layout.
 ### Preview layout
 
 `preview_layout = "auto"` is the default: the preview sits beside the list when
-the screen is wide enough and below it on narrow or portrait displays.
-`beside` and `below` remain explicit overrides. Panel width is clamped to the
-screen, so the preview pane stays inside a narrow display instead of running
-off the right edge.
+the fixed frame is wide enough and below it on portrait frames.
+`beside` and `below` remain explicit overrides. The pane takes room from the
+list card; it never resizes the window. The launcher opens at one fixed frame
+per display — 60% of each screen axis, or the absolute caps when those are
+smaller — and does not grow or shrink with result count, preview, provider bar
+or mode. The embedded terminal opens at 90% of that width and 85% of its
+height, centred; the scratchpad keeps the full launcher frame.
 
 ### Pinned items
 
@@ -480,7 +510,7 @@ menu-bar **Stop recording · m:ss** item shows while a recording runs. All four
 live in Settings → **Shortcuts** and can be cleared or rebound.
 
 A capture plays a shutter sound and shows a thumbnail for a couple of seconds
-(both toggles in Settings → Search → Screenshots), so it is obvious that it worked. `/shots`
+(both toggles in Settings → **Screenshots**), so it is obvious that it worked. `/shots`
 lists everything in the capture directory, newest first and grouped by day —
 screenshots and recordings together — with a thumbnail (a poster frame for
 videos) on every row and in the preview pane, plus open, annotate, copy image,
@@ -491,10 +521,28 @@ same cache as the preview.
 
 Recordings can target the whole screen, a single display, or a fixed region, and
 optionally include audio from the system default input or a chosen microphone
-(`[capture] recording_microphone`), set under Settings → Search → Recordings or per row in
-`/rec`, which lists every active display by name and resolution.
+(`[capture] recording_microphone`), set under Settings → **Recordings**. Every
+start — the hotkey, `/rec` and the menu — asks first in a compact options panel
+(audio, microphone, display, area) that remembers the last choice, so the
+recording never includes the panel that asked.
 `[capture] gallery = "all" | "palette"` decides whether `/shots` lists everything
 in the folder or only Palette's own `shot-*` and `rec-*` files.
+
+The status menu has a capture section — **Start**, **Stop** with elapsed time,
+**Copy Last Path**, **Reveal Last Capture**, **Show Last Recording** and **Show
+Last Screenshot** — and every capture action reports the same way: in the panel
+when it is open, otherwise a Notification Center banner plus a brief menu-bar
+flash.
+
+**Pins** float a screenshot above every other app and pass clicks straight
+through, so it never gets in the way; hold `⌥` to show the grip and drag, resize
+or scroll to zoom. Pin from the annotator (`⇧⌘P`), from a `/shots` row, or from
+the menu bar, and up to 8 pins cascade down the screen (the oldest closes).
+
+Images are read on device: clipboard images, the last screenshot, pins and the
+annotator offer **Copy Text** (Vision OCR) and **Open Detected Link** from QR,
+EAN and Code128 codes; `/ocr` lists the text found in the clipboard image or a
+given path. Nothing leaves the Mac.
 
 **Annotate** rows in `/shot` open the editor on the capture: pointer, arrow,
 rectangle, text and crop, six colours, `⌘Z` undo, `⌘C` copy, `⌘S` save over the
@@ -506,14 +554,15 @@ while zoomed. Marks are stored as fractions of the image, so they look the same
 at any window size, and cropping remaps them instead of dropping them.
 
 Recordings open in a player window when they stop: play, scrub, reveal in
-Finder, or copy the path. Both behaviours are toggles in Settings → Search → Screenshots
-(`edit_after_capture`, `preview_recording`), and the first capture asks for
-Screen Recording permission once per build.
+Finder, or copy the path. The preview keeps its size and position and no longer
+hides when you switch apps. Both behaviours are toggles in Settings →
+**Screenshots** (`edit_after_capture`, `preview_recording`), and the first
+capture asks for Screen Recording permission once per build.
 
 ### Cheatsheets
 
 `/cheat` lists PDF, HTML, Markdown, text and image files from the folders you add
-in Settings → **Search → Cheatsheets**, one level deep. Selecting a row previews it with
+in Settings → **Cheatsheets**, one level deep. Selecting a row previews it with
 QuickLook inside the launcher; `⌥P` enlarges the preview. Rows also open the file
 and reveal it in Finder. Folders and extensions are ordinary config:
 
@@ -581,7 +630,7 @@ keywords = ["code", "repos"]
 ```
 
 A bookmark opens the URL as a **normal browser window**, not the `/web` app
-mode, and in the browser you pick. Edit rows in Settings → Search → Bookmarks;
+mode, and in the browser you pick. Edit rows in Settings → **Bookmarks**;
 they are written back to the file as you edit.
 
 ### Clipboard transforms
@@ -598,8 +647,9 @@ clipboard copy.
 `/scratch` lists saved notes and opens a persistent editor with a title field.
 It accepts pasted text, supports normal selection and editing, and provides
 **Paste**, **Copy All**, **Clear**, and **Save & Close**. Clipboard text entries
-also have **Open in Scratchpad** in `⌘K`; the most recent note is restored by
-the `⌘⌥S` shortcut.
+also have **Open in Scratchpad** in `⌘K`. The `⌘⌥S` shortcut opens this note list
+(not the editor), with **New Scratch Note** first; picking a note opens the
+editor, and `Esc` clears the list query and then dismisses as usual.
 
 `/term` opens a persistent multiplexer session in the content panel using
 SwiftTerm. By default it attaches Zellij's **Palette** session, then falls back
@@ -796,15 +846,9 @@ action = "launch"              # launch | command | provider | url
 value = "Ghostty"
 
 [window]
-auto_size = true               # size to the screen under the cursor
-scale = 1.0                    # 0.8-1.6; multiplies every size below, like rem
-width = 0                      # points; 0 = 680 * scale
-max_height = 0                 # points; 0 = 720 * scale
-visible_rows = 0               # 5-10; 0 = 7 * scale, sets the panel height
-clipboard_width = 0            # 0 = follow the panel width
-preview_width = 0
-terminal_width = 0             # 0 = 1000 * scale
 preview_layout = "auto"        # auto | beside | below
+provider_bar = "top"           # top | left | hidden
+favicons = true                # fetch web-app site icons
 
 [timer]
 presets = [5, 10, 15, 25, 30, 45, 60]   # minutes, shown in /timer

@@ -22,12 +22,12 @@ public final class CalculatorProvider: PaletteProvider, @unchecked Sendable {
         return [PaletteItem(
             id: "result",
             title: formatted,
-            subtitle: "\(input) — copy result",
+            subtitle: "\(input) — paste result",
             icon: .symbol("equal.square"),
             score: 2_000,
             actions: [
-                PaletteAction(id: "copy", title: "Copy Result", kind: .copyText, value: .text(formatted)),
                 PaletteAction(id: "paste", title: "Paste Result", kind: .pasteText, value: .text(formatted)),
+                PaletteAction(id: "copy", title: "Copy Result", kind: .copyText, value: .text(formatted)),
             ],
             providerID: descriptor.id,
             providerName: descriptor.name

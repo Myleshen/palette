@@ -276,9 +276,19 @@ The preview pane is only offered for a curated set — `clip`, `snip`, `recent`,
 bound prefix, and only while the selected row has preview content. Other
 providers fill the list but never widen the panel.
 
+The rail shows **Everything** and **Apps** first, then one row per provider
+group, then one row per ungrouped provider. Bundled families that answer one
+trigger stem share a group: Bitwarden (`bw`, `bwu`, `bwt`, `bwn`, `bwo`) and
+GitHub (`gh`, `ghr`, `ghp`, `ghi`, `gha`, `ghn`). Selecting a group opens its
+first member and shows the others as a secondary strip; every trigger still
+works on its own when typed. **Apps** is the one rail row that opens a provider
+without a prefix, and plain text keeps filtering it until another scope is
+chosen. Groups are declared in code, not in a manifest, so user providers simply
+appear as their own rows.
+
 | ID | Trigger | Backend | Notes |
 |---|---|---|---|
-| `apps` | — | native | applications, always searched for plain queries |
+| `apps` | — | native | applications, always searched for plain queries; the **Apps** rail row opens it without a prefix |
 | `calc` | `calc` | native | arithmetic; unprefixed by default |
 | `pins` | — | native | pinned items, in the default allowlist |
 | `neo` | `edit` | paths | files and folders across home, freeform, opens in the configured editor (`/neo` alias) |
@@ -290,7 +300,8 @@ providers fill the list but never widen the panel.
 | `bwt` | `bwt` | native | Bitwarden TOTP codes |
 | `bwn` | `bwn` | native | Bitwarden notes |
 | `bwo` | `bwo` | native | Bitwarden URLs |
-| `clip` | `clip` | native | clipboard history: text, images, Finder files; grouped and previewable |
+| `clip` | `clip` | native | clipboard history: text, images, Finder files; grouped and previewable; image rows copy text with on-device OCR and open detected http(s) links |
+| `ocr` | `ocr` | native | on-device Vision text and QR/barcode reading of the clipboard image (or last screenshot); optional path argument; rows copy the text, open validated links, or search the web |
 | `port` | `port` | native | listening TCP ports, process/cwd, confirmed kill |
 | `cmd` | `cmd` | native | manifest commands from commands.toml |
 | `proj` | `proj` | native | devx projects/worktrees, `~/dev` fallback; empty query adds **Clone a repository…** and **New project…** |
@@ -309,7 +320,7 @@ providers fill the list but never widen the panel.
 | `web` | `web` | native | web apps with optional in-app global shortcuts, in the default allowlist |
 | `bookmark` | `bookmark` | native | bookmarks from `bookmarks.toml`, opened in a normal browser window, in the default allowlist |
 | `emoji` | `emoji` | native | full Unicode emoji catalog with name search |
-| `cheat` | `cheat` | native | cheatsheet folders from Settings → Search → Cheatsheets, one level deep, QuickLook preview; in the default allowlist (plain queries) |
+| `cheat` | `cheat` | native | cheatsheet folders from Settings → Cheatsheets, one level deep, QuickLook preview; in the default allowlist (plain queries) |
 | `atlas` | `atlas` | native | artifacts and docs from `~/.config/atlas/state.json`, inbox first with a review badge and document preview; add it to the allowlist for plain queries |
 | `ssh` | `ssh` | native | hosts from `~/.ssh/config`; connect in the embedded terminal, one session per host that reattaches on re-run |
 | `system` | `sys` | native | sleep, lock, empty trash, reload, quit |

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import PaletteCore
 import PalettePlatform
@@ -15,29 +16,59 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
     )
 
     private let service: CaptureService
+    private let bridge: HostBridge
+    private let lastScreenshot: @MainActor () -> URL?
     private let beforeCapture: @MainActor () -> Void
 
-    public init(service: CaptureService, beforeCapture: @escaping @MainActor () -> Void) {
+    public init(
+        service: CaptureService,
+        bridge: HostBridge,
+        lastScreenshot: @escaping @MainActor () -> URL?,
+        beforeCapture: @escaping @MainActor () -> Void
+    ) {
         self.service = service
+        self.bridge = bridge
+        self.lastScreenshot = lastScreenshot
         self.beforeCapture = beforeCapture
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let delay = await service.config.delay
-        let items = [
+        var items = [
             row(id: "screen", title: "Capture the screen", subtitle: delay > 0 ? "After \(Int(delay)) seconds" : "All displays", value: "screen", score: 9_000),
             row(id: "region", title: "Capture a region", subtitle: "Drag to select", value: "region", score: 8_900),
             row(id: "window", title: "Capture a window", subtitle: "Click a window", value: "window", score: 8_800),
             row(id: "annotate-region", title: "Capture a region and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:region", score: 8_700),
             row(id: "annotate-screen", title: "Capture the screen and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:screen", score: 8_600),
         ]
+        if let last = await MainActor.run(body: { lastScreenshot() }),
+           FileManager.default.fileExists(atPath: last.path) {
+            items.append(row(
+                id: "ocr-copy",
+                title: "Copy Text from Last Screenshot",
+                subtitle: last.lastPathComponent,
+                value: "ocr-copy",
+                score: 8_500
+            ))
+            items.append(row(
+                id: "ocr-open",
+                title: "Open Detected Link",
+                subtitle: "From \(last.lastPathComponent)",
+                value: "ocr-open",
+                score: 8_400
+            ))
+        }
         guard !query.isEmpty else { return items }
         return items.filter { Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "")") != nil }
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         guard let raw = action.value.text else { return }
+        if raw == "ocr-copy" || raw == "ocr-open" {
+            await readLastScreenshot(openLink: raw == "ocr-open")
+            return
+        }
         let annotate = raw.hasPrefix("annotate:")
         let name = annotate ? String(raw.dropFirst("annotate:".count)) : raw
         guard let mode = CaptureMode(rawValue: name) else { return }
@@ -47,6 +78,24 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
         // Give the panel a beat to leave the screen before capturing.
         try? await Task.sleep(nanoseconds: 180_000_000)
         _ = try await service.screenshot(mode)
+    }
+
+    private func readLastScreenshot(openLink: Bool) async {
+        guard let url = await MainActor.run(body: { lastScreenshot() }),
+              let image = NSImage(contentsOf: url) else {
+            await bridge.notify("No last screenshot")
+            return
+        }
+        do {
+            let recognition = try await ImageTextRecognition.recognize(image)
+            if openLink {
+                await ImageTextRecognition.openFirstLink(recognition, using: bridge)
+            } else {
+                await ImageTextRecognition.copyText(recognition, using: bridge)
+            }
+        } catch {
+            await bridge.notify("Text recognition failed")
+        }
     }
 
     private func row(id: String, title: String, subtitle: String, value: String, score: Double) -> PaletteItem {
@@ -65,7 +114,8 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
     }
 }
 
-/// Screen recording: start and stop through the same capture engine.
+/// Screen recording: the hotkey and `/rec` both ask for the options first, then
+/// start and stop through the same capture engine.
 public final class RecProvider: PaletteProvider, @unchecked Sendable {
     public let descriptor = ProviderDescriptor(
         id: "rec",
@@ -78,11 +128,11 @@ public final class RecProvider: PaletteProvider, @unchecked Sendable {
     )
 
     private let service: CaptureService
-    private let beforeStart: @MainActor () -> Void
+    private let startRequest: @MainActor () -> Void
 
-    public init(service: CaptureService, beforeStart: @escaping @MainActor () -> Void) {
+    public init(service: CaptureService, startRequest: @escaping @MainActor () -> Void) {
         self.service = service
-        self.beforeStart = beforeStart
+        self.startRequest = startRequest
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
@@ -106,74 +156,29 @@ public final class RecProvider: PaletteProvider, @unchecked Sendable {
                 providerName: descriptor.name
             )
         } else {
-            var rows = [
-                startRow(
-                    id: "screen",
-                    title: "Record the whole screen",
-                    subtitle: "Run /rec again to stop",
-                    value: "start",
-                    score: 10_000
-                )
-            ]
-            for display in CaptureDisplays.active() {
-                rows.append(startRow(
-                    id: "display-\(display.index)",
-                    title: "Record \(display.name)",
-                    subtitle: "\(display.width)×\(display.height) · display \(display.index)",
-                    value: "start:display:\(display.index)",
-                    score: 9_900
-                ))
-            }
-            let region = await service.config.recordingRegion.trimmingCharacters(in: .whitespaces)
-            if !region.isEmpty {
-                rows.append(startRow(
-                    id: "region",
-                    title: "Record the region \(region)",
-                    subtitle: "Set in Settings → Capture",
-                    value: "start:region",
-                    score: 9_800
-                ))
-            }
-            let filtered = query.isEmpty
-                ? rows
-                : rows.filter { Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "")") != nil }
-            return filtered
+            item = PaletteItem(
+                id: "rec:start",
+                title: "Start recording…",
+                subtitle: "Audio, display and area",
+                icon: .symbol("record.circle"),
+                group: "Recording",
+                score: 10_000,
+                actions: [PaletteAction(id: "start", title: "Start recording…", kind: .custom, value: .text("start"))],
+                preview: .text("Asks for audio, microphone, display and area, then records with the system capture engine.\n\nStop with the same shortcut, /rec, or the menu bar."),
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            )
         }
         guard !query.isEmpty else { return [item] }
         return Ranking.score(query: query, candidate: "\(item.title) \(item.subtitle ?? "")") != nil ? [item] : []
     }
 
-    private func startRow(id: String, title: String, subtitle: String, value: String, score: Double) -> PaletteItem {
-        PaletteItem(
-            id: "rec:\(id)",
-            title: title,
-            subtitle: subtitle,
-            icon: .symbol("record.circle"),
-            group: "Recording",
-            score: score,
-            actions: [PaletteAction(id: id, title: title, kind: .custom, value: .text(value))],
-            preview: .text("Records with the system capture engine.\n\nChoose a display, the whole screen, or the region from Settings → Capture. Stop with /rec or the menu bar."),
-            providerID: descriptor.id,
-            providerName: descriptor.name
-        )
-    }
-
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         switch action.value.text {
-        case let value? where value.hasPrefix("start"):
-            let parts = value.split(separator: ":").map(String.init)
-            await MainActor.run {
-                if parts.count == 3, parts[1] == "display", let index = Int(parts[2]) {
-                    service.config.recordingTarget = "display"
-                    service.config.recordingDisplay = index
-                } else if parts.count == 2, parts[1] == "region" {
-                    service.config.recordingTarget = "region"
-                } else {
-                    service.config.recordingTarget = "screen"
-                }
-            }
-            if await service.config.hidePalette { await beforeStart() }
-            try await service.startRecording()
+        case "start":
+            // The options panel owns the launcher's start path too, so a
+            // recording asks the same questions however it is triggered.
+            await MainActor.run { startRequest() }
         case "stop":
             _ = try await service.stopRecording()
         default:

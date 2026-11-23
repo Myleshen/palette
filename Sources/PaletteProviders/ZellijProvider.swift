@@ -72,16 +72,16 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
             return sessionItem(session, query: query)
         }
 
-        let validName = query.range(of: "^[A-Za-z0-9._-]{1,64}$", options: .regularExpression) != nil
-        if validName, !sessions.contains(where: { $0.name == query }) {
+        let validName = ZellijAttach.sessionName(query)
+        if !query.isEmpty, !sessions.contains(where: { $0.name == validName }) {
             items.append(PaletteItem(
-                id: "create:\(query)",
-                title: "Create session “\(query)”",
+                id: "create:\(validName)",
+                title: "Create session “\(validName)”",
                 subtitle: "Start a new zellij session in \(terminal)",
                 icon: .symbol("plus.rectangle"),
                 score: 2_000,
                 actions: [
-                    PaletteAction(id: "create", title: "Create Session", kind: .custom, value: .text("create:\(query)")),
+                    PaletteAction(id: "create", title: "Create Session", kind: .custom, value: .text("create:\(validName)")),
                 ],
                 providerID: descriptor.id,
                 providerName: descriptor.name
@@ -165,11 +165,22 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
             return
         }
 
-        var arguments = [executable, "--detach", zellij, "attach"]
-        if create { arguments.append("--create") }
-        arguments.append(name)
+        // A stale session of the same name would make attach resurrect stale
+        // panes or fail, so drop it before handing the terminal away.
+        let preparation = await ZellijLauncher.prepare(name: name)
+        if let warning = preparation.warning {
+            await bridge.notify("zellij: \(warning)")
+        }
+        let script = ZellijLauncher.attachScript(
+            zellij: zellij,
+            name: preparation.name,
+            create: create
+        )
         do {
-            try ProcessRunner.launch(arguments, cwd: NSHomeDirectory())
+            try ProcessRunner.launch(
+                [executable, "--detach", "/bin/sh", "-c", script],
+                cwd: NSHomeDirectory()
+            )
         } catch {
             await bridge.notify("Could not open zellij: \(error.localizedDescription)")
         }

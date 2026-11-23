@@ -11,6 +11,7 @@ public struct PromptState: Identifiable, Equatable {
     public var kind: PromptKind
     public var title: String
     public var placeholder: String?
+    public var validation: PromptValidation = .none
 }
 
 @MainActor
@@ -37,9 +38,22 @@ public final class SearchController: ObservableObject, HostBridge {
     /// snapshot from before the save.
     private var scratchpadSaveTask: Task<Void, Never>?
     @Published public var actionIndex = 0
-    /// The rail has keyboard focus after a click; arrows move providers then,
-    /// while the search field keeps the actual typing focus.
-    @Published public var railFocused = false
+    /// Which zone Tab, the arrows, Enter and Esc act on. The search field keeps
+    /// the real keyboard focus in every zone so typing never stops working.
+    @Published public var focusZone: LauncherZone = .search
+    /// Derived views for the script dump and the older click handlers.
+    public var railFocused: Bool {
+        get { focusZone == .rail }
+        set { focusZone = newValue ? .rail : (focusZone == .rail ? .search : focusZone) }
+    }
+    /// The secondary strip has keyboard focus; arrows switch group children.
+    public var stripFocused: Bool {
+        get { focusZone == .strip }
+        set { focusZone = newValue ? .strip : (focusZone == .strip ? .search : focusZone) }
+    }
+    /// A provider opened without a trigger (the Apps rail row); plain text
+    /// keeps filtering that provider until another scope is chosen.
+    @Published public private(set) var scopeProviderID: String?
     @Published public private(set) var prompt: PromptState?
     @Published public var promptValue = ""
     @Published public private(set) var focusToken = 0
@@ -51,6 +65,11 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public var scratchpadTitle = ""
     @Published public private(set) var terminalActive = false
     @Published public private(set) var terminalInitialCommand: String?
+    /// Exit status of the pane's child; nil while it is running. Drives the end
+    /// card so a finished session never looks like a hung one.
+    @Published public private(set) var terminalExitCode: Int32?
+    /// Bumped by Restart; the pane starts a fresh process when it changes.
+    @Published public private(set) var terminalRestartToken = 0
     @Published public var scratchpadText = ""
     @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
@@ -66,6 +85,8 @@ public final class SearchController: ObservableObject, HostBridge {
     public var panel: PanelController?
     public var onReload: (() -> Void)?
     public var onOpenConfig: (() -> Void)?
+    /// Opens Settings already scrolled to a search anchor, for trouble rows.
+    public var onOpenSettingsAnchor: ((String) -> Void)?
     public var onOpenProviders: (() -> Void)?
     public var onQuit: (() -> Void)?
 
@@ -79,6 +100,7 @@ public final class SearchController: ObservableObject, HostBridge {
     private let clipboardMonitor: ClipboardMonitor?
 
     private var searchTask: Task<Void, Never>?
+    private var previewTask: Task<Void, Never>?
     private var statusTask: Task<Void, Never>?
     private var promptContinuation: CheckedContinuation<String?, Never>?
     private var resetting = false
@@ -109,6 +131,15 @@ public final class SearchController: ObservableObject, HostBridge {
         return items[selectionIndex]
     }
 
+    /// What the footer says Return will do; nil when Return does nothing.
+    public var returnHint: String? {
+        switch selectedItem?.returnRoute {
+        case .settings: return "Fix in Settings"
+        case .action(let action): return action.title
+        case nil: return nil
+        }
+    }
+
     /// The pane only exists when there is a row and that row has preview
     /// content; setup and empty rows are not worth widening the panel for.
     public var previewVisible: Bool {
@@ -125,6 +156,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func panelDidShow() {
         focusToken += 1
+        focusZone = .search
         hasShown = true
         scheduleSearch()
     }
@@ -135,8 +167,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public var previewLayout: PreviewPlacement {
         configuration.window.resolvedPreviewLayout(
-            screenWidth: Double(screenSize.width),
-            previewPanelWidth: Double(windowConfig.previewWidth(for: screenSize))
+            frameWidth: Double(configuration.window.launcherSize(for: screenSize).width)
         )
     }
 
@@ -146,16 +177,6 @@ public final class SearchController: ObservableObject, HostBridge {
     /// The strip only occupies height in top mode and only while it has chips.
     public var showsProviderBar: Bool {
         providerBar == .top && !railEntries.isEmpty
-    }
-
-    /// Rendered height of the top provider strip, measured by the view. The
-    /// panel height uses this instead of assuming the chip metrics.
-    private var measuredProviderBarHeight = LauncherMetrics.providerBarHeight
-
-    public func setProviderBarHeight(_ height: CGFloat) {
-        guard abs(height - measuredProviderBarHeight) > 0.5 else { return }
-        measuredProviderBarHeight = height
-        updatePanelHeight()
     }
 
     private var timerObserver: NSObjectProtocol?
@@ -168,7 +189,6 @@ public final class SearchController: ObservableObject, HostBridge {
     public func openClipboard() {
         previewEnabled = true
         clipboardFilter = nil
-        updatePreviewWidth()
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)clip "
@@ -182,6 +202,7 @@ public final class SearchController: ObservableObject, HostBridge {
             saveScratchpad()
         }
         searchTask?.cancel()
+        previewTask?.cancel()
         isSearching = false
         cancelPrompt()
         actionsMode = false
@@ -199,11 +220,12 @@ public final class SearchController: ObservableObject, HostBridge {
         highlightTerms = []
         previewEnabled = false
         previewFocused = false
-        railFocused = false
+        focusZone = .search
+        scopeProviderID = nil
         terminalActive = false
         terminalSessionName = nil
+        panel?.terminalFrame = false
         panel?.suppressAutoHide = false
-        panel?.widthOverride = nil
     }
 
     public func requestFocus() {
@@ -233,6 +255,7 @@ public final class SearchController: ObservableObject, HostBridge {
         // Bound searches can take a moment (Bitwarden, external processes).
         // Show the target provider immediately instead of stale global rows.
         let parsed = registry.parser.parse(query)
+        if parsed.providerID != nil { scopeProviderID = nil }
         // Preview is useful wherever a row has something worth showing:
         // clipboard, snippets, and path/project providers.
         let previewProvider = ["clip", "snip", "recent", "neo", "neof", "proj", "shots", "cheat", "atlas"]
@@ -240,14 +263,12 @@ public final class SearchController: ObservableObject, HostBridge {
         if previewProvider {
             if !previewEnabled {
                 previewEnabled = true
-                updatePreviewWidth()
             }
         } else if previewEnabled {
             previewEnabled = false
             previewFocused = false
             panel?.suppressAutoHide = false
             clipboardFilter = nil
-            panel?.widthOverride = nil
         }
         if parsed.isBound {
             items = []
@@ -263,7 +284,6 @@ public final class SearchController: ObservableObject, HostBridge {
             } else {
                 scopeLabel = nil
             }
-            updatePanelHeight()
         } else {
             scopeLabel = nil
         }
@@ -273,18 +293,19 @@ public final class SearchController: ObservableObject, HostBridge {
     private func scheduleSearch(debounce: Bool = true) {
         searchTask?.cancel()
         let raw = query
-        let pathQuery = registry.parser.parse(raw).isBound
+        let scope = scopeProviderID
+        let pathQuery = scope != nil || registry.parser.parse(raw).isBound
         let delay: UInt64 = debounce && pathQuery ? 120_000_000 : (debounce ? 12_000_000 : 0)
         searchTask = Task { [weak self] in
             if delay > 0 {
                 try? await Task.sleep(nanoseconds: delay)
             }
             guard !Task.isCancelled else { return }
-            await self?.performSearch(raw: raw)
+            await self?.performSearch(raw: raw, scope: scope)
         }
     }
 
-    private func performSearch(raw: String) async {
+    private func performSearch(raw: String, scope: String?) async {
         isSearching = true
         // `!keyword query` goes straight to a search engine; providers never
         // see it, and the list is the bang row (or the matching engines).
@@ -303,14 +324,28 @@ public final class SearchController: ObservableObject, HostBridge {
             }
             actionIndex = 0
             isSearching = false
-            updatePanelHeight()
             return
         }
-        let result = await registry.search(raw: raw)
+        let result: RegistrySearchResult
+        if let scope {
+            result = await registry.search(providerID: scope, text: raw)
+        } else {
+            result = await registry.search(raw: raw)
+        }
         guard !Task.isCancelled else { return }
 
         let previousID = selectedItem?.stableID
-        let boosts = (try? await store.frecencyBoosts(for: result.items.map(\.stableID))) ?? [:]
+        var boosts = (try? await store.frecencyBoosts(for: result.items.map(\.stableID))) ?? [:]
+        // Learned ordering is a tie-breaker for a short plain query only; a
+        // bound /trigger search or a scoped provider never learns or boosts.
+        if scope == nil, !result.parsed.isBound, configuration.learningEnabled,
+           let prefix = QueryMemory.learnablePrefix(result.parsed.text),
+           let learned = try? await store.learnedBoosts(
+                prefixHash: QueryMemory.digest(prefix),
+                itemKeys: result.items.map(\.stableID)
+           ) {
+            for (stableID, boost) in learned { boosts[stableID, default: 0] += boost }
+        }
         guard !Task.isCancelled else { return }
         let merged: [PaletteItem]
         if result.parsed.isBound {
@@ -324,8 +359,10 @@ public final class SearchController: ObservableObject, HostBridge {
         }
 
         // The empty-query screen is the app list: only apps and pinned items,
-        // never unpinned web apps, sessions, or search suggestions.
-        let isEmptySearch = !result.parsed.isBound
+        // never unpinned web apps, sessions, or search suggestions. The Apps
+        // rail row is the same list on purpose.
+        let appOnly = result.parsed.providerID == "apps"
+        let isEmptySearch = (!result.parsed.isBound || appOnly)
             && result.parsed.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         var visible: [PaletteItem]
         if isEmptySearch {
@@ -369,7 +406,7 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
 
-        items = visible
+        items = markingPasteTrouble(visible)
         highlightTerms = result.parsed.text
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
@@ -409,7 +446,58 @@ public final class SearchController: ObservableObject, HostBridge {
         if let diagnostic = result.diagnostics.first(where: { $0.level != .info }) {
             setStatus(diagnostic.message, duration: 6)
         }
-        updatePanelHeight()
+        fillPreview()
+    }
+
+    /// Providers build paste actions without knowing the permission state, so
+    /// the host adds the trouble here: Return then opens Settings → Permissions
+    /// instead of silently falling back to Copy.
+    private func markingPasteTrouble(_ items: [PaletteItem]) -> [PaletteItem] {
+        guard !pasteboard.isAccessibilityTrusted else { return items }
+        return items.map { item in
+            guard item.trouble == nil,
+                  let kind = item.primaryAction?.kind,
+                  kind == .pasteText || kind == .pasteImage || kind == .pasteFiles
+            else { return item }
+            var copy = item
+            copy.trouble = ItemTrouble(
+                title: "Enable Accessibility",
+                detail: "Allow Palette to paste into the previous app",
+                settingsAnchor: "general-permissions"
+            )
+            return copy
+        }
+    }
+
+    /// A preview that costs a process call (git status, a file digest) is
+    /// fetched for the selected row only, after its list is already on screen.
+    private func fillPreview() {
+        previewTask?.cancel()
+        guard previewEnabled, items.indices.contains(selectionIndex) else { return }
+        let item = items[selectionIndex]
+        guard let provider = registry.providers.first(where: { $0.descriptor.id == item.providerID })
+            as? AsyncPreviewProviding else { return }
+        let index = selectionIndex
+        let stableID = item.stableID
+        previewTask = Task { [weak self] in
+            let preview = await provider.preview(for: item)
+            guard let preview, let self, !Task.isCancelled,
+                  self.items.indices.contains(index),
+                  self.items[index].stableID == stableID else { return }
+            self.items[index].preview = preview
+        }
+    }
+
+    /// The bound provider has nothing to show because a tool is missing.
+    public var missingToolHint: String? {
+        let parsed = registry.parser.parse(query)
+        guard parsed.isBound,
+              let id = parsed.providerID,
+              let provider = registry.providers.first(where: { $0.descriptor.id == id }),
+              let missing = ProviderRequirements.missing(
+                ProviderToolRequirements.requirements(for: provider)
+              ).first else { return nil }
+        return "\(provider.descriptor.name) needs \(missing.tool) — \(missing.install)"
     }
 
     // MARK: - Keyboard
@@ -424,6 +512,13 @@ public final class SearchController: ObservableObject, HostBridge {
 
         if terminalActive {
             if command, keyCode == 13 {
+                closeTerminalPanel()
+                panel?.hide(activatePrevious: false)
+                return true
+            }
+            // Esc belongs to the running program; once the child is gone it
+            // closes the pane like the end card's Close button.
+            if keyCode == 53, terminalExitCode != nil {
                 closeTerminalPanel()
                 panel?.hide(activatePrevious: false)
                 return true
@@ -450,14 +545,12 @@ public final class SearchController: ObservableObject, HostBridge {
         if option, characters == "p", previewEnabled {
             previewFocused.toggle()
             panel?.suppressAutoHide = previewFocused
-            updatePanelHeight()
             return true
         }
         if previewFocused {
             if keyCode == 53 {
                 previewFocused = false
                 panel?.suppressAutoHide = false
-                updatePanelHeight()
                 return true
             }
             if control {
@@ -478,27 +571,7 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
 
-        if railFocused {
-            switch keyCode {
-            case 125:
-                moveRail(by: 1)
-                return true
-            case 126:
-                moveRail(by: -1)
-                return true
-            case 53:
-                selectRail("everything")
-                railFocused = false
-                return true
-            case 36, 76, 48:
-                railFocused = false
-                // Tab falls through to the normal provider cycle below.
-                if keyCode != 48 { return true }
-            default:
-                break
-            }
-        }
-
+        // A prompt is modal: it owns Enter and Esc ahead of any focus zone.
         if prompt != nil {
             switch keyCode {
             case 53:
@@ -509,6 +582,83 @@ public final class SearchController: ObservableObject, HostBridge {
                 return true
             default:
                 return false
+            }
+        }
+
+        let shift = flags.contains(.shift)
+        // Plain keys belong to the zone; ⌘ combos (⌘⏎, ⌘K, ⌘1…9, ⌘Tab) stay
+        // with the command block below.
+        if !command {
+            switch focusZone {
+            case .strip:
+                switch keyCode {
+                case 123, 126:
+                    moveGroupChild(by: -1)
+                    return true
+                case 124, 125:
+                    moveGroupChild(by: 1)
+                    return true
+                case 36, 76:
+                    // Enter confirms the child and hands the list the keyboard.
+                    focusZone = .list
+                    fillPreview()
+                    return true
+                case 48:
+                    focusTab(forward: !shift)
+                    return true
+                case 53:
+                    focusZone = .search
+                    return true
+                default:
+                    break
+                }
+            case .rail:
+                switch keyCode {
+                case 125:
+                    moveRail(by: 1)
+                    return true
+                case 126:
+                    moveRail(by: -1)
+                    return true
+                case 36, 76:
+                    focusZone = .list
+                    fillPreview()
+                    return true
+                case 48:
+                    focusTab(forward: !shift)
+                    return true
+                case 53:
+                    focusZone = .search
+                    return true
+                default:
+                    break
+                }
+            case .list:
+                switch keyCode {
+                case 125:
+                    moveSelection(by: 1)
+                    return true
+                case 126:
+                    moveSelection(by: -1)
+                    return true
+                case 36, 76:
+                    if actionsMode { executeAction() } else { executePrimary() }
+                    return true
+                case 48:
+                    focusTab(forward: !shift)
+                    return true
+                case 53:
+                    if actionsMode {
+                        closeActions()
+                    } else {
+                        focusZone = .search
+                    }
+                    return true
+                default:
+                    break
+                }
+            case .search:
+                break
             }
         }
 
@@ -562,18 +712,14 @@ public final class SearchController: ObservableObject, HostBridge {
             if actionsMode { executeAction() } else { executePrimary() }
             return true
         case 48:
-            cycleTab(by: flags.contains(.shift) ? -1 : 1)
+            focusTab(forward: !shift)
             return true
         case 53:
             if actionsMode {
                 closeActions()
-            } else if !query.isEmpty {
-                resetting = true
-                query = ""
-                resetting = false
-                previewEnabled = false
-                clipboardFilter = nil
-                panel?.widthOverride = nil
+            } else if !query.isEmpty || scopeProviderID != nil {
+                resetToPlainQuery()
+                scopeProviderID = nil
                 scheduleSearch(debounce: false)
             } else {
                 panel?.hide()
@@ -592,56 +738,90 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         guard !items.isEmpty else { return }
         selectionIndex = (selectionIndex + delta + items.count) % items.count
-        if previewEnabled { updatePanelHeight() }
+        fillPreview()
+    }
+
+    /// Tab never changes the provider: it walks the focus zones and wraps.
+    public func focusTab(forward: Bool) {
+        guard !actionsMode else { return }
+        focusZone = LauncherFocus.tab(
+            from: focusZone,
+            forward: forward,
+            hasStrip: activeGroupEntry != nil
+        )
+        if focusZone == .list { fillPreview() }
     }
 
     // MARK: - Provider rail
 
-    public struct RailEntry: Identifiable, Equatable {
-        public var id: String
-        public var title: String
-        public var trigger: String?
-        public var icon: String?
-    }
-
-    /// Everything first, then one row per provider in registry order.
-    public var railEntries: [RailEntry] {
-        var entries: [RailEntry] = [
-            RailEntry(id: "everything", title: "Everything", trigger: nil, icon: "symbol:square.grid.2x2"),
-        ]
-        for provider in registry.providers {
-            let descriptor = provider.descriptor
-            guard let trigger = descriptor.trigger else { continue }
-            entries.append(RailEntry(
-                id: descriptor.id,
-                title: descriptor.name,
-                trigger: trigger,
-                icon: descriptor.icon
-            ))
-        }
-        return entries
+    /// Everything, Apps, one row per group, then ungrouped providers.
+    public var railEntries: [ProviderRailEntry] {
+        ProviderRail.entries(for: registry.providers.map(\.descriptor))
     }
 
     /// The rail row for the current scope; a plain query is Everything.
     public var activeRailID: String {
-        let provider = registry.parser.parse(query).providerID
-        if provider == nil || provider == "apps" { return "everything" }
-        return provider ?? "everything"
+        if let scopeProviderID { return scopeProviderID }
+        guard let providerID = registry.parser.parse(query).providerID else {
+            return ProviderRail.everythingID
+        }
+        return ProviderRail.railID(for: providerID, in: railEntries)
+    }
+
+    /// The group whose secondary strip belongs above the list, if any.
+    public var activeGroupEntry: ProviderRailEntry? {
+        let id = activeRailID
+        return railEntries.first { $0.id == id && $0.isGroup }
     }
 
     public func selectRail(_ id: String) {
         guard let entry = railEntries.first(where: { $0.id == id }) else { return }
+        stripFocused = false
+        if entry.isGroup {
+            scopeProviderID = nil
+            guard let first = entry.children.first else { return }
+            resetToPlainQuery()
+            query = registry.parser.prefix + first.trigger + " "
+            scheduleSearch(debounce: false)
+            return
+        }
+        if let scope = entry.scopeProviderID {
+            resetToPlainQuery()
+            scopeProviderID = scope
+            scheduleSearch(debounce: false)
+            return
+        }
+        scopeProviderID = nil
         if let trigger = entry.trigger {
             query = registry.parser.prefix + trigger + " "
         } else {
-            resetting = true
-            query = ""
-            resetting = false
-            previewEnabled = false
-            clipboardFilter = nil
-            panel?.widthOverride = nil
+            resetToPlainQuery()
             scheduleSearch(debounce: false)
         }
+    }
+
+    /// Switch inside the group strip, keeping whatever text follows the trigger.
+    public func selectGroupChild(_ child: ProviderRailChild) {
+        let text = registry.parser.parse(query).text
+        scopeProviderID = nil
+        query = registry.parser.prefix + child.trigger + (text.isEmpty ? " " : " " + text)
+    }
+
+    public func moveGroupChild(by delta: Int) {
+        guard let group = activeGroupEntry, !group.children.isEmpty else { return }
+        let current = group.children.firstIndex { $0.id == activeProviderID } ?? 0
+        let count = group.children.count
+        let next = ((current + delta) % count + count) % count
+        selectGroupChild(group.children[next])
+    }
+
+    private func resetToPlainQuery() {
+        resetting = true
+        query = ""
+        resetting = false
+        previewEnabled = false
+        previewFocused = false
+        clipboardFilter = nil
     }
 
     public func moveRail(by delta: Int) {
@@ -653,21 +833,12 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public var activeTabID: String {
-        activeRailID == "everything" ? "apps" : activeRailID
+        activeRailID == ProviderRail.everythingID ? "apps" : activeProviderID
     }
 
     public var activeProviderID: String {
-        registry.parser.parse(query).providerID ?? "apps"
-    }
-
-    public func cycleTab(by delta: Int) {
-        guard !actionsMode else { return }
-        let entries = railEntries
-        guard entries.count > 1 else { return }
-        let current = entries.firstIndex(where: { $0.id == activeRailID }) ?? 0
-        let count = entries.count
-        let next = ((current + delta) % count + count) % count
-        selectRail(entries[next].id)
+        if let scopeProviderID { return scopeProviderID }
+        return registry.parser.parse(query).providerID ?? "apps"
     }
 
     public var effectiveClipboardFilter: String? {
@@ -714,9 +885,9 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func select(_ index: Int) {
         guard actionsMode == false, items.indices.contains(index) else { return }
-        railFocused = false
+        focusZone = .list
         selectionIndex = index
-        if previewEnabled { updatePanelHeight() }
+        fillPreview()
     }
 
     public func activate(_ index: Int) {
@@ -725,8 +896,20 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func executePrimary() {
-        guard let item = selectedItem, let action = item.primaryAction else { return }
-        execute(item: item, action: action)
+        guard let item = selectedItem else { return }
+        switch item.returnRoute {
+        case .settings(let anchor):
+            if let onOpenSettingsAnchor {
+                onOpenSettingsAnchor(anchor)
+            } else {
+                onOpenConfig?()
+            }
+            panel?.hide()
+        case .action(let action):
+            execute(item: item, action: action, learnQuery: learnableQuery)
+        case nil:
+            return
+        }
     }
 
     public func executeSecondary() {
@@ -734,7 +917,14 @@ public final class SearchController: ObservableObject, HostBridge {
             setStatus("No secondary action", duration: 2)
             return
         }
-        execute(item: item, action: action)
+        execute(item: item, action: action, learnQuery: learnableQuery)
+    }
+
+    /// The plain query text this activation may be learned under, if any.
+    private var learnableQuery: String? {
+        let parsed = registry.parser.parse(query)
+        guard !actionsMode, scopeProviderID == nil, !parsed.isBound else { return nil }
+        return QueryMemory.learnablePrefix(parsed.text)
     }
 
     /// The same list ⌘K shows, also used by a row's right-click menu.
@@ -764,6 +954,7 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         guard let item = selectedItem else { return }
         actionsMode = true
+        focusZone = .list
         actionsOwner = item
         actionsOwnerID = item.stableID
         allActions = actions(for: item)
@@ -779,7 +970,6 @@ public final class SearchController: ObservableObject, HostBridge {
             ? allActions
             : allActions.filter { Ranking.score(query: needle, candidate: $0.title) != nil }
         actionIndex = 0
-        updatePanelHeight()
     }
 
     private func closeActions() {
@@ -792,7 +982,6 @@ public final class SearchController: ObservableObject, HostBridge {
         let restored = queryBeforeActions
         queryBeforeActions = ""
         query = restored
-        updatePanelHeight()
     }
 
     public func executeAction() {
@@ -802,8 +991,10 @@ public final class SearchController: ObservableObject, HostBridge {
         execute(item: item, action: action)
     }
 
-    private func execute(item: PaletteItem, action: PaletteAction) {
+    private func execute(item: PaletteItem, action: PaletteAction, learnQuery: String? = nil) {
         let isTransient = ["install", "login", "unlock", "add", "remove", "shortcut", "clear-shortcut", "pin-item", "unpin-item"].contains(action.id)
+        // Digest before the task runs: the query may change while it waits.
+        let prefixHash = learnQuery.map(QueryMemory.digest)
         Task { [weak self] in
             guard let self else { return }
             // Act first: the frecency write must not sit between Enter and the
@@ -811,6 +1002,12 @@ public final class SearchController: ObservableObject, HostBridge {
             await self.perform(item: item, action: action)
             if !isTransient {
                 try? await self.store.recordUse(stableID: item.stableID, provider: item.providerID)
+                if let prefixHash, self.configuration.learningEnabled {
+                    try? await self.store.recordLearnedChoice(
+                        prefixHash: prefixHash,
+                        itemKey: item.stableID
+                    )
+                }
             }
         }
     }
@@ -860,22 +1057,24 @@ public final class SearchController: ObservableObject, HostBridge {
 
             case .pasteText:
                 if let text = action.value.text {
+                    let previous = panel?.previousApplication
+                    let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
+                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
+                        pasteboard.write(text: text, concealed: action.concealed, clearAfterMs: clearAfterMs)
+                        setStatus("Copied — paste with ⌘V", duration: 5)
+                        return
+                    }
                     if !pasteboard.isAccessibilityTrusted {
-                        pasteboard.write(
-                            text: text,
-                            concealed: action.concealed,
-                            clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
-                        )
+                        pasteboard.write(text: text, concealed: action.concealed, clearAfterMs: clearAfterMs)
                         pasteboard.requestAccessibility()
                         setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
                         return
                     }
-                    let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
                     _ = pasteboard.paste(
                         text: text,
                         concealed: action.concealed,
-                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
+                        clearAfterMs: clearAfterMs,
                         into: previous
                     )
                 }
@@ -890,13 +1089,18 @@ public final class SearchController: ObservableObject, HostBridge {
                 // Clipboard rows carry a DB id; /shots rows pass a file path.
                 if let id = action.value.text,
                    let image = try await store.clipboardImage(id: id) ?? NSImage(contentsOfFile: id)?.pngData() {
+                    let previous = panel?.previousApplication
+                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
+                        pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
+                        setStatus("Copied — paste with ⌘V", duration: 5)
+                        return
+                    }
                     if !pasteboard.isAccessibilityTrusted {
                         pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
                         pasteboard.requestAccessibility()
                         setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
                         return
                     }
-                    let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
                     _ = pasteboard.paste(
                         image: image,
@@ -914,13 +1118,18 @@ public final class SearchController: ObservableObject, HostBridge {
 
             case .pasteFiles:
                 if let paths = action.value.list, !paths.isEmpty {
+                    let previous = panel?.previousApplication
+                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
+                        pasteboard.write(files: paths, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
+                        setStatus("Copied — paste with ⌘V", duration: 5)
+                        return
+                    }
                     if !pasteboard.isAccessibilityTrusted {
                         pasteboard.write(files: paths, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
                         pasteboard.requestAccessibility()
                         setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
                         return
                     }
-                    let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
                     _ = pasteboard.paste(
                         files: paths,
@@ -997,6 +1206,8 @@ public final class SearchController: ObservableObject, HostBridge {
                     try await store.pinItem(item)
                     setStatus("Pinned \(item.title)", duration: 2)
                     scheduleSearch(debounce: false)
+                } else if action.id == "ocr-pin-copy" || action.id == "ocr-pin-open" {
+                    await runPinnedImageOCR(item: item, openLink: action.id == "ocr-pin-open")
                 } else if action.id == "unpin-item" {
                     try await store.unpinItem(id: item.stableID)
                     setStatus("Unpinned \(item.title)", duration: 2)
@@ -1051,10 +1262,59 @@ public final class SearchController: ObservableObject, HostBridge {
         }
     }
 
+    /// OCR for a pinned image. Pinned items keep the provider they came from,
+    /// so the host reads the best available pixels instead of dispatching to a
+    /// provider that may no longer have the row.
+    private func runPinnedImageOCR(item: PaletteItem, openLink: Bool) async {
+        guard let data = await pinnedImageData(for: item) else {
+            setStatus("No text found", duration: 3)
+            return
+        }
+        guard let recognition = try? await ImageTextRecognition.recognize(pngData: data) else {
+            setStatus("Text recognition failed", duration: 3)
+            return
+        }
+        if openLink {
+            guard let raw = recognition.firstLink,
+                  ImageTextRecognition.isOpenable(raw),
+                  let url = URL(string: raw) else {
+                setStatus("No link found", duration: 3)
+                return
+            }
+            panel?.hide(activatePrevious: false)
+            NSWorkspace.shared.open(url)
+        } else {
+            let text = recognition.text
+            guard !text.isEmpty else {
+                setStatus("No text found", duration: 3)
+                return
+            }
+            pasteboard.write(text: text)
+            setStatus("Text copied (\(text.count) chars)", duration: 3)
+        }
+    }
+
+    private func pinnedImageData(for item: PaletteItem) async -> Data? {
+        if item.providerID == "shots", item.id.hasPrefix("shot:") {
+            let path = String(item.id.dropFirst("shot:".count))
+            return try? Data(contentsOf: URL(fileURLWithPath: path))
+        }
+        if item.providerID == "clip", let data = try? await store.clipboardImage(id: item.id) {
+            return data
+        }
+        if case let .image(base64, _, _) = item.preview {
+            return Data(base64Encoded: base64)
+        }
+        return nil
+    }
+
     private func keepsPanelOpen(item: PaletteItem, action: PaletteAction) -> Bool {
         switch item.providerID {
-        case "theme", "clip":
+        case "theme", "clip", "ocr":
             return true
+        case "shot":
+            // OCR results report a character count; capture rows still hide.
+            return action.id.hasPrefix("ocr-")
         case "awake":
             return true
         case "web":
@@ -1066,8 +1326,9 @@ public final class SearchController: ObservableObject, HostBridge {
         case "git":
             return ["status", "log", "stage", "commit", "pull", "push", "clear-output"].contains(action.id)
         case "proj":
-            // Keep the list open so the new project shows up after it is registered.
-            return ["clone-repo", "new-project"].contains(action.id)
+            // Keep the list open so the new project or worktree shows up
+            // immediately and its status/error stays readable.
+            return ["clone-repo", "new-project", "new-worktree"].contains(action.id)
         case "gha":
             return ["rerun", "cancel"].contains(action.id)
         case "ghn":
@@ -1080,6 +1341,15 @@ public final class SearchController: ObservableObject, HostBridge {
     // MARK: - Host bridge
 
     public func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String? {
+        await prompt(kind: kind, title: title, placeholder: placeholder, validation: .none)
+    }
+
+    public func prompt(
+        kind: PromptKind,
+        title: String,
+        placeholder: String?,
+        validation: PromptValidation
+    ) async -> String? {
         if promptContinuation != nil {
             promptContinuation?.resume(returning: nil)
             promptContinuation = nil
@@ -1087,15 +1357,28 @@ public final class SearchController: ObservableObject, HostBridge {
         return await withCheckedContinuation { continuation in
             promptContinuation = continuation
             promptValue = ""
-            prompt = PromptState(kind: kind, title: title, placeholder: placeholder)
+            prompt = PromptState(kind: kind, title: title, placeholder: placeholder, validation: validation)
             panel?.suppressAutoHide = true
             focusToken += 1
-            updatePanelHeight()
         }
     }
 
+    /// Inline reason the prompt cannot be accepted, read as the field changes.
+    public var promptValidationMessage: String? {
+        guard let prompt else { return nil }
+        switch prompt.validation {
+        case .none: return nil
+        case .branchName: return BranchName.error(for: promptValue)
+        }
+    }
+
+    public var canSubmitPrompt: Bool {
+        guard let prompt else { return false }
+        return prompt.kind == .confirm || promptValidationMessage == nil
+    }
+
     public func submitPrompt() {
-        guard let prompt else { return }
+        guard let prompt, canSubmitPrompt else { return }
         let value = prompt.kind == .confirm ? "true" : promptValue
         finishPrompt(value)
     }
@@ -1110,9 +1393,9 @@ public final class SearchController: ObservableObject, HostBridge {
         promptContinuation = nil
         prompt = nil
         promptValue = ""
+        focusZone = .search
         panel?.suppressAutoHide = false
         panel?.activatePreviousOnHide = true
-        updatePanelHeight()
         continuation?.resume(returning: value)
         requestFocus()
     }
@@ -1169,98 +1452,11 @@ public final class SearchController: ObservableObject, HostBridge {
         }
     }
 
-    public func updatePanelHeight() {
-        guard let panel else { return }
-        let theme = themeManager.theme
-        let chrome = tabChromeHeight
-        if scratchpadActive {
-            panel.setContentHeight(CGFloat(theme.search.height) + 500 + chrome)
-            return
-        }
-        if terminalActive {
-            panel.setContentHeight(660 + chrome)
-            return
-        }
-
-        var content: CGFloat
-        if prompt != nil {
-            content = 136
-        } else if actionsMode {
-            content = 38 + listHeight
-        } else {
-            content = modeHeaderHeight + listHeight
-        }
-        if previewEnabled {
-            // Clearing the width override matters as much as setting it: an
-            // empty result hides the pane and must not leave the panel wide.
-            updatePreviewWidth()
-        }
-        if previewVisible, previewLayout == .below {
-            // The preview is its own card with one card gap under the list.
-            content += previewPaneHeight + LauncherMetrics.cardGap
-        }
-        panel.setContentHeight(CGFloat(theme.search.height) + content + chrome)
-    }
-
-    /// Everything around the list: both outer insets, the card gaps, the
-    /// footer, and the top provider strip when it is showing. The left rail is
-    /// a sibling card, so it reserves no list height.
-    private var tabChromeHeight: CGFloat {
-        let footer = themeManager.theme.footer.show ? LauncherMetrics.footerHeight : 0
-        let gaps = themeManager.theme.footer.show ? LauncherMetrics.cardGap * 2 : LauncherMetrics.cardGap
-        let bar: CGFloat = showsProviderBar
-            ? measuredProviderBarHeight + LauncherMetrics.cardGap
-            : 0
-        return LauncherMetrics.outerInset * 2 + gaps + footer + bar
-    }
-
-    /// The optional Ask/History or clipboard filter row inside the list card.
-    private var modeHeaderHeight: CGFloat {
-        activeTabID == "clip" || activeTabID == "ask" ? 40 : 0
-    }
-
-    /// The configured row count fixes the panel's height: it does not change
-    /// with how many results exist, how many headers they carry, or whether a
-    /// title wraps. The list scrolls inside this budget instead.
-    private func listHeight(rows: Int) -> CGFloat {
-        let row = CGFloat(themeManager.theme.effectiveRowHeight)
-        let spacing: CGFloat = 6
-        return CGFloat(rows) * row
-            + CGFloat(max(0, rows - 1)) * spacing
-            + LauncherMetrics.innerPadding * 2
-    }
-
-    private var listHeight: CGFloat {
-        listHeight(rows: Int(panel?.effectiveRows() ?? windowConfig.launcherRows))
-    }
-
-    /// Height the panel renders for `rows` in a plain search: the same terms
-    /// `updatePanelHeight` uses, so Settings can show the exact number.
-    public func panelHeight(forRows rows: Int) -> CGFloat {
-        let theme = themeManager.theme
-        let footer = theme.footer.show ? LauncherMetrics.footerHeight : 0
-        let gaps = theme.footer.show ? LauncherMetrics.cardGap * 2 : LauncherMetrics.cardGap
-        let bar = showsProviderBar
-            ? measuredProviderBarHeight + LauncherMetrics.cardGap
-            : 0
-        return CGFloat(theme.search.height)
-            + listHeight(rows: rows)
-            + LauncherMetrics.outerInset * 2
-            + gaps + footer + bar
-    }
-
-    /// The rows the panel would use right now (auto or explicit).
-    public func panelHeightForEffectiveRows() -> CGFloat {
-        panelHeight(forRows: Int(panel?.effectiveRows() ?? windowConfig.launcherRows))
-    }
-
     /// Width left for a result title after the rail, card/row insets, icon,
     /// badge and spacer. Err narrow so a long title is predicted to wrap.
     private var titleColumnWidth: CGFloat {
-        let panelWidth = panel?.widthOverride ?? CGFloat(windowConfig.launcherWidth(for: screenSize))
-        let rail: CGFloat = providerBar == .left
-            ? ((previewVisible || panelWidth < 700) ? 56 : 220)
-            : 0
+        let panelWidth = CGFloat(windowConfig.launcherSize(for: screenSize).width)
+        let rail: CGFloat = providerBar == .left ? LauncherMetrics.railWidth : 0
         return max(120, panelWidth - LauncherMetrics.outerInset * 2 - rail
             - LauncherMetrics.cardGap - LauncherMetrics.innerPadding * 4 - 20 - 10 - 8 - 80)
     }
@@ -1274,73 +1470,91 @@ public final class SearchController: ObservableObject, HostBridge {
         return width > titleColumnWidth
     }
 
-    /// Width of the beside-list preview pane. ⌥P grows it, and the panel
-    /// grows by the same amount so the list keeps its width.
+    /// Width of the beside-list preview pane. ⌥P grows the pane, which takes
+    /// the extra width out of the list area; the window itself never changes.
     public var previewPaneWidth: CGFloat {
         guard previewLayout == .beside, previewFocused else { return 300 }
-        return max(300, min(640, screenSize.width - 420))
+        return max(300, min(640, windowConfig.launcherSize(for: screenSize).width - 420))
     }
 
-    /// Height of the below-list preview pane. ⌥P takes the room the max
-    /// panel height leaves after the list, so nothing is pushed out of view.
+    /// Height of the below-list preview pane. ⌥P grows it inside the fixed
+    /// frame, shrinking the list card instead of the window.
     public var previewPaneHeight: CGFloat {
         guard previewLayout == .below, previewFocused else { return 220 }
-        let base = CGFloat(themeManager.theme.search.height) + tabChromeHeight + listHeight
-        return max(220, min(520, CGFloat(themeManager.theme.window.maxHeight) - base))
-    }
-
-    /// One width rule for previews: `preview_width` beside, launcher width
-    /// below, and a wider panel while focused. Clipboard's own width key must
-    /// not fight this, or the panel jumps between opens and searches.
-    private func updatePreviewWidth() {
-        guard let panel else { return }
-        guard previewVisible, previewLayout == .beside else {
-            panel.widthOverride = nil
-            return
-        }
-        guard previewFocused else {
-            panel.widthOverride = CGFloat(windowConfig.previewWidth(for: screenSize))
-            return
-        }
-        let normal = CGFloat(windowConfig.previewWidth(for: screenSize))
-        panel.widthOverride = min(normal + previewPaneWidth - 300, screenSize.width - 24)
+        let frame = windowConfig.launcherSize(for: screenSize)
+        return min(520, max(220, frame.height - 420))
     }
 
     public func openTerminalPanel(command: String? = nil, sessionName: String? = nil) {
         scratchpadGeneration += 1
         terminalInitialCommand = command
         terminalSessionName = sessionName
+        terminalExitCode = nil
         terminalActive = true
         scratchpadActive = false
         previewEnabled = false
         previewFocused = false
         actionsMode = false
         actionItems = []
-        panel?.widthOverride = CGFloat(windowConfig.terminalWidth(for: screenSize))
+        panel?.terminalFrame = true
         panel?.show()
-        updatePanelHeight()
         requestFocus()
     }
 
     public func closeTerminalPanel() {
         guard terminalActive else { return }
         terminalActive = false
+        terminalExitCode = nil
         terminalSessionName = nil
-        panel?.widthOverride = nil
+        panel?.terminalFrame = false
         NotificationCenter.default.post(name: .paletteTerminalStop, object: nil)
+        focusZone = .search
         resetting = true
         query = ""
         resetting = false
         scheduleSearch(debounce: false)
-        updatePanelHeight()
     }
 
-    public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
+    /// Called by the terminal pane when its child exits. The pane stays open so
+    /// the last output can still be read.
+    public func noteTerminalExited(_ code: Int32?) {
+        guard terminalActive else { return }
+        terminalExitCode = code
+    }
+
+    /// Runs the pane's initial command again after the child exited.
+    public func restartTerminal() {
+        guard terminalActive, terminalExitCode != nil else { return }
+        terminalExitCode = nil
+        terminalRestartToken += 1
+    }
+
+    /// True while the list (not the editor) is the visible scratchpad surface.
+    public var scratchpadListActive: Bool {
+        !scratchpadActive
+            && registry.parser.parse(query).providerID == HotkeyTargets.scratchpadListTrigger
+    }
+
+    /// The ⌘⌥S target: the scratchpad provider's list, New Scratch Note first.
+    public func openScratchpadList() {
         if terminalActive { closeTerminalPanel() }
+        if scratchpadActive { closeScratchpad(save: true) }
+        scopeProviderID = nil
+        resetToPlainQuery()
+        resetting = true
+        query = HotkeyTargets.scratchpadListQuery(prefix: registry.parser.prefix)
+        resetting = false
+        focusZone = .search
+        panel?.show()
+        requestFocus()
+        scheduleSearch(debounce: false)
+    }
+
+    public func openScratchpad(noteID: String? = nil, seed: String? = nil) {        if terminalActive { closeTerminalPanel() }
         scratchpadGeneration += 1
         let generation = scratchpadGeneration
+        panel?.terminalFrame = false
         panel?.show()
-        panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
         scratchpadActive = true
         previewEnabled = false
         previewFocused = false
@@ -1376,7 +1590,6 @@ public final class SearchController: ObservableObject, HostBridge {
                 }
             }
         }
-        updatePanelHeight()
         requestFocus()
     }
 
@@ -1403,13 +1616,12 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
         scratchpadActive = false
-        panel?.widthOverride = nil
+        focusZone = .search
         panel?.suppressAutoHide = false
         resetting = true
         query = ""
         resetting = false
         scheduleSearch(debounce: false)
-        updatePanelHeight()
         requestFocus()
     }
 
@@ -1479,9 +1691,5 @@ public final class SearchController: ObservableObject, HostBridge {
             object: nil,
             userInfo: ["dx": dx, "dy": dy]
         )
-    }
-
-    public func refreshTheme() {
-        updatePanelHeight()
     }
 }

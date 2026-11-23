@@ -22,16 +22,21 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     /// Set while an in-panel prompt is open, so resigning key does not hide it.
     public var suppressAutoHide = false
     public var activatePreviousOnHide = true
+    /// Scripted runs must not disturb the desktop: a quiet panel is ordered to
+    /// the back of the normal level, never key, and never activates the app.
+    public var quiet = false
 
     public private(set) var previousApplication: NSRunningApplication?
-    /// Wider panel for preview layouts (clipboard window). Nil uses the theme.
-    public var widthOverride: CGFloat? {
+
+    /// Sizing comes from config's fixed per-screen frame. The panel never
+    /// sizes itself to its content, a preview, or a mode.
+    public var windowConfig = WindowConfig() {
         didSet { if isShowing { position() } }
     }
 
-    /// Sizing from config.toml. Auto mode re-measures on the screen under the
-    /// cursor every time the panel is positioned.
-    public var windowConfig = WindowConfig() {
+    /// True while the embedded terminal is open: it opens at
+    /// `WindowConfig.terminalSize(for:)`, centred, instead of the launcher frame.
+    public var terminalFrame = false {
         didSet { if isShowing { position() } }
     }
 
@@ -41,14 +46,14 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     }
 
     private var keyMonitor: Any?
-    private var contentHeight: CGFloat = 200
     private var theme: Theme
     private var isShowing = false
 
     public init(theme: Theme, content: NSView) {
         self.theme = theme
+        let initial = WindowConfig().launcherSize(for: CGSize(width: 1440, height: 900))
         let panel = PalettePanel(
-            contentRect: NSRect(x: 0, y: 0, width: theme.window.width, height: contentHeight),
+            contentRect: NSRect(x: 0, y: 0, width: initial.width, height: initial.height),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -105,11 +110,6 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         ])
     }
 
-    public func setContentHeight(_ height: CGFloat) {
-        contentHeight = max(92, min(height, CGFloat(theme.window.maxHeight)))
-        if isShowing { position() }
-    }
-
     public func apply(theme: Theme) {
         self.theme = theme
         panel.hasShadow = false
@@ -119,13 +119,24 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
 
     public func show() {
         guard !isShowing else { return }
-        let current = NSWorkspace.shared.frontmostApplication
-        if current?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
-            previousApplication = current
+        if !quiet {
+            let current = NSWorkspace.shared.frontmostApplication
+            if current?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+                previousApplication = current
+            }
         }
         onShow?()
         isShowing = true
         position()
+        if quiet {
+            panel.level = .normal
+            panel.orderBack(nil)
+            Log.shared.info(
+                "Script mode: panel shown without activation (appActive=\(NSApp.isActive))",
+                source: "app"
+            )
+            return
+        }
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         installKeyMonitor()
@@ -136,7 +147,7 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         isShowing = false
         removeKeyMonitor()
         panel.orderOut(nil)
-        let shouldActivate = activatePrevious ?? activatePreviousOnHide
+        let shouldActivate = !quiet && (activatePrevious ?? activatePreviousOnHide)
         if shouldActivate, let previousApplication, !previousApplication.isTerminated {
             previousApplication.activate(options: [])
         }
@@ -148,7 +159,8 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     }
 
     public func windowDidResignKey(_ notification: Notification) {
-        guard !suppressAutoHide else { return }
+        // A scripted run must survive the user clicking elsewhere.
+        guard !quiet, !suppressAutoHide else { return }
         // A short delay lets an in-panel menu or prompt take key first.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
             guard let self, self.isShowing, !self.suppressAutoHide, !self.panel.isKeyWindow else { return }
@@ -168,42 +180,37 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     /// exercised on a single-display machine.
     public var screenSizeOverride: CGSize?
 
-    /// Rows that fit on the screen the cursor is on.
-    public func effectiveRows() -> Int {
-        let visible = screenSizeOverride
-            ?? (Self.screenUnderPointer() ?? panel.screen)?.visibleFrame.size
-            ?? CGSize(width: 1440, height: 900)
-        return windowConfig.launcherRows(for: visible)
-    }
-
     private func position() {
         let screen = Self.screenUnderPointer()
         guard let screen else { return }
         let visible = screen.visibleFrame
-        // Never grow past the usable screen area, whatever the theme or an
-        // override asks for.
+        // Never grow past the usable screen area, whatever an override asks for.
         let metrics = screenSizeOverride ?? visible.size
-        let width = min(
-            widthOverride ?? CGFloat(windowConfig.launcherWidth(for: metrics)),
-            visible.width - 24
-        )
-        let height = max(92, min(contentHeight, CGFloat(theme.window.maxHeight), visible.height - 24))
+        let size = terminalFrame
+            ? windowConfig.terminalSize(for: metrics)
+            : windowConfig.launcherSize(for: metrics)
+        let width = min(size.width, visible.width - 24)
+        let height = min(size.height, visible.height - 24)
         var x = visible.midX - width / 2
         var y: CGFloat
 
-        switch (anchorOverride ?? theme.window.anchor).lowercased() {
-        case "center":
+        if terminalFrame {
             y = visible.midY - height / 2
-        case "bottom":
-            let offset = theme.window.offsetYPercent
-                ? visible.height * CGFloat(theme.window.offsetY) / 100
-                : CGFloat(theme.window.offsetY)
-            y = visible.minY + offset
-        default:
-            let offset = theme.window.offsetYPercent
-                ? visible.height * CGFloat(theme.window.offsetY) / 100
-                : CGFloat(theme.window.offsetY)
-            y = visible.maxY - offset - height
+        } else {
+            switch (anchorOverride ?? theme.window.anchor).lowercased() {
+            case "center":
+                y = visible.midY - height / 2
+            case "bottom":
+                let offset = theme.window.offsetYPercent
+                    ? visible.height * CGFloat(theme.window.offsetY) / 100
+                    : CGFloat(theme.window.offsetY)
+                y = visible.minY + offset
+            default:
+                let offset = theme.window.offsetYPercent
+                    ? visible.height * CGFloat(theme.window.offsetY) / 100
+                    : CGFloat(theme.window.offsetY)
+                y = visible.maxY - offset - height
+            }
         }
 
         x = max(visible.minX + 12, min(x, visible.maxX - width - 12))

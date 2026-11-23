@@ -15,6 +15,17 @@ public final class LauncherService {
         let url = URL(fileURLWithPath: expanded)
 
         if let appPath = ToolLocator.shared.appPath(named: app) {
+            // Editors that reuse their window would put a second project into
+            // the window already open; start their binary again instead.
+            // LaunchServices would otherwise route the path to the running one.
+            if let command = EditorLaunch.newInstanceCommand(appPath: appPath, path: expanded),
+               FileManager.default.isExecutableFile(atPath: command[0]) {
+                // A GUI app inherits launchd's minimal PATH, so the editor
+                // cannot find Homebrew's nvim. Hand it the tool directories.
+                let toolPath = Self.toolPathEnvironment["PATH"] ?? ""
+                try ProcessRunner.launch(command, environment: ["PATH": toolPath])
+                return
+            }
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true
             // GUI apps inherit launchd's minimal PATH, so Neovide cannot find

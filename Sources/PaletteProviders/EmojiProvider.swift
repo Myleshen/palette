@@ -70,7 +70,7 @@ public final class EmojiProvider: PaletteProvider, @unchecked Sendable {
     private func item(for emoji: EmojiCatalogEntry, score: Double) -> PaletteItem {
         let label = (emoji.appleName.isEmpty ? emoji.name : emoji.appleName).capitalized
         // The group already reads in the subtitle; a badge would print it twice.
-        let detail = emoji.group.isEmpty ? "Copy emoji" : emoji.group
+        let detail = emoji.group.isEmpty ? "Paste emoji" : emoji.group
         return PaletteItem(
             id: emoji.glyph,
             title: "\(emoji.glyph)  \(label)",
@@ -78,6 +78,7 @@ public final class EmojiProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("face.smiling"),
             score: score,
             actions: [
+                PaletteAction(id: "paste-emoji", title: "Paste Emoji", kind: .pasteText, value: .text(emoji.glyph)),
                 PaletteAction(id: "copy-emoji", title: "Copy Emoji", kind: .copyText, value: .text(emoji.glyph)),
             ],
             providerID: descriptor.id,

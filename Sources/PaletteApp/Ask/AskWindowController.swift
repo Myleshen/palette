@@ -107,26 +107,42 @@ final class AskWindowController: NSWindowController, NSWindowDelegate {
     /// Switches this window to a saved chat; the sidebar uses the same path.
     func open(chat: AskChat) {
         state.openChat(chat)
-        // Ordering a miniaturised window front would otherwise leave it in the
-        // Dock; ⌘⌥A has to bring it back.
-        window?.deminiaturize(nil)
-        window?.makeKeyAndOrderFront(nil)
-        window?.makeKey()
+        if WindowPresentation.isScripted {
+            // Ordering a window front would put it over the user's work.
+            window?.level = .normal
+            window?.orderBack(nil)
+        } else {
+            // Ordering a miniaturised window front would otherwise leave it in
+            // the Dock; ⌘⌥A has to bring it back.
+            window?.deminiaturize(nil)
+            window?.makeKeyAndOrderFront(nil)
+            window?.makeKey()
+        }
         clearBadge()
     }
 
     func show(below panelFrame: NSRect? = nil) {
-        if NSApp.activationPolicy() != .regular {
+        let quiet = WindowPresentation.isScripted
+        if !quiet, NSApp.activationPolicy() != .regular {
             NSApp.setActivationPolicy(.regular)
         }
         position(below: panelFrame)
         // Ask for banner permission while the user is looking at the app; a
         // prompt fired by a background answer would suppress that answer.
-        SystemNotification.prepare()
-        showWindow(nil)
-        NSRunningApplication.current.activate(options: [.activateAllWindows])
-        window?.makeKeyAndOrderFront(nil)
-        window?.makeKey()
+        if !quiet { SystemNotification.prepare() }
+        if quiet {
+            window?.level = .normal
+            window?.orderBack(nil)
+            Log.shared.info(
+                "Script mode: ask window shown without activation (appActive=\(NSApp.isActive))",
+                source: "app"
+            )
+        } else {
+            showWindow(nil)
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            window?.makeKeyAndOrderFront(nil)
+            window?.makeKey()
+        }
         clearBadge()
         onStatusChange?()
         if let window {

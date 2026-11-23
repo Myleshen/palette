@@ -70,6 +70,30 @@ public enum GitHubKind: String, Sendable, CaseIterable {
         }
     }
 
+    /// Strip label: the group name already says GitHub.
+    public var shortName: String {
+        switch self {
+        case .context: return "Overview"
+        case .repos: return "Repositories"
+        case .pulls: return "PRs"
+        case .issues: return "Issues"
+        case .actions: return "Actions"
+        case .notifications: return "Notifications"
+        }
+    }
+
+    /// Strip order: the default overview, then the five trigger rows.
+    var groupRank: Int {
+        switch self {
+        case .context: return 0
+        case .pulls: return 1
+        case .issues: return 2
+        case .actions: return 3
+        case .notifications: return 4
+        case .repos: return 5
+        }
+    }
+
     public var icon: String {
         switch self {
         case .context: return "chevron.left.forwardslash.chevron.right"
@@ -143,6 +167,25 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     private let bridge: HostBridge
     private let terminalApp: String
     private let terminal: String
+    private let cache = ResultCache()
+
+    /// `gh` is spawned per keystroke otherwise. Results live for 20 s, and a
+    /// cancelled search kills its child through `ProcessRunner`, so a newer
+    /// query simply replaces the in-flight one.
+    private actor ResultCache {
+        private var entries: [String: (items: [PaletteItem], at: Date)] = [:]
+        private let ttl: TimeInterval = 20
+
+        func cached(_ key: String) -> [PaletteItem]? {
+            guard let entry = entries[key], Date().timeIntervalSince(entry.at) < ttl else { return nil }
+            return entry.items
+        }
+
+        func store(_ items: [PaletteItem], key: String) {
+            if entries.count > 40 { entries.removeAll() }
+            entries[key] = (items, Date())
+        }
+    }
 
     public init(
         kind: GitHubKind = .context,
@@ -161,9 +204,11 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             name: kind.name,
             trigger: kind.trigger,
             isGlobal: false,
-            priority: kind == .context ? 44 : 43,
+            priority: 44 - kind.groupRank,
             icon: "symbol:\(kind.icon)",
-            keywords: kind.keywords
+            keywords: kind.keywords,
+            group: ProviderGroup(id: "github", name: "GitHub", order: 10),
+            shortName: kind.shortName
         )
     }
 
@@ -176,18 +221,26 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
                 id: "gh-missing",
                 title: "GitHub CLI not installed",
                 subtitle: "Install with brew install gh, then reload",
-                action: nil
+                action: nil,
+                trouble: ProviderRequirements.requirements(forProviderID: descriptor.id)
+                    .first
+                    .map(ItemTrouble.missingTool)
             )]
         }
 
+        let key = "\(kind.rawValue)|\(FileManager.default.currentDirectoryPath)|\(query)"
+        if let cached = await cache.cached(key) { return cached }
+        let items: [PaletteItem]
         switch kind {
-        case .context: return await contextItems(gh, query: query)
-        case .repos: return await repositoryItems(gh, query: query)
-        case .pulls: return await pullRequestItems(gh, query: query)
-        case .issues: return await issueItems(gh, query: query)
-        case .actions: return await actionRunItems(gh, query: query)
-        case .notifications: return await notificationItems(gh, query: query)
+        case .context: items = await contextItems(gh, query: query)
+        case .repos: items = await repositoryItems(gh, query: query)
+        case .pulls: items = await pullRequestItems(gh, query: query)
+        case .issues: items = await issueItems(gh, query: query)
+        case .actions: items = await actionRunItems(gh, query: query)
+        case .notifications: items = await notificationItems(gh, query: query)
         }
+        await cache.store(items, key: key)
+        return items
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -854,7 +907,13 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         return .success(entries)
     }
 
-    private func infoRow(id: String, title: String, subtitle: String, action: String?) -> PaletteItem {
+    private func infoRow(
+        id: String,
+        title: String,
+        subtitle: String,
+        action: String?,
+        trouble: ItemTrouble? = nil
+    ) -> PaletteItem {
         PaletteItem(
             id: id,
             title: title,
@@ -864,6 +923,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             group: kind.name,
             score: 1_000,
             actions: action.map { [PaletteAction(id: "auth", title: "Run gh auth login", kind: .custom, value: .text($0))] } ?? [],
+            trouble: trouble,
             providerID: descriptor.id,
             providerName: descriptor.name
         )

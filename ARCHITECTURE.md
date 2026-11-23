@@ -161,12 +161,18 @@ exited, restarted with backoff. Full protocol in [PROVIDERS.md](PROVIDERS.md).
 ### 7.4 Launcher rail
 
 The launcher is a search capsule, a full-height provider rail, and a content
-card. `SearchController.railEntries` builds the rail as **Everything** followed
-by one row per registered provider that declares a trigger; Everything is
-pinned, the rest scroll a whole row at a time. Selecting a row writes
-`<prefix><trigger> ` into the query, so the rail and prefixes share one routing
-path. `Tab` / `⇧Tab` walk the same array. The rail is 220 pt and collapses to
-56 pt icons when the preview pane is open or the panel is narrower than 700 pt.
+card. `SearchController.railEntries` builds the rail as **Everything**, **Apps**,
+one row per `ProviderGroup` in group order, then one row per ungrouped provider.
+Everything is pinned, the rest scroll a whole row at a time. Selecting a provider
+row writes `<prefix><trigger> ` into the query, so the rail and prefixes share one
+routing path. Selecting a group writes its first child's trigger and shows that
+group's children in a secondary strip above the list; picking a child swaps the
+trigger and keeps the text. Apps opens its provider without a trigger through
+`scopeProviderID`. `Tab` / `⇧Tab` walk four focus zones — search → list →
+rail → strip — and never change the provider themselves; the rail and strip do
+that. Arrows act on the focused zone, `⏎` switches from the rail/strip and then
+lands on the list, and `Esc` returns to search. The rail is always 220 pt wide
+and scrolls internally; it never collapses to icons.
 
 The preview pane is opt-in per provider, not inferred from every row: `clip`,
 `snip`, `recent`, `neo`, `neof`, `proj`, `shots`, `cheat`, and `atlas` enable

@@ -115,21 +115,7 @@ public final class ProviderRegistry: @unchecked Sendable {
 
         switch parsed.scope {
         case .provider(let id):
-            guard let provider = byID[id] else {
-                diagnostics.append(Diagnostic(.error, "No provider is registered for that prefix.", source: "providers"))
-                return RegistrySearchResult(items: [], diagnostics: diagnostics, parsed: parsed)
-            }
-            do {
-                let items = try await provider.search(SearchRequest(text: parsed.text, limit: 5000, isBound: true))
-                return RegistrySearchResult(items: Array(items.prefix(5000)), diagnostics: diagnostics, parsed: parsed)
-            } catch is CancellationError {
-                return RegistrySearchResult(items: [], diagnostics: [], parsed: parsed)
-            } catch ProviderError.cancelled {
-                return RegistrySearchResult(items: [], diagnostics: [], parsed: parsed)
-            } catch {
-                diagnostics.append(Diagnostic(.warning, message(for: error, provider: provider.descriptor.name), source: provider.descriptor.id))
-                return RegistrySearchResult(items: [], diagnostics: diagnostics, parsed: parsed)
-            }
+            return await searchProvider(id, text: parsed.text, parsed: parsed)
 
         case .global:
             let providers = globalProviders
@@ -169,6 +155,36 @@ public final class ProviderRegistry: @unchecked Sendable {
                 if let diagnostic { diagnostics.append(diagnostic) }
             }
             return RegistrySearchResult(items: items, diagnostics: diagnostics, parsed: parsed)
+        }
+    }
+
+    /// Search one provider without a trigger, for rail entries such as Apps.
+    public func search(providerID id: String, text: String) async -> RegistrySearchResult {
+        let parsed = ParsedQuery(raw: text, scope: .provider(id), text: text)
+        return await searchProvider(id, text: text, parsed: parsed)
+    }
+
+    private func searchProvider(_ id: String, text: String, parsed: ParsedQuery) async -> RegistrySearchResult {
+        guard let provider = byID[id] else {
+            return RegistrySearchResult(
+                items: [],
+                diagnostics: [Diagnostic(.error, "No provider is registered for that prefix.", source: "providers")],
+                parsed: parsed
+            )
+        }
+        do {
+            let items = try await provider.search(SearchRequest(text: text, limit: 5000, isBound: true))
+            return RegistrySearchResult(items: Array(items.prefix(5000)), diagnostics: [], parsed: parsed)
+        } catch is CancellationError {
+            return RegistrySearchResult(items: [], diagnostics: [], parsed: parsed)
+        } catch ProviderError.cancelled {
+            return RegistrySearchResult(items: [], diagnostics: [], parsed: parsed)
+        } catch {
+            return RegistrySearchResult(
+                items: [],
+                diagnostics: [Diagnostic(.warning, message(for: error, provider: provider.descriptor.name), source: provider.descriptor.id)],
+                parsed: parsed
+            )
         }
     }
 

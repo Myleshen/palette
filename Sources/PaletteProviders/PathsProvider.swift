@@ -263,10 +263,18 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         return items
     }
 
+    /// True when this provider walks the whole home folder, which is the walk
+    /// that raises macOS folder prompts.
+    public var indexesHomeFolder: Bool {
+        scope.expandedRoots.contains(NSHomeDirectory())
+    }
+
     /// Loads the disk cache or walks the scope now. Called at launch so the
-    /// first bound query is warm.
-    public func prewarm() async {
+    /// first bound query is warm. The whole home folder is only walked once the
+    /// user consented: it is the walk that raises macOS folder prompts.
+    public func prewarm(homeConsent: Bool) async {
         guard ToolLocator.shared.path(for: "fd") != nil else { return }
+        guard homeConsent || !indexesHomeFolder else { return }
         _ = try? await snapshot()
     }
 
@@ -363,10 +371,16 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
             value: .object(["path": terminalPath])
         ))
 
+        // Editor rows should not pretend a second project opens in its own
+        // window when the editor can only reuse the one that is open.
+        let subtitle = EditorLaunch.reusesOpenWindow(app: configuration.openWith)
+            ? trimmed + " · reuses the open window"
+            : trimmed
+
         return PaletteItem(
             id: path,
             title: name,
-            subtitle: trimmed,
+            subtitle: subtitle,
             icon: isDirectory ? .symbol("folder.fill") : .file(path),
             badge: isDirectory ? "folder" : (ext.isEmpty ? nil : ext.uppercased()),
             score: 1_000 - Double(rank),

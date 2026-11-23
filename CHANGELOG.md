@@ -1,5 +1,156 @@
 # Changelog
 
+## 2.18.0 — 2026-11-23
+
+### Added
+
+- **Provider groups in the rail, and Apps.** **Everything** and **Apps** stay
+  pinned at the top; below them is one row per provider group and then one per
+  ungrouped provider. A group row opens its first member and shows a secondary
+  strip of its children above the list (in the top-bar layout too): Bitwarden —
+  Passwords, Usernames, TOTP, Notes, URLs; GitHub — Overview, PRs, Issues,
+  Actions, Notifications, Repositories. Apps opens the app list without a
+  prefix and keeps filtering it while plain text is typed.
+- **Nineteen Settings panes in four sidebar groups.** **Embedded Terminal**,
+  **Bookmarks**, **Cheatsheets**, **Web Apps**, **Screenshots**, **After a
+  capture**, **Recordings** and **Captures** each have their own pane;
+  **About** moved under System, an **Advanced** section holds **Provider
+  Files**, **Config Files** and **Diagnostics**, and the command prefix lives in
+  **General**. The search index, per-pane resets and tab order follow, and the
+  sidebar's collapse button is gone.
+- **Recording asks first.** The recording hotkey, `/rec` and the menu all open
+  a compact options panel — audio, microphone, display, region — that remembers
+  the last choice. The status menu gains a capture section (**Start**,
+  **Stop** with elapsed time, **Copy Last Path**, **Reveal Last Capture**,
+  **Show Last Recording/Screenshot**), feedback always goes through one path
+  (panel status when the launcher is open, otherwise a Notification Center
+  banner plus a menu-bar flash), the launcher and HUD hide before the first
+  frame, and one reusable preview window keeps its frame autosave and no longer
+  hides when Palette deactivates, so **Show Last…** reopens the last capture.
+- **Pinned screenshots.** **Pin** in the annotator (`⇧⌘P`), **Pin to Screen**
+  on `/shots` rows and **Pin Last Screenshot** in the menu bar float the image
+  above other apps and pass every click through until Option is held; Option
+  shows the grip and enables drag, resize and scroll zoom. Pins cascade 24 pt
+  from the last one, clamp to the screen under the pointer, cap at 8 (the
+  oldest closes), and reuse the file already on disk.
+- **On-device OCR and QR/link detection.** Vision text recognition (accurate,
+  language correction) and QR/EAN/Code128 detection run locally on clipboard
+  images, the last screenshot, pinned images and the annotator, with
+  **Copy Text** and **Open Detected Link** wherever an image appears. `/ocr`
+  turns the clipboard image (or a path) into rows that copy text, open a
+  validated http(s) link, or search the web.
+- **Learned ranking.** Palette remembers which row a short plain query led to
+  and boosts it as a tie-breaker (at most +2.0, so a better text match still
+  wins), so `chr` opens the Chrome you actually chose. Only a SHA-256 digest of
+  the normalised 12-character prefix is stored, capped at 4 rows per prefix and
+  400 prefixes; Settings → Search → Learning has the toggle and a confirmed
+  **Forget**, and trigger and actions-mode activations are never recorded.
+- **Clipboard ignore list.** `[clipboard] ignored_apps` names bundle ids whose
+  copies are not recorded — password managers and token viewers that copy
+  without marking the pasteboard. Concealed and transient pasteboard types
+  still always win, so a marked copy is skipped even when the app is not
+  listed. Settings → General → Clipboard → **Never record from** adds an
+  installed or running app, or a typed bundle id, and removes it again.
+- **Clipboard search is indexed.** The history is folded once into an in-memory
+  snapshot that is rebuilt only when the store's clipboard revision moves (or
+  after 60 s), the query scores that snapshot, and the displayed rows are
+  fetched by id afterwards. At 5,000 short entries that is 2.9× faster and
+  drops the full-text read from every keystroke.
+- **Remote-desktop paste targets copy only.** RDC, Citrix, Parallels and
+  Horizon turn a synthesised ⌘V into a literal `v`, so Palette writes the
+  clipboard, says **Copied — paste with ⌘V**, and leaves the keystroke to you.
+- **Rows say what is wrong.** A row that needs `devx`, `git`, `atlas`, `gh`,
+  `bw` or Accessibility shows a warning glyph and the fix in its subtitle, the
+  footer reads **Fix in Settings**, and Return opens the exact pane and card
+  (missing tools, or Permissions) instead of failing silently. `⌘K` still lists
+  the row's actions, and VoiceOver reads the trouble.
+- **Update nudge.** Palette checks the GitHub releases page once a day (a failed
+  check backs off 15 minutes, doubling up to the daily interval) and, when a
+  newer version exists, shows one notification per version plus **Palette
+  <version> available — Update…** and **Release notes** in the menu. Update runs
+  `brew update && brew upgrade --cask palette` in the embedded terminal;
+  Settings → General → **Updates** has the automatic toggle, **Check now** and
+  the last-check time.
+- **First-run tool prompts name the tap.** Missing tools offer the exact
+  first-party formula (`brew install Myleshen/tap/devx`, `…/atlas`) and the
+  Settings missing-tools card keeps the Enable/Disable answer. Indexing the
+  whole home folder is opt-in, asked once (`[indexing] home_consent`), and skips
+  Library and the standard user folders.
+- **Window titles without Screen Recording.** When CG window names are
+  unavailable, Palette reads the owning app's Accessibility titles and matches
+  them by frame (2 pt), cached per pid for 5 s. Untitled windows keep distinct
+  entries keyed by window number and fall back to `Untitled window · app · WxH`.
+- **Web-app windows tile.** Web apps launch Chromium profiles with
+  `--force-renderer-accessibility`, so Amethyst and other window managers can
+  see and tile their windows.
+- **The terminal ends, it does not freeze.** A finished session shows an end
+  card with the exit code and **Restart** / **Close** in its own row, keeping
+  the last output readable; Esc closes a finished session. Zellij attach
+  recovers from a stale session once (shared by the embedded pane and `/zj`),
+  and `/neo` and `/editor` launch neovide with `--fork` so each project gets its
+  own instance; editors that can only reuse a window say so.
+- **`⌘⌥S` opens the scratchpad list** with **New Scratch Note** first; a second
+  press over a visible list closes it.
+- **Focus zones.** `Tab`/`⇧Tab` walk search → list → rail → group strip and
+  wrap, arrows act on the focused zone, Return confirms a rail or strip row and
+  moves to the list, and Esc returns to search first. Tab never changes the
+  provider.
+- Config keys: `[updates] automatic`, `[search] learn`, `[indexing]
+  home_consent`.
+
+### Changed
+
+- **One fixed panel geometry per display.** The frame is derived from the screen
+  alone — at most 60% of each axis, an absolute cap only when smaller, and a
+  usable floor on tiny displays — so result count, preview, rail and mode never
+  resize it. The embedded terminal is 90% × 85% of that frame, centred;
+  scratchpad and Ask keep the launcher frame; the provider rail is always
+  220 pt and scrolls instead of collapsing; the preview takes space from the
+  list card instead of the window.
+- The Providers table shows a group label above each child and the group name is
+  searchable; unselected rail chips no longer carry a filled background, and the
+  group strip keeps a fixed height.
+- Tests: `make test`, `make e2e` and `make layout-check` run at background QoS
+  (`taskpolicy -b`, `nice -n 10`), every run gets its own temp config, state,
+  cache and support directories, windows are presented without activation, and
+  a scripted launch no longer asks for Accessibility. Timing-sensitive flows
+  poll with `wait_until=` instead of sleeping. The Settings layout check now
+  covers all 19 panes.
+
+### Fixed
+
+- **Worktree dialog.** Branch names are checked per keystroke against git's own
+  rules, with the reason inline and **Create** disabled until it is valid; git
+  remains the final authority. The prompt lays out at a fixed width, a created
+  or failed worktree reports in the palette, and the project and git caches
+  refresh immediately so `/proj` shows the new worktree.
+- **One selection, and scrolling keeps it.** The focused zone gets a single
+  accent ring instead of a second row painted like the selection, so only one
+  row ever looks selected, and scrolling the result list no longer clears the
+  selected row or its preview.
+- **`/proj` no longer stalls.** Rows come from cache and never wait on git, the
+  selected row's git preview is fetched after the list appears, git state is
+  cached for 5 minutes behind a HEAD/index fingerprint, and project and clone
+  changes invalidate the caches.
+- **`/atlas` is cheap.** The parsed index is cached by `state.json` mtime and
+  size, the review marker is read from an 8 KB head, and preview digests are
+  built only for visible rows. `/atlas` and `/proj` filter through `fzf` on
+  large lists. `/gh*` caches for 20 s and kills its child on a cancelled
+  keystroke; `/shots` and `/cheat` cache listings for 5 s behind folder mtime.
+- **Return pastes** for every text result: emoji (previously copied only),
+  calculator results, clipboard transform output, and snippets, which gained a
+  Paste action for the expanded text. Copy stays the second action everywhere,
+  and rows now say "paste" in their subtitle.
+
+### Removed
+
+- Manual panel sizing: the Settings **Size** card, and `[window]` no longer
+  reads `auto_size`, `scale`, `width`, `max_height`, `visible_rows`,
+  `clipboard_width`, `preview_width` or `terminal_width`. Old files still parse
+  and those keys are dropped on the next save; `preview_layout`, `provider_bar`
+  and `favicons` remain.
+- The Settings sidebar collapse button.
+
 ## 2.17.0 — 2026-11-22
 
 ### Added

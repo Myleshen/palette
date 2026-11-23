@@ -187,6 +187,9 @@ public struct ClipboardConfig: Sendable, Equatable {
     public var retentionDays: Int
     /// Total bytes of image blobs; the oldest images are evicted first.
     public var maxImageBytes: Int
+    /// Bundle ids whose copies are never recorded (password managers, token
+    /// viewers). Concealed/transient pasteboard types still win over this list.
+    public var ignoredApps: [String]
 
     public init(
         enabled: Bool = true,
@@ -194,7 +197,8 @@ public struct ClipboardConfig: Sendable, Equatable {
         pollMs: Int = 500,
         clearAfterMs: Int = 30_000,
         retentionDays: Int = 30,
-        maxImageBytes: Int = 200 * 1024 * 1024
+        maxImageBytes: Int = 200 * 1024 * 1024,
+        ignoredApps: [String] = []
     ) {
         self.enabled = enabled
         self.maxEntries = maxEntries
@@ -202,6 +206,7 @@ public struct ClipboardConfig: Sendable, Equatable {
         self.clearAfterMs = clearAfterMs
         self.retentionDays = retentionDays
         self.maxImageBytes = maxImageBytes
+        self.ignoredApps = ignoredApps
     }
 }
 
@@ -233,23 +238,12 @@ public enum ProviderBarPlacement: String, Sendable, Equatable, CaseIterable {
     case top, left, hidden
 }
 
-/// Launcher geometry lives in config.toml, not the theme: themes describe how
-/// things look, this describes how big they are.
+/// Launcher chrome that still varies: provider placement, preview direction and
+/// site icons. The panel geometry itself is fixed per screen — see
+/// `launcherSize(for:)`, the single source every caller reads.
 public struct WindowConfig: Sendable, Equatable {
-    /// Multiplier applied to every size below, like `rem`. 0.8...1.6.
-    public var scale: Double = 1
-    /// Size to the screen under the cursor instead of one fixed size.
-    public var autoSize: Bool = true
     /// Provider switcher: top strip, left rail, or hidden.
     public var providerBar: ProviderBarPlacement = .top
-    /// Points. 0 means "use the default times scale".
-    public var width: Double = 0
-    public var maxHeight: Double = 0
-    /// Rows before scrolling. 0 means "use the default times scale".
-    public var visibleRows: Int = 0
-    public var clipboardWidth: Double = 0
-    public var previewWidth: Double = 0
-    public var terminalWidth: Double = 0
     public var previewLayout: PreviewPlacement = .auto
     /// Fetch site icons for web apps. Turning it off stops any request to the
     /// third-party favicon service; cached icons stay local.
@@ -257,81 +251,70 @@ public struct WindowConfig: Sendable, Equatable {
 
     public init() {}
 
-    public static let defaultWidth: Double = 680
-    public static let defaultMaxHeight: Double = 820
-    public static let defaultRows: Int = 7
-    public static let defaultPanelWidth: Double = 880
-    public static let defaultTerminalWidth: Double = 1000
+    /// Gap kept between the panel and every screen edge.
+    public static let panelMargin: Double = 24
+    /// Absolute launcher bounds. These only matter when they sit below the
+    /// 60%-of-screen rule; they never make the panel larger than 60%.
+    public static let maxPanelWidth: Double = 1_100
+    public static let maxPanelHeight: Double = 900
+    /// Portrait screens get a narrower frame on the same 60% rule.
+    public static let portraitMaxPanelWidth: Double = 720
+    /// The panel covers this share of each screen axis.
+    public static let screenShare: Double = 0.6
+    /// Usable floor for small screens; clamped to the visible area.
+    public static let minPanelWidth: Double = 480
+    public static let minPanelHeight: Double = 360
+    /// Embedded terminal shares of the launcher frame, so it never fills the
+    /// whole panel.
+    public static let terminalWidthShare: Double = 0.9
+    public static let terminalHeightShare: Double = 0.85
+    /// Auto preview sits beside only when the fixed frame leaves a useful list.
+    public static let besidePreviewMinWidth: Double = 800
 
-    public var effectiveScale: Double {
-        scale <= 0 ? 1 : min(1.6, max(0.8, scale))
+    /// The one launcher size for a screen, in points. It depends on the screen
+    /// alone: rows, preview, provider rail and mode never change it. Each axis
+    /// takes at most 60% of the screen, clamped to the visible area and bounded
+    /// by the absolute caps when those are smaller. A tiny display gets a small
+    /// panel rather than one clipped by the screen edge.
+    public func launcherSize(for visible: CGSize) -> CGSize {
+        guard visible.width > 0, visible.height > 0 else {
+            return CGSize(width: Self.maxPanelWidth, height: Self.maxPanelHeight)
+        }
+        let margin = CGFloat(Self.panelMargin)
+        let availableWidth = max(1, visible.width - margin * 2)
+        let availableHeight = max(1, visible.height - margin * 2)
+        let portrait = visible.height > visible.width
+        let widthCap = CGFloat(portrait ? Self.portraitMaxPanelWidth : Self.maxPanelWidth)
+        let width = min(
+            availableWidth,
+            max(CGFloat(Self.minPanelWidth), min(visible.width * CGFloat(Self.screenShare), widthCap))
+        )
+        let height = min(
+            availableHeight,
+            max(CGFloat(Self.minPanelHeight), min(visible.height * CGFloat(Self.screenShare), CGFloat(Self.maxPanelHeight)))
+        )
+        return CGSize(width: width.rounded(.down), height: height.rounded(.down))
     }
 
-    private func size(_ explicit: Double, _ fallback: Double) -> Double {
-        explicit > 0 ? explicit : (fallback * effectiveScale).rounded()
+    /// The embedded terminal opens smaller than the launcher frame, centred on
+    /// the same screen. Scratchpad and Ask keep the launcher frame.
+    public func terminalSize(for visible: CGSize) -> CGSize {
+        let frame = launcherSize(for: visible)
+        return CGSize(
+            width: max(1, (frame.width * CGFloat(Self.terminalWidthShare)).rounded()),
+            height: max(1, (frame.height * CGFloat(Self.terminalHeightShare)).rounded())
+        )
     }
 
-    /// A 13" laptop (1440×900) is the reference: 0.486 × width gives 700pt.
-    /// Larger displays scale up to 1000, small ones down to 640.
-    public func autoWidth(for visible: CGSize) -> Double {
-        guard visible.width > 0, visible.height > 0 else { return Self.defaultWidth * effectiveScale }
-        let raw = Double(visible.width) * 0.486
-        return (min(1_000, max(640, raw)) * effectiveScale).rounded()
-    }
-
-    /// 900pt gets 7 rows; every 128pt of height adds one, clamped 6...11.
-    public func autoRows(for visible: CGSize) -> Int {
-        guard visible.height > 0 else { return Self.defaultRows }
-        let fit = Int((Double(visible.height) / 128).rounded())
-        return min(11, max(6, fit))
-    }
-
-    public func launcherWidth(for visible: CGSize) -> Double {
-        if width > 0 { return width }
-        return autoSize ? autoWidth(for: visible) : size(0, Self.defaultWidth)
-    }
-
-    public func launcherRows(for visible: CGSize) -> Int {
-        if visibleRows > 0 { return min(11, max(6, visibleRows)) }
-        return autoSize ? autoRows(for: visible) : launcherRows
-    }
-
-    /// Per-view widths keep the same proportions as the main panel.
-    public func panelWidth(_ explicit: Double, _ fallback: Double, for visible: CGSize) -> Double {
-        if explicit > 0 { return explicit }
-        guard autoSize else { return (fallback * effectiveScale).rounded() }
-        return (autoWidth(for: visible) * (fallback / Self.defaultWidth)).rounded()
-    }
-
-    public var launcherWidth: Double { size(width, Self.defaultWidth) }
-    public var launcherMaxHeight: Double { size(maxHeight, Self.defaultMaxHeight) }
-
-    public var launcherRows: Int {
-        if visibleRows > 0 { return min(11, max(6, visibleRows)) }
-        return min(11, max(6, Int((Double(Self.defaultRows) * effectiveScale).rounded())))
-    }
-
-    public func clipboardWidth(for visible: CGSize) -> Double {
-        panelWidth(clipboardWidth, Self.defaultPanelWidth, for: visible)
-    }
-    public func previewWidth(for visible: CGSize) -> Double {
-        panelWidth(previewWidth, Self.defaultPanelWidth, for: visible)
-    }
-
-    /// The layout to actually use: `auto` falls back to below when the beside
-    /// panel would not fit inside the screen minus the 24pt margins. Takes
-    /// primitive widths rather than `CGSize`, which trips a SIL-deserialization
-    /// bug in some toolchains when a serialized function reads `CGSize.width`.
-    public func resolvedPreviewLayout(screenWidth: Double, previewPanelWidth: Double) -> PreviewPlacement {
+    /// The layout to actually use: `auto` picks beside only on a frame wide
+    /// enough for a list next to the pane, so portrait frames stack instead.
+    /// Takes a primitive width rather than `CGSize`, which trips a
+    /// SIL-deserialization bug in some toolchains when a serialized function
+    /// reads `CGSize.width`.
+    public func resolvedPreviewLayout(frameWidth: Double) -> PreviewPlacement {
         guard previewLayout == .auto else { return previewLayout }
-        return screenWidth - 24 >= previewPanelWidth ? .beside : .below
+        return frameWidth >= Self.besidePreviewMinWidth ? .beside : .below
     }
-    public func terminalWidth(for visible: CGSize) -> Double {
-        panelWidth(terminalWidth, Self.defaultTerminalWidth, for: visible)
-    }
-    public var clipboardPanelWidth: Double { size(clipboardWidth, Self.defaultPanelWidth) }
-    public var previewPanelWidth: Double { size(previewWidth, Self.defaultPanelWidth) }
-    public var terminalPanelWidth: Double { size(terminalWidth, Self.defaultTerminalWidth) }
 }
 
 public enum CaptureAction: String, Sendable, Equatable {
@@ -396,6 +379,14 @@ public struct TimerConfig: Sendable, Equatable {
     public init() {}
 }
 
+public struct UpdateConfig: Sendable, Equatable {
+    /// Look for a newer release at most once a day. Palette never installs it;
+    /// the menu item hands that to Homebrew.
+    public var automatic = true
+
+    public init() {}
+}
+
 public enum HotkeyAction: String, Sendable, Equatable, CaseIterable {
     case launch
     case command
@@ -456,6 +447,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var clipboard: ClipboardConfig
     public var webSearchEnabled: Bool
     public var webSearchEngines: [WebSearchEngine]
+    /// Rank the row the user picked after a short plain query first.
+    public var learningEnabled: Bool
     public var searchPosition: SearchPosition
     public var webAppBrowser: String
     public var window: WindowConfig
@@ -472,6 +465,12 @@ public struct PaletteConfig: Sendable, Equatable {
     /// Allowlist of providers searched by a plain, unprefixed query. `apps` is
     /// always searched and need not be listed.
     public var globalProviders: [String]
+    /// Provider ids whose missing-tool prompt was already answered, so the
+    /// launcher never asks twice.
+    public var missingToolAcknowledged: [String]
+    /// Whether the user agreed to index the whole home folder. nil means the
+    /// one-time consent prompt has not been shown.
+    public var indexingHomeConsent: Bool?
 
     /// Providers a plain query searches out of the box, before user changes.
     public static let defaultGlobalProviders = [
@@ -483,6 +482,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var timer: TimerConfig
     public var capture: CaptureConfig
     public var cheatsheets: CheatsheetConfig
+    public var updates: UpdateConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -506,6 +506,7 @@ public struct PaletteConfig: Sendable, Equatable {
         clipboard: ClipboardConfig = ClipboardConfig(),
         webSearchEnabled: Bool = true,
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
+        learningEnabled: Bool = true,
         searchPosition: SearchPosition = .top,
         webAppBrowser: String = "Helium",
         window: WindowConfig = WindowConfig(),
@@ -518,10 +519,13 @@ public struct PaletteConfig: Sendable, Equatable {
         bindings: [HotkeyBinding] = [],
         shortcuts: [ShortcutBinding] = [],
         globalProviders: [String] = PaletteConfig.defaultGlobalProviders,
+        missingToolAcknowledged: [String] = [],
+        indexingHomeConsent: Bool? = nil,
         terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
         timer: TimerConfig = TimerConfig(),
         capture: CaptureConfig = CaptureConfig(),
-        cheatsheets: CheatsheetConfig = CheatsheetConfig()
+        cheatsheets: CheatsheetConfig = CheatsheetConfig(),
+        updates: UpdateConfig = UpdateConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -543,6 +547,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.clipboard = clipboard
         self.webSearchEnabled = webSearchEnabled
         self.webSearchEngines = webSearchEngines
+        self.learningEnabled = learningEnabled
         self.searchPosition = searchPosition
         self.webAppBrowser = webAppBrowser
         self.window = window
@@ -555,10 +560,13 @@ public struct PaletteConfig: Sendable, Equatable {
         self.bindings = bindings
         self.shortcuts = shortcuts
         self.globalProviders = globalProviders
+        self.missingToolAcknowledged = missingToolAcknowledged
+        self.indexingHomeConsent = indexingHomeConsent
         self.terminalSession = terminalSession
         self.timer = timer
         self.capture = capture
         self.cheatsheets = cheatsheets
+        self.updates = updates
     }
 }
 
@@ -775,16 +783,10 @@ public enum ConfigLoader {
             config.appSort = parsed
         }
         if let window = table.table("window") {
-            config.window.autoSize = window.bool("auto_size") ?? config.window.autoSize
-            if let value = window.number("scale"), value > 0 { config.window.scale = value }
-            if let value = window.number("width"), value > 0 { config.window.width = value }
-            if let value = window.number("max_height"), value > 0 { config.window.maxHeight = value }
-            if let value = window.int("visible_rows"), value > 0 {
-                config.window.visibleRows = min(11, max(6, value))
-            }
-            if let value = window.number("clipboard_width"), value > 0 { config.window.clipboardWidth = value }
-            if let value = window.number("preview_width"), value > 0 { config.window.previewWidth = value }
-            if let value = window.number("terminal_width"), value > 0 { config.window.terminalWidth = value }
+            // 2.17.1 dropped the manual sizing keys (auto_size, scale, width,
+            // max_height, visible_rows, clipboard_width, preview_width,
+            // terminal_width). Old files still parse because unknown keys are
+            // ignored, and the writer drops them on the next save.
             if let raw = window.str("preview_layout"), let layout = PreviewPlacement(rawValue: raw.lowercased()) {
                 config.window.previewLayout = layout
             }
@@ -793,10 +795,6 @@ public enum ConfigLoader {
                 config.window.providerBar = placement
             }
             config.window.favicons = window.bool("favicons") ?? config.window.favicons
-        }
-        // 2.3.2 wrote a root-level key; keep reading it for one release.
-        if let rows = table.int("visible_rows"), rows > 0, config.window.visibleRows == 0 {
-            config.window.visibleRows = min(11, max(6, rows))
         }
 
         if let typography = table.table("typography") {
@@ -874,11 +872,18 @@ public enum ConfigLoader {
             config.timer.notify = timer.bool("notify") ?? config.timer.notify
         }
 
+        if let updates = table.table("updates") {
+            config.updates.automatic = updates.bool("automatic") ?? config.updates.automatic
+        }
+
         if let providers = table.table("providers") {
             config.providerOrder = providers.strArray("order") ?? []
             config.disabledProviders = (providers.strArray("disabled") ?? [])
                 .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
                 .filter { !$0.isEmpty && $0 != "apps" }
+            config.missingToolAcknowledged = (providers.strArray("missing_tool_acknowledged") ?? [])
+                .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                .filter { !$0.isEmpty }
             // Absent key keeps the default allowlist, so old configs gain it;
             // an explicit `global = []` opts out of everything but apps.
             if let global = providers.strArray("global") {
@@ -914,6 +919,10 @@ public enum ConfigLoader {
                 }
                 config.providerAliases = parsed
             }
+        }
+
+        if let indexing = table.table("indexing") {
+            config.indexingHomeConsent = indexing.bool("home_consent")
         }
 
         // `[[binding]]` is an array of tables so shortcuts like ctrl+alt+g need
@@ -1000,6 +1009,10 @@ public enum ConfigLoader {
             }
         }
 
+        if let search = table.table("search"), let learn = search.bool("learn") {
+            config.learningEnabled = learn
+        }
+
         if let askTable = table.table("ask") {
             var ask = config.ask
             if let raw = askTable.str("provider"),
@@ -1076,6 +1089,11 @@ public enum ConfigLoader {
             if let bytes = clipboardTable.int("max_image_bytes") {
                 clipboard.maxImageBytes = max(0, bytes)
             }
+            if let ignored = clipboardTable.strArray("ignored_apps") {
+                clipboard.ignoredApps = ignored
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            }
             config.clipboard = clipboard
         }
 
@@ -1142,17 +1160,10 @@ public enum ConfigLoader {
         web_app_browser = "Helium"
         app_sort = "alphabetical"      # alphabetical | frequent
 
-        # Launcher size. scale multiplies every size below, like rem.
-        # 0 means "use the default times scale".
+        # Launcher geometry is fixed per screen: 60% of each screen axis, with a
+        # narrower absolute cap on portrait displays. Only layout choices live
+        # here.
         [window]
-        auto_size = true               # size to the screen under the cursor
-        scale = 1.0                    # 0.8 - 1.6
-        width = 0                      # points, 0 = 680 * scale
-        max_height = 0                 # points, 0 = 820 * scale
-        visible_rows = 0               # 6-11, 0 = 7 * scale
-        clipboard_width = 0            # 0 = 880 * scale
-        preview_width = 0
-        terminal_width = 0             # 0 = 1000 * scale
         preview_layout = "auto"        # beside | below | auto
         provider_bar = "top"           # top | left | hidden
         favicons = true                # fetch web-app site icons from Google
@@ -1189,6 +1200,11 @@ public enum ConfigLoader {
         sound = true
         notify = true
 
+        # Look for a newer release once a day. Homebrew still installs it;
+        # Palette only offers the command.
+        [updates]
+        automatic = true
+
         # Font overrides. Empty family or 0 size inherits the active theme.
         [typography]
         ui_family = ""
@@ -1206,6 +1222,12 @@ public enum ConfigLoader {
           "calc", "search", "web", "win", "unit", "zj",
           "bookmark", "pins", "system", "timer", "awake", "cheat",
         ]
+        # Providers whose missing-tool prompt was already answered.
+        missing_tool_acknowledged = []
+
+        # Ask once before indexing the whole home folder for the file providers.
+        # [indexing]
+        # home_consent = true
 
         [providers.aliases]
 
@@ -1255,6 +1277,11 @@ public enum ConfigLoader {
         url = "https://www.youtube.com/results?search_query={query}"
         keyword = "yt"
 
+        # Plain-query ranking remembers the row you pick. Only a digest of the
+        # query is stored, never the typed text.
+        [search]
+        learn = true
+
         [theme]
         mode = "auto"                 # dark | light | auto
         dark = "siri-graphite"
@@ -1292,6 +1319,7 @@ public enum ConfigLoader {
         clear_after_ms = 30000
         retention_days = 30
         max_image_bytes = 209715200
+        ignored_apps = []
 
         # Written by Palette. Missing means the file predates schema versioning.
         [meta]
@@ -1348,14 +1376,6 @@ public enum ConfigWriter {
         out.append("app_sort = \(quote(config.appSort.rawValue))")
         out.append("")
         out.append("[window]")
-        out.append("auto_size = \(config.window.autoSize)")
-        out.append("scale = \(config.window.scale)")
-        if config.window.width > 0 { out.append("width = \(config.window.width)") }
-        if config.window.maxHeight > 0 { out.append("max_height = \(config.window.maxHeight)") }
-        if config.window.visibleRows > 0 { out.append("visible_rows = \(config.window.visibleRows)") }
-        if config.window.clipboardWidth > 0 { out.append("clipboard_width = \(config.window.clipboardWidth)") }
-        if config.window.previewWidth > 0 { out.append("preview_width = \(config.window.previewWidth)") }
-        if config.window.terminalWidth > 0 { out.append("terminal_width = \(config.window.terminalWidth)") }
         out.append("preview_layout = \"\(config.window.previewLayout.rawValue)\"")
         out.append("provider_bar = \"\(config.window.providerBar.rawValue)\"")
         out.append("favicons = \(config.window.favicons)")
@@ -1390,6 +1410,9 @@ public enum ConfigWriter {
         out.append("sound = \(config.timer.sound)")
         out.append("notify = \(config.timer.notify)")
         out.append("")
+        out.append("[updates]")
+        out.append("automatic = \(config.updates.automatic)")
+        out.append("")
         out.append("[typography]")
         out.append("ui_family = \(quote(config.typography.uiFamily))")
         out.append("mono_family = \(quote(config.typography.monoFamily))")
@@ -1400,7 +1423,13 @@ public enum ConfigWriter {
         out.append("order = [\(config.providerOrder.map(quote).joined(separator: ", "))]")
         out.append("disabled = [\(config.disabledProviders.map(quote).joined(separator: ", "))]")
         out.append("global = [\(config.globalProviders.map(quote).joined(separator: ", "))]")
+        out.append("missing_tool_acknowledged = [\(config.missingToolAcknowledged.map(quote).joined(separator: ", "))]")
         out.append("")
+        if let consent = config.indexingHomeConsent {
+            out.append("[indexing]")
+            out.append("home_consent = \(consent)")
+            out.append("")
+        }
         out.append("[providers.aliases]")
         for id in config.providerAliases.keys.sorted() {
             let aliases = config.providerAliases[id] ?? []
@@ -1453,6 +1482,9 @@ public enum ConfigWriter {
             if !engine.browser.isEmpty { out.append("browser = \(quote(engine.browser))") }
             if engine.appMode { out.append("app_mode = true") }
         }
+        out.append("")
+        out.append("[search]")
+        out.append("learn = \(config.learningEnabled)")
         for name in config.scopes.keys.sorted() {
             guard let scope = config.scopes[name] else { continue }
             out.append("")
@@ -1472,6 +1504,7 @@ public enum ConfigWriter {
         out.append("clear_after_ms = \(config.clipboard.clearAfterMs)")
         out.append("retention_days = \(config.clipboard.retentionDays)")
         out.append("max_image_bytes = \(config.clipboard.maxImageBytes)")
+        out.append("ignored_apps = [\(config.clipboard.ignoredApps.map(quote).joined(separator: ", "))]")
         out.append("")
         out.append("[meta]")
         out.append("config_version = \(configVersion)")
