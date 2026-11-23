@@ -101,7 +101,7 @@ false, and `wait_until=<condition>;timeout=<seconds>` polls until it holds
 ## Layout check
 
 Unit tests cannot see a clipped label or a squashed stepper. `make layout-check`
-renders all seven Settings panes headlessly and compares each with the
+renders every Settings pane headlessly and compares each with the
 reference in `Tests/Snapshots/`:
 
 ```sh

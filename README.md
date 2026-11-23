@@ -359,25 +359,26 @@ fallbacks.
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window with seven panes in
-three sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
-and **Shortcuts**; Features holds **Search** and **Ask**; System holds
-**Providers**. General holds startup, permissions, power, notifications, the
-editor/terminal apps used by providers, and clipboard history; Launcher holds
-where the panel opens, the search placeholder, app order, and the panel size;
-Appearance holds themes, typography, and glass; Shortcuts holds every global
-shortcut, including capture, recording, and your own **Custom hotkeys**.
-**Search** holds the web-results
-toggle, one card per engine (Name · Search URL · `!keyword` · Browser · Open in
-web app), bookmarks, cheatsheets, the web-app browser, and the screenshot and
-recording options. **Ask** selects the endpoint and model, saves a local API
-key, toggles fallback, answer notifications (sound, Notification Center banner,
-Dock badge) and the per-turn web search, and controls how many Q&A rows and how
-many days of history are kept. **Providers** is one table with
-a row per provider — enable, the **Plain queries** checkbox, name,
-trigger, aliases, and order in the same row. Appearance links the themes folder;
-**Providers** also links the providers and commands files, config, log, and
-crash log, exports a backup, and lists startup diagnostics.
+`⌘,` (or the menu-bar icon) opens a native Settings window with nineteen panes in
+four sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
+and **Shortcuts**; Features holds **Search**, **Ask**, **Embedded Terminal**,
+**Bookmarks**, **Cheatsheets**, **Web Apps**, **Screenshots**, **After a
+capture**, **Recordings**, and **Captures**; System holds **About** and
+**Providers**; Advanced holds **Provider Files**, **Config Files**, and
+**Diagnostics**. General holds startup, permissions, power, notifications, the
+editor/terminal apps used by providers, clipboard history, and the command
+prefix; Launcher holds where the panel opens, the search placeholder, app order,
+and the panel size; Appearance holds themes, typography, and glass; Shortcuts
+holds every global shortcut, including capture, recording, and your own **Custom
+hotkeys**. **Search** holds the web-results toggle and one card per engine
+(Name · Search URL · `!keyword` · Browser · Open in web app). **Ask** selects the
+endpoint and model, saves a local API key, toggles fallback, answer
+notifications (sound, Notification Center banner, Dock badge) and the per-turn
+web search, and controls how many Q&A rows and how many days of history are
+kept. **Providers** is one table with a row per provider — enable, the **Plain
+queries** checkbox, name, trigger, aliases, and order in the same row. The
+Advanced panes open the provider and config files, export a backup, and list
+startup diagnostics, separate from the provider table.
 Hotkeys are recorded by pressing them, not typed. The recorder uses a short-lived
 session event tap, so macOS-reserved combinations such as `⌘Space` are captured
 instead of being swallowed by the system; it stops as soon as Settings loses
