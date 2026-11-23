@@ -13,6 +13,8 @@ provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
 |---|---|
 | `CoreTests` | query parsing and completion, ranking, frecency math, calculator, scope globs, config defaults, theme composition, app lookup |
 | `StorageTests` | SQLite migrations, frecency round-trip, metadata, clipboard dedupe/cap |
+| `ClipboardCaptureTests` | capture policy (concealed wins, ignored apps), `ignored_apps` config round-trip, copy-only paste targets |
+| `ClipboardSearchIndexTests` | the clipboard search snapshot: rebuild on history change, pinned ranking, folded scoring, per-keystroke timing at 5k entries |
 | `PathsEngineTests` | fd enumeration, excludes, fzf ranking, weird filenames |
 | `ManifestTests` | provider manifest parsing and validation diagnostics |
 | `AskTests` | Ask config round-trip without secrets, free-first model order, endpoint scoping, response/error parsing, quota fallback, invalid-key endpoint skipping, Settings model precedence, streaming, saved chats and sources, markdown blocks/tables/images, web-search parsing and the untrusted system note |

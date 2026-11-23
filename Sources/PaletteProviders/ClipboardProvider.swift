@@ -18,17 +18,13 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
 
     private let store: PaletteStore
     private let bridge: HostBridge
+    /// Folded history, rebuilt when the store's clipboard revision moves.
+    private let index = ClipboardSearchIndex()
 
     public init(store: PaletteStore, bridge: HostBridge) {
         self.store = store
         self.bridge = bridge
     }
-
-    // A hard safety cap for pathological histories. Normal configured limits
-    // (including the 5,000 default and 6,000 here) are scanned in full.
-    // shortcut: histories above 50k entries are capped; add a ranked index if
-    // that becomes a real use case.
-    private static let maxSearchEntries = 50_000
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         if let entryID = Self.transformEntryID(request.text) {
@@ -37,64 +33,51 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
         }
         let parsed = Self.parse(request.text)
         let query = parsed.query
-        // Fuzzy search has to see the whole recent history, because a
-        // non-contiguous match ("qbf" -> "quick brown fox") cannot be expressed
-        // as a SQL LIKE pattern.
-        let fetchLimit: Int
-        if query.isEmpty {
-            fetchLimit = min(500, max(1, request.limit))
-        } else {
-            let total = (try? await store.clipboardCount()) ?? 0
-            fetchLimit = max(1, min(Self.maxSearchEntries, max(request.limit, total)))
-        }
-        let entries = try await store.clipboardEntries(
-            limit: fetchLimit,
-            query: nil,
-            kind: parsed.kind,
-            // Thumbnails are only fetched for the handful of rows we show.
-            includeThumbnails: query.isEmpty
-        )
-        let ordered = entries.sorted { lhs, rhs in
-            if lhs.pinned != rhs.pinned { return lhs.pinned }
-            if lhs.kind != rhs.kind {
-                return Self.kindOrder(lhs.kind) < Self.kindOrder(rhs.kind)
-            }
-            return lhs.createdAt > rhs.createdAt
-        }
+        let limit = max(1, request.limit)
+
+        // Fuzzy search sees the whole recent history, because a non-contiguous
+        // match ("qbf" -> "quick brown fox") cannot be a SQL LIKE pattern.
+        let snapshot = await index.entries(for: store)
+        let candidates = parsed.kind.map { kind in snapshot.filter { $0.kind == kind } } ?? snapshot
 
         if query.isEmpty {
-            let shown = Array(ordered.prefix(max(1, request.limit)))
+            // The snapshot is already in display order. The clipboard browser
+            // never shows more than 500 rows, matching the old fetch cap.
+            let ids = candidates.prefix(min(limit, 500)).map(\.id)
+            let rows = try await store.clipboardEntries(ids: ids)
+            let byID = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let shown = ids.compactMap { byID[$0] }
             await Self.prefetchLinks(for: shown)
-            return shown.map { entry in
-                Self.item(for: entry, provider: descriptor)
-            }
+            return shown.map { Self.item(for: $0, provider: descriptor) }
         }
 
-        var matches: [(entry: ClipboardEntry, score: Double)] = []
-        for entry in ordered {
-            guard let score = Self.searchScore(entry, query: query) else { continue }
-            // Keep typed results flat and ranked; group headers only help the
-            // unfiltered clipboard browser.
-            matches.append((entry, score + (entry.pinned ? 25 : 0)))
+        let terms = query.split(whereSeparator: \.isWhitespace).map { Ranking.normalize(String($0)) }
+        var matches: [(id: String, score: Double, createdAt: Date)] = []
+        for entry in candidates {
+            guard let score = Ranking.score(foldedTerms: terms, foldedCandidate: entry.folded) else { continue }
+            // Keep typed results flat and ranked.
+            matches.append((entry.id, score + (entry.pinned ? 25 : 0), entry.createdAt))
         }
         matches.sort { lhs, rhs in
             if abs(lhs.score - rhs.score) > 0.0001 { return lhs.score > rhs.score }
-            return lhs.entry.createdAt > rhs.entry.createdAt
+            return lhs.createdAt > rhs.createdAt
         }
 
-        let limit = max(1, request.limit)
-        var top = Array(matches.prefix(limit))
-        for index in top.indices where top[index].entry.kind != .text && top[index].entry.thumbnailPNG == nil {
-            if let thumbnail = try? await store.clipboardThumbnail(id: top[index].entry.id) {
-                top[index].entry.thumbnailPNG = thumbnail
+        let top = Array(matches.prefix(limit))
+        let rows = try await store.clipboardEntries(ids: top.map(\.id), includeThumbnails: false)
+        let byID = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var items: [PaletteItem] = []
+        for match in top {
+            guard var entry = byID[match.id] else { continue }
+            if entry.kind != .text && entry.thumbnailPNG == nil {
+                entry.thumbnailPNG = try? await store.clipboardThumbnail(id: entry.id)
             }
-        }
-        return top.map { match in
-            var item = Self.item(for: match.entry, provider: descriptor)
+            var item = Self.item(for: entry, provider: descriptor)
             item.group = nil
             item.score = match.score
-            return item
+            items.append(item)
         }
+        return items
     }
 
     private static func item(for entry: ClipboardEntry, provider: ProviderDescriptor) -> PaletteItem {
@@ -106,21 +89,6 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
         case .text:
             return textItem(entry, provider: provider)
         }
-    }
-
-    /// The searchable form of an entry, capped so a huge text clipboard does
-    /// not make every keystroke crawl.
-    private static func searchScore(_ entry: ClipboardEntry, query: String) -> Double? {
-        let candidate: String
-        switch entry.kind {
-        case .text:
-            candidate = String(entry.text.prefix(4_000))
-        case .files:
-            candidate = String(entry.paths.joined(separator: " ").prefix(4_000))
-        case .image:
-            candidate = "Image \(entry.imageWidth)×\(entry.imageHeight) PNG image"
-        }
-        return Ranking.score(query: query, candidate: candidate)
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -358,14 +326,6 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
         }
         let rest = fields.count > 1 ? String(fields[1]) : ""
         return (kind, rest.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-
-    private static func kindOrder(_ kind: ClipboardKind) -> Int {
-        switch kind {
-        case .text: return 0
-        case .image: return 1
-        case .files: return 2
-        }
     }
 
     private static func relative(_ date: Date) -> String {

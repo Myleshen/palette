@@ -2136,6 +2136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // monitor keeps its last change count.
         let monitor = clipboardMonitor ?? ClipboardMonitor()
         let controller = searchController
+        monitor.setIgnoredApps(configuration.clipboard.ignoredApps)
         monitor.onCapture = { capture in
             Task {
                 switch capture {
