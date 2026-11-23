@@ -1017,7 +1017,7 @@ struct SettingsView: View {
             .init(title: "Launcher shortcut", tab: .shortcuts, anchor: "row-Launcher shortcut", keywords: "hotkey shortcut launcher"),
             .init(title: "Clipboard shortcut", tab: .shortcuts, anchor: "row-Clipboard shortcut", keywords: "hotkey shortcut clipboard"),
             .init(title: "Terminal shortcut", tab: .shortcuts, anchor: "row-Terminal shortcut", keywords: "hotkey shortcut terminal"),
-            .init(title: "Scratchpad shortcut", tab: .shortcuts, anchor: "row-Scratchpad shortcut", keywords: "hotkey shortcut scratchpad"),
+            .init(title: "Scratchpad list", tab: .shortcuts, anchor: "row-Scratchpad list", keywords: "hotkey shortcut scratchpad notes list"),
             .init(title: "Ask shortcut", tab: .shortcuts, anchor: "row-Ask shortcut", keywords: "hotkey shortcut ask"),
             .init(title: "Screenshot shortcuts", tab: .shortcuts, anchor: "shortcuts-capture", keywords: "screenshot screen region window recording hotkey"),
             .init(title: "Custom hotkeys", tab: .shortcuts, anchor: "shortcuts-bindings", keywords: "binding launch command provider url shortcut hotkey"),
@@ -1927,8 +1927,8 @@ struct SettingsView: View {
                             token: $clipboardRecordToken, label: "Clipboard hotkey", required: true)
                 shortcutRow("Terminal shortcut", id: "terminal", value: $config.terminalHotkey,
                             token: $terminalRecordToken, label: "Terminal hotkey")
-                shortcutRow("Scratchpad shortcut", id: "scratchpad", value: $config.scratchpadHotkey,
-                            token: $scratchpadRecordToken, label: "Scratchpad hotkey")
+                shortcutRow("Scratchpad list", id: "scratchpad", value: $config.scratchpadHotkey,
+                            token: $scratchpadRecordToken, label: "Scratchpad list hotkey")
                 shortcutRow("Ask shortcut", id: "ask", value: $config.askHotkey,
                             token: $askRecordToken, label: "Ask hotkey")
             } footer: {
@@ -2107,7 +2107,7 @@ struct SettingsView: View {
             ("Launcher", config.hotkey),
             ("Clipboard", config.clipboardHotkey),
             ("Terminal", config.terminalHotkey),
-            ("Scratchpad", config.scratchpadHotkey),
+            ("Scratchpad list", config.scratchpadHotkey),
             ("Ask", config.askHotkey),
             ("Screen", config.screenshotHotkey),
             ("Region", config.regionScreenshotHotkey),

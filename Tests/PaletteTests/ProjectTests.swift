@@ -88,4 +88,25 @@ final class ProjectTests: XCTestCase {
         XCTAssertNil(ProjectName.validate(".."))
         XCTAssertNil(ProjectName.validate("a..b"))
     }
+
+    func testBranchNameAcceptsGitBranches() {
+        for name in ["feature/name", "fix-123", "release/2.17.1", "a.b", "user/topic_1"] {
+            XCTAssertNil(BranchName.error(for: name), "expected \(name) to be valid")
+            XCTAssertTrue(BranchName.isValid(name))
+        }
+        XCTAssertNil(BranchName.error(for: "  feature/name  "))
+    }
+
+    func testBranchNameRejectsGitRefFormatViolations() {
+        let invalid = [
+            "", "   ", "@", "-nope", "feat ure", "a..b", "feature/.hidden",
+            "feature/trailing.", "feature/trailing/", "a//b", "a.lock",
+            "feature/foo.lock", "a~b", "a^b", "a:b", "a?b", "a*b", "a[b",
+            "a\\b", "a@{b",
+        ]
+        for name in invalid {
+            XCTAssertNotNil(BranchName.error(for: name), "expected \(name) to be rejected")
+            XCTAssertFalse(BranchName.isValid(name))
+        }
+    }
 }
