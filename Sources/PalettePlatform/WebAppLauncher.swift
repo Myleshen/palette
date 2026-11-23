@@ -32,15 +32,22 @@ public enum WebAppLauncher {
         let profile = profileRoot.appendingPathComponent(String(slug), isDirectory: true)
         try? FileManager.default.createDirectory(at: profile, withIntermediateDirectories: true)
 
-        return WebAppLaunchSpec(
-            executable: executable,
-            arguments: [
-                "--app=\(url.absoluteString)",
-                "--user-data-dir=\(profile.path)",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--window-size=1280,900",
-            ]
-        )
+        return WebAppLaunchSpec(executable: executable, arguments: arguments(url: url, profile: profile))
+    }
+
+    /// Split out from `launchSpec` so tests can check the argv without a browser installed.
+    static func arguments(url: URL, profile: URL) -> [String] {
+        var arguments = [
+            "--app=\(url.absoluteString)",
+            "--user-data-dir=\(profile.path)",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--window-size=1280,900",
+        ]
+        // Chromium keeps its windows out of the macOS accessibility tree unless
+        // forced, so window managers (Amethyst) cannot see or tile web-app windows.
+        let accessibilityFlag = "--force-renderer-accessibility"
+        if !arguments.contains(accessibilityFlag) { arguments.append(accessibilityFlag) }
+        return arguments
     }
 }
