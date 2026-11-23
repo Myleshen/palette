@@ -45,7 +45,8 @@ PALETTE_SCRIPT='show; query=Safari; wait=1.2; actions; \
 ```
 
 Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
-`query=<text>`, `snapshot=<path>`, `shot`, `settings_tab=<index>`,
+`query=<text>`, `rail=<id>`, `railfocus`, `snapshot=<path>`, `shot`,
+`settings_tab=<index>`,
 `settings_size=<w>x<h>`, `settings_edit=<field>=<value>`,
 `settings_clear_search`, `awake=<seconds>`, `settings_snapshot=<path>`,
 `window_snapshot=<path>`, `askwindow=<question>`, `chatwindow`,

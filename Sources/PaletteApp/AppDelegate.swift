@@ -535,6 +535,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.fireBinding(keys: value)
                 } else if let value = step.dropPrefix("query=") {
                     self.searchController.query = value
+                } else if let value = step.dropPrefix("rail=") {
+                    self.searchController.selectRail(value)
+                } else if step == "railfocus" {
+                    self.searchController.railFocused = true
                 } else if step == "refresh" {
                     self.searchController.refreshResults()
                 } else if let value = step.dropPrefix("snapshot=") {
@@ -622,6 +626,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var itemCount: Int
         var actionsMode: Bool
         var previewEnabled: Bool
+        var railFocused: Bool
+        var stripFocused: Bool
         var scratchpadActive: Bool
         var terminalActive: Bool
         var askWindows: Int
@@ -644,7 +650,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private static let scriptKeys = [
         "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
-        "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "askWindows",
+        "actionsMode", "previewEnabled", "railFocused", "stripFocused",
+        "scratchpadActive", "terminalActive", "askWindows",
         "askStreaming", "askTurns", "askChats", "askBadge",
         "firstTitle", "firstProvider", "statusMessage", "probeResult",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
@@ -659,6 +666,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             itemCount: searchController?.items.count ?? 0,
             actionsMode: searchController?.actionsMode ?? false,
             previewEnabled: searchController?.previewEnabled ?? false,
+            railFocused: searchController?.railFocused ?? false,
+            stripFocused: searchController?.stripFocused ?? false,
             scratchpadActive: searchController?.scratchpadActive ?? false,
             terminalActive: searchController?.terminalActive ?? false,
             askWindows: askWindow == nil ? 0 : 1,
@@ -684,6 +693,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "itemCount": return String(observation.itemCount)
         case "actionsMode": return String(observation.actionsMode)
         case "previewEnabled": return String(observation.previewEnabled)
+        case "railFocused": return String(observation.railFocused)
+        case "stripFocused": return String(observation.stripFocused)
         case "scratchpadActive": return String(observation.scratchpadActive)
         case "terminalActive": return String(observation.terminalActive)
         case "askWindows": return String(observation.askWindows)
@@ -777,6 +788,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "itemCount": observation.itemCount,
             "actionsMode": observation.actionsMode,
             "previewEnabled": observation.previewEnabled,
+            "railFocused": observation.railFocused,
+            "stripFocused": observation.stripFocused,
             "scratchpadActive": observation.scratchpadActive,
             "terminalActive": observation.terminalActive,
             "askWindows": observation.askWindows,
@@ -1067,7 +1080,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 id: $0.descriptor.id,
                 name: $0.descriptor.name,
                 trigger: $0.descriptor.trigger,
-                isGlobal: $0.descriptor.isGlobal
+                isGlobal: $0.descriptor.isGlobal,
+                group: $0.descriptor.group
             )
         }
         let registry = ProviderRegistry(
@@ -1799,7 +1813,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 id: $0.descriptor.id,
                 name: $0.descriptor.name,
                 trigger: $0.descriptor.trigger,
-                isGlobal: $0.descriptor.isGlobal
+                isGlobal: $0.descriptor.isGlobal,
+                group: $0.descriptor.group
             )
         }
     }

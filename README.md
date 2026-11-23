@@ -194,7 +194,7 @@ Caches live in `~/Library/Caches/Palette`.
 | `⌘⏎` | secondary action (usually paste, or reveal for paths) |
 | `⌘K` | action list for the selection |
 | `⌘1`…`⌘9` | open the nth result |
-| `Tab` / `⇧Tab` | cycle providers in the rail (`/web`, `/zj`, `/bw`, …) |
+| `Tab` / `⇧Tab` | cycle rail rows (groups, `/bw`, …); from a group, `Tab` enters its strip |
 | `Esc` | clear the query, then dismiss |
 | `⌘,` | open Settings |
 | `⌘R` | reload config, themes, and providers after manual file edits |
@@ -205,11 +205,14 @@ Application rows expose Open, Show in Finder, Copy Bundle ID, and Copy Path in
 ### Provider rail
 
 A full-height rail sits on the left of the search field and cards. **Everything**
-is pinned at the top and is the plain-query scope; below it is one row per
-provider that declares a trigger. Clicking a row opens that provider with an
-empty query, and `Tab` / `⇧Tab` cycle the same rows from the keyboard. The rail
-narrows to icons when the preview pane is open or the panel is under 700 pt
-wide, and scrolls a whole row at a time. Prefixes work with or without the rail.
+is pinned at the top and is the plain-query scope; **Apps** opens the app list.
+Below them is one row per provider group and one per ungrouped provider. A group
+(Bitwarden, GitHub) opens its first member and shows a secondary strip of its
+children above the list; the strip also appears in the top-bar layout. Clicking a
+row opens that provider with an empty query, and `Tab` / `⇧Tab` cycle the same
+rows from the keyboard. The rail narrows to icons when the preview pane is open
+or the panel is under 700 pt wide, and scrolls a whole row at a time. Prefixes
+work with or without the rail.
 
 ### Prefixes
 
