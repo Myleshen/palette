@@ -1288,8 +1288,14 @@ struct LauncherRootView: View {
     @ViewBuilder
     private var content: some View {
         if controller.terminalActive {
-            TerminalPane(controller: controller, theme: theme)
-                .padding(LauncherMetrics.innerPadding)
+            GeometryReader { proxy in
+                let size = WindowConfig.terminalContentSize(in: proxy.size)
+                TerminalPane(controller: controller, theme: theme)
+                    .frame(width: size.width, height: size.height)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .padding(.horizontal, CGFloat(WindowConfig.terminalInsetWidth))
+            .padding(.vertical, CGFloat(WindowConfig.terminalInsetHeight))
         } else if controller.scratchpadActive {
             ScratchpadView(controller: controller, theme: theme)
                 .padding(LauncherMetrics.innerPadding)
