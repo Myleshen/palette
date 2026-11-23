@@ -35,13 +35,15 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
         var lastSeen: String
         var mtime: Double
         var marked: Bool
-        var preview: String?
         var relativePath: String
 
         /// Mirrors atlas's `inbox_items` exactly: only artifacts that carry the
         /// review marker. Acking a file removes the marker, so it leaves the
         /// inbox; nothing queues by default.
         var isInbox: Bool { kind == "artifact" && marked }
+
+        /// What the matcher and the fzf filter see. No file contents.
+        var haystack: String { "\(title) \(relativePath) \(summary)" }
     }
 
     private struct Snapshot: Sendable {
@@ -50,16 +52,35 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private actor Cache {
-        private var snapshot: (value: Snapshot, at: Date)?
+        private var snapshot: (key: String, value: Snapshot)?
+        /// Preview HTML path per `path|mtime`, built only for the rows a search
+        /// actually returns.
+        private var previews: [String: String?] = [:]
 
+        /// Keyed by state.json's mtime and size: atlas rewrites it on every run,
+        /// so nothing is re-parsed or re-read while the index is unchanged.
         func load(_ config: Config) -> Snapshot {
-            if let snapshot, Date().timeIntervalSince(snapshot.at) < 10 { return snapshot.value }
+            let key = AtlasProvider.stateKey(config.stateFile)
+            if let snapshot, snapshot.key == key { return snapshot.value }
             let fresh = AtlasProvider.load(config)
-            snapshot = (fresh, Date())
+            snapshot = (key, fresh)
+            previews.removeAll()
             return fresh
         }
 
-        func invalidate() { snapshot = nil }
+        func preview(for entry: Entry, config: Config) -> String? {
+            let key = "\(entry.path)|\(entry.mtime)"
+            if let cached = previews[key] { return cached }
+            let preview = AtlasProvider.previewPath(entry, config: config)
+            if previews.count > 512 { previews.removeAll() }
+            previews[key] = preview
+            return preview
+        }
+
+        func invalidate() {
+            snapshot = nil
+            previews.removeAll()
+        }
     }
 
     private let config: Config
@@ -101,19 +122,29 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
             // when the user asked for atlas explicitly.
             return request.isBound ? [setupItem()] : []
         }
-        let matched = snapshot.entries.compactMap { entry -> (Entry, Double)? in
-            let haystack = "\(entry.title) \(entry.relativePath) \(entry.summary)"
-            guard let score = Ranking.score(terms: request.terms, candidate: haystack) else { return nil }
+        let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidates = snapshot.entries.map(\.haystack)
+        let indices = await RowFilter.matchingIndices(query: query, candidates: candidates)
+        let matched = indices.map { index -> (entry: Entry, score: Double) in
+            let entry = snapshot.entries[index]
+            let score = query.isEmpty ? 0 : (Ranking.score(query: query, candidate: candidates[index]) ?? 0)
             return (entry, score)
         }
-        // Inbox first, then newest: the review queue is the point of the provider.
+        // Inbox first, then relevance; an empty query keeps newest first, which
+        // is what the review queue wants.
         let sorted = matched.sorted { lhs, rhs in
-            if lhs.0.isInbox != rhs.0.isInbox { return lhs.0.isInbox }
-            if lhs.0.lastSeen != rhs.0.lastSeen { return lhs.0.lastSeen > rhs.0.lastSeen }
-            if lhs.0.mtime != rhs.0.mtime { return lhs.0.mtime > rhs.0.mtime }
-            return lhs.1 > rhs.1
+            if lhs.entry.isInbox != rhs.entry.isInbox { return lhs.entry.isInbox }
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            if lhs.entry.lastSeen != rhs.entry.lastSeen { return lhs.entry.lastSeen > rhs.entry.lastSeen }
+            if lhs.entry.mtime != rhs.entry.mtime { return lhs.entry.mtime > rhs.entry.mtime }
+            return lhs.entry.path < rhs.entry.path
         }
-        return sorted.prefix(100).map { item($0.0) }
+        // Preview work stays on the rows on screen.
+        var items: [PaletteItem] = []
+        for (entry, score) in sorted.prefix(100) {
+            items.append(await item(entry, score: score))
+        }
+        return items
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -145,7 +176,7 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
 
     // MARK: - Rows
 
-    private func item(_ entry: Entry) -> PaletteItem {
+    private func item(_ entry: Entry, score: Double) async -> PaletteItem {
         let path = entry.path
         var actions = [
             PaletteAction(id: "open", title: "Open", kind: .openPath, value: .text(path)),
@@ -161,6 +192,7 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
                 at: 1
             )
         }
+        let previewPath = await cache.preview(for: entry, config: config)
         return PaletteItem(
             id: path,
             title: entry.title,
@@ -168,15 +200,15 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
             icon: .file(path),
             badge: entry.isInbox ? "review" : nil,
             group: entry.project,
-            score: 1_000,
+            score: 1_000 + score,
             actions: actions,
-            preview: preview(entry),
+            preview: preview(entry, previewPath: previewPath),
             providerID: descriptor.id,
             providerName: descriptor.name
         )
     }
 
-    private func preview(_ entry: Entry) -> ItemPreview {
+    private func preview(_ entry: Entry, previewPath: String?) -> ItemPreview {
         // The generated HTML is a whole page; inside the pane it renders at a
         // fraction of its size and is unreadable. Show the source text instead.
         let ext = (entry.path as NSString).pathExtension.lowercased()
@@ -186,8 +218,8 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
             let limit = 6_000
             return .text(body.count > limit ? String(body.prefix(limit)) + "\n…" : body)
         }
-        if let preview = entry.preview {
-            return .document(url: preview, kind: "html")
+        if let previewPath {
+            return .document(url: previewPath, kind: "html")
         }
         if ext == "html" || ext == "htm" {
             return .document(url: entry.path, kind: "html")
@@ -230,6 +262,15 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
         var removed_on: String?
     }
 
+    private static func stateKey(_ url: URL) -> String {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
+            return "missing"
+        }
+        let mtime = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let size = (attributes[.size] as? NSNumber)?.intValue ?? 0
+        return "\(mtime)|\(size)"
+    }
+
     private static func load(_ config: Config) -> Snapshot {
         guard let data = try? Data(contentsOf: config.stateFile),
               let state = try? JSONDecoder().decode(StoredState.self, from: data) else {
@@ -245,14 +286,11 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
             let ext = (path as NSString).pathExtension.lowercased()
             let isMarkdown = ext == "md" || ext == "markdown"
             let isHTML = ext == "html" || ext == "htm"
-            let text = isMarkdown || isHTML ? readText(path) : nil
-            let marked = text.map { hasMarker($0, isMarkdown: isMarkdown) } ?? false
-            var preview: String?
-            if isMarkdown, let text {
-                let candidate = config.previewDirectory
-                    .appendingPathComponent(previewDigest(path: path, text: text) + ".html").path
-                if manager.fileExists(atPath: candidate) { preview = candidate }
-            }
+            // The inbox flag needs the marker, which lives in the front matter
+            // or the `<head>`. Read the head only; the full text and the
+            // preview digest wait until a row is actually shown.
+            let head = isMarkdown || isHTML ? readHead(path) : nil
+            let marked = head.map { hasMarker($0, isMarkdown: isMarkdown) } ?? false
             let root = config.roots.first { path.hasPrefix($0 + "/") }
             let relative = root.map { String(path.dropFirst($0.count + 1)) }
                 ?? path.replacingOccurrences(of: config.home + "/", with: "")
@@ -269,11 +307,21 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
                 lastSeen: stored.last_seen ?? "",
                 mtime: modified.timeIntervalSince1970,
                 marked: marked,
-                preview: preview,
                 relativePath: relative
             ))
         }
         return Snapshot(entries: entries, stateFound: true)
+    }
+
+    /// The preview atlas wrote for this exact content, or nil when there is
+    /// none. Hashing the whole file is why this is deferred to the visible rows.
+    private static func previewPath(_ entry: Entry, config: Config) -> String? {
+        let ext = (entry.path as NSString).pathExtension.lowercased()
+        guard ext == "md" || ext == "markdown",
+              let text = readText(entry.path) else { return nil }
+        let candidate = config.previewDirectory
+            .appendingPathComponent(previewDigest(path: entry.path, text: text) + ".html").path
+        return FileManager.default.fileExists(atPath: candidate) ? candidate : nil
     }
 
     private static var fallbackTool: String? {
@@ -286,6 +334,14 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
         // Atlas reads with errors="replace"; decode the same way so the preview
         // hash still matches for files that are not clean UTF-8.
         return String(decoding: data, as: UTF8.self)
+    }
+
+    /// The marker only lives at the top of a file: front matter for Markdown,
+    /// `<head>` for HTML. 8 KB is far past either and keeps the index scan cheap.
+    private static func readHead(_ path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        return String(decoding: handle.readData(ofLength: 8_192), as: UTF8.self)
     }
 
     // MARK: - Atlas compatibility

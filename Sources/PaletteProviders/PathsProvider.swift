@@ -263,10 +263,18 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         return items
     }
 
+    /// True when this provider walks the whole home folder, which is the walk
+    /// that raises macOS folder prompts.
+    public var indexesHomeFolder: Bool {
+        scope.expandedRoots.contains(NSHomeDirectory())
+    }
+
     /// Loads the disk cache or walks the scope now. Called at launch so the
-    /// first bound query is warm.
-    public func prewarm() async {
+    /// first bound query is warm. The whole home folder is only walked once the
+    /// user consented: it is the walk that raises macOS folder prompts.
+    public func prewarm(homeConsent: Bool) async {
         guard ToolLocator.shared.path(for: "fd") != nil else { return }
+        guard homeConsent || !indexesHomeFolder else { return }
         _ = try? await snapshot()
     }
 

@@ -19,6 +19,7 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
 
     private let service: CaptureService
     private let bridge: HostBridge
+    private let cache = ShortCache<[Entry]>(ttl: 5)
 
     public init(service: CaptureService, bridge: HostBridge) {
         self.service = service
@@ -36,7 +37,17 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let config = await service.config
         let directory = config.directory
-        var entries = Self.entries(in: directory)
+        // The directory's own mtime changes with every new capture, so a fresh
+        // screenshot appears immediately and an unchanged folder is not
+        // re-enumerated per keystroke.
+        let key = "\(directory)|\(config.gallery)|\(Self.modified(directory))"
+        var entries: [Entry]
+        if let cached = await cache.get(key) {
+            entries = cached
+        } else {
+            entries = Self.entries(in: directory)
+            await cache.set(entries, key: key)
+        }
         if config.gallery == "palette" {
             entries = entries.filter { Self.isPaletteCapture($0.url) }
         }
@@ -200,6 +211,13 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
     }
 
     // MARK: - Files
+
+    private static func modified(_ directory: String) -> String {
+        let url = URL(fileURLWithPath: (directory as NSString).expandingTildeInPath)
+        guard let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+            .contentModificationDate else { return "-" }
+        return String(Int(date.timeIntervalSince1970))
+    }
 
     /// Palette names its own captures `shot-*.png` and `rec-*.mov`; anything
     /// else in the folder came from Shottr, CleanShot, the system, or the user.

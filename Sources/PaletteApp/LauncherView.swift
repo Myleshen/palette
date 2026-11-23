@@ -1429,6 +1429,7 @@ struct LauncherRootView: View {
     private var emptyDetail: String {
         if controller.isSearching { return "Results appear as each source responds." }
         if controller.query.isEmpty { return "Search apps, files, clipboard, snippets and more." }
+        if let hint = controller.missingToolHint { return hint }
         if controller.scopeLabel != nil { return "Nothing here yet." }
         return "Try a different spelling, or press ⌘, to enable more sources."
     }

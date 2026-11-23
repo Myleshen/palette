@@ -143,6 +143,25 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     private let bridge: HostBridge
     private let terminalApp: String
     private let terminal: String
+    private let cache = ResultCache()
+
+    /// `gh` is spawned per keystroke otherwise. Results live for 20 s, and a
+    /// cancelled search kills its child through `ProcessRunner`, so a newer
+    /// query simply replaces the in-flight one.
+    private actor ResultCache {
+        private var entries: [String: (items: [PaletteItem], at: Date)] = [:]
+        private let ttl: TimeInterval = 20
+
+        func cached(_ key: String) -> [PaletteItem]? {
+            guard let entry = entries[key], Date().timeIntervalSince(entry.at) < ttl else { return nil }
+            return entry.items
+        }
+
+        func store(_ items: [PaletteItem], key: String) {
+            if entries.count > 40 { entries.removeAll() }
+            entries[key] = (items, Date())
+        }
+    }
 
     public init(
         kind: GitHubKind = .context,
@@ -180,14 +199,19 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             )]
         }
 
+        let key = "\(kind.rawValue)|\(FileManager.default.currentDirectoryPath)|\(query)"
+        if let cached = await cache.cached(key) { return cached }
+        let items: [PaletteItem]
         switch kind {
-        case .context: return await contextItems(gh, query: query)
-        case .repos: return await repositoryItems(gh, query: query)
-        case .pulls: return await pullRequestItems(gh, query: query)
-        case .issues: return await issueItems(gh, query: query)
-        case .actions: return await actionRunItems(gh, query: query)
-        case .notifications: return await notificationItems(gh, query: query)
+        case .context: items = await contextItems(gh, query: query)
+        case .repos: items = await repositoryItems(gh, query: query)
+        case .pulls: items = await pullRequestItems(gh, query: query)
+        case .issues: items = await issueItems(gh, query: query)
+        case .actions: items = await actionRunItems(gh, query: query)
+        case .notifications: items = await notificationItems(gh, query: query)
         }
+        await cache.store(items, key: key)
+        return items
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {

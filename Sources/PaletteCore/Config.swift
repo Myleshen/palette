@@ -450,6 +450,12 @@ public struct PaletteConfig: Sendable, Equatable {
     /// Allowlist of providers searched by a plain, unprefixed query. `apps` is
     /// always searched and need not be listed.
     public var globalProviders: [String]
+    /// Provider ids whose missing-tool prompt was already answered, so the
+    /// launcher never asks twice.
+    public var missingToolAcknowledged: [String]
+    /// Whether the user agreed to index the whole home folder. nil means the
+    /// one-time consent prompt has not been shown.
+    public var indexingHomeConsent: Bool?
 
     /// Providers a plain query searches out of the box, before user changes.
     public static let defaultGlobalProviders = [
@@ -496,6 +502,8 @@ public struct PaletteConfig: Sendable, Equatable {
         bindings: [HotkeyBinding] = [],
         shortcuts: [ShortcutBinding] = [],
         globalProviders: [String] = PaletteConfig.defaultGlobalProviders,
+        missingToolAcknowledged: [String] = [],
+        indexingHomeConsent: Bool? = nil,
         terminalSession: TerminalSessionConfig = TerminalSessionConfig(),
         timer: TimerConfig = TimerConfig(),
         capture: CaptureConfig = CaptureConfig(),
@@ -533,6 +541,8 @@ public struct PaletteConfig: Sendable, Equatable {
         self.bindings = bindings
         self.shortcuts = shortcuts
         self.globalProviders = globalProviders
+        self.missingToolAcknowledged = missingToolAcknowledged
+        self.indexingHomeConsent = indexingHomeConsent
         self.terminalSession = terminalSession
         self.timer = timer
         self.capture = capture
@@ -847,6 +857,9 @@ public enum ConfigLoader {
             config.disabledProviders = (providers.strArray("disabled") ?? [])
                 .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
                 .filter { !$0.isEmpty && $0 != "apps" }
+            config.missingToolAcknowledged = (providers.strArray("missing_tool_acknowledged") ?? [])
+                .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                .filter { !$0.isEmpty }
             // Absent key keeps the default allowlist, so old configs gain it;
             // an explicit `global = []` opts out of everything but apps.
             if let global = providers.strArray("global") {
@@ -882,6 +895,10 @@ public enum ConfigLoader {
                 }
                 config.providerAliases = parsed
             }
+        }
+
+        if let indexing = table.table("indexing") {
+            config.indexingHomeConsent = indexing.bool("home_consent")
         }
 
         // `[[binding]]` is an array of tables so shortcuts like ctrl+alt+g need
@@ -1167,6 +1184,12 @@ public enum ConfigLoader {
           "calc", "search", "web", "win", "unit", "zj",
           "bookmark", "pins", "system", "timer", "awake", "cheat",
         ]
+        # Providers whose missing-tool prompt was already answered.
+        missing_tool_acknowledged = []
+
+        # Ask once before indexing the whole home folder for the file providers.
+        # [indexing]
+        # home_consent = true
 
         [providers.aliases]
 
@@ -1353,7 +1376,13 @@ public enum ConfigWriter {
         out.append("order = [\(config.providerOrder.map(quote).joined(separator: ", "))]")
         out.append("disabled = [\(config.disabledProviders.map(quote).joined(separator: ", "))]")
         out.append("global = [\(config.globalProviders.map(quote).joined(separator: ", "))]")
+        out.append("missing_tool_acknowledged = [\(config.missingToolAcknowledged.map(quote).joined(separator: ", "))]")
         out.append("")
+        if let consent = config.indexingHomeConsent {
+            out.append("[indexing]")
+            out.append("home_consent = \(consent)")
+            out.append("")
+        }
         out.append("[providers.aliases]")
         for id in config.providerAliases.keys.sorted() {
             let aliases = config.providerAliases[id] ?? []
