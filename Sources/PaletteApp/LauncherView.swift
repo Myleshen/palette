@@ -1,5 +1,7 @@
 import AppKit
 import class SwiftTerm.LocalProcessTerminalView
+import class SwiftTerm.TerminalView
+import protocol SwiftTerm.LocalProcessTerminalViewDelegate
 import PaletteCore
 import PalettePlatform
 import QuickLookUI
@@ -1228,7 +1230,7 @@ struct LauncherRootView: View {
     @ViewBuilder
     private var content: some View {
         if controller.terminalActive {
-            TerminalPane(theme: theme, initialCommand: controller.terminalInitialCommand, session: controller.terminalSession)
+            TerminalPane(controller: controller, theme: theme)
                 .padding(LauncherMetrics.innerPadding)
         } else if controller.scratchpadActive {
             ScratchpadView(controller: controller, theme: theme)
@@ -2018,10 +2020,70 @@ extension Notification.Name {
     static let paletteTerminalStop = Notification.Name("palette.terminal.stop")
 }
 
-struct TerminalPane: NSViewRepresentable {
+/// The terminal card: the live pane plus an end card, so a finished session is
+/// obviously over instead of looking like a hung pane showing stale output.
+struct TerminalPane: View {
+    @ObservedObject var controller: SearchController
+    var theme: Theme
+
+    var body: some View {
+        // The card takes its own row instead of covering the last lines of
+        // output, so nothing the user may still need to read is hidden.
+        VStack(spacing: 0) {
+            TerminalSurface(
+                theme: theme,
+                initialCommand: controller.terminalInitialCommand,
+                session: controller.terminalSession,
+                restartToken: controller.terminalRestartToken,
+                onExit: { [weak controller] code in controller?.noteTerminalExited(code) }
+            )
+            if let code = controller.terminalExitCode {
+                endCard(code)
+            }
+        }
+    }
+
+    private func endCard(_ code: Int32?) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "terminal")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.color(theme.palette.accent))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(code.map { "Session ended (exit \($0))" } ?? "Session ended (terminated)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.color(theme.palette.fg))
+                Text("Output stays until you close · esc or ⌘W")
+                    .font(.system(size: 10))
+                    .foregroundColor(theme.color(theme.palette.fgMuted))
+            }
+            Spacer()
+            Button("Restart") { controller.restartTerminal() }
+            Button("Close") { controller.closeTerminalPanel() }
+        }
+        .buttonStyle(.borderless)
+        .font(.system(size: 11))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            GlassSurface(
+                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                tint: theme.color(theme.palette.elevated).opacity(0.9)
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(theme.color(theme.palette.border).opacity(0.6), lineWidth: 1)
+        )
+        .padding(LauncherMetrics.innerPadding)
+    }
+}
+
+struct TerminalSurface: NSViewRepresentable {
     var theme: Theme
     var initialCommand: String?
     var session: TerminalSessionConfig
+    var restartToken: Int
+    var onExit: (Int32?) -> Void
 
     /// The stop observer runs on the main queue but is `@Sendable`; the view
     /// itself is main-actor UI.
@@ -2033,13 +2095,153 @@ struct TerminalPane: NSViewRepresentable {
         }
     }
 
-    final class Coordinator {
+    @MainActor
+    final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         weak var view: LocalProcessTerminalView?
         var observer: NSObjectProtocol?
-        var started = false
+        var token = 0
+        var cancelled = false
+        var session: TerminalSessionConfig
+        var initialCommand: String?
+        var onExit: (Int32?) -> Void
+        /// Sanitized zellij session name; set only while a zellij pane runs.
+        private var zellijName: String?
+        /// Automatic stale-session rebuilds already spent for this pane.
+        private var rebuilds = 0
+
+        init(session: TerminalSessionConfig, initialCommand: String?, token: Int, onExit: @escaping (Int32?) -> Void) {
+            self.session = session
+            self.initialCommand = initialCommand
+            self.token = token
+            self.onExit = onExit
+        }
+
+        func start(restarting: Bool) {
+            guard let view, !cancelled else { return }
+            if restarting {
+                rebuilds = 0
+                zellijName = nil
+                // Keep the old output readable, but mark the new run.
+                view.feed(text: "\r\n")
+            }
+            let shell = Self.shell(session)
+            let environment = Self.environment(shell: shell)
+            let name = session.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Palette" : session.name
+            let zellij = ToolLocator.shared.path(for: "zellij")
+            let tmux = ToolLocator.shared.path(for: "tmux")
+            let zellijWanted = session.multiplexer == .zellij || session.multiplexer == .auto
+            let tmuxWanted = session.multiplexer == .tmux || session.multiplexer == .auto
+
+            if zellijWanted, let zellij {
+                // Decide before the PTY starts: an exited session of the same
+                // name would make attach resurrect stale panes or fail.
+                Task { @MainActor in
+                    let preparation = await ZellijLauncher.prepare(name: name)
+                    guard !self.cancelled, self.view === view else { return }
+                    self.zellijName = preparation.name
+                    if let warning = preparation.warning {
+                        view.feed(text: "\r\nzellij: \(warning)\r\n")
+                    }
+                    view.startProcess(
+                        executable: zellij,
+                        args: ["attach", "--create", preparation.name],
+                        environment: environment,
+                        execName: "zellij",
+                        currentDirectory: NSHomeDirectory()
+                    )
+                    self.didStart(view)
+                }
+                return
+            }
+
+            if tmuxWanted, let tmux {
+                view.startProcess(
+                    executable: tmux,
+                    args: ["new-session", "-A", "-s", name, "--", shell, "-l"],
+                    environment: environment,
+                    execName: "tmux",
+                    currentDirectory: NSHomeDirectory()
+                )
+            } else {
+                view.startProcess(
+                    executable: shell,
+                    args: ["-l"],
+                    environment: environment,
+                    execName: (shell as NSString).lastPathComponent,
+                    currentDirectory: NSHomeDirectory()
+                )
+            }
+            didStart(view)
+        }
+
+        private func didStart(_ view: LocalProcessTerminalView) {
+            view.window?.makeFirstResponder(view)
+            if let command = initialCommand, !command.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak view] in
+                    view?.send(txt: command + "\n")
+                }
+            }
+            if ProcessInfo.processInfo.environment["PALETTE_TERMINAL_DEBUG"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    let rows = view.terminalStateSnapshot().visibleRows
+                        .map(\.text)
+                        .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    Log.shared.info("Terminal font: \(view.font.fontName) \(view.font.pointSize)", source: "terminal")
+                    Log.shared.info("Terminal rows: \(rows.joined(separator: " | "))", source: "terminal")
+                }
+            }
+        }
+
+        // MARK: LocalProcessTerminalViewDelegate
+
+        func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
+
+        func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
+
+        func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+
+        func processTerminated(source: TerminalView, exitCode: Int32?) {
+            guard let view else { return }
+            // A stale zellij attach (dead session, resurrect prompt) gets one
+            // rebuild; anything else is a real end the user has to see.
+            if let name = zellijName, rebuilds == 0, exitCode != 0,
+               ZellijAttach.isStaleSessionFailure(Self.visibleText(view)) {
+                rebuilds = 1
+                view.feed(text: "\r\n↻ zellij session \"\(name)\" was stale, rebuilding it\r\n")
+                start(restarting: false)
+                return
+            }
+            onExit(exitCode)
+        }
+
+        private static func visibleText(_ view: LocalProcessTerminalView) -> String {
+            view.terminalStateSnapshot().visibleRows.map(\.text).joined(separator: "\n")
+        }
+
+        static func shell(_ session: TerminalSessionConfig) -> String {
+            let configured = session.shell.trimmingCharacters(in: .whitespacesAndNewlines)
+            if configured.isEmpty {
+                return ToolLocator.shared.path(for: "fish") ?? "/bin/zsh"
+            }
+            if configured.contains("/") {
+                return FileManager.default.isExecutableFile(atPath: configured) ? configured : "/bin/zsh"
+            }
+            return ToolLocator.shared.path(for: configured) ?? "/bin/zsh"
+        }
+
+        private static func environment(shell: String) -> [String] {
+            var environment = ProcessInfo.processInfo.environment
+                .filter { $0.key != "SHELL" && $0.key != "TERM" }
+                .map { "\($0.key)=\($0.value)" }
+            environment.append("SHELL=\(shell)")
+            environment.append("TERM=xterm-256color")
+            return environment
+        }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(session: session, initialCommand: initialCommand, token: restartToken, onExit: onExit)
+    }
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let terminal = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 560))
@@ -2052,6 +2254,7 @@ struct TerminalPane: NSViewRepresentable {
         terminal.layer?.cornerRadius = 10
         terminal.font = resolvedFont()
         context.coordinator.view = terminal
+        terminal.processDelegate = context.coordinator
         let stoppable = Stoppable(terminal)
         context.coordinator.observer = NotificationCenter.default.addObserver(
             forName: .paletteTerminalStop,
@@ -2061,52 +2264,7 @@ struct TerminalPane: NSViewRepresentable {
             stoppable.view.terminate()
         }
         DispatchQueue.main.async {
-            let shell = resolvedShell()
-            let environment = terminalEnvironment(shell: shell)
-            let zellij = ToolLocator.shared.path(for: "zellij")
-            let tmux = ToolLocator.shared.path(for: "tmux")
-            let name = session.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Palette" : session.name
-            switch session.multiplexer {
-            case .zellij where zellij != nil, .auto where zellij != nil:
-                terminal.startProcess(
-                    executable: zellij!,
-                    args: ["attach", "--create", name],
-                    environment: environment,
-                    execName: "zellij",
-                    currentDirectory: NSHomeDirectory()
-                )
-            case .tmux where tmux != nil, .auto where tmux != nil:
-                terminal.startProcess(
-                    executable: tmux!,
-                    args: ["new-session", "-A", "-s", name, "--", shell, "-l"],
-                    environment: environment,
-                    execName: "tmux",
-                    currentDirectory: NSHomeDirectory()
-                )
-            default:
-                terminal.startProcess(
-                    executable: shell,
-                    args: ["-l"],
-                    environment: environment,
-                    execName: (shell as NSString).lastPathComponent,
-                    currentDirectory: NSHomeDirectory()
-                )
-            }
-            terminal.window?.makeFirstResponder(terminal)
-            if let command = initialCommand, !command.isEmpty {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-                    terminal.send(txt: command + "\n")
-                }
-            }
-            if ProcessInfo.processInfo.environment["PALETTE_TERMINAL_DEBUG"] == "1" {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    let rows = terminal.terminalStateSnapshot().visibleRows
-                        .map(\.text)
-                        .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                    Log.shared.info("Terminal font: \(terminal.font.fontName) \(terminal.font.pointSize)", source: "terminal")
-                    Log.shared.info("Terminal rows: \(rows.joined(separator: " | "))", source: "terminal")
-                }
-            }
+            context.coordinator.start(restarting: false)
         }
         return terminal
     }
@@ -2161,37 +2319,26 @@ struct TerminalPane: NSViewRepresentable {
         return (family, size ?? 13)
     }
 
-    private func resolvedShell() -> String {
-        let configured = session.shell.trimmingCharacters(in: .whitespacesAndNewlines)
-        if configured.isEmpty {
-            return ToolLocator.shared.path(for: "fish") ?? "/bin/zsh"
-        }
-        if configured.contains("/") {
-            return FileManager.default.isExecutableFile(atPath: configured) ? configured : "/bin/zsh"
-        }
-        return ToolLocator.shared.path(for: configured) ?? "/bin/zsh"
-    }
-
-    private func terminalEnvironment(shell: String) -> [String] {
-        var environment = ProcessInfo.processInfo.environment
-            .filter { $0.key != "SHELL" && $0.key != "TERM" }
-            .map { "\($0.key)=\($0.value)" }
-        environment.append("SHELL=\(shell)")
-        environment.append("TERM=xterm-256color")
-        return environment
-    }
-
     func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
         terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
         terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
         terminal.font = resolvedFont()
         terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
+        context.coordinator.session = session
+        context.coordinator.initialCommand = initialCommand
+        context.coordinator.onExit = onExit
+        if context.coordinator.token != restartToken {
+            context.coordinator.token = restartToken
+            context.coordinator.start(restarting: true)
+        }
     }
 
     static func dismantleNSView(_ terminal: LocalProcessTerminalView, coordinator: Coordinator) {
+        coordinator.cancelled = true
         if let observer = coordinator.observer {
             NotificationCenter.default.removeObserver(observer)
         }
+        terminal.processDelegate = nil
         terminal.terminate()
     }
 }

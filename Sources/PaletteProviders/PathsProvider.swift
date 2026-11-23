@@ -363,10 +363,16 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
             value: .object(["path": terminalPath])
         ))
 
+        // Editor rows should not pretend a second project opens in its own
+        // window when the editor can only reuse the one that is open.
+        let subtitle = EditorLaunch.reusesOpenWindow(app: configuration.openWith)
+            ? trimmed + " · reuses the open window"
+            : trimmed
+
         return PaletteItem(
             id: path,
             title: name,
-            subtitle: trimmed,
+            subtitle: subtitle,
             icon: isDirectory ? .symbol("folder.fill") : .file(path),
             badge: isDirectory ? "folder" : (ext.isEmpty ? nil : ext.uppercased()),
             score: 1_000 - Double(rank),

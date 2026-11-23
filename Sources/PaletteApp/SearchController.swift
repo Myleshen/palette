@@ -51,6 +51,11 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public var scratchpadTitle = ""
     @Published public private(set) var terminalActive = false
     @Published public private(set) var terminalInitialCommand: String?
+    /// Exit status of the pane's child; nil while it is running. Drives the end
+    /// card so a finished session never looks like a hung one.
+    @Published public private(set) var terminalExitCode: Int32?
+    /// Bumped by Restart; the pane starts a fresh process when it changes.
+    @Published public private(set) var terminalRestartToken = 0
     @Published public var scratchpadText = ""
     @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
@@ -424,6 +429,13 @@ public final class SearchController: ObservableObject, HostBridge {
 
         if terminalActive {
             if command, keyCode == 13 {
+                closeTerminalPanel()
+                panel?.hide(activatePrevious: false)
+                return true
+            }
+            // Esc belongs to the running program; once the child is gone it
+            // closes the pane like the end card's Close button.
+            if keyCode == 53, terminalExitCode != nil {
                 closeTerminalPanel()
                 panel?.hide(activatePrevious: false)
                 return true
@@ -1310,6 +1322,7 @@ public final class SearchController: ObservableObject, HostBridge {
         scratchpadGeneration += 1
         terminalInitialCommand = command
         terminalSessionName = sessionName
+        terminalExitCode = nil
         terminalActive = true
         scratchpadActive = false
         previewEnabled = false
@@ -1325,6 +1338,7 @@ public final class SearchController: ObservableObject, HostBridge {
     public func closeTerminalPanel() {
         guard terminalActive else { return }
         terminalActive = false
+        terminalExitCode = nil
         terminalSessionName = nil
         panel?.widthOverride = nil
         NotificationCenter.default.post(name: .paletteTerminalStop, object: nil)
@@ -1333,6 +1347,20 @@ public final class SearchController: ObservableObject, HostBridge {
         resetting = false
         scheduleSearch(debounce: false)
         updatePanelHeight()
+    }
+
+    /// Called by the terminal pane when its child exits. The pane stays open so
+    /// the last output can still be read.
+    public func noteTerminalExited(_ code: Int32?) {
+        guard terminalActive else { return }
+        terminalExitCode = code
+    }
+
+    /// Runs the pane's initial command again after the child exited.
+    public func restartTerminal() {
+        guard terminalActive, terminalExitCode != nil else { return }
+        terminalExitCode = nil
+        terminalRestartToken += 1
     }
 
     public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
