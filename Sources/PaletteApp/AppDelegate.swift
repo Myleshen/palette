@@ -560,6 +560,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.writeOnboardingSnapshot(to: value)
                 } else if step == "onboarding_skip" {
                     self.skipOnboarding()
+                } else if let value = step.dropPrefix("term=") {
+                    self.searchController.openTerminalPanel(command: value.isEmpty ? nil : value)
+                } else if step == "term_restart" {
+                    self.searchController.restartTerminal()
                 } else if let value = step.dropPrefix("prompt=") {
                     self.searchController.promptValue = value
                 } else if let value = step.dropPrefix("wait=") {
@@ -621,6 +625,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var previewEnabled: Bool
         var scratchpadActive: Bool
         var terminalActive: Bool
+        var terminalExited: Bool
         var askWindows: Int
         var askStreaming: Bool
         var askTurns: Int
@@ -641,7 +646,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private static let scriptKeys = [
         "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
-        "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "askWindows",
+        "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "askWindows",
         "askStreaming", "askTurns", "askChats", "askBadge",
         "firstTitle", "firstProvider", "statusMessage", "probeResult",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
@@ -658,6 +663,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             previewEnabled: searchController?.previewEnabled ?? false,
             scratchpadActive: searchController?.scratchpadActive ?? false,
             terminalActive: searchController?.terminalActive ?? false,
+            terminalExited: searchController?.terminalExitCode != nil,
             askWindows: askWindow == nil ? 0 : 1,
             askStreaming: askWindow?.isStreaming ?? false,
             askTurns: askWindow?.turnCount ?? 0,
@@ -683,6 +689,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "previewEnabled": return String(observation.previewEnabled)
         case "scratchpadActive": return String(observation.scratchpadActive)
         case "terminalActive": return String(observation.terminalActive)
+        case "terminalExited": return String(observation.terminalExited)
         case "askWindows": return String(observation.askWindows)
         case "askStreaming": return String(observation.askStreaming)
         case "askTurns": return String(observation.askTurns)
@@ -717,7 +724,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive":
+        case "panelVisible", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
