@@ -23,16 +23,19 @@ public enum Ranking {
     }
 
     public static func score(terms: [String], candidate: String) -> Double? {
-        guard !terms.isEmpty else { return 0 }
-        // Fold each side once: the candidate is shared by every term.
-        let haystack = normalize(candidate)
-        let needles = terms.map(normalize)
+        score(foldedTerms: terms.map(normalize), foldedCandidate: normalize(candidate))
+    }
+
+    /// Scores pre-folded terms against a pre-folded candidate. A cached search
+    /// index folds both sides once instead of on every keystroke.
+    public static func score(foldedTerms: [String], foldedCandidate: String) -> Double? {
+        guard !foldedTerms.isEmpty else { return 0 }
         var total: Double = 0
-        for needle in needles {
-            guard let value = score(normalizedNeedle: needle, haystack: haystack) else { return nil }
+        for needle in foldedTerms {
+            guard let value = score(normalizedNeedle: needle, haystack: foldedCandidate) else { return nil }
             total += value
         }
-        return total / Double(terms.count)
+        return total / Double(foldedTerms.count)
     }
 
     /// `needle` and `haystack` must already be folded.

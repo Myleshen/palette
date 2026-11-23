@@ -18,6 +18,17 @@ public final class ClipboardMonitor: @unchecked Sendable {
 
     public var onCapture: (@Sendable (ClipboardCapture) -> Void)?
 
+    /// Bundle ids whose copies are never recorded. Read from the poll queue, so
+    /// changes go through a lock rather than racing a Settings save.
+    private let ignoredAppsLock = NSLock()
+    private var ignoredApps: Set<String> = []
+
+    public func setIgnoredApps(_ bundleIDs: [String]) {
+        ignoredAppsLock.lock()
+        ignoredApps = Set(bundleIDs)
+        ignoredAppsLock.unlock()
+    }
+
     /// Change counts Palette wrote itself. Their content is already in history
     /// (or is a save-copy screenshot), so recording it again is noise.
     nonisolated(unsafe) private static var paletteWrite: Int = -1
@@ -77,13 +88,24 @@ public final class ClipboardMonitor: @unchecked Sendable {
     }
 
     private func poll(force: Bool = false) {
+        // Sampled every poll: a copy is attributed to whichever app is
+        // frontmost when the pasteboard changes, so the ignore list is checked
+        // against that app rather than the one that happened to launch Palette.
+        let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let current = pasteboard.changeCount
         guard force || current != lastChangeCount else { return }
         lastChangeCount = current
         guard !Self.consumePaletteWrite(current) else { return }
 
         let types = Set(pasteboard.types ?? [])
-        guard types.isDisjoint(with: Self.ignoredTypes) else { return }
+        ignoredAppsLock.lock()
+        let ignored = ignoredApps
+        ignoredAppsLock.unlock()
+        guard ClipboardCapturePolicy.shouldCapture(
+            frontmostBundleID: frontmostBundleID,
+            ignoredApps: ignored,
+            isMarkedSecret: !types.isDisjoint(with: Self.ignoredTypes)
+        ) else { return }
 
         // Finder copies carry file URLs *and* a text representation of the
         // names, so files must be checked before plain text.

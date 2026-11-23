@@ -187,6 +187,9 @@ public struct ClipboardConfig: Sendable, Equatable {
     public var retentionDays: Int
     /// Total bytes of image blobs; the oldest images are evicted first.
     public var maxImageBytes: Int
+    /// Bundle ids whose copies are never recorded (password managers, token
+    /// viewers). Concealed/transient pasteboard types still win over this list.
+    public var ignoredApps: [String]
 
     public init(
         enabled: Bool = true,
@@ -194,7 +197,8 @@ public struct ClipboardConfig: Sendable, Equatable {
         pollMs: Int = 500,
         clearAfterMs: Int = 30_000,
         retentionDays: Int = 30,
-        maxImageBytes: Int = 200 * 1024 * 1024
+        maxImageBytes: Int = 200 * 1024 * 1024,
+        ignoredApps: [String] = []
     ) {
         self.enabled = enabled
         self.maxEntries = maxEntries
@@ -202,6 +206,7 @@ public struct ClipboardConfig: Sendable, Equatable {
         self.clearAfterMs = clearAfterMs
         self.retentionDays = retentionDays
         self.maxImageBytes = maxImageBytes
+        self.ignoredApps = ignoredApps
     }
 }
 
@@ -1061,6 +1066,11 @@ public enum ConfigLoader {
             if let bytes = clipboardTable.int("max_image_bytes") {
                 clipboard.maxImageBytes = max(0, bytes)
             }
+            if let ignored = clipboardTable.strArray("ignored_apps") {
+                clipboard.ignoredApps = ignored
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            }
             config.clipboard = clipboard
         }
 
@@ -1276,6 +1286,7 @@ public enum ConfigLoader {
         clear_after_ms = 30000
         retention_days = 30
         max_image_bytes = 209715200
+        ignored_apps = []
 
         # Written by Palette. Missing means the file predates schema versioning.
         [meta]
@@ -1454,6 +1465,7 @@ public enum ConfigWriter {
         out.append("clear_after_ms = \(config.clipboard.clearAfterMs)")
         out.append("retention_days = \(config.clipboard.retentionDays)")
         out.append("max_image_bytes = \(config.clipboard.maxImageBytes)")
+        out.append("ignored_apps = [\(config.clipboard.ignoredApps.map(quote).joined(separator: ", "))]")
         out.append("")
         out.append("[meta]")
         out.append("config_version = \(configVersion)")

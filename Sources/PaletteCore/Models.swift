@@ -474,3 +474,33 @@ public struct ClipboardEntry: Identifiable, Equatable, Sendable {
         kind == .files ? text.split(separator: "\n").map(String.init) : []
     }
 }
+
+/// A history row reduced to what search needs: the text is capped in SQL so a
+/// 1 MB clipboard never crosses the actor boundary just to be scored.
+public struct ClipboardSearchRow: Equatable, Sendable {
+    public var id: String
+    public var textPrefix: String
+    public var createdAt: Date
+    public var pinned: Bool
+    public var kind: ClipboardKind
+    public var imageWidth: Int
+    public var imageHeight: Int
+
+    public init(
+        id: String,
+        textPrefix: String,
+        createdAt: Date,
+        pinned: Bool,
+        kind: ClipboardKind,
+        imageWidth: Int = 0,
+        imageHeight: Int = 0
+    ) {
+        self.id = id
+        self.textPrefix = textPrefix
+        self.createdAt = createdAt
+        self.pinned = pinned
+        self.kind = kind
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
+    }
+}

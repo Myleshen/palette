@@ -290,6 +290,10 @@ struct SettingsView: View {
     @State private var keepAwakeMessage: String?
     @State private var appsMessage: String?
     @State private var copiedDiagnostics = false
+    /// Bundle ids the clipboard ignores, with names resolved from installed and
+    /// running apps only while this pane is open.
+    @State private var ignoredAppChoices: [AppRecord] = []
+    @State private var ignoredAppDraft = ""
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -1002,6 +1006,7 @@ struct SettingsView: View {
             .init(title: "Terminal", tab: .general, anchor: "row-Terminal", keywords: "terminal binary zellij project command embedded"),
             .init(title: "Terminal app", tab: .general, anchor: "row-Terminal app", keywords: "terminal kitty ghostty ssh docker github external app"),
             .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries poll clear retention secrets"),
+            .init(title: "Ignored clipboard apps", tab: .general, anchor: "row-Never record from", keywords: "clipboard ignore apps password manager 1password secrets bundle id"),
             .init(title: "Commands", tab: .general, anchor: "general-commands", keywords: "command prefix provider slash"),
             .init(title: "Command prefix", tab: .general, anchor: "row-Command prefix", keywords: "prefix provider command slash"),
             .init(title: "Launcher position", tab: .launcher, anchor: "launcher-position", keywords: "top center position"),
@@ -1467,8 +1472,13 @@ struct SettingsView: View {
                            in: 0...3_650, step: 1, unit: "days")
                 numericRow("Image storage cap", value: maxClipboardImageMBBinding,
                            in: 0...2_048, step: 50, unit: "MB")
+                ignoredAppsRow
             } footer: {
-                Text("Text and PNG images are stored. Anything another app marks concealed is never recorded. Zero seconds keeps secrets until you clear the history.")
+                Text("Text and PNG images are stored. Copies an app marks concealed or transient are never recorded, even when that app is allowed below. Zero seconds keeps secrets until you clear the history.")
+            }
+            .task {
+                guard ignoredAppChoices.isEmpty else { return }
+                ignoredAppChoices = await AppIndex().applications()
             }
 
             card("Commands", anchor: "general-commands") {
@@ -1481,6 +1491,82 @@ struct SettingsView: View {
                 Text("Prefix for provider commands such as /clip and /port. Usually /.")
             }
         }
+    }
+
+    /// Password managers and token viewers that copy without marking the
+    /// pasteboard. Names come from installed and running apps; a bundle id can
+    /// be typed for anything not found.
+    private var ignoredAppsRow: some View {
+        fieldRow("Never record from") {
+            VStack(alignment: .leading, spacing: 6) {
+                if config.clipboard.ignoredApps.isEmpty {
+                    Text("Every app is recorded.")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                } else {
+                    ForEach(config.clipboard.ignoredApps, id: \.self) { bundleID in
+                        HStack(spacing: 8) {
+                            Text(ignoredAppLabel(bundleID))
+                                .font(theme.font(size: 12))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer(minLength: 8)
+                            Button {
+                                config.clipboard.ignoredApps.removeAll { $0 == bundleID }
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Record from this app again")
+                            .accessibilityLabel("Stop ignoring \(bundleID)")
+                        }
+                    }
+                }
+                HStack(spacing: 8) {
+                    Menu("Add app…") {
+                        ForEach(ignorableApps, id: \.id) { app in
+                            Button(app.name) { addIgnoredApp(app.id) }
+                        }
+                    }
+                    .frame(maxWidth: 160)
+                    .disabled(ignorableApps.isEmpty)
+                    TextField("Bundle id, e.g. com.1password.1password", text: $ignoredAppDraft)
+                        .settingsField()
+                        .onSubmit { addIgnoredApp(ignoredAppDraft) }
+                    Button("Add") { addIgnoredApp(ignoredAppDraft) }
+                        .disabled(ignoredAppDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private var ignorableApps: [(id: String, name: String)] {
+        var seen = Set<String>()
+        var rows: [(id: String, name: String)] = []
+        for record in ignoredAppChoices {
+            guard let bundleID = record.bundleID, seen.insert(bundleID).inserted else { continue }
+            rows.append((bundleID, record.name))
+        }
+        for app in NSWorkspace.shared.runningApplications {
+            guard let bundleID = app.bundleIdentifier, !bundleID.isEmpty,
+                  seen.insert(bundleID).inserted else { continue }
+            rows.append((bundleID, app.localizedName ?? bundleID))
+        }
+        return rows.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// App name with its bundle id, or just the id when nothing installed or
+    /// running matches.
+    private func ignoredAppLabel(_ bundleID: String) -> String {
+        guard let name = ignorableApps.first(where: { $0.id == bundleID })?.name else { return bundleID }
+        return "\(name) (\(bundleID))"
+    }
+
+    private func addIgnoredApp(_ raw: String) {
+        let bundleID = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !bundleID.isEmpty, !config.clipboard.ignoredApps.contains(bundleID) else { return }
+        config.clipboard.ignoredApps.append(bundleID)
+        ignoredAppDraft = ""
     }
 
     // MARK: - About

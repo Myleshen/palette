@@ -988,22 +988,24 @@ public final class SearchController: ObservableObject, HostBridge {
 
             case .pasteText:
                 if let text = action.value.text {
+                    let previous = panel?.previousApplication
+                    let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
+                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
+                        pasteboard.write(text: text, concealed: action.concealed, clearAfterMs: clearAfterMs)
+                        setStatus("Copied — paste with ⌘V", duration: 5)
+                        return
+                    }
                     if !pasteboard.isAccessibilityTrusted {
-                        pasteboard.write(
-                            text: text,
-                            concealed: action.concealed,
-                            clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
-                        )
+                        pasteboard.write(text: text, concealed: action.concealed, clearAfterMs: clearAfterMs)
                         pasteboard.requestAccessibility()
                         setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
                         return
                     }
-                    let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
                     _ = pasteboard.paste(
                         text: text,
                         concealed: action.concealed,
-                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
+                        clearAfterMs: clearAfterMs,
                         into: previous
                     )
                 }
@@ -1018,13 +1020,18 @@ public final class SearchController: ObservableObject, HostBridge {
                 // Clipboard rows carry a DB id; /shots rows pass a file path.
                 if let id = action.value.text,
                    let image = try await store.clipboardImage(id: id) ?? NSImage(contentsOfFile: id)?.pngData() {
+                    let previous = panel?.previousApplication
+                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
+                        pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
+                        setStatus("Copied — paste with ⌘V", duration: 5)
+                        return
+                    }
                     if !pasteboard.isAccessibilityTrusted {
                         pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
                         pasteboard.requestAccessibility()
                         setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
                         return
                     }
-                    let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
                     _ = pasteboard.paste(
                         image: image,
@@ -1042,13 +1049,18 @@ public final class SearchController: ObservableObject, HostBridge {
 
             case .pasteFiles:
                 if let paths = action.value.list, !paths.isEmpty {
+                    let previous = panel?.previousApplication
+                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
+                        pasteboard.write(files: paths, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
+                        setStatus("Copied — paste with ⌘V", duration: 5)
+                        return
+                    }
                     if !pasteboard.isAccessibilityTrusted {
                         pasteboard.write(files: paths, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
                         pasteboard.requestAccessibility()
                         setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
                         return
                     }
-                    let previous = panel?.previousApplication
                     panel?.hide(activatePrevious: false)
                     _ = pasteboard.paste(
                         files: paths,

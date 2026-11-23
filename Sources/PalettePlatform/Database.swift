@@ -118,6 +118,9 @@ public actor PaletteStore {
     private let filePath: String
     /// VACUUM rewrites the whole file, so at most once per launch.
     private var hasVacuumed = false
+    /// Bumped by every clipboard write so the provider's search snapshot knows
+    /// when its copy is stale without polling the table.
+    private var clipboardRevisionValue = 0
 
     public init(path: String) throws {
         self.filePath = path
@@ -375,6 +378,7 @@ public actor PaletteStore {
         sqlite3_bind_double(statement, 4, date.timeIntervalSince1970)
         try step(statement)
         try trimClipboard(maxEntries: maxEntries)
+        clipboardRevisionValue += 1
         return !existing
     }
 
@@ -415,6 +419,7 @@ public actor PaletteStore {
         sqlite3_bind_int(statement, 7, Int32(height))
         try step(statement)
         try trimClipboard(maxEntries: maxEntries)
+        clipboardRevisionValue += 1
         return !existing
     }
 
@@ -472,6 +477,7 @@ public actor PaletteStore {
         }
         try step(statement)
         try trimClipboard(maxEntries: maxEntries)
+        clipboardRevisionValue += 1
         return !existing
     }
 
@@ -572,6 +578,7 @@ public actor PaletteStore {
         defer { sqlite3_finalize(statement) }
         bind(statement, 1, id)
         try step(statement)
+        clipboardRevisionValue += 1
     }
 
     public func setClipboardPinned(id: String, pinned: Bool) throws {
@@ -580,10 +587,89 @@ public actor PaletteStore {
         sqlite3_bind_int(statement, 1, pinned ? 1 : 0)
         bind(statement, 2, id)
         try step(statement)
+        clipboardRevisionValue += 1
     }
 
     public func clearClipboard() throws {
         try execute("DELETE FROM clipboard WHERE pinned = 0;")
+        clipboardRevisionValue += 1
+    }
+
+    /// Changes whenever a clipboard row is inserted, removed or re-pinned. The
+    /// provider compares it to know when its folded search snapshot is stale.
+    public func clipboardRevision() -> Int {
+        clipboardRevisionValue
+    }
+
+    /// The rows a search snapshot needs, already in display order. The text is
+    /// capped in SQL so a 1 MB clipboard costs one prefix, not one megabyte.
+    public func clipboardSearchRows(limit: Int) throws -> [ClipboardSearchRow] {
+        let statement = try prepare("""
+        SELECT id, substr(text, 1, 4096), kind, pinned, created, width, height
+        FROM clipboard
+        ORDER BY pinned DESC,
+                 CASE kind WHEN 'text' THEN 0 WHEN 'image' THEN 1 ELSE 2 END,
+                 created DESC
+        LIMIT ?;
+        """)
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int(statement, 1, Int32(max(1, limit)))
+
+        var rows: [ClipboardSearchRow] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idText = sqlite3_column_text(statement, 0),
+                  let text = sqlite3_column_text(statement, 1) else { continue }
+            let kind = sqlite3_column_text(statement, 2).map { String(cString: $0) } ?? "text"
+            rows.append(ClipboardSearchRow(
+                id: String(cString: idText),
+                textPrefix: String(cString: text),
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
+                pinned: sqlite3_column_int(statement, 3) != 0,
+                kind: ClipboardKind(rawValue: kind) ?? .text,
+                imageWidth: Int(sqlite3_column_int(statement, 5)),
+                imageHeight: Int(sqlite3_column_int(statement, 6))
+            ))
+        }
+        return rows
+    }
+
+    /// Full rows for the handful of ids a search is about to show.
+    public func clipboardEntries(ids: [String], includeThumbnails: Bool = true) throws -> [ClipboardEntry] {
+        guard !ids.isEmpty else { return [] }
+        let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ", ")
+        let thumbnailColumn = includeThumbnails ? "thumbnail" : "NULL"
+        let statement = try prepare("""
+        SELECT id, text, created, pinned, kind, width, height, \(thumbnailColumn)
+        FROM clipboard WHERE id IN (\(placeholders));
+        """)
+        defer { sqlite3_finalize(statement) }
+        for (offset, id) in ids.enumerated() {
+            bind(statement, Int32(offset + 1), id)
+        }
+
+        var entries: [ClipboardEntry] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idText = sqlite3_column_text(statement, 0),
+                  let bodyText = sqlite3_column_text(statement, 1) else { continue }
+            let kind = sqlite3_column_text(statement, 4).map { String(cString: $0) } ?? "text"
+            var thumbnail: Data?
+            if sqlite3_column_type(statement, 7) != SQLITE_NULL,
+               let bytes = sqlite3_column_blob(statement, 7) {
+                let count = Int(sqlite3_column_bytes(statement, 7))
+                if count > 0 { thumbnail = Data(bytes: bytes, count: count) }
+            }
+            entries.append(ClipboardEntry(
+                id: String(cString: idText),
+                text: String(cString: bodyText),
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 2)),
+                pinned: sqlite3_column_int(statement, 3) != 0,
+                kind: ClipboardKind(rawValue: kind) ?? .text,
+                imageWidth: Int(sqlite3_column_int(statement, 5)),
+                imageHeight: Int(sqlite3_column_int(statement, 6)),
+                thumbnailPNG: thumbnail
+            ))
+        }
+        return entries
     }
 
     public func clipboardCount() throws -> Int {
@@ -1169,6 +1255,9 @@ public actor PaletteStore {
 
         if report.clipboardRemoved > 0 || report.chatsRemoved > 0 {
             try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        }
+        if report.clipboardRemoved > 0 {
+            clipboardRevisionValue += 1
         }
 
         var after = Self.totalBytes(of: filePath)
