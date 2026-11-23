@@ -235,8 +235,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pasteboard.resumePendingClear()
 
         Log.shared.info("Accessibility trusted=\(pasteboard.isAccessibilityTrusted)", source: "app")
-        if !pasteboard.isAccessibilityTrusted {
-            // Make the permission gap visible instead of silently copying.
+        if !pasteboard.isAccessibilityTrusted, !isScriptMode {
+            // Make the permission gap visible instead of silently copying. A
+            // scripted run must not raise a TCC prompt over the user's screen.
             pasteboard.requestAccessibility()
         }
         appIndex = AppIndex()
@@ -429,6 +430,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         steps = merged
+        Log.shared.info(
+            "Script mode: \(steps.count) steps, activation policy \(NSApp.activationPolicy() == .accessory ? "accessory" : "other"), appActive=\(NSApp.isActive)",
+            source: "app"
+        )
         Task { @MainActor [weak self] in
             for step in steps {
                 guard let self else { return }
@@ -683,6 +688,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// controller and panel.
     private struct ScriptObservation {
         var panelVisible: Bool
+        var appActive: Bool
         var query: String
         var scopeLabel: String
         var selectionIndex: Int
@@ -717,7 +723,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var scriptFailureReasons: [String] = []
 
     private static let scriptKeys = [
-        "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
+        "panelVisible", "appActive", "query", "scopeLabel", "selectionIndex", "itemCount",
         "actionsMode", "previewEnabled", "railFocused", "stripFocused",
         "focusZone", "railID",
         "scratchpadActive", "terminalActive", "terminalExited", "askWindows",
@@ -730,6 +736,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func scriptObservation() -> ScriptObservation {
         ScriptObservation(
             panelVisible: panel?.isVisible == true,
+            appActive: NSApp.isActive,
             query: searchController?.query ?? "",
             scopeLabel: searchController?.scopeLabel ?? "",
             selectionIndex: searchController?.selectionIndex ?? 0,
@@ -764,6 +771,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func scriptValue(_ key: String, _ observation: ScriptObservation) -> String {
         switch key {
         case "panelVisible": return String(observation.panelVisible)
+        case "appActive": return String(observation.appActive)
         case "selectionIndex": return String(observation.selectionIndex)
         case "itemCount": return String(observation.itemCount)
         case "actionsMode": return String(observation.actionsMode)
@@ -811,7 +819,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited":
+        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -862,6 +870,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let observation = scriptObservation()
         let dump: [String: Any] = [
             "panelVisible": observation.panelVisible,
+            "appActive": observation.appActive,
             "query": observation.query,
             "scopeLabel": observation.scopeLabel,
             "selectionIndex": observation.selectionIndex,
@@ -917,6 +926,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// NSApp.terminate always exits 0, so a failed script exits directly.
     private func finishScript() -> Never {
         let reasons = scriptFailureReasons
+        Log.shared.info(
+            "Script finished: failures=\(reasons.count), appActive=\(NSApp.isActive)",
+            source: "app"
+        )
         if reasons.isEmpty && !scriptFailure {
             print("SCRIPT OK")
         } else {
@@ -954,7 +967,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow?.orderOut(nil)
         guard let view = settingsWindow?.contentView else { return }
         write(view: view, to: destination)
-        settingsWindow?.orderFrontRegardless()
+        // A scripted run stays off the user's screen; the window was never
+        // ordered above other apps, so there is nothing to restore.
+        if !isScriptMode { settingsWindow?.orderFrontRegardless() }
     }
 
     private func writeOnboardingSnapshot(to destination: String) {
@@ -1226,6 +1241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // which lets a long list grow the window past the bottom of the screen.
         hosting.sizingOptions = []
         let controller = PanelController(theme: themeManager.theme, content: hosting)
+        controller.quiet = isScriptMode
         controller.windowConfig = configuration.window
         controller.onKeyDown = { [weak self] event in
             self?.searchController.handleKey(event) ?? false
@@ -1498,7 +1514,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // panel. show() also restores PanelController's own state, which
             // makeKeyAndOrderFront alone does not.
             if panel.isVisible {
-                if !panel.panel.isKeyWindow { panel.panel.makeKeyAndOrderFront(nil) }
+                if !panel.quiet, !panel.panel.isKeyWindow { panel.panel.makeKeyAndOrderFront(nil) }
             } else {
                 panel.show()
             }
@@ -1769,6 +1785,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// scanning NSApp.windows used to leave the Dock icon behind whenever any
     /// other window happened to be visible.
     private func updateActivationPolicy() {
+        // Scripted runs stay accessory: no Dock icon and no focus change.
+        if isScriptMode {
+            if NSApp.activationPolicy() != .accessory { NSApp.setActivationPolicy(.accessory) }
+            return
+        }
         let askNeedsDock = askWindow?.window?.isVisible == true
             || askWindow?.isStreaming == true
             || (NSApp.dockTile.badgeLabel?.isEmpty == false)
@@ -2215,9 +2236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.contentViewController = NSHostingController(rootView: view)
         window.center()
         onboardingWindow = window
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+        WindowPresentation.present(window)
     }
 
     private func seedCommandsFile() {
@@ -3095,9 +3114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !settingsWindow.isVisible {
                 settingsWindow.contentView = makeSettingsHostingView()
             }
-            NSApp.activate()
-            settingsWindow.makeKeyAndOrderFront(nil)
-            settingsWindow.orderFrontRegardless()
+            WindowPresentation.present(settingsWindow)
             return
         }
 
@@ -3112,7 +3129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.isOpaque = false
         window.contentMinSize = NSSize(width: 820, height: 560)
         window.collectionBehavior.insert(.fullScreenPrimary)
-        window.setFrameAutosaveName("PaletteSettings")
+        // A scripted run must not persist a test frame into the user's prefs.
+        if !isScriptMode { window.setFrameAutosaveName("PaletteSettings") }
         // A themed (not transparent) titlebar keeps AppKit's native window drag.
         window.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
         window.titlebarAppearsTransparent = false
@@ -3124,9 +3142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.center()
         }
         settingsWindow = window
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+        WindowPresentation.present(window)
     }
 
     private func makeSettingsHostingView() -> NSView {

@@ -89,9 +89,8 @@ final class RecordingOptionsPanelController: NSWindowController, NSWindowDelegat
     }
 
     func show() {
-        showWindow(nil)
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate()
+        guard let window else { return }
+        WindowPresentation.present(window)
     }
 
     private func record() {

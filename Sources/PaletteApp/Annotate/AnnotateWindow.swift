@@ -180,6 +180,12 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func show() {
+        guard let window else { return }
+        if WindowPresentation.isScripted {
+            // The script posts drag events by window number; no focus needed.
+            WindowPresentation.present(window)
+            return
+        }
         // Palette is an accessory app (LSUIElement), so its windows never become
         // key on their own and the canvas would not receive clicks.
         if NSApp.activationPolicy() != .regular {
@@ -187,8 +193,8 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
         }
         showWindow(nil)
         NSRunningApplication.current.activate(options: [.activateAllWindows])
-        window?.makeKeyAndOrderFront(nil)
-        window?.makeKey()
+        window.makeKeyAndOrderFront(nil)
+        window.makeKey()
     }
 
     func windowWillClose(_ notification: Notification) {

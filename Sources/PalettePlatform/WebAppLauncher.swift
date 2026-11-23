@@ -16,7 +16,14 @@ public struct WebAppLaunchSpec: Sendable, Equatable {
 
 public enum WebAppLauncher {
     public static var profileRoot: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        // `PALETTE_SUPPORT_DIR` keeps tests and debug builds off the real
+        // Application Support directory.
+        if let override = ProcessInfo.processInfo.environment["PALETTE_SUPPORT_DIR"],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+                .appendingPathComponent("WebApps", isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Palette/WebApps", isDirectory: true)
     }
 

@@ -1,5 +1,6 @@
 import AppKit
 import PaletteCore
+import PalettePlatform
 import SwiftUI
 
 /// Brief thumbnail that appears after a capture so a screenshot is never a
@@ -56,7 +57,13 @@ final class ScreenshotHUD {
                 y: visible.minY + 24
             ))
         }
-        panel.orderFrontRegardless()
+        if WindowPresentation.isScripted {
+            // Never put a test thumbnail over the user's screen.
+            panel.level = .normal
+            panel.orderBack(nil)
+        } else {
+            panel.orderFrontRegardless()
+        }
         self.panel = panel
 
         // The panel never becomes key, so a local monitor supplies Return and

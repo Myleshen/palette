@@ -75,12 +75,17 @@ final class MediaPreviewWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func show() {
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
+        guard let window else { return }
+        if WindowPresentation.isScripted {
+            WindowPresentation.present(window)
+        } else {
+            if NSApp.activationPolicy() != .regular {
+                NSApp.setActivationPolicy(.regular)
+            }
+            showWindow(nil)
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate()
         }
-        showWindow(nil)
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate()
         player.play()
     }
 }

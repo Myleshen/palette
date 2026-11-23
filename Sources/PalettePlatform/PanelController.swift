@@ -22,6 +22,9 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     /// Set while an in-panel prompt is open, so resigning key does not hide it.
     public var suppressAutoHide = false
     public var activatePreviousOnHide = true
+    /// Scripted runs must not disturb the desktop: a quiet panel is ordered to
+    /// the back of the normal level, never key, and never activates the app.
+    public var quiet = false
 
     public private(set) var previousApplication: NSRunningApplication?
 
@@ -116,13 +119,24 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
 
     public func show() {
         guard !isShowing else { return }
-        let current = NSWorkspace.shared.frontmostApplication
-        if current?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
-            previousApplication = current
+        if !quiet {
+            let current = NSWorkspace.shared.frontmostApplication
+            if current?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+                previousApplication = current
+            }
         }
         onShow?()
         isShowing = true
         position()
+        if quiet {
+            panel.level = .normal
+            panel.orderBack(nil)
+            Log.shared.info(
+                "Script mode: panel shown without activation (appActive=\(NSApp.isActive))",
+                source: "app"
+            )
+            return
+        }
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         installKeyMonitor()
@@ -133,7 +147,7 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         isShowing = false
         removeKeyMonitor()
         panel.orderOut(nil)
-        let shouldActivate = activatePrevious ?? activatePreviousOnHide
+        let shouldActivate = !quiet && (activatePrevious ?? activatePreviousOnHide)
         if shouldActivate, let previousApplication, !previousApplication.isTerminated {
             previousApplication.activate(options: [])
         }
@@ -145,7 +159,8 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     }
 
     public func windowDidResignKey(_ notification: Notification) {
-        guard !suppressAutoHide else { return }
+        // A scripted run must survive the user clicking elsewhere.
+        guard !quiet, !suppressAutoHide else { return }
         // A short delay lets an in-panel menu or prompt take key first.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
             guard let self, self.isShowing, !self.suppressAutoHide, !self.panel.isKeyWindow else { return }
