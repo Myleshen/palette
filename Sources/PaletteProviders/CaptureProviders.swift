@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import PaletteCore
 import PalettePlatform
@@ -15,29 +16,59 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
     )
 
     private let service: CaptureService
+    private let bridge: HostBridge
+    private let lastScreenshot: @MainActor () -> URL?
     private let beforeCapture: @MainActor () -> Void
 
-    public init(service: CaptureService, beforeCapture: @escaping @MainActor () -> Void) {
+    public init(
+        service: CaptureService,
+        bridge: HostBridge,
+        lastScreenshot: @escaping @MainActor () -> URL?,
+        beforeCapture: @escaping @MainActor () -> Void
+    ) {
         self.service = service
+        self.bridge = bridge
+        self.lastScreenshot = lastScreenshot
         self.beforeCapture = beforeCapture
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let delay = await service.config.delay
-        let items = [
+        var items = [
             row(id: "screen", title: "Capture the screen", subtitle: delay > 0 ? "After \(Int(delay)) seconds" : "All displays", value: "screen", score: 9_000),
             row(id: "region", title: "Capture a region", subtitle: "Drag to select", value: "region", score: 8_900),
             row(id: "window", title: "Capture a window", subtitle: "Click a window", value: "window", score: 8_800),
             row(id: "annotate-region", title: "Capture a region and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:region", score: 8_700),
             row(id: "annotate-screen", title: "Capture the screen and annotate", subtitle: "Arrow, rectangle, text, crop", value: "annotate:screen", score: 8_600),
         ]
+        if let last = await MainActor.run(body: { lastScreenshot() }),
+           FileManager.default.fileExists(atPath: last.path) {
+            items.append(row(
+                id: "ocr-copy",
+                title: "Copy Text from Last Screenshot",
+                subtitle: last.lastPathComponent,
+                value: "ocr-copy",
+                score: 8_500
+            ))
+            items.append(row(
+                id: "ocr-open",
+                title: "Open Detected Link",
+                subtitle: "From \(last.lastPathComponent)",
+                value: "ocr-open",
+                score: 8_400
+            ))
+        }
         guard !query.isEmpty else { return items }
         return items.filter { Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "")") != nil }
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         guard let raw = action.value.text else { return }
+        if raw == "ocr-copy" || raw == "ocr-open" {
+            await readLastScreenshot(openLink: raw == "ocr-open")
+            return
+        }
         let annotate = raw.hasPrefix("annotate:")
         let name = annotate ? String(raw.dropFirst("annotate:".count)) : raw
         guard let mode = CaptureMode(rawValue: name) else { return }
@@ -47,6 +78,24 @@ public final class ShotProvider: PaletteProvider, @unchecked Sendable {
         // Give the panel a beat to leave the screen before capturing.
         try? await Task.sleep(nanoseconds: 180_000_000)
         _ = try await service.screenshot(mode)
+    }
+
+    private func readLastScreenshot(openLink: Bool) async {
+        guard let url = await MainActor.run(body: { lastScreenshot() }),
+              let image = NSImage(contentsOf: url) else {
+            await bridge.notify("No last screenshot")
+            return
+        }
+        do {
+            let recognition = try await ImageTextRecognition.recognize(image)
+            if openLink {
+                await ImageTextRecognition.openFirstLink(recognition, using: bridge)
+            } else {
+                await ImageTextRecognition.copyText(recognition, using: bridge)
+            }
+        } catch {
+            await bridge.notify("Text recognition failed")
+        }
     }
 
     private func row(id: String, title: String, subtitle: String, value: String, score: Double) -> PaletteItem {

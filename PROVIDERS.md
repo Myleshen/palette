@@ -290,7 +290,8 @@ providers fill the list but never widen the panel.
 | `bwt` | `bwt` | native | Bitwarden TOTP codes |
 | `bwn` | `bwn` | native | Bitwarden notes |
 | `bwo` | `bwo` | native | Bitwarden URLs |
-| `clip` | `clip` | native | clipboard history: text, images, Finder files; grouped and previewable |
+| `clip` | `clip` | native | clipboard history: text, images, Finder files; grouped and previewable; image rows copy text with on-device OCR and open detected http(s) links |
+| `ocr` | `ocr` | native | on-device Vision text and QR/barcode reading of the clipboard image (or last screenshot); optional path argument; rows copy the text, open validated links, or search the web |
 | `port` | `port` | native | listening TCP ports, process/cwd, confirmed kill |
 | `cmd` | `cmd` | native | manifest commands from commands.toml |
 | `proj` | `proj` | native | devx projects/worktrees, `~/dev` fallback; empty query adds **Clone a repository…** and **New project…** |

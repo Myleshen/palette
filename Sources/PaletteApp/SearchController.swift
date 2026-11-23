@@ -1193,6 +1193,8 @@ public final class SearchController: ObservableObject, HostBridge {
                     try await store.pinItem(item)
                     setStatus("Pinned \(item.title)", duration: 2)
                     scheduleSearch(debounce: false)
+                } else if action.id == "ocr-pin-copy" || action.id == "ocr-pin-open" {
+                    await runPinnedImageOCR(item: item, openLink: action.id == "ocr-pin-open")
                 } else if action.id == "unpin-item" {
                     try await store.unpinItem(id: item.stableID)
                     setStatus("Unpinned \(item.title)", duration: 2)
@@ -1247,10 +1249,59 @@ public final class SearchController: ObservableObject, HostBridge {
         }
     }
 
+    /// OCR for a pinned image. Pinned items keep the provider they came from,
+    /// so the host reads the best available pixels instead of dispatching to a
+    /// provider that may no longer have the row.
+    private func runPinnedImageOCR(item: PaletteItem, openLink: Bool) async {
+        guard let data = await pinnedImageData(for: item) else {
+            setStatus("No text found", duration: 3)
+            return
+        }
+        guard let recognition = try? await ImageTextRecognition.recognize(pngData: data) else {
+            setStatus("Text recognition failed", duration: 3)
+            return
+        }
+        if openLink {
+            guard let raw = recognition.firstLink,
+                  ImageTextRecognition.isOpenable(raw),
+                  let url = URL(string: raw) else {
+                setStatus("No link found", duration: 3)
+                return
+            }
+            panel?.hide(activatePrevious: false)
+            NSWorkspace.shared.open(url)
+        } else {
+            let text = recognition.text
+            guard !text.isEmpty else {
+                setStatus("No text found", duration: 3)
+                return
+            }
+            pasteboard.write(text: text)
+            setStatus("Text copied (\(text.count) chars)", duration: 3)
+        }
+    }
+
+    private func pinnedImageData(for item: PaletteItem) async -> Data? {
+        if item.providerID == "shots", item.id.hasPrefix("shot:") {
+            let path = String(item.id.dropFirst("shot:".count))
+            return try? Data(contentsOf: URL(fileURLWithPath: path))
+        }
+        if item.providerID == "clip", let data = try? await store.clipboardImage(id: item.id) {
+            return data
+        }
+        if case let .image(base64, _, _) = item.preview {
+            return Data(base64Encoded: base64)
+        }
+        return nil
+    }
+
     private func keepsPanelOpen(item: PaletteItem, action: PaletteAction) -> Bool {
         switch item.providerID {
-        case "theme", "clip":
+        case "theme", "clip", "ocr":
             return true
+        case "shot":
+            // OCR results report a character count; capture rows still hide.
+            return action.id.hasPrefix("ocr-")
         case "awake":
             return true
         case "web":

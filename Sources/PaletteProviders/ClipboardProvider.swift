@@ -63,7 +63,9 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
         }
 
         if query.isEmpty {
-            return ordered.prefix(max(1, request.limit)).map { entry in
+            let shown = Array(ordered.prefix(max(1, request.limit)))
+            await Self.prefetchLinks(for: shown)
+            return shown.map { entry in
                 Self.item(for: entry, provider: descriptor)
             }
         }
@@ -133,8 +135,51 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
         case "unpin":
             try await store.setClipboardPinned(id: item.id, pinned: false)
             await bridge.notify("Clipboard entry unpinned")
+        case "ocr-copy":
+            try await Self.copyRecognizedText(entryID: item.id, store: store, bridge: bridge)
         default:
             break
+        }
+    }
+
+    // MARK: - OCR
+
+    /// Reads a clipboard image with Vision and copies the text. The full image
+    /// is used here; only link detection reads the cheaper thumbnail.
+    private static func copyRecognizedText(entryID: String, store: PaletteStore, bridge: HostBridge) async throws {
+        guard let data = try await store.clipboardImage(id: entryID) else {
+            await bridge.notify("No text found")
+            return
+        }
+        do {
+            let recognition = try await ImageTextRecognition.recognize(pngData: data)
+            await ImageTextRecognition.copyText(recognition, using: bridge)
+        } catch {
+            await bridge.notify("Text recognition failed")
+        }
+    }
+
+    /// Link detection for the images a search is about to show, so the row can
+    /// offer Open Link without OCR running at click time. Cached per entry, so
+    /// this is a one-off cost for a given image.
+    private static func prefetchLinks(for entries: [ClipboardEntry]) async {
+        let pending = entries.filter { entry in
+            entry.kind == .image
+                && entry.thumbnailPNG != nil
+                && ImageTextRecognition.cached(cacheKey: entry.id) == nil
+        }
+        // A first clipboard paint must stay fast; the remaining rows get their
+        // links on the next search.
+        let limited = pending.prefix(4)
+        guard !limited.isEmpty else { return }
+        await withTaskGroup(of: Void.self) { group in
+            for entry in limited {
+                guard let thumbnail = entry.thumbnailPNG else { continue }
+                let id = entry.id
+                group.addTask {
+                    _ = try? await ImageTextRecognition.recognize(pngData: thumbnail, cacheKey: id)
+                }
+            }
         }
     }
 
@@ -175,12 +220,17 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private static func imageItem(_ entry: ClipboardEntry, provider: ProviderDescriptor) -> PaletteItem {
-        let actions: [PaletteAction] = [
+        var actions: [PaletteAction] = [
             PaletteAction(id: "paste-image", title: "Paste Image", kind: .pasteImage, value: .text(entry.id)),
             PaletteAction(id: "copy-image", title: "Copy Image", kind: .copyImage, value: .text(entry.id)),
-            pinAction(entry),
-            PaletteAction(id: "delete", title: "Delete Entry", kind: .custom, value: .text("delete")),
+            PaletteAction(id: "ocr-copy", title: "Copy Text (OCR)", kind: .custom, value: .text(entry.id)),
         ]
+        if let link = ImageTextRecognition.cached(cacheKey: entry.id)?.firstLink,
+           ImageTextRecognition.isOpenable(link) {
+            actions.append(PaletteAction(id: "ocr-open-link", title: "Open Link", kind: .openURL, value: .text(link)))
+        }
+        actions.append(pinAction(entry))
+        actions.append(PaletteAction(id: "delete", title: "Delete Entry", kind: .custom, value: .text("delete")))
         let thumbnail = entry.thumbnailPNG
         let icon: IconSpec? = thumbnail.map { .base64($0.base64EncodedString()) } ?? .symbol("photo")
         let preview: ItemPreview? = thumbnail.map {
