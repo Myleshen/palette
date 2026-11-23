@@ -187,15 +187,15 @@ Caches live in `~/Library/Caches/Palette`.
 | `⌥Space` | show / hide |
 | `⌥V` | clipboard browser with live preview |
 | `⌘⌥T` | embedded terminal |
-| `⌘⌥S` | scratchpad |
+| `⌘⌥S` | scratchpad list |
 | `⌘⌥A` | Ask |
-| `↑` `↓` | move selection |
+| `↑` `↓` | move selection (or the focused rail/strip row) |
 | `⏎` | primary action |
 | `⌘⏎` | secondary action (usually paste, or reveal for paths) |
 | `⌘K` | action list for the selection |
 | `⌘1`…`⌘9` | open the nth result |
-| `Tab` / `⇧Tab` | cycle rail rows (groups, `/bw`, …); from a group, `Tab` enters its strip |
-| `Esc` | clear the query, then dismiss |
+| `Tab` / `⇧Tab` | move focus search → list → rail → group strip; never changes the provider |
+| `Esc` | leave the rail/strip/list, then clear the query, then dismiss |
 | `⌘,` | open Settings |
 | `⌘R` | reload config, themes, and providers after manual file edits |
 
@@ -209,10 +209,19 @@ is pinned at the top and is the plain-query scope; **Apps** opens the app list.
 Below them is one row per provider group and one per ungrouped provider. A group
 (Bitwarden, GitHub) opens its first member and shows a secondary strip of its
 children above the list; the strip also appears in the top-bar layout. Clicking a
-row opens that provider with an empty query, and `Tab` / `⇧Tab` cycle the same
-rows from the keyboard. The rail narrows to icons when the preview pane is open
-or the panel is under 700 pt wide, and scrolls a whole row at a time. Prefixes
-work with or without the rail.
+row opens that provider with an empty query. The rail is always 220 pt wide and
+never collapses; it scrolls a whole row at a time instead. Prefixes work with or
+without the rail.
+
+The launcher has four focus zones: **search**, **list**, **rail**, and the group
+**strip**. `Tab` walks search → list → rail → strip and wraps; `⇧Tab` reverses.
+`Tab` never switches the provider — use the rail, the strip, `⌘1`…`⌘9`, or a
+prefix for that. Arrow keys move the list selection, the rail row, or the group
+child depending on the focused zone; `⏎` acts on the list selection unless the
+rail or strip is focused, where it confirms the provider and moves to the list.
+`Esc` returns to search first, then clears the query, then dismisses. One focus
+ring marks the active zone, and only the selected provider/chip is painted with
+the accent.
 
 ### Prefixes
 
@@ -605,8 +614,9 @@ clipboard copy.
 `/scratch` lists saved notes and opens a persistent editor with a title field.
 It accepts pasted text, supports normal selection and editing, and provides
 **Paste**, **Copy All**, **Clear**, and **Save & Close**. Clipboard text entries
-also have **Open in Scratchpad** in `⌘K`; the most recent note is restored by
-the `⌘⌥S` shortcut.
+also have **Open in Scratchpad** in `⌘K`. The `⌘⌥S` shortcut opens this note list
+(not the editor), with **New Scratch Note** first; picking a note opens the
+editor, and `Esc` clears the list query and then dismisses as usual.
 
 `/term` opens a persistent multiplexer session in the content panel using
 SwiftTerm. By default it attaches Zellij's **Palette** session, then falls back

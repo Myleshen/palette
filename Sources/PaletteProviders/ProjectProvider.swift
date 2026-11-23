@@ -37,6 +37,40 @@ public enum ProjectName {
     }
 }
 
+/// Git's own branch-name rules (`git check-ref-format --branch`), evaluated
+/// without spawning a process so the prompt can reject a name per keystroke.
+public enum BranchName {
+    /// Nil when the name is acceptable; otherwise the reason to show inline.
+    public static func error(for raw: String) -> String? {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return "Enter a branch name." }
+        if name == "@" { return "A branch name cannot be @." }
+        if name.hasPrefix("-") { return "A branch name cannot start with -." }
+        if name.hasSuffix("/") || name.hasSuffix(".") {
+            return "A branch name cannot end with / or ."
+        }
+        if name.contains("//") { return "A branch name cannot contain //." }
+        if name.contains("..") { return "A branch name cannot contain .." }
+        if name.contains("@{") { return "A branch name cannot contain @{." }
+        for component in name.split(separator: "/", omittingEmptySubsequences: false) {
+            if component.isEmpty { return "A branch name cannot contain an empty component." }
+            if component.hasPrefix(".") { return "A path component cannot start with a dot." }
+            if component.hasSuffix(".lock") { return "A path component cannot end with .lock." }
+        }
+        let forbidden = CharacterSet(charactersIn: " ~^:?*[\\")
+        if name.unicodeScalars.contains(where: {
+            $0.value < 0x20 || $0.value == 0x7f || forbidden.contains($0)
+        }) {
+            return "A branch name cannot contain spaces or any of ~ ^ : ? * [ \\."
+        }
+        return nil
+    }
+
+    public static func isValid(_ raw: String) -> Bool {
+        error(for: raw) == nil
+    }
+}
+
 /// Fast project switcher. Mutations go through devx when it is installed, so
 /// its worktree and overlay safety checks stay authoritative.
 public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
@@ -234,12 +268,42 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
                 await bridge.notify("Install devx to create worktrees")
                 return
             }
-            guard let branch = await bridge.prompt(kind: .text, title: "New worktree branch for \(name)", placeholder: "feature/name"),
-                  !branch.isEmpty else { return }
-            try await MainActor.run {
-                try launcher.openTerminal(command: "\(Self.shellQuote(devx)) worktree create \(Self.shellQuote(name)) \(Self.shellQuote(branch))", app: terminal)
+            guard let entered = await bridge.prompt(
+                kind: .text,
+                title: "New worktree branch for \(name)",
+                placeholder: "feature/name",
+                validation: .branchName
+            ) else { return }
+            let branch = entered.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let reason = BranchName.error(for: branch) {
+                await bridge.notify(reason)
+                return
             }
-            await invalidateCaches(delayed: true)
+            do {
+                // The pure helper drives the inline feedback; git stays the
+                // final authority over the name it will actually create.
+                let check = try await ProcessRunner.run(
+                    ["git", "check-ref-format", "--branch", branch],
+                    timeout: 10
+                )
+                guard check.status == 0 else {
+                    await bridge.notify("Invalid branch: \(Self.firstLine(check.stderrString))")
+                    return
+                }
+                await bridge.beginProgress("Creating worktree \(branch)…")
+                let result = try await ProcessRunner.run(
+                    [devx, "worktree", "create", name, branch],
+                    timeout: 180
+                )
+                guard result.status == 0 else {
+                    await bridge.notify("Worktree failed: \(Self.firstLine(result.stderrString))")
+                    return
+                }
+                await invalidateCaches()
+                await bridge.notify("Worktree created")
+            } catch {
+                await bridge.notify("Worktree failed: \(error.localizedDescription)")
+            }
         case "remove-worktree":
             guard let devx else {
                 await bridge.notify("Install devx to remove worktrees")

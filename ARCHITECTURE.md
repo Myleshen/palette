@@ -168,10 +168,11 @@ row writes `<prefix><trigger> ` into the query, so the rail and prefixes share o
 routing path. Selecting a group writes its first child's trigger and shows that
 group's children in a secondary strip above the list; picking a child swaps the
 trigger and keeps the text. Apps opens its provider without a trigger through
-`scopeProviderID`. `Tab` / `⇧Tab` walk the rail; `Tab` on a group row focuses the
-strip, arrows switch children, and `Tab` again returns to the list. The rail is
-220 pt and collapses to 56 pt icons when the preview pane is open or the panel is
-narrower than 700 pt.
+`scopeProviderID`. `Tab` / `⇧Tab` walk four focus zones — search → list →
+rail → strip — and never change the provider themselves; the rail and strip do
+that. Arrows act on the focused zone, `⏎` switches from the rail/strip and then
+lands on the list, and `Esc` returns to search. The rail is always 220 pt wide
+and scrolls internally; it never collapses to icons.
 
 The preview pane is opt-in per provider, not inferred from every row: `clip`,
 `snip`, `recent`, `neo`, `neof`, `proj`, `shots`, `cheat`, and `atlas` enable

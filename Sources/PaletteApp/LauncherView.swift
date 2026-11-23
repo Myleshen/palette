@@ -449,7 +449,7 @@ private struct ProviderBarChip: View {
                     .fill(
                         selected
                             ? theme.color(theme.palette.accent)
-                            : theme.color(theme.palette.elevated).opacity(hovered ? 1 : 0.65)
+                            : theme.color(theme.palette.elevated).opacity(hovered ? 0.8 : 0)
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous))
@@ -735,6 +735,19 @@ struct LauncherRootView: View {
     private var theme: Theme { themeManager.theme }
     private var isPill: Bool { true }
 
+    /// One focus indicator for the whole launcher: the zone Tab and the arrows
+    /// act on gets a ring, never a second row painted like the selection.
+    private func zoneRing(_ zone: LauncherZone, radius: CGFloat = LauncherMetrics.cardRadius) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .strokeBorder(
+                theme.color(theme.palette.accent)
+                    .opacity(controller.focusZone == zone ? 0.55 : 0),
+                lineWidth: 1
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
     var body: some View {
         pillLayout()
             .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
@@ -748,6 +761,9 @@ struct LauncherRootView: View {
         }
         .onChange(of: controller.prompt?.id) { _, _ in
             DispatchQueue.main.async { promptFocused = controller.prompt != nil }
+        }
+        .onChange(of: searchFocused) { _, focused in
+            if focused { controller.focusZone = .search }
         }
     }
 
@@ -1023,6 +1039,7 @@ struct LauncherRootView: View {
         .frame(width: LauncherMetrics.railWidth)
         .frame(maxHeight: .infinity)
         .cardSurface(theme: theme)
+        .overlay(zoneRing(.rail))
     }
 
     /// Drop a redundant provider prefix before truncating a label mid-word.
@@ -1100,6 +1117,7 @@ struct LauncherRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .cardSurface(theme: theme)
+        .overlay(zoneRing(.list))
     }
 
     /// Secondary strip for a grouped rail row. It lives in the content column
@@ -1133,6 +1151,7 @@ struct LauncherRootView: View {
                     .padding(.vertical, LauncherMetrics.providerBarVerticalPadding)
                 }
                 .scrollIndicators(.hidden)
+                .frame(height: LauncherMetrics.providerBarHeight)
                 .onChange(of: controller.activeProviderID, initial: true) { _, id in
                     withAnimation(reduceMotion ? nil : theme.scrollAnimation) {
                         proxy.scrollTo(id, anchor: .center)
@@ -1143,6 +1162,7 @@ struct LauncherRootView: View {
                         .fill(theme.color(theme.palette.separator).opacity(0.5))
                         .frame(height: 1)
                 }
+                .overlay(zoneRing(.strip, radius: 10))
             }
         }
     }
@@ -1244,7 +1264,8 @@ struct LauncherRootView: View {
                     LinearGradient(
                         colors: [
                             theme.color(theme.palette.fg).opacity(isPill && theme.window.glass ? 0.14 : 0),
-                            theme.color(theme.palette.accent).opacity(isPill ? 0.30 : 0),
+                            theme.color(theme.palette.accent)
+                                .opacity(isPill ? (controller.focusZone == .search ? 0.65 : 0.30) : 0),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1252,6 +1273,9 @@ struct LauncherRootView: View {
                     lineWidth: 1
                 )
         )
+        .simultaneousGesture(TapGesture().onEnded {
+            controller.focusZone = .search
+        })
 
     }
 
@@ -1586,6 +1610,7 @@ struct PromptView: View {
                 .padding(8)
                 .background(theme.color(theme.palette.surface).opacity(0.9))
                 .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
+                .frame(maxWidth: 380, alignment: .leading)
                 .focused(focused)
                 .onSubmit { controller.submitPrompt() }
             } else {
@@ -1598,8 +1623,14 @@ struct PromptView: View {
                 .padding(8)
                 .background(theme.color(theme.palette.surface).opacity(0.9))
                 .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
+                .frame(maxWidth: 380, alignment: .leading)
                 .focused(focused)
                 .onSubmit { controller.submitPrompt() }
+            }
+            if let message = controller.promptValidationMessage {
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.color(theme.palette.danger))
             }
             HStack(spacing: 8) {
                 Spacer()
@@ -1616,6 +1647,8 @@ struct PromptView: View {
                     .padding(.vertical, 6)
                     .background(theme.color(theme.palette.accent))
                     .clipShape(pill ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: 6, style: .continuous)))
+                    .opacity(controller.canSubmitPrompt ? 1 : 0.45)
+                    .disabled(!controller.canSubmitPrompt)
             }
             .font(.system(size: 12, weight: .medium))
         }

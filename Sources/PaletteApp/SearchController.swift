@@ -11,6 +11,7 @@ public struct PromptState: Identifiable, Equatable {
     public var kind: PromptKind
     public var title: String
     public var placeholder: String?
+    public var validation: PromptValidation = .none
 }
 
 @MainActor
@@ -37,11 +38,19 @@ public final class SearchController: ObservableObject, HostBridge {
     /// snapshot from before the save.
     private var scratchpadSaveTask: Task<Void, Never>?
     @Published public var actionIndex = 0
-    /// The rail has keyboard focus after a click; arrows move providers then,
-    /// while the search field keeps the actual typing focus.
-    @Published public var railFocused = false
+    /// Which zone Tab, the arrows, Enter and Esc act on. The search field keeps
+    /// the real keyboard focus in every zone so typing never stops working.
+    @Published public var focusZone: LauncherZone = .search
+    /// Derived views for the script dump and the older click handlers.
+    public var railFocused: Bool {
+        get { focusZone == .rail }
+        set { focusZone = newValue ? .rail : (focusZone == .rail ? .search : focusZone) }
+    }
     /// The secondary strip has keyboard focus; arrows switch group children.
-    @Published public var stripFocused = false
+    public var stripFocused: Bool {
+        get { focusZone == .strip }
+        set { focusZone = newValue ? .strip : (focusZone == .strip ? .search : focusZone) }
+    }
     /// A provider opened without a trigger (the Apps rail row); plain text
     /// keeps filtering that provider until another scope is chosen.
     @Published public private(set) var scopeProviderID: String?
@@ -136,6 +145,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func panelDidShow() {
         focusToken += 1
+        focusZone = .search
         hasShown = true
         scheduleSearch()
     }
@@ -199,8 +209,7 @@ public final class SearchController: ObservableObject, HostBridge {
         highlightTerms = []
         previewEnabled = false
         previewFocused = false
-        railFocused = false
-        stripFocused = false
+        focusZone = .search
         scopeProviderID = nil
         terminalActive = false
         terminalSessionName = nil
@@ -521,53 +530,7 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
 
-        if stripFocused {
-            switch keyCode {
-            case 123, 126:
-                moveGroupChild(by: -1)
-                return true
-            case 124, 125:
-                moveGroupChild(by: 1)
-                return true
-            case 48:
-                stripFocused = false
-                return true
-            case 53:
-                stripFocused = false
-                railFocused = true
-                return true
-            default:
-                break
-            }
-        }
-
-        if railFocused {
-            switch keyCode {
-            case 125:
-                moveRail(by: 1)
-                return true
-            case 126:
-                moveRail(by: -1)
-                return true
-            case 53:
-                selectRail(ProviderRail.everythingID)
-                railFocused = false
-                return true
-            case 36, 76:
-                railFocused = false
-                return true
-            case 48:
-                railFocused = false
-                // A group opens its strip first; otherwise Tab keeps cycling.
-                if activeGroupEntry != nil {
-                    stripFocused = true
-                    return true
-                }
-            default:
-                break
-            }
-        }
-
+        // A prompt is modal: it owns Enter and Esc ahead of any focus zone.
         if prompt != nil {
             switch keyCode {
             case 53:
@@ -578,6 +541,83 @@ public final class SearchController: ObservableObject, HostBridge {
                 return true
             default:
                 return false
+            }
+        }
+
+        let shift = flags.contains(.shift)
+        // Plain keys belong to the zone; ⌘ combos (⌘⏎, ⌘K, ⌘1…9, ⌘Tab) stay
+        // with the command block below.
+        if !command {
+            switch focusZone {
+            case .strip:
+                switch keyCode {
+                case 123, 126:
+                    moveGroupChild(by: -1)
+                    return true
+                case 124, 125:
+                    moveGroupChild(by: 1)
+                    return true
+                case 36, 76:
+                    // Enter confirms the child and hands the list the keyboard.
+                    focusZone = .list
+                    fillPreview()
+                    return true
+                case 48:
+                    focusTab(forward: !shift)
+                    return true
+                case 53:
+                    focusZone = .search
+                    return true
+                default:
+                    break
+                }
+            case .rail:
+                switch keyCode {
+                case 125:
+                    moveRail(by: 1)
+                    return true
+                case 126:
+                    moveRail(by: -1)
+                    return true
+                case 36, 76:
+                    focusZone = .list
+                    fillPreview()
+                    return true
+                case 48:
+                    focusTab(forward: !shift)
+                    return true
+                case 53:
+                    focusZone = .search
+                    return true
+                default:
+                    break
+                }
+            case .list:
+                switch keyCode {
+                case 125:
+                    moveSelection(by: 1)
+                    return true
+                case 126:
+                    moveSelection(by: -1)
+                    return true
+                case 36, 76:
+                    if actionsMode { executeAction() } else { executePrimary() }
+                    return true
+                case 48:
+                    focusTab(forward: !shift)
+                    return true
+                case 53:
+                    if actionsMode {
+                        closeActions()
+                    } else {
+                        focusZone = .search
+                    }
+                    return true
+                default:
+                    break
+                }
+            case .search:
+                break
             }
         }
 
@@ -631,7 +671,7 @@ public final class SearchController: ObservableObject, HostBridge {
             if actionsMode { executeAction() } else { executePrimary() }
             return true
         case 48:
-            cycleTab(by: flags.contains(.shift) ? -1 : 1)
+            focusTab(forward: !shift)
             return true
         case 53:
             if actionsMode {
@@ -658,6 +698,17 @@ public final class SearchController: ObservableObject, HostBridge {
         guard !items.isEmpty else { return }
         selectionIndex = (selectionIndex + delta + items.count) % items.count
         fillPreview()
+    }
+
+    /// Tab never changes the provider: it walks the focus zones and wraps.
+    public func focusTab(forward: Bool) {
+        guard !actionsMode else { return }
+        focusZone = LauncherFocus.tab(
+            from: focusZone,
+            forward: forward,
+            hasStrip: activeGroupEntry != nil
+        )
+        if focusZone == .list { fillPreview() }
     }
 
     // MARK: - Provider rail
@@ -748,16 +799,6 @@ public final class SearchController: ObservableObject, HostBridge {
         return registry.parser.parse(query).providerID ?? "apps"
     }
 
-    public func cycleTab(by delta: Int) {
-        guard !actionsMode else { return }
-        let entries = railEntries
-        guard entries.count > 1 else { return }
-        let current = entries.firstIndex(where: { $0.id == activeRailID }) ?? 0
-        let count = entries.count
-        let next = ((current + delta) % count + count) % count
-        selectRail(entries[next].id)
-    }
-
     public var effectiveClipboardFilter: String? {
         let text = registry.parser.parse(query).text.lowercased()
         if text.hasPrefix("image") { return "image" }
@@ -802,8 +843,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func select(_ index: Int) {
         guard actionsMode == false, items.indices.contains(index) else { return }
-        railFocused = false
-        stripFocused = false
+        focusZone = .list
         selectionIndex = index
         fillPreview()
     }
@@ -853,6 +893,7 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         guard let item = selectedItem else { return }
         actionsMode = true
+        focusZone = .list
         actionsOwner = item
         actionsOwnerID = item.stableID
         allActions = actions(for: item)
@@ -1153,8 +1194,9 @@ public final class SearchController: ObservableObject, HostBridge {
         case "git":
             return ["status", "log", "stage", "commit", "pull", "push", "clear-output"].contains(action.id)
         case "proj":
-            // Keep the list open so the new project shows up after it is registered.
-            return ["clone-repo", "new-project"].contains(action.id)
+            // Keep the list open so the new project or worktree shows up
+            // immediately and its status/error stays readable.
+            return ["clone-repo", "new-project", "new-worktree"].contains(action.id)
         case "gha":
             return ["rerun", "cancel"].contains(action.id)
         case "ghn":
@@ -1167,6 +1209,15 @@ public final class SearchController: ObservableObject, HostBridge {
     // MARK: - Host bridge
 
     public func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String? {
+        await prompt(kind: kind, title: title, placeholder: placeholder, validation: .none)
+    }
+
+    public func prompt(
+        kind: PromptKind,
+        title: String,
+        placeholder: String?,
+        validation: PromptValidation
+    ) async -> String? {
         if promptContinuation != nil {
             promptContinuation?.resume(returning: nil)
             promptContinuation = nil
@@ -1174,14 +1225,28 @@ public final class SearchController: ObservableObject, HostBridge {
         return await withCheckedContinuation { continuation in
             promptContinuation = continuation
             promptValue = ""
-            prompt = PromptState(kind: kind, title: title, placeholder: placeholder)
+            prompt = PromptState(kind: kind, title: title, placeholder: placeholder, validation: validation)
             panel?.suppressAutoHide = true
             focusToken += 1
         }
     }
 
+    /// Inline reason the prompt cannot be accepted, read as the field changes.
+    public var promptValidationMessage: String? {
+        guard let prompt else { return nil }
+        switch prompt.validation {
+        case .none: return nil
+        case .branchName: return BranchName.error(for: promptValue)
+        }
+    }
+
+    public var canSubmitPrompt: Bool {
+        guard let prompt else { return false }
+        return prompt.kind == .confirm || promptValidationMessage == nil
+    }
+
     public func submitPrompt() {
-        guard let prompt else { return }
+        guard let prompt, canSubmitPrompt else { return }
         let value = prompt.kind == .confirm ? "true" : promptValue
         finishPrompt(value)
     }
@@ -1196,6 +1261,7 @@ public final class SearchController: ObservableObject, HostBridge {
         promptContinuation = nil
         prompt = nil
         promptValue = ""
+        focusZone = .search
         panel?.suppressAutoHide = false
         panel?.activatePreviousOnHide = true
         continuation?.resume(returning: value)
@@ -1310,6 +1376,7 @@ public final class SearchController: ObservableObject, HostBridge {
         terminalSessionName = nil
         panel?.terminalFrame = false
         NotificationCenter.default.post(name: .paletteTerminalStop, object: nil)
+        focusZone = .search
         resetting = true
         query = ""
         resetting = false
@@ -1330,8 +1397,28 @@ public final class SearchController: ObservableObject, HostBridge {
         terminalRestartToken += 1
     }
 
-    public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
+    /// True while the list (not the editor) is the visible scratchpad surface.
+    public var scratchpadListActive: Bool {
+        !scratchpadActive
+            && registry.parser.parse(query).providerID == HotkeyTargets.scratchpadListTrigger
+    }
+
+    /// The ⌘⌥S target: the scratchpad provider's list, New Scratch Note first.
+    public func openScratchpadList() {
         if terminalActive { closeTerminalPanel() }
+        if scratchpadActive { closeScratchpad(save: true) }
+        scopeProviderID = nil
+        resetToPlainQuery()
+        resetting = true
+        query = HotkeyTargets.scratchpadListQuery(prefix: registry.parser.prefix)
+        resetting = false
+        focusZone = .search
+        panel?.show()
+        requestFocus()
+        scheduleSearch(debounce: false)
+    }
+
+    public func openScratchpad(noteID: String? = nil, seed: String? = nil) {        if terminalActive { closeTerminalPanel() }
         scratchpadGeneration += 1
         let generation = scratchpadGeneration
         panel?.terminalFrame = false
@@ -1397,6 +1484,7 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
         scratchpadActive = false
+        focusZone = .search
         panel?.suppressAutoHide = false
         resetting = true
         query = ""

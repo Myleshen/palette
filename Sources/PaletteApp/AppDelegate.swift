@@ -29,6 +29,21 @@ final class HostBridgeProxy: HostBridge, @unchecked Sendable {
         return await target.prompt(kind: kind, title: title, placeholder: placeholder)
     }
 
+    func prompt(
+        kind: PromptKind,
+        title: String,
+        placeholder: String?,
+        validation: PromptValidation
+    ) async -> String? {
+        guard let target = current() else { return nil }
+        return await target.prompt(
+            kind: kind,
+            title: title,
+            placeholder: placeholder,
+            validation: validation
+        )
+    }
+
     func notify(_ message: String) async {
         guard let target = current() else { return }
         await target.notify(message)
@@ -505,6 +520,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.pasteboard.write(text: parts[0], concealed: true, clearAfterMs: clearAfterMs)
                 } else if step == "scratchpad" {
                     self.searchController.openScratchpad()
+                } else if step == "scratchlist" {
+                    self.toggleScratchpad()
+                } else if let value = step.dropPrefix("focus=") {
+                    if let zone = LauncherZone(rawValue: value) {
+                        self.searchController.focusZone = zone
+                    } else {
+                        self.recordScriptFailure("unknown focus zone '\(value)'")
+                    }
                 } else if let question = step.dropPrefix("askwindow=") {
                     self.showAskWindow(question: question)
                 } else if step == "chatwindow" {
@@ -653,6 +676,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var previewEnabled: Bool
         var railFocused: Bool
         var stripFocused: Bool
+        var focusZone: String
+        var railID: String
         var scratchpadActive: Bool
         var terminalActive: Bool
         var terminalExited: Bool
@@ -662,6 +687,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var askChats: Int
         var askBadge: String
         var statusMessage: String
+        var promptTitle: String
+        var promptError: String
         var probeResult: String
         var panelHeight: CGFloat
         var panelWidth: CGFloat
@@ -677,9 +704,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let scriptKeys = [
         "panelVisible", "query", "scopeLabel", "selectionIndex", "itemCount",
         "actionsMode", "previewEnabled", "railFocused", "stripFocused",
+        "focusZone", "railID",
         "scratchpadActive", "terminalActive", "terminalExited", "askWindows",
         "askStreaming", "askTurns", "askChats", "askBadge",
         "firstTitle", "firstProvider", "statusMessage", "probeResult",
+        "promptTitle", "promptError",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
     ]
 
@@ -694,6 +723,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             previewEnabled: searchController?.previewEnabled ?? false,
             railFocused: searchController?.railFocused ?? false,
             stripFocused: searchController?.stripFocused ?? false,
+            focusZone: searchController?.focusZone.rawValue ?? "search",
+            railID: searchController?.activeRailID ?? "",
             scratchpadActive: searchController?.scratchpadActive ?? false,
             terminalActive: searchController?.terminalActive ?? false,
             terminalExited: searchController?.terminalExitCode != nil,
@@ -703,6 +734,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             askChats: askWindow?.chatCount ?? 0,
             askBadge: NSApp.dockTile.badgeLabel ?? "",
             statusMessage: searchController?.statusMessage ?? "",
+            promptTitle: searchController?.prompt?.title ?? "",
+            promptError: searchController?.promptValidationMessage ?? "",
             probeResult: scriptProbeResult,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
@@ -722,6 +755,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "previewEnabled": return String(observation.previewEnabled)
         case "railFocused": return String(observation.railFocused)
         case "stripFocused": return String(observation.stripFocused)
+        case "focusZone": return observation.focusZone
+        case "railID": return observation.railID
         case "scratchpadActive": return String(observation.scratchpadActive)
         case "terminalActive": return String(observation.terminalActive)
         case "terminalExited": return String(observation.terminalExited)
@@ -735,6 +770,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "firstTitle": return observation.items.first?.title ?? ""
         case "firstProvider": return observation.items.first?.providerID ?? ""
         case "probeResult": return observation.probeResult
+        case "promptTitle": return observation.promptTitle
+        case "promptError": return observation.promptError
         case "panelHeight": return String(format: "%.2f", observation.panelHeight)
         case "panelWidth": return String(format: "%.2f", observation.panelWidth)
         case "derivedPanelHeight": return String(format: "%.2f", observation.derivedPanelHeight)
@@ -818,6 +855,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "previewEnabled": observation.previewEnabled,
             "railFocused": observation.railFocused,
             "stripFocused": observation.stripFocused,
+            "focusZone": observation.focusZone,
+            "railID": observation.railID,
             "scratchpadActive": observation.scratchpadActive,
             "terminalActive": observation.terminalActive,
             "askWindows": observation.askWindows,
@@ -826,6 +865,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "askChats": observation.askChats,
             "askBadge": observation.askBadge,
             "statusMessage": observation.statusMessage,
+            "promptTitle": observation.promptTitle,
+            "promptError": observation.promptError,
             "probeResult": observation.probeResult,
             "panelHeight": observation.panelHeight,
             "panelWidth": observation.panelWidth,
@@ -1229,7 +1270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     press: { [weak self] in self?.showClipboard() }),
             Desired(id: "terminal", label: "Terminal shortcut", keys: configuration.terminalHotkey,
                     press: { [weak self] in self?.toggleTerminalPanel() }),
-            Desired(id: "scratchpad", label: "Scratchpad shortcut", keys: configuration.scratchpadHotkey,
+            Desired(id: "scratchpad", label: "Scratchpad list shortcut", keys: configuration.scratchpadHotkey,
                     press: { [weak self] in self?.toggleScratchpad() }),
             Desired(id: "ask", label: "Ask shortcut", keys: configuration.askHotkey,
                     press: { [weak self] in self?.toggleAskWindow() }),
@@ -1946,14 +1987,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func toggleScratchpad() {
         guard let controller = searchController else { return }
-        if controller.scratchpadActive {
-            controller.closeScratchpad(save: true)
-            return
+        switch HotkeyTargets.scratchpadAction(
+            panelVisible: panel?.isVisible == true,
+            listActive: controller.scratchpadListActive
+        ) {
+        case .hide:
+            panel?.hide()
+        case .showList:
+            controller.openScratchpadList()
         }
-        if controller.terminalActive {
-            controller.closeTerminalPanel()
-        }
-        controller.openScratchpad()
     }
 
     private func configureClipboard() {

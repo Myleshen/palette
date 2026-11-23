@@ -376,9 +376,22 @@ public enum PromptKind: String, Sendable, Equatable {
     case confirm
 }
 
+/// Per-field rules the prompt applies while the user types, so a provider does
+/// not have to accept bad input and reject it afterwards.
+public enum PromptValidation: Sendable, Equatable {
+    case none
+    case branchName
+}
+
 /// Services the host exposes to providers that need UI or clipboard access.
 public protocol HostBridge: AnyObject, Sendable {
     func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String?
+    func prompt(
+        kind: PromptKind,
+        title: String,
+        placeholder: String?,
+        validation: PromptValidation
+    ) async -> String?
     func notify(_ message: String) async
     func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async
     /// Like `notify`, but stays on screen until the next status replaces it.
@@ -387,6 +400,17 @@ public protocol HostBridge: AnyObject, Sendable {
 }
 
 public extension HostBridge {
+    /// Hosts without inline validation accept the value unvalidated; providers
+    /// still re-check it before acting.
+    func prompt(
+        kind: PromptKind,
+        title: String,
+        placeholder: String?,
+        validation: PromptValidation
+    ) async -> String? {
+        await prompt(kind: kind, title: title, placeholder: placeholder)
+    }
+
     /// Hosts that cannot keep a status fall back to a normal toast.
     func beginProgress(_ message: String) async {
         await notify(message)
