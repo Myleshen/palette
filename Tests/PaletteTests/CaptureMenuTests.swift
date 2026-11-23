@@ -31,6 +31,7 @@ final class CaptureMenuTests: XCTestCase {
         XCTAssertEqual(items[.revealLastCapture]?.enabled, false)
         XCTAssertEqual(items[.showLastRecording]?.visible, false)
         XCTAssertEqual(items[.showLastScreenshot]?.visible, false)
+        XCTAssertEqual(items[.pinLastScreenshot]?.visible, false)
     }
 
     func testRecordingDisablesStartAndShowsElapsed() throws {
@@ -54,5 +55,7 @@ final class CaptureMenuTests: XCTestCase {
         let screenshotOnly = state(last: "/tmp/shot.png", lastScreenshot: "/tmp/shot.png")
         XCTAssertEqual(screenshotOnly[.showLastRecording]?.visible, false)
         XCTAssertEqual(screenshotOnly[.showLastScreenshot]?.visible, true)
+        XCTAssertEqual(screenshotOnly[.pinLastScreenshot]?.visible, true)
+        XCTAssertEqual(screenshotOnly[.pinLastScreenshot]?.title, "Pin Last Screenshot")
     }
 }
