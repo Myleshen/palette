@@ -45,6 +45,20 @@
   the normalised 12-character prefix is stored, capped at 4 rows per prefix and
   400 prefixes; Settings → Search → Learning has the toggle and a confirmed
   **Forget**, and trigger and actions-mode activations are never recorded.
+- **Clipboard ignore list.** `[clipboard] ignored_apps` names bundle ids whose
+  copies are not recorded — password managers and token viewers that copy
+  without marking the pasteboard. Concealed and transient pasteboard types
+  still always win, so a marked copy is skipped even when the app is not
+  listed. Settings → General → Clipboard → **Never record from** adds an
+  installed or running app, or a typed bundle id, and removes it again.
+- **Clipboard search is indexed.** The history is folded once into an in-memory
+  snapshot that is rebuilt only when the store's clipboard revision moves (or
+  after 60 s), the query scores that snapshot, and the displayed rows are
+  fetched by id afterwards. At 5,000 short entries that is 2.9× faster and
+  drops the full-text read from every keystroke.
+- **Remote-desktop paste targets copy only.** RDC, Citrix, Parallels and
+  Horizon turn a synthesised ⌘V into a literal `v`, so Palette writes the
+  clipboard, says **Copied — paste with ⌘V**, and leaves the keystroke to you.
 - **Rows say what is wrong.** A row that needs `devx`, `git`, `atlas`, `gh`,
   `bw` or Accessibility shows a warning glyph and the fix in its subtitle, the
   footer reads **Fix in Settings**, and Return opens the exact pane and card
@@ -110,8 +124,10 @@
   remains the final authority. The prompt lays out at a fixed width, a created
   or failed worktree reports in the palette, and the project and git caches
   refresh immediately so `/proj` shows the new worktree.
-- **One selection in the launcher.** The focused zone gets a single accent ring
-  instead of a second row painted like the selection.
+- **One selection, and scrolling keeps it.** The focused zone gets a single
+  accent ring instead of a second row painted like the selection, so only one
+  row ever looks selected, and scrolling the result list no longer clears the
+  selected row or its preview.
 - **`/proj` no longer stalls.** Rows come from cache and never wait on git, the
   selected row's git preview is fetched after the list appears, git state is
   cached for 5 minutes behind a HEAD/index fingerprint, and project and clone
