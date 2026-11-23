@@ -34,8 +34,8 @@ failed=0
 
 # One snapshot per SettingsTab.allCases entry. The case list is read from the
 # enum declaration so adding a tab does not silently skip its snapshot.
-TAB_CASES="$(awk '/enum SettingsTab/{found=1} found && /^    case /{print; exit}' Sources/PaletteApp/SettingsView.swift)"
-TAB_COUNT="$(printf '%s\n' "$TAB_CASES" | tr ',' '\n' | wc -l | tr -d ' ')"
+TAB_CASES="$(awk '/enum SettingsTab/{found=1} found && /^    case /{print} found && /var id: Int/{exit}' Sources/PaletteApp/SettingsView.swift)"
+TAB_COUNT="$(printf '%s\n' "$TAB_CASES" | sed 's/^    case //' | tr ',' '\n' | grep -c '[[:alnum:]]')"
 if [ "$TAB_COUNT" -lt 1 ]; then
   echo "could not read SettingsTab.allCases from Sources/PaletteApp/SettingsView.swift"
   exit 1

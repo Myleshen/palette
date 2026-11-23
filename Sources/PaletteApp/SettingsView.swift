@@ -22,8 +22,27 @@ private struct ProviderAliasEntry: Identifiable, Equatable {
 }
 
 enum SettingsTab: Int, CaseIterable, Identifiable {
-    // Raw values are the `settings_tab=<index>` script surface.
-    case general, launcher, appearance, shortcuts, search, ask, providers
+    // Raw values are the `settings_tab=<index>` script surface; the order here
+    // is the sidebar order and must stay stable.
+    case general
+    case launcher
+    case appearance
+    case shortcuts
+    case search
+    case ask
+    case terminal
+    case bookmarks
+    case cheatsheets
+    case webApps
+    case screenshots
+    case afterCapture
+    case recordings
+    case captures
+    case about
+    case providers
+    case providerFiles
+    case configFiles
+    case diagnostics
 
     var id: Int { rawValue }
     var title: String {
@@ -34,7 +53,19 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .shortcuts: return "Shortcuts"
         case .search: return "Search"
         case .ask: return "Ask"
+        case .terminal: return "Embedded Terminal"
+        case .bookmarks: return "Bookmarks"
+        case .cheatsheets: return "Cheatsheets"
+        case .webApps: return "Web Apps"
+        case .screenshots: return "Screenshots"
+        case .afterCapture: return "After a capture"
+        case .recordings: return "Recordings"
+        case .captures: return "Captures"
+        case .about: return "About"
         case .providers: return "Providers"
+        case .providerFiles: return "Provider Files"
+        case .configFiles: return "Config Files"
+        case .diagnostics: return "Diagnostics"
         }
     }
     var icon: String {
@@ -45,7 +76,19 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .shortcuts: return "command"
         case .search: return "magnifyingglass"
         case .ask: return "sparkles"
+        case .terminal: return "terminal"
+        case .bookmarks: return "bookmark.fill"
+        case .cheatsheets: return "book.closed.fill"
+        case .webApps: return "globe"
+        case .screenshots: return "camera.fill"
+        case .afterCapture: return "wand.and.stars"
+        case .recordings: return "record.circle"
+        case .captures: return "photo.on.rectangle.angled"
+        case .about: return "info.circle.fill"
         case .providers: return "square.stack.3d.up"
+        case .providerFiles: return "folder.fill"
+        case .configFiles: return "doc.text.fill"
+        case .diagnostics: return "stethoscope"
         }
     }
     /// Fixed tile colours like System Settings, deliberately not read from the
@@ -58,7 +101,19 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .shortcuts: return Color(red: 1.00, green: 0.58, blue: 0.00)
         case .search: return Color(red: 0.20, green: 0.78, blue: 0.35)
         case .ask: return Color(red: 0.72, green: 0.38, blue: 0.95)
+        case .terminal: return Color(red: 0.29, green: 0.33, blue: 0.38)
+        case .bookmarks: return Color(red: 0.00, green: 0.42, blue: 0.90)
+        case .cheatsheets: return Color(red: 0.00, green: 0.62, blue: 0.58)
+        case .webApps: return Color(red: 0.35, green: 0.34, blue: 0.84)
+        case .screenshots: return Color(red: 0.90, green: 0.30, blue: 0.42)
+        case .afterCapture: return Color(red: 0.65, green: 0.35, blue: 0.90)
+        case .recordings: return Color(red: 0.88, green: 0.19, blue: 0.22)
+        case .captures: return Color(red: 0.55, green: 0.38, blue: 0.24)
+        case .about: return Color(red: 0.45, green: 0.47, blue: 0.50)
         case .providers: return Color(red: 0.61, green: 0.44, blue: 0.31)
+        case .providerFiles: return Color(red: 0.76, green: 0.53, blue: 0.16)
+        case .configFiles: return Color(red: 0.36, green: 0.42, blue: 0.50)
+        case .diagnostics: return Color(red: 0.20, green: 0.62, blue: 0.52)
         }
     }
 }
@@ -72,8 +127,12 @@ private struct SettingsTabGroup: Identifiable {
 private extension SettingsTab {
     static let sidebarGroups: [SettingsTabGroup] = [
         SettingsTabGroup(title: "Basics", tabs: [.general, .launcher, .appearance, .shortcuts]),
-        SettingsTabGroup(title: "Features", tabs: [.search, .ask]),
-        SettingsTabGroup(title: "System", tabs: [.providers]),
+        SettingsTabGroup(title: "Features", tabs: [
+            .search, .ask, .terminal, .bookmarks, .cheatsheets, .webApps,
+            .screenshots, .afterCapture, .recordings, .captures,
+        ]),
+        SettingsTabGroup(title: "System", tabs: [.about, .providers]),
+        SettingsTabGroup(title: "Advanced", tabs: [.providerFiles, .configFiles, .diagnostics]),
     ]
 }
 
@@ -402,6 +461,9 @@ struct SettingsView: View {
         } detail: {
             detailPane
         }
+        // Settings is one window with a fixed sidebar; hide AppKit's automatic
+        // sidebar-collapse button so the title stands alone.
+        .toolbar(removing: .sidebarToggle)
         .onReceive(NotificationCenter.default.publisher(for: .paletteSettingsTab)) { note in
             guard let index = note.object as? Int, let tab = SettingsTab(rawValue: index) else { return }
             settingsSearch = ""
@@ -507,7 +569,7 @@ struct SettingsView: View {
                 ? theme.color(theme.palette.surface).opacity(1)
                 : theme.color(theme.palette.bg).opacity(0.35)
         )
-        .navigationSplitViewColumnWidth(min: 155, ideal: 165, max: 220)
+        .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
     }
 
     /// Hand-built rather than `.searchable`: the system field cannot render the
@@ -966,7 +1028,19 @@ struct SettingsView: View {
         case .shortcuts: shortcuts
         case .search: search
         case .ask: ask
+        case .terminal: terminalSettings
+        case .bookmarks: bookmarksPane
+        case .cheatsheets: cheatsheetsPane
+        case .webApps: webAppsPane
+        case .screenshots: screenshotsPane
+        case .afterCapture: afterCapturePane
+        case .recordings: recordingsPane
+        case .captures: capturesPane
+        case .about: aboutPane
         case .providers: providerSettings
+        case .providerFiles: providerFilesPane
+        case .configFiles: configFilesPane
+        case .diagnostics: diagnosticsPane
         }
     }
 
@@ -986,6 +1060,8 @@ struct SettingsView: View {
             .init(title: "Terminal", tab: .general, anchor: "row-Terminal", keywords: "terminal binary zellij project command embedded"),
             .init(title: "Terminal app", tab: .general, anchor: "row-Terminal app", keywords: "terminal kitty ghostty ssh docker github external app"),
             .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries poll clear retention secrets"),
+            .init(title: "Commands", tab: .general, anchor: "general-commands", keywords: "command prefix provider slash"),
+            .init(title: "Command prefix", tab: .general, anchor: "row-Command prefix", keywords: "prefix provider command slash"),
             .init(title: "Launcher position", tab: .launcher, anchor: "launcher-position", keywords: "top center position"),
             .init(title: "Provider bar", tab: .launcher, anchor: "launcher-tabs", keywords: "provider bar top left hidden tabs"),
             .init(title: "Search placeholder", tab: .launcher, anchor: "row-Placeholder", keywords: "search hint placeholder text"),
@@ -995,9 +1071,6 @@ struct SettingsView: View {
             .init(title: "Visible rows", tab: .launcher, anchor: "row-Visible rows", keywords: "rows height automatic"),
             .init(title: "Scale", tab: .launcher, anchor: "row-Scale", keywords: "scale rem zoom"),
             .init(title: "Preview layout", tab: .launcher, anchor: "row-Preview", keywords: "preview beside below layout"),
-            .init(title: "Command prefix", tab: .launcher, anchor: "row-Command prefix", keywords: "prefix provider command slash"),
-            .init(title: "Terminal session", tab: .launcher, anchor: "row-Session", keywords: "terminal session zellij tmux fish zsh shell"),
-            .init(title: "Terminal font", tab: .launcher, anchor: "row-Font family", keywords: "terminal font family size"),
             .init(title: "Themes", tab: .appearance, anchor: "appearance-theme", keywords: "theme dark light catppuccin gruvbox aetheria glass material"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
@@ -1012,23 +1085,32 @@ struct SettingsView: View {
             .init(title: "Custom hotkeys", tab: .shortcuts, anchor: "shortcuts-bindings", keywords: "binding launch command provider url shortcut hotkey"),
             .init(title: "Web search", tab: .search, anchor: "row-Show web results in search", keywords: "web search engine google duckduckgo github youtube"),
             .init(title: "Search engines", tab: .search, anchor: "search-engines", keywords: "engine url keyword bang !g"),
-            .init(title: "Bookmarks", tab: .search, anchor: "search-bookmarks", keywords: "bookmark url keywords browser"),
-            .init(title: "Cheatsheet folders", tab: .search, anchor: "search-cheatsheets", keywords: "cheatsheet reference pdf html markdown text image folder book"),
-            .init(title: "Web app browser", tab: .search, anchor: "search-webapps", keywords: "browser helium chrome chromium web app"),
-            .init(title: "Screenshot destination", tab: .search, anchor: "row-Save to", keywords: "screenshot capture delay format save folder"),
-            .init(title: "Recording action", tab: .search, anchor: "row-recording-action", keywords: "recording audio microphone display region format"),
-            .init(title: "After a capture", tab: .search, anchor: "search-screenshots", keywords: "cursor clicks shutter thumbnail annotator preview"),
             .init(title: "Ask provider", tab: .ask, anchor: "row-Provider", keywords: "ask endpoint model"),
             .init(title: "Ask model", tab: .ask, anchor: "row-Model", keywords: "ask model tokens fallback"),
             .init(title: "API key", tab: .ask, anchor: "ask-model", keywords: "api key token secret"),
             .init(title: "Ask history", tab: .ask, anchor: "row-Keep questions and answers", keywords: "ask history retention"),
+            .init(title: "Embedded Terminal", tab: .terminal, anchor: "terminal-session", keywords: "terminal session zellij tmux fish zsh shell font"),
+            .init(title: "Terminal session", tab: .terminal, anchor: "row-Session", keywords: "terminal session zellij tmux fish zsh shell"),
+            .init(title: "Terminal font", tab: .terminal, anchor: "row-Font family", keywords: "terminal font family size"),
+            .init(title: "Bookmarks", tab: .bookmarks, anchor: "bookmarks-list", keywords: "bookmark url keywords browser"),
+            .init(title: "Cheatsheets", tab: .cheatsheets, anchor: "cheatsheets-folders", keywords: "cheatsheet reference pdf html markdown text image folder book extensions"),
+            .init(title: "Cheatsheet folders", tab: .cheatsheets, anchor: "cheatsheets-folders", keywords: "cheatsheet reference pdf html markdown text image folder book"),
+            .init(title: "Web Apps", tab: .webApps, anchor: "webapps-browser", keywords: "browser helium chrome chromium web app"),
+            .init(title: "Web app browser", tab: .webApps, anchor: "webapps-browser", keywords: "browser helium chrome chromium web app"),
+            .init(title: "Screenshots", tab: .screenshots, anchor: "screenshots-destination", keywords: "screenshot capture delay format save folder"),
+            .init(title: "Screenshot destination", tab: .screenshots, anchor: "screenshots-destination", keywords: "screenshot capture delay format save folder"),
+            .init(title: "After a capture", tab: .afterCapture, anchor: "search-after-capture", keywords: "cursor clicks shutter thumbnail annotator preview hide palette"),
+            .init(title: "Recordings", tab: .recordings, anchor: "recordings-action", keywords: "recording audio microphone display region format"),
+            .init(title: "Recording action", tab: .recordings, anchor: "recordings-action", keywords: "recording audio microphone display region format"),
+            .init(title: "Captures", tab: .captures, anchor: "search-captures", keywords: "captures list shots gallery folder"),
+            .init(title: "About Palette", tab: .about, anchor: "settings-about", keywords: "about version build commit chip macos architecture config state logs reveal diagnostics github releases issue author myleshen licence"),
             .init(title: "Plain queries", tab: .providers, anchor: "providers-default", keywords: "global unprefixed plain query provider default search"),
             .init(title: "Provider filter", tab: .providers, anchor: "providers-default", keywords: "filter find provider"),
             .init(title: "Provider order", tab: .providers, anchor: "providers-default", keywords: "provider order visibility trigger"),
             .init(title: "Provider aliases", tab: .providers, anchor: "providers-default", keywords: "provider alias shortcut"),
-            .init(title: "Provider files", tab: .providers, anchor: "providers-files", keywords: "provider commands.toml folder"),
-            .init(title: "Config file and logs", tab: .providers, anchor: "providers-config", keywords: "config log crash backup export diagnostics"),
-            .init(title: "About Palette", tab: .general, anchor: "settings-about", keywords: "about version build commit chip macos architecture config state logs reveal diagnostics github releases issue author myleshen licence"),
+            .init(title: "Provider Files", tab: .providerFiles, anchor: "providers-files", keywords: "provider commands.toml folder"),
+            .init(title: "Config Files", tab: .configFiles, anchor: "config-files", keywords: "config log crash backup export reveal diagnostics"),
+            .init(title: "Diagnostics", tab: .diagnostics, anchor: "diagnostics-lines", keywords: "diagnostics startup warnings log"),
         ]
     }
 
@@ -1451,6 +1533,22 @@ struct SettingsView: View {
                 Text("Text and PNG images are stored. Anything another app marks concealed is never recorded. Zero seconds keeps secrets until you clear the history.")
             }
 
+            card("Commands", anchor: "general-commands") {
+                fieldRow("Command prefix", error: providerPrefixIssue) {
+                    TextField("Command prefix", text: $config.providerPrefix)
+                        .settingsField()
+                        .frame(maxWidth: 92)
+                }
+            } footer: {
+                Text("Prefix for provider commands such as /clip and /port. Usually /.")
+            }
+        }
+    }
+
+    // MARK: - About
+
+    private var aboutPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
             card("About", anchor: "settings-about") {
                 aboutRow("Version", about.versionBuild)
                 if let commit = about.commit {
@@ -1705,18 +1803,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Scale multiplies every launcher size, like rem. Width and rows override it, and Automatic falls back to the screen and scale. Clipboard, Ask, preview, terminal, and scratchpad widths live in config.toml under [window].")
             }
+        }
+    }
 
-            card("Commands", anchor: "launcher-commands") {
-                fieldRow("Command prefix", error: providerPrefixIssue) {
-                    TextField("Command prefix", text: $config.providerPrefix)
-                        .settingsField()
-                        .frame(maxWidth: 92)
-                }
-            } footer: {
-                Text("Prefix for provider commands such as /clip and /port. Usually /.")
-            }
+    // MARK: - Embedded Terminal
 
-            card("Embedded terminal", anchor: "launcher-terminal") {
+    private var terminalSettings: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Terminal", anchor: "terminal-session") {
                 pickerRow("Session") {
                     Picker("Session", selection: $config.terminalSession.multiplexer) {
                         Text("Auto").tag(TerminalMultiplexer.auto)
@@ -2335,8 +2429,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Type !keyword in the launcher, for example !yt lo-fi. The search URL must contain {query}, which Palette replaces with the URL-encoded text. An invalid engine is flagged here and the last valid one stays in config.toml.")
             }
+        }
+    }
 
-            card("Bookmarks", anchor: "search-bookmarks") {
+    // MARK: - Bookmarks
+
+    private var bookmarksPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Bookmarks", anchor: "bookmarks-list") {
                 if let bookmarksError {
                     Text("\(bookmarksError) The file is left untouched; fix or restore bookmarks.toml, then reopen Settings.")
                         .font(.caption)
@@ -2402,8 +2502,14 @@ struct SettingsView: View {
                     Text("Bookmarks open in a normal browser window, in the browser you pick. They live in bookmarks.toml; Reveal in Finder shows that file.")
                 }
             }
+        }
+    }
 
-            card("Cheatsheets", anchor: "search-cheatsheets") {
+    // MARK: - Cheatsheets
+
+    private var cheatsheetsPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Cheatsheets", anchor: "cheatsheets-folders") {
                 if cheatsheetFolders.isEmpty {
                     Text("Choose a folder of PDFs, notes, or images to browse with /cheat. Folders are scanned one level deep.")
                         .font(.caption)
@@ -2450,8 +2556,14 @@ struct SettingsView: View {
             } footer: {
                 Text("PDF, HTML, Markdown, text, and images preview in the launcher; press ⌥P to enlarge. Folders are scanned one level deep and ~ works in paths. Extensions are comma-separated, without the dot.")
             }
+        }
+    }
 
-            card("Web apps", anchor: "search-webapps") {
+    // MARK: - Web Apps
+
+    private var webAppsPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Web Apps", anchor: "webapps-browser") {
                 fieldRow("Open web apps in", error: webAppBrowserIssue) {
                     Picker("Open web apps in", selection: webAppBrowserBinding) {
                         if webAppBrowserChoices.isEmpty {
@@ -2468,8 +2580,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Chromium-based browsers only. The list shows the ones installed on this Mac.")
             }
+        }
+    }
 
-            card("Screenshots", anchor: "search-screenshots") {
+    // MARK: - Screenshots
+
+    private var screenshotsPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Screenshots", anchor: "screenshots-destination") {
                 fieldRow("Save to") {
                     HStack(spacing: 8) {
                         TextField("Save to", text: $config.capture.directory)
@@ -2510,8 +2628,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Use /shot or the screen, region, and window shortcuts. Save to supports ~ and is created on the first capture.")
             }
+        }
+    }
 
-            card("Recordings", anchor: "search-recordings") {
+    // MARK: - Recordings
+
+    private var recordingsPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Recordings", anchor: "recordings-action") {
                 pickerRow("Action", anchor: "row-recording-action") {
                     Picker("Action", selection: $config.capture.recordingAction) {
                         Text("Save").tag(CaptureAction.save)
@@ -2578,8 +2702,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Use /rec to start or stop a recording. Recordings are saved with the system capture engine.")
             }
+        }
+    }
 
-            card("After a capture") {
+    // MARK: - After a capture
+
+    private var afterCapturePane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("After a capture", anchor: "search-after-capture") {
                 toggleRow("Hide Palette before capturing", isOn: $config.capture.hidePalette)
                 toggleRow("Include the cursor", isOn: $config.capture.captureCursor)
                 toggleRow("Show clicks while recording", isOn: $config.capture.showClicks)
@@ -2588,8 +2718,14 @@ struct SettingsView: View {
                 toggleRow("Open the annotator after a screenshot", isOn: $config.capture.editAfterCapture)
                 toggleRow("Preview recordings when they stop", isOn: $config.capture.previewRecording)
             }
+        }
+    }
 
-            card("Captures list") {
+    // MARK: - Captures
+
+    private var capturesPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Captures list", anchor: "search-captures") {
                 pickerRow("List") {
                     Picker("List", selection: $config.capture.gallery) {
                         Text("Everything in the folder").tag("all")
@@ -2847,8 +2983,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Tab removes the provider from the registry, so its trigger and aliases stop working. Apps always answer a plain query. A checked alias is active and saved to config.toml; unchecking keeps the row so the word can be restored. Triggers come from provider.toml and cannot be renamed here. The arrows change the tab order.")
             }
+        }
+    }
 
-            card("Provider files", anchor: "providers-files") {
+    // MARK: - Provider Files
+
+    private var providerFilesPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Provider Files", anchor: "providers-files") {
                 HStack(spacing: 8) {
                     Button("Open providers folder") { onOpen(PalettePaths.resolve().providersDir) }
                     Button("Open commands.toml") {
@@ -2859,9 +3001,17 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(muted)
                     .fixedSize(horizontal: false, vertical: true)
+            } footer: {
+                Text("These are the files Palette reads at launch. Settings never edits them.")
             }
+        }
+    }
 
-            card("Configuration", anchor: "providers-config") {
+    // MARK: - Config Files
+
+    private var configFilesPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Config Files", anchor: "config-files") {
                 HStack(spacing: 8) {
                     Button("Open config.toml") { onOpen(configURL) }
                     Button("Reveal in Finder") { reveal(configURL.path) }
@@ -2877,8 +3027,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Settings writes config.toml for you. Edit it directly only for options that are not in this window, then press ⌘R. Backups include config, themes, providers, history and encrypted Ask keys: plain-text clipboard entries are removed, image and file entries stay.")
             }
+        }
+    }
 
-            card("Diagnostics") {
+    // MARK: - Diagnostics
+
+    private var diagnosticsPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Diagnostics", anchor: "diagnostics-lines") {
                 if diagnostics.isEmpty {
                     Text("No startup diagnostics.").font(.caption).foregroundStyle(muted)
                 } else {
@@ -2887,6 +3043,8 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            } footer: {
+                Text("Lines reported while the last configuration was loaded.")
             }
         }
     }
@@ -3229,19 +3387,43 @@ struct SettingsView: View {
     private var resetSummary: String {
         switch selectedTab {
         case .general:
-            return "Restores the editor, terminal, terminal app, notification, and clipboard-history defaults. Startup, permissions, and power are left alone."
+            return "Restores the editor, terminal, terminal app, notification, clipboard-history, and command-prefix defaults. Startup, permissions, and power are left alone."
         case .launcher:
-            return "Restores launcher position, size, behaviour, command prefix, and the embedded terminal defaults."
+            return "Restores launcher position, search-field behaviour, size, and layout defaults."
         case .appearance:
             return "Restores the default theme and the theme's typography."
         case .shortcuts:
             return "Restores every global shortcut to its default. Custom hotkeys are left alone."
         case .search:
-            return "Restores web search, engines, the web-app browser, screenshots, recordings, and cheatsheet folders. Bookmarks and saved files are left alone."
+            return "Restores web search and the search engine list."
         case .ask:
             return "Restores the Ask endpoint, model, tokens, fallback, notifications, and history limits. Saved API keys are left alone."
+        case .terminal:
+            return "Restores the embedded terminal session, shell, and font defaults."
+        case .bookmarks:
+            return "Removes every bookmark. bookmarks.toml is rewritten with an empty list."
+        case .cheatsheets:
+            return "Restores the default cheatsheet folders (none) and file extensions."
+        case .webApps:
+            return "Restores the default web-app browser."
+        case .screenshots:
+            return "Restores the screenshot folder, action, format, and delay."
+        case .afterCapture:
+            return "Restores the toggles that decide what happens after a capture."
+        case .recordings:
+            return "Restores the recording action, target, display, region, format, and audio defaults."
+        case .captures:
+            return "Restores what the captures list shows."
+        case .about:
+            return "About shows read-only information; there is nothing to reset."
         case .providers:
             return "Restores provider order, visibility, plain-query search, and aliases. Provider files are left alone."
+        case .providerFiles:
+            return "Provider Files only opens folders and files; there is nothing to reset."
+        case .configFiles:
+            return "Config Files only opens files and exports a backup; there is nothing to reset."
+        case .diagnostics:
+            return "Diagnostics is read-only; there is nothing to reset."
         }
     }
 
@@ -3254,15 +3436,13 @@ struct SettingsView: View {
             config.terminalApp = defaults.terminalApp
             config.timer = TimerConfig()
             config.clipboard = ClipboardConfig()
+            config.providerPrefix = defaults.providerPrefix
             appsMessage = nil
         case .launcher:
             config.searchPosition = .top
             config.appSort = .alphabetical
             config.window = WindowConfig()
-            config.providerPrefix = defaults.providerPrefix
             config.searchPlaceholder = defaults.searchPlaceholder
-            config.terminalSession = TerminalSessionConfig()
-            terminalShellChoice = "auto"
         case .appearance:
             config.theme = ThemeSelection()
             config.typography = TypographyConfig()
@@ -3280,14 +3460,49 @@ struct SettingsView: View {
             config.webSearchEnabled = defaults.webSearchEnabled
             config.webSearchEngines = WebSearchEngine.defaults
             engines = WebSearchEngine.defaults
-            config.webAppBrowser = installedChromium.first ?? defaults.webAppBrowser
-            config.capture = CaptureConfig()
-            config.cheatsheets = CheatsheetConfig()
-            cheatsheetFolders = []
-            cheatsheetExtensions = CheatsheetConfig().extensions.joined(separator: ", ")
         case .ask:
             config.ask = AskConfig()
             askKeyMessage = nil
+        case .terminal:
+            config.terminalSession = TerminalSessionConfig()
+            terminalShellChoice = "auto"
+        case .bookmarks:
+            bookmarks = []
+            bookmarksSaveError = nil
+        case .cheatsheets:
+            config.cheatsheets = CheatsheetConfig()
+            cheatsheetFolders = []
+            cheatsheetExtensions = CheatsheetConfig().extensions.joined(separator: ", ")
+        case .webApps:
+            config.webAppBrowser = installedChromium.first ?? defaults.webAppBrowser
+        case .screenshots:
+            let capture = CaptureConfig()
+            config.capture.directory = capture.directory
+            config.capture.screenshotAction = capture.screenshotAction
+            config.capture.screenshotFormat = capture.screenshotFormat
+            config.capture.delay = capture.delay
+        case .afterCapture:
+            let capture = CaptureConfig()
+            config.capture.hidePalette = capture.hidePalette
+            config.capture.captureCursor = capture.captureCursor
+            config.capture.showClicks = capture.showClicks
+            config.capture.captureSound = capture.captureSound
+            config.capture.captureThumbnail = capture.captureThumbnail
+            config.capture.editAfterCapture = capture.editAfterCapture
+            config.capture.previewRecording = capture.previewRecording
+        case .recordings:
+            let capture = CaptureConfig()
+            config.capture.recordingAction = capture.recordingAction
+            config.capture.recordingTarget = capture.recordingTarget
+            config.capture.recordingDisplay = capture.recordingDisplay
+            config.capture.recordingRegion = capture.recordingRegion
+            config.capture.recordingFormat = capture.recordingFormat
+            config.capture.recordingAudio = capture.recordingAudio
+            config.capture.recordingMicrophone = capture.recordingMicrophone
+        case .captures:
+            config.capture.gallery = CaptureConfig().gallery
+        case .about, .providerFiles, .configFiles, .diagnostics:
+            break
         case .providers:
             providerOrder = providers.map(\.id)
             disabledProviders = []
