@@ -430,9 +430,10 @@ provider rail and a content card. There is no alternate classic layout.
 the fixed frame is wide enough and below it on portrait frames.
 `beside` and `below` remain explicit overrides. The pane takes room from the
 list card; it never resizes the window. The launcher opens at one fixed frame
-per display — near full width and tall on landscape, narrower and full height
-on portrait — and does not grow or shrink with result count, preview, provider
-bar or mode.
+per display — 60% of each screen axis, or the absolute caps when those are
+smaller — and does not grow or shrink with result count, preview, provider bar
+or mode. The embedded terminal opens at 90% of that width and 85% of its
+height, centred; the scratchpad keeps the full launcher frame.
 
 ### Pinned items
 

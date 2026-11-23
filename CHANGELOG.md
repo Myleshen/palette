@@ -4,12 +4,13 @@
 
 ### Changed
 
-- **One fixed launcher frame per screen.** The panel opens at the same large
-  landscape size on every landscape display (a narrower, full-height frame on
-  portrait screens) and no longer grows or shrinks with result count, preview,
-  provider rail or mode. The provider rail keeps one width and scrolls its
-  list, and the preview takes room from the list card without resizing the
-  window. Terminal and scratchpad use the same frame.
+- **One fixed launcher frame per screen.** The panel takes 60% of each screen
+  axis (absolute caps only when smaller), with a usable floor on tiny displays,
+  and no longer grows or shrinks with result count, preview, provider rail or
+  mode. The provider rail keeps one width and scrolls its list, and the preview
+  takes room from the list card without resizing the window. The embedded
+  terminal opens at 90% width and 85% height of that frame, centred; scratchpad
+  and Ask keep the launcher frame.
 - Settings lost the manual **Size** card, and `[window]` no longer reads
   `auto_size`, `scale`, `width`, `max_height`, `visible_rows`,
   `clipboard_width`, `preview_width` or `terminal_width`. Old files still parse

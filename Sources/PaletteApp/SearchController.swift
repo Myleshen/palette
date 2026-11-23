@@ -190,6 +190,7 @@ public final class SearchController: ObservableObject, HostBridge {
         railFocused = false
         terminalActive = false
         terminalSessionName = nil
+        panel?.terminalFrame = false
         panel?.suppressAutoHide = false
     }
 
@@ -1184,6 +1185,7 @@ public final class SearchController: ObservableObject, HostBridge {
         previewFocused = false
         actionsMode = false
         actionItems = []
+        panel?.terminalFrame = true
         panel?.show()
         requestFocus()
     }
@@ -1192,6 +1194,7 @@ public final class SearchController: ObservableObject, HostBridge {
         guard terminalActive else { return }
         terminalActive = false
         terminalSessionName = nil
+        panel?.terminalFrame = false
         NotificationCenter.default.post(name: .paletteTerminalStop, object: nil)
         resetting = true
         query = ""
@@ -1203,6 +1206,7 @@ public final class SearchController: ObservableObject, HostBridge {
         if terminalActive { closeTerminalPanel() }
         scratchpadGeneration += 1
         let generation = scratchpadGeneration
+        panel?.terminalFrame = false
         panel?.show()
         scratchpadActive = true
         previewEnabled = false

@@ -163,7 +163,7 @@ both the check and the repair.
 `list.spacing`, `list.icon_size`, `motion.duration_ms`.
 
 Panel width and height are not theme keys. The launcher uses one fixed frame per
-screen (near full width on landscape, narrower and full height on portrait), so
+screen (60% of each screen axis, with absolute caps when smaller), so
 a theme stays portable across screen sizes. `config.toml` under `[window]` only
 picks the preview direction, provider bar placement and favicons.
 

@@ -248,18 +248,28 @@ public struct WindowConfig: Sendable, Equatable {
 
     /// Gap kept between the panel and every screen edge.
     public static let panelMargin: Double = 24
-    /// Landscape launcher bounds. The width cap is what makes the panel read
-    /// as "near full" on a laptop without stretching on an ultrawide.
+    /// Absolute launcher bounds. These only matter when they sit below the
+    /// 60%-of-screen rule; they never make the panel larger than 60%.
     public static let maxPanelWidth: Double = 1_100
     public static let maxPanelHeight: Double = 900
-    /// Portrait screens get a narrower, full-height frame instead.
+    /// Portrait screens get a narrower frame on the same 60% rule.
     public static let portraitMaxPanelWidth: Double = 720
+    /// The panel covers this share of each screen axis.
+    public static let screenShare: Double = 0.6
+    /// Usable floor for small screens; clamped to the visible area.
+    public static let minPanelWidth: Double = 480
+    public static let minPanelHeight: Double = 360
+    /// Embedded terminal shares of the launcher frame, so it never fills the
+    /// whole panel.
+    public static let terminalWidthShare: Double = 0.9
+    public static let terminalHeightShare: Double = 0.85
     /// Auto preview sits beside only when the fixed frame leaves a useful list.
-    public static let besidePreviewMinWidth: Double = 900
+    public static let besidePreviewMinWidth: Double = 800
 
     /// The one launcher size for a screen, in points. It depends on the screen
-    /// alone: rows, preview, provider rail and mode never change it. The frame
-    /// never exceeds the visible area, so a tiny display simply gets a small
+    /// alone: rows, preview, provider rail and mode never change it. Each axis
+    /// takes at most 60% of the screen, clamped to the visible area and bounded
+    /// by the absolute caps when those are smaller. A tiny display gets a small
     /// panel rather than one clipped by the screen edge.
     public func launcherSize(for visible: CGSize) -> CGSize {
         guard visible.width > 0, visible.height > 0 else {
@@ -270,11 +280,24 @@ public struct WindowConfig: Sendable, Equatable {
         let availableHeight = max(1, visible.height - margin * 2)
         let portrait = visible.height > visible.width
         let widthCap = CGFloat(portrait ? Self.portraitMaxPanelWidth : Self.maxPanelWidth)
-        // Portrait keeps the whole height; landscape stops at the cap.
-        let heightCap = portrait ? availableHeight : CGFloat(Self.maxPanelHeight)
+        let width = min(
+            availableWidth,
+            max(CGFloat(Self.minPanelWidth), min(visible.width * CGFloat(Self.screenShare), widthCap))
+        )
+        let height = min(
+            availableHeight,
+            max(CGFloat(Self.minPanelHeight), min(visible.height * CGFloat(Self.screenShare), CGFloat(Self.maxPanelHeight)))
+        )
+        return CGSize(width: width.rounded(.down), height: height.rounded(.down))
+    }
+
+    /// The embedded terminal opens smaller than the launcher frame, centred on
+    /// the same screen. Scratchpad and Ask keep the launcher frame.
+    public func terminalSize(for visible: CGSize) -> CGSize {
+        let frame = launcherSize(for: visible)
         return CGSize(
-            width: min(availableWidth, widthCap).rounded(),
-            height: min(availableHeight, heightCap).rounded()
+            width: max(1, (frame.width * CGFloat(Self.terminalWidthShare)).rounded()),
+            height: max(1, (frame.height * CGFloat(Self.terminalHeightShare)).rounded())
         )
     }
 
@@ -1087,9 +1110,9 @@ public enum ConfigLoader {
         web_app_browser = "Helium"
         app_sort = "alphabetical"      # alphabetical | frequent
 
-        # Launcher geometry is fixed per screen: one large landscape frame, or a
-        # narrower full-height frame on portrait displays. Only layout choices
-        # live here.
+        # Launcher geometry is fixed per screen: 60% of each screen axis, with a
+        # narrower absolute cap on portrait displays. Only layout choices live
+        # here.
         [window]
         preview_layout = "auto"        # beside | below | auto
         provider_bar = "top"           # top | left | hidden

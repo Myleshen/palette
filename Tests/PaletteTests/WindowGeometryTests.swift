@@ -6,8 +6,8 @@ final class WindowGeometryTests: XCTestCase {
         let window = WindowConfig()
         let screen = CGSize(width: 1440, height: 900)
         let size = window.launcherSize(for: screen)
-        XCTAssertEqual(size.width, 1_100)
-        XCTAssertEqual(size.height, 852, "screen minus both 24pt margins")
+        XCTAssertEqual(size.width, 864, "60% of the screen width")
+        XCTAssertEqual(size.height, 540, "60% of the screen height")
         // Asking again, or with any other layout choice, cannot move it.
         var leftRail = WindowConfig()
         leftRail.providerBar = .left
@@ -17,31 +17,52 @@ final class WindowGeometryTests: XCTestCase {
         XCTAssertEqual(window.launcherSize(for: screen), size)
     }
 
-    func testLandscapeHeightStopsAtTheCap() {
+    func testFrameTakesSixtyPercentOfBothAxes() {
         let window = WindowConfig()
-        // 2560×1440 leaves 1392pt of height; the frame stops at 900.
-        let size = window.launcherSize(for: CGSize(width: 2560, height: 1440))
-        XCTAssertEqual(size.width, 1_100)
-        XCTAssertEqual(size.height, 900)
+        // The reference screen from the brief.
+        let size = window.launcherSize(for: CGSize(width: 1710, height: 1073))
+        XCTAssertEqual(size.width, 1_026, accuracy: 1)
+        XCTAssertEqual(size.height, 643, accuracy: 1)
+        XCTAssertLessThanOrEqual(size.width, 1710 * 0.6)
+        XCTAssertLessThanOrEqual(size.height, 1073 * 0.6)
     }
 
-    func testPortraitFrameIsNarrowerAndFullHeight() {
+    func testAbsoluteCapsBoundVeryLargeScreens() {
+        let window = WindowConfig()
+        // 60% of 2560 is 1536, 60% of 1440 is 864: the width cap wins.
+        let size = window.launcherSize(for: CGSize(width: 2560, height: 1440))
+        XCTAssertEqual(size.width, 1_100)
+        XCTAssertEqual(size.height, 864)
+    }
+
+    func testPortraitFrameIsNarrowerOnTheSameRule() {
         let window = WindowConfig()
         let landscape = window.launcherSize(for: CGSize(width: 1440, height: 900))
         let portrait = window.launcherSize(for: CGSize(width: 900, height: 1440))
         XCTAssertLessThan(portrait.width, landscape.width)
         XCTAssertGreaterThan(portrait.height, landscape.height)
-        XCTAssertEqual(portrait.width, 720)
-        XCTAssertEqual(portrait.height, 1_392)
+        XCTAssertEqual(portrait.width, 540, "60% of the screen width")
+        XCTAssertEqual(portrait.height, 864, "60% of the screen height")
     }
 
     func testFrameIsClampedToSmallScreens() {
         let window = WindowConfig()
         let size = window.launcherSize(for: CGSize(width: 400, height: 300))
-        XCTAssertEqual(size.width, 352, "400 minus the margins when the cap does not fit")
+        XCTAssertEqual(size.width, 352, "400 minus the margins when even 60% does not fit")
         XCTAssertEqual(size.height, 252)
         XCTAssertLessThanOrEqual(size.width, 400)
         XCTAssertLessThanOrEqual(size.height, 300)
+    }
+
+    func testTerminalIsSmallerThanTheLauncher() {
+        let window = WindowConfig()
+        let screen = CGSize(width: 1710, height: 1073)
+        let launcher = window.launcherSize(for: screen)
+        let terminal = window.terminalSize(for: screen)
+        XCTAssertLessThan(terminal.width, launcher.width)
+        XCTAssertLessThan(terminal.height, launcher.height)
+        XCTAssertEqual(terminal.width, 923, "90% of the launcher width")
+        XCTAssertEqual(terminal.height, 547, "85% of the launcher height")
     }
 
     func testAutoPreviewReadsTheFrameWidth() {

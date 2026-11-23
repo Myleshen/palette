@@ -31,6 +31,12 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         didSet { if isShowing { position() } }
     }
 
+    /// True while the embedded terminal is open: it opens at
+    /// `WindowConfig.terminalSize(for:)`, centred, instead of the launcher frame.
+    public var terminalFrame = false {
+        didSet { if isShowing { position() } }
+    }
+
     /// Config `search_position` wins over the theme's window anchor.
     public var anchorOverride: String? {
         didSet { if isShowing { position() } }
@@ -165,25 +171,31 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         let visible = screen.visibleFrame
         // Never grow past the usable screen area, whatever an override asks for.
         let metrics = screenSizeOverride ?? visible.size
-        let size = windowConfig.launcherSize(for: metrics)
+        let size = terminalFrame
+            ? windowConfig.terminalSize(for: metrics)
+            : windowConfig.launcherSize(for: metrics)
         let width = min(size.width, visible.width - 24)
         let height = min(size.height, visible.height - 24)
         var x = visible.midX - width / 2
         var y: CGFloat
 
-        switch (anchorOverride ?? theme.window.anchor).lowercased() {
-        case "center":
+        if terminalFrame {
             y = visible.midY - height / 2
-        case "bottom":
-            let offset = theme.window.offsetYPercent
-                ? visible.height * CGFloat(theme.window.offsetY) / 100
-                : CGFloat(theme.window.offsetY)
-            y = visible.minY + offset
-        default:
-            let offset = theme.window.offsetYPercent
-                ? visible.height * CGFloat(theme.window.offsetY) / 100
-                : CGFloat(theme.window.offsetY)
-            y = visible.maxY - offset - height
+        } else {
+            switch (anchorOverride ?? theme.window.anchor).lowercased() {
+            case "center":
+                y = visible.midY - height / 2
+            case "bottom":
+                let offset = theme.window.offsetYPercent
+                    ? visible.height * CGFloat(theme.window.offsetY) / 100
+                    : CGFloat(theme.window.offsetY)
+                y = visible.minY + offset
+            default:
+                let offset = theme.window.offsetYPercent
+                    ? visible.height * CGFloat(theme.window.offsetY) / 100
+                    : CGFloat(theme.window.offsetY)
+                y = visible.maxY - offset - height
+            }
         }
 
         x = max(visible.minX + 12, min(x, visible.maxX - width - 12))
