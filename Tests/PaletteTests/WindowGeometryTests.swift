@@ -54,15 +54,28 @@ final class WindowGeometryTests: XCTestCase {
         XCTAssertLessThanOrEqual(size.height, 300)
     }
 
-    func testTerminalIsSmallerThanTheLauncher() {
+    func testTerminalFrameIsTheLauncherFrame() {
         let window = WindowConfig()
         let screen = CGSize(width: 1710, height: 1073)
-        let launcher = window.launcherSize(for: screen)
-        let terminal = window.terminalSize(for: screen)
-        XCTAssertLessThan(terminal.width, launcher.width)
-        XCTAssertLessThan(terminal.height, launcher.height)
-        XCTAssertEqual(terminal.width, 923, "90% of the launcher width")
-        XCTAssertEqual(terminal.height, 547, "85% of the launcher height")
+        let frame = window.launcherSize(for: screen)
+        XCTAssertEqual(frame.width, 1_026, "the window never shrinks for the terminal")
+        XCTAssertEqual(frame.height, 643)
+        // The pane insets inside that same frame instead.
+        let available = CGSize(
+            width: frame.width - WindowConfig.terminalInsetWidth * 2,
+            height: frame.height - WindowConfig.terminalInsetHeight * 2
+        )
+        let content = WindowConfig.terminalContentSize(in: available)
+        XCTAssertLessThan(content.width, frame.width)
+        XCTAssertLessThan(content.height, frame.height)
+    }
+
+    func testTerminalContentIsInsetAndCapped() {
+        // Full width of the inset area, 82% of its height, centred by the view.
+        let content = WindowConfig.terminalContentSize(in: CGSize(width: 700, height: 500))
+        XCTAssertEqual(content.width, 700)
+        XCTAssertEqual(content.height, 410, accuracy: 0.001)
+        XCTAssertEqual(content.height / 500, 0.82, accuracy: 0.0001)
     }
 
     func testAutoPreviewReadsTheFrameWidth() {

@@ -264,10 +264,12 @@ public struct WindowConfig: Sendable, Equatable {
     /// Usable floor for small screens; clamped to the visible area.
     public static let minPanelWidth: Double = 480
     public static let minPanelHeight: Double = 360
-    /// Embedded terminal shares of the launcher frame, so it never fills the
-    /// whole panel.
-    public static let terminalWidthShare: Double = 0.9
-    public static let terminalHeightShare: Double = 0.85
+    /// Embedded terminal inset and height cap inside the launcher frame. The
+    /// window never changes size; only the terminal content sits slightly
+    /// smaller inside it.
+    public static let terminalInsetWidth: Double = 24
+    public static let terminalInsetHeight: Double = 16
+    public static let terminalContentHeightShare: Double = 0.82
     /// Auto preview sits beside only when the fixed frame leaves a useful list.
     public static let besidePreviewMinWidth: Double = 800
 
@@ -296,13 +298,13 @@ public struct WindowConfig: Sendable, Equatable {
         return CGSize(width: width.rounded(.down), height: height.rounded(.down))
     }
 
-    /// The embedded terminal opens smaller than the launcher frame, centred on
-    /// the same screen. Scratchpad and Ask keep the launcher frame.
-    public func terminalSize(for visible: CGSize) -> CGSize {
-        let frame = launcherSize(for: visible)
-        return CGSize(
-            width: max(1, (frame.width * CGFloat(Self.terminalWidthShare)).rounded()),
-            height: max(1, (frame.height * CGFloat(Self.terminalHeightShare)).rounded())
+    /// The terminal content size for a content area that already had the
+    /// insets taken out: full width, 82% of the height, so the pane reads
+    /// slightly smaller than the window it lives in.
+    public static func terminalContentSize(in available: CGSize) -> CGSize {
+        CGSize(
+            width: max(1, available.width),
+            height: max(1, available.height * CGFloat(Self.terminalContentHeightShare))
         )
     }
 
