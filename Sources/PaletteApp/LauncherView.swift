@@ -424,7 +424,7 @@ private struct ChipButton: View {    var title: String
 /// One provider chip for the top strip: the rail's glyph and label in a 26pt
 /// rounded chip. Selection uses the rail's solid palette pair.
 private struct ProviderBarChip: View {
-    var entry: SearchController.RailEntry
+    var entry: ProviderRailEntry
     var width: CGFloat
     var selected: Bool
     var theme: Theme
@@ -465,7 +465,7 @@ private struct ProviderBarChip: View {
 /// The provider's real icon when it ships one, otherwise a two-letter tile.
 /// Shared by the left rail and the top strip so both read the same.
 private struct ProviderGlyph: View {
-    var entry: SearchController.RailEntry
+    var entry: ProviderRailEntry
     var theme: Theme
 
     private var symbol: String? {
@@ -843,7 +843,7 @@ struct LauncherRootView: View {
     }
 
     private struct ProviderBarWindow {
-        var entries: [SearchController.RailEntry]
+        var entries: [ProviderRailEntry]
         var startIndex: Int
         var endIndex: Int
         var count: Int { entries.count }
@@ -905,7 +905,7 @@ struct LauncherRootView: View {
 
     /// Chip widths are measured from the same 11pt label the chip draws, plus
     /// its 16pt glyph, 6pt gap and 12pt padding on each side.
-    private func chipWidth(_ entry: SearchController.RailEntry) -> CGFloat {
+    private func chipWidth(_ entry: ProviderRailEntry) -> CGFloat {
         let label = (entry.title as NSString).size(
             withAttributes: [.font: theme.nsFont(size: 11, weight: .medium)]
         ).width
@@ -1048,7 +1048,7 @@ struct LauncherRootView: View {
     }
 
 
-    private func railRow(_ entry: SearchController.RailEntry) -> some View {
+    private func railRow(_ entry: ProviderRailEntry) -> some View {
         let selected = controller.activeRailID == entry.id
         return HStack(spacing: 8) {
             ProviderGlyph(entry: entry, theme: theme)
@@ -1094,11 +1094,57 @@ struct LauncherRootView: View {
 
     private var listCard: some View {
         VStack(spacing: 0) {
+            groupStrip
             modeHeader
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .cardSurface(theme: theme)
+    }
+
+    /// Secondary strip for a grouped rail row. It lives in the content column
+    /// in every mode, so the top bar and the left rail share one placement.
+    @ViewBuilder
+    private var groupStrip: some View {
+        if let group = controller.activeGroupEntry {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    HStack(spacing: LauncherMetrics.providerChipGap) {
+                        ForEach(group.children) { child in
+                            let entry = ProviderRailEntry(
+                                id: child.id,
+                                title: child.title,
+                                icon: child.icon,
+                                trigger: child.trigger
+                            )
+                            ProviderBarChip(
+                                entry: entry,
+                                width: chipWidth(entry),
+                                selected: controller.activeProviderID == child.id,
+                                theme: theme
+                            ) {
+                                controller.selectGroupChild(child)
+                                controller.stripFocused = true
+                            }
+                            .id(child.id)
+                        }
+                    }
+                    .padding(.horizontal, LauncherMetrics.innerPadding)
+                    .padding(.vertical, LauncherMetrics.providerBarVerticalPadding)
+                }
+                .scrollIndicators(.hidden)
+                .onChange(of: controller.activeProviderID, initial: true) { _, id in
+                    withAnimation(reduceMotion ? nil : theme.scrollAnimation) {
+                        proxy.scrollTo(id, anchor: .center)
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(theme.color(theme.palette.separator).opacity(0.5))
+                        .frame(height: 1)
+                }
+            }
+        }
     }
 
     private var previewCard: some View {

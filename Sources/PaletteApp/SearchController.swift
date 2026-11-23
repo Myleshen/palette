@@ -40,6 +40,11 @@ public final class SearchController: ObservableObject, HostBridge {
     /// The rail has keyboard focus after a click; arrows move providers then,
     /// while the search field keeps the actual typing focus.
     @Published public var railFocused = false
+    /// The secondary strip has keyboard focus; arrows switch group children.
+    @Published public var stripFocused = false
+    /// A provider opened without a trigger (the Apps rail row); plain text
+    /// keeps filtering that provider until another scope is chosen.
+    @Published public private(set) var scopeProviderID: String?
     @Published public private(set) var prompt: PromptState?
     @Published public var promptValue = ""
     @Published public private(set) var focusToken = 0
@@ -195,6 +200,8 @@ public final class SearchController: ObservableObject, HostBridge {
         previewEnabled = false
         previewFocused = false
         railFocused = false
+        stripFocused = false
+        scopeProviderID = nil
         terminalActive = false
         terminalSessionName = nil
         panel?.terminalFrame = false
@@ -228,6 +235,7 @@ public final class SearchController: ObservableObject, HostBridge {
         // Bound searches can take a moment (Bitwarden, external processes).
         // Show the target provider immediately instead of stale global rows.
         let parsed = registry.parser.parse(query)
+        if parsed.providerID != nil { scopeProviderID = nil }
         // Preview is useful wherever a row has something worth showing:
         // clipboard, snippets, and path/project providers.
         let previewProvider = ["clip", "snip", "recent", "neo", "neof", "proj", "shots", "cheat", "atlas"]
@@ -265,18 +273,19 @@ public final class SearchController: ObservableObject, HostBridge {
     private func scheduleSearch(debounce: Bool = true) {
         searchTask?.cancel()
         let raw = query
-        let pathQuery = registry.parser.parse(raw).isBound
+        let scope = scopeProviderID
+        let pathQuery = scope != nil || registry.parser.parse(raw).isBound
         let delay: UInt64 = debounce && pathQuery ? 120_000_000 : (debounce ? 12_000_000 : 0)
         searchTask = Task { [weak self] in
             if delay > 0 {
                 try? await Task.sleep(nanoseconds: delay)
             }
             guard !Task.isCancelled else { return }
-            await self?.performSearch(raw: raw)
+            await self?.performSearch(raw: raw, scope: scope)
         }
     }
 
-    private func performSearch(raw: String) async {
+    private func performSearch(raw: String, scope: String?) async {
         isSearching = true
         // `!keyword query` goes straight to a search engine; providers never
         // see it, and the list is the bang row (or the matching engines).
@@ -297,7 +306,12 @@ public final class SearchController: ObservableObject, HostBridge {
             isSearching = false
             return
         }
-        let result = await registry.search(raw: raw)
+        let result: RegistrySearchResult
+        if let scope {
+            result = await registry.search(providerID: scope, text: raw)
+        } else {
+            result = await registry.search(raw: raw)
+        }
         guard !Task.isCancelled else { return }
 
         let previousID = selectedItem?.stableID
@@ -315,8 +329,10 @@ public final class SearchController: ObservableObject, HostBridge {
         }
 
         // The empty-query screen is the app list: only apps and pinned items,
-        // never unpinned web apps, sessions, or search suggestions.
-        let isEmptySearch = !result.parsed.isBound
+        // never unpinned web apps, sessions, or search suggestions. The Apps
+        // rail row is the same list on purpose.
+        let appOnly = result.parsed.providerID == "apps"
+        let isEmptySearch = (!result.parsed.isBound || appOnly)
             && result.parsed.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         var visible: [PaletteItem]
         if isEmptySearch {
@@ -505,6 +521,26 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
 
+        if stripFocused {
+            switch keyCode {
+            case 123, 126:
+                moveGroupChild(by: -1)
+                return true
+            case 124, 125:
+                moveGroupChild(by: 1)
+                return true
+            case 48:
+                stripFocused = false
+                return true
+            case 53:
+                stripFocused = false
+                railFocused = true
+                return true
+            default:
+                break
+            }
+        }
+
         if railFocused {
             switch keyCode {
             case 125:
@@ -514,13 +550,19 @@ public final class SearchController: ObservableObject, HostBridge {
                 moveRail(by: -1)
                 return true
             case 53:
-                selectRail("everything")
+                selectRail(ProviderRail.everythingID)
                 railFocused = false
                 return true
-            case 36, 76, 48:
+            case 36, 76:
                 railFocused = false
-                // Tab falls through to the normal provider cycle below.
-                if keyCode != 48 { return true }
+                return true
+            case 48:
+                railFocused = false
+                // A group opens its strip first; otherwise Tab keeps cycling.
+                if activeGroupEntry != nil {
+                    stripFocused = true
+                    return true
+                }
             default:
                 break
             }
@@ -594,12 +636,9 @@ public final class SearchController: ObservableObject, HostBridge {
         case 53:
             if actionsMode {
                 closeActions()
-            } else if !query.isEmpty {
-                resetting = true
-                query = ""
-                resetting = false
-                previewEnabled = false
-                clipboardFilter = nil
+            } else if !query.isEmpty || scopeProviderID != nil {
+                resetToPlainQuery()
+                scopeProviderID = nil
                 scheduleSearch(debounce: false)
             } else {
                 panel?.hide()
@@ -623,50 +662,73 @@ public final class SearchController: ObservableObject, HostBridge {
 
     // MARK: - Provider rail
 
-    public struct RailEntry: Identifiable, Equatable {
-        public var id: String
-        public var title: String
-        public var trigger: String?
-        public var icon: String?
-    }
-
-    /// Everything first, then one row per provider in registry order.
-    public var railEntries: [RailEntry] {
-        var entries: [RailEntry] = [
-            RailEntry(id: "everything", title: "Everything", trigger: nil, icon: "symbol:square.grid.2x2"),
-        ]
-        for provider in registry.providers {
-            let descriptor = provider.descriptor
-            guard let trigger = descriptor.trigger else { continue }
-            entries.append(RailEntry(
-                id: descriptor.id,
-                title: descriptor.name,
-                trigger: trigger,
-                icon: descriptor.icon
-            ))
-        }
-        return entries
+    /// Everything, Apps, one row per group, then ungrouped providers.
+    public var railEntries: [ProviderRailEntry] {
+        ProviderRail.entries(for: registry.providers.map(\.descriptor))
     }
 
     /// The rail row for the current scope; a plain query is Everything.
     public var activeRailID: String {
-        let provider = registry.parser.parse(query).providerID
-        if provider == nil || provider == "apps" { return "everything" }
-        return provider ?? "everything"
+        if let scopeProviderID { return scopeProviderID }
+        guard let providerID = registry.parser.parse(query).providerID else {
+            return ProviderRail.everythingID
+        }
+        return ProviderRail.railID(for: providerID, in: railEntries)
+    }
+
+    /// The group whose secondary strip belongs above the list, if any.
+    public var activeGroupEntry: ProviderRailEntry? {
+        let id = activeRailID
+        return railEntries.first { $0.id == id && $0.isGroup }
     }
 
     public func selectRail(_ id: String) {
         guard let entry = railEntries.first(where: { $0.id == id }) else { return }
+        stripFocused = false
+        if entry.isGroup {
+            scopeProviderID = nil
+            guard let first = entry.children.first else { return }
+            resetToPlainQuery()
+            query = registry.parser.prefix + first.trigger + " "
+            return
+        }
+        if let scope = entry.scopeProviderID {
+            resetToPlainQuery()
+            scopeProviderID = scope
+            scheduleSearch(debounce: false)
+            return
+        }
+        scopeProviderID = nil
         if let trigger = entry.trigger {
             query = registry.parser.prefix + trigger + " "
         } else {
-            resetting = true
-            query = ""
-            resetting = false
-            previewEnabled = false
-            clipboardFilter = nil
+            resetToPlainQuery()
             scheduleSearch(debounce: false)
         }
+    }
+
+    /// Switch inside the group strip, keeping whatever text follows the trigger.
+    public func selectGroupChild(_ child: ProviderRailChild) {
+        let text = registry.parser.parse(query).text
+        scopeProviderID = nil
+        query = registry.parser.prefix + child.trigger + (text.isEmpty ? " " : " " + text)
+    }
+
+    public func moveGroupChild(by delta: Int) {
+        guard let group = activeGroupEntry, !group.children.isEmpty else { return }
+        let current = group.children.firstIndex { $0.id == activeProviderID } ?? 0
+        let count = group.children.count
+        let next = ((current + delta) % count + count) % count
+        selectGroupChild(group.children[next])
+    }
+
+    private func resetToPlainQuery() {
+        resetting = true
+        query = ""
+        resetting = false
+        previewEnabled = false
+        previewFocused = false
+        clipboardFilter = nil
     }
 
     public func moveRail(by delta: Int) {
@@ -678,11 +740,12 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public var activeTabID: String {
-        activeRailID == "everything" ? "apps" : activeRailID
+        activeRailID == ProviderRail.everythingID ? "apps" : activeProviderID
     }
 
     public var activeProviderID: String {
-        registry.parser.parse(query).providerID ?? "apps"
+        if let scopeProviderID { return scopeProviderID }
+        return registry.parser.parse(query).providerID ?? "apps"
     }
 
     public func cycleTab(by delta: Int) {
@@ -740,6 +803,7 @@ public final class SearchController: ObservableObject, HostBridge {
     public func select(_ index: Int) {
         guard actionsMode == false, items.indices.contains(index) else { return }
         railFocused = false
+        stripFocused = false
         selectionIndex = index
         fillPreview()
     }

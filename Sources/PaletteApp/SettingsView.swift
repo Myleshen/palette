@@ -14,6 +14,7 @@ struct ProviderSettingsInfo: Identifiable, Equatable {
     /// Tools this provider cannot run without, checked once here rather than
     /// from inside a search.
     var requirements: [ProviderRequirement] = []
+    var group: ProviderGroup?
 }
 
 /// One editable alias row. `enabled` is the effective set written to config;
@@ -3088,6 +3089,7 @@ struct SettingsView: View {
             return providerName(id).localizedCaseInsensitiveContains(query)
                 || id.localizedCaseInsensitiveContains(query)
                 || (providerTrigger(id)?.localizedCaseInsensitiveContains(query) ?? false)
+                || (providerGroup(id)?.localizedCaseInsensitiveContains(query) ?? false)
         }
         let pinned = pinnedProviderIDs.filter { id in
             providers.contains { $0.id == id }
@@ -3117,6 +3119,10 @@ struct SettingsView: View {
 
     private func providerName(_ id: String) -> String {
         providers.first(where: { $0.id == id })?.name ?? id
+    }
+
+    private func providerGroup(_ id: String) -> String? {
+        providers.first(where: { $0.id == id })?.group?.name
     }
 
     private func providerTrigger(_ id: String) -> String? {
@@ -3181,9 +3187,17 @@ struct SettingsView: View {
                 .help("Include \(providerName(id)) in the registry and show its tab")
 
             VStack(alignment: .leading, spacing: 1) {
+                if let group = providerGroup(id) {
+                    Text(group)
+                        .font(.system(size: 9))
+                        .foregroundStyle(muted)
+                        .lineLimit(1)
+                        .padding(.leading, 10)
+                }
                 Text(providerName(id))
                     .fontWeight(.medium)
                     .lineLimit(2)
+                    .padding(.leading, providerGroup(id) == nil ? 0 : 10)
                 if let missing = ProviderRequirements.missing(requirements(for: id)).first {
                     Text("needs \(missing.tool)")
                         .font(.caption2)

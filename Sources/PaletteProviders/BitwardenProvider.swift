@@ -307,6 +307,17 @@ public enum BitwardenKind: String, Sendable, CaseIterable {
         }
     }
 
+    /// Strip label: the group name already says Bitwarden.
+    public var shortName: String {
+        switch self {
+        case .passwords: return "Passwords"
+        case .usernames: return "Usernames"
+        case .totp: return "TOTP"
+        case .notes: return "Notes"
+        case .urls: return "URLs"
+        }
+    }
+
     public var icon: String {
         switch self {
         case .passwords: return "key.fill"
@@ -367,10 +378,15 @@ public actor BitwardenProvider: PaletteProvider {
             name: kind.name,
             trigger: kind.trigger,
             isGlobal: false,
-            priority: kind == .passwords ? 34 : 30,
-            icon: "symbol:\(kind.icon)"
+            // Descending so the rail strip keeps this reading order.
+            priority: 34 - (Self.allKinds.firstIndex(of: kind) ?? 0),
+            icon: "symbol:\(kind.icon)",
+            group: ProviderGroup(id: "bitwarden", name: "Bitwarden", order: 20),
+            shortName: kind.shortName
         )
     }
+
+    private static let allKinds = BitwardenKind.allCases
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         guard let bw = ToolLocator.shared.path(for: "bw") else {

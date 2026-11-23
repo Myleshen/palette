@@ -70,6 +70,30 @@ public enum GitHubKind: String, Sendable, CaseIterable {
         }
     }
 
+    /// Strip label: the group name already says GitHub.
+    public var shortName: String {
+        switch self {
+        case .context: return "Overview"
+        case .repos: return "Repositories"
+        case .pulls: return "PRs"
+        case .issues: return "Issues"
+        case .actions: return "Actions"
+        case .notifications: return "Notifications"
+        }
+    }
+
+    /// Strip order: the default overview, then the five trigger rows.
+    var groupRank: Int {
+        switch self {
+        case .context: return 0
+        case .pulls: return 1
+        case .issues: return 2
+        case .actions: return 3
+        case .notifications: return 4
+        case .repos: return 5
+        }
+    }
+
     public var icon: String {
         switch self {
         case .context: return "chevron.left.forwardslash.chevron.right"
@@ -180,9 +204,11 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             name: kind.name,
             trigger: kind.trigger,
             isGlobal: false,
-            priority: kind == .context ? 44 : 43,
+            priority: 44 - kind.groupRank,
             icon: "symbol:\(kind.icon)",
-            keywords: kind.keywords
+            keywords: kind.keywords,
+            group: ProviderGroup(id: "github", name: "GitHub", order: 10),
+            shortName: kind.shortName
         )
     }
 

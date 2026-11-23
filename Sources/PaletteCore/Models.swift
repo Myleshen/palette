@@ -153,6 +153,20 @@ public struct SearchRequest: Sendable {
     }
 }
 
+/// Providers that answer the same trigger family share one rail row and a
+/// secondary strip, e.g. Bitwarden's `bw`/`bwu`/`bwt`/`bwn`/`bwo`.
+public struct ProviderGroup: Equatable, Hashable, Sendable {
+    public var id: String
+    public var name: String
+    public var order: Int
+
+    public init(id: String, name: String, order: Int = 0) {
+        self.id = id
+        self.name = name
+        self.order = order
+    }
+}
+
 public struct ProviderDescriptor: Identifiable, Equatable, Sendable {
     public var id: String
     public var name: String
@@ -161,6 +175,9 @@ public struct ProviderDescriptor: Identifiable, Equatable, Sendable {
     public var priority: Int
     public var icon: String?
     public var keywords: [String]
+    public var group: ProviderGroup?
+    /// Short label for the group strip; falls back to `name`.
+    public var shortName: String?
 
     public init(
         id: String,
@@ -169,7 +186,9 @@ public struct ProviderDescriptor: Identifiable, Equatable, Sendable {
         isGlobal: Bool = false,
         priority: Int = 0,
         icon: String? = nil,
-        keywords: [String] = []
+        keywords: [String] = [],
+        group: ProviderGroup? = nil,
+        shortName: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -178,6 +197,127 @@ public struct ProviderDescriptor: Identifiable, Equatable, Sendable {
         self.priority = priority
         self.icon = icon
         self.keywords = keywords
+        self.group = group
+        self.shortName = shortName
+    }
+}
+
+public struct ProviderRailChild: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var trigger: String
+    public var icon: String?
+
+    public init(id: String, title: String, trigger: String, icon: String? = nil) {
+        self.id = id
+        self.title = title
+        self.trigger = trigger
+        self.icon = icon
+    }
+}
+
+public struct ProviderRailEntry: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var icon: String?
+    public var trigger: String?
+    /// Set when the entry opens one provider without a prefix, such as Apps.
+    public var scopeProviderID: String?
+    public var children: [ProviderRailChild]
+
+    public var isGroup: Bool { !children.isEmpty }
+
+    public init(
+        id: String,
+        title: String,
+        icon: String? = nil,
+        trigger: String? = nil,
+        scopeProviderID: String? = nil,
+        children: [ProviderRailChild] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.icon = icon
+        self.trigger = trigger
+        self.scopeProviderID = scopeProviderID
+        self.children = children
+    }
+}
+
+/// Everything and Apps, then one row per group, then every ungrouped provider.
+public enum ProviderRail {
+    public static let everythingID = "everything"
+    public static let appsID = "apps"
+
+    public static func groupEntryID(_ groupID: String) -> String { "group:\(groupID)" }
+
+    public static func entries(for descriptors: [ProviderDescriptor]) -> [ProviderRailEntry] {
+        var entries: [ProviderRailEntry] = [
+            ProviderRailEntry(id: everythingID, title: "Everything", icon: "symbol:square.grid.2x2"),
+            ProviderRailEntry(
+                id: appsID,
+                title: "Apps",
+                icon: descriptors.first(where: { $0.id == appsID })?.icon ?? "symbol:app",
+                scopeProviderID: appsID
+            ),
+        ]
+
+        var groupsByID: [String: ProviderGroup] = [:]
+        var groupOrder: [String] = []
+        var childrenByGroup: [String: [ProviderRailChild]] = [:]
+        var ungrouped: [ProviderRailEntry] = []
+
+        for descriptor in descriptors where descriptor.id != appsID {
+            guard let trigger = descriptor.trigger else { continue }
+            if let group = descriptor.group {
+                if groupsByID[group.id] == nil {
+                    groupsByID[group.id] = group
+                    groupOrder.append(group.id)
+                }
+                childrenByGroup[group.id, default: []].append(ProviderRailChild(
+                    id: descriptor.id,
+                    title: descriptor.shortName ?? descriptor.name,
+                    trigger: trigger,
+                    icon: descriptor.icon
+                ))
+            } else {
+                ungrouped.append(ProviderRailEntry(
+                    id: descriptor.id,
+                    title: descriptor.shortName ?? descriptor.name,
+                    icon: descriptor.icon,
+                    trigger: trigger
+                ))
+            }
+        }
+
+        // A group takes the place of its first member; `order` decides which
+        // group comes first when several are present.
+        let orderedGroups = groupOrder.enumerated().sorted { lhs, rhs in
+            let left = groupsByID[lhs.element]?.order ?? 0
+            let right = groupsByID[rhs.element]?.order ?? 0
+            if left != right { return left < right }
+            return lhs.offset < rhs.offset
+        }
+        for (_, groupID) in orderedGroups {
+            guard let group = groupsByID[groupID],
+                  let members = childrenByGroup[groupID],
+                  let first = members.first else { continue }
+            entries.append(ProviderRailEntry(
+                id: groupEntryID(groupID),
+                title: group.name,
+                icon: first.icon,
+                children: members
+            ))
+        }
+        entries.append(contentsOf: ungrouped)
+        return entries
+    }
+
+    /// The rail row that owns a provider: its group when it belongs to one.
+    public static func railID(for providerID: String, in entries: [ProviderRailEntry]) -> String {
+        entries.first { entry in
+            entry.id == providerID || entry.children.contains { $0.id == providerID }
+        }?.id ?? providerID
     }
 }
 
