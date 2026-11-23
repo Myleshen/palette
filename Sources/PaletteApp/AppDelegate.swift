@@ -74,8 +74,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var appIndex: AppIndex!
     /// Bindable catalogue, rebuilt with the registry so provider ids never lie.
     private var catalogCommands: [CatalogCommand] = []
-    private var recordingMenuItem: NSMenuItem?
     private var recordingTicker: Timer?
+    private var recordingOptionsPanel: RecordingOptionsPanelController?
+    private var captureMenuItems: [CaptureMenuCommand: NSMenuItem] = [:]
+    private var lastCaptureURL: URL?
+    private var lastRecordingURL: URL?
+    private var lastScreenshotURL: URL?
+    private var menuBarFlashTask: Task<Void, Never>?
     private let screenshotHUD = ScreenshotHUD()
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
@@ -280,14 +285,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             searchController.setStatus("Timer finished while Palette was closed", duration: 8)
         }
         captureService.onStatus = { [weak self] message in
-            self?.searchController.setStatus(message, duration: 4)
+            self?.captureFeedback(message)
         }
         captureService.onFailure = { [weak self] message in
-            self?.captureService.annotateNextCapture = false
-            Task { await self?.searchController.notify(message) }
+            guard let self else { return }
+            self.captureService.annotateNextCapture = false
+            self.recordingTicker?.invalidate()
+            self.recordingTicker = nil
+            self.updateCaptureMenu()
+            self.captureFeedback(message)
         }
         captureService.onScreenshot = { [weak self] url in
             guard let self else { return }
+            self.rememberCapture(url, recording: false)
             let forced = self.captureService.annotateNextCapture
             self.captureService.annotateNextCapture = false
             if forced || self.configuration.capture.editAfterCapture {
@@ -297,7 +307,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.confirmCapture(url)
         }
         captureService.onRecordingStopped = { [weak self] url in
-            guard let self, self.configuration.capture.previewRecording else { return }
+            guard let self else { return }
+            self.rememberCapture(url, recording: true)
+            guard self.configuration.capture.previewRecording else { return }
             self.openMediaPreview(url)
         }
         NotificationCenter.default.addObserver(
@@ -328,7 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configureClipboard()
         buildStatusItem()
         if case .adopted = recordingAdoption {
-            updateRecordingMenuItem()
+            updateCaptureMenu()
             startRecordingTicker()
             searchController?.setStatus("Recording in progress", duration: nil)
         }
@@ -542,11 +554,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.writeSnapshot(to: value)
                 } else if let value = step.dropPrefix("probe=") {
                     self.scriptProbeResult = self.probeShortcut(value)
+                } else if step == "record_options" {
+                    self.presentRecordingOptions()
+                } else if let value = step.dropPrefix("last_capture=") {
+                    let url = URL(fileURLWithPath: value)
+                    self.rememberCapture(
+                        url,
+                        recording: ["mov", "mp4"].contains(url.pathExtension.lowercased())
+                    )
+                } else if let value = step.dropPrefix("capture_menu=") {
+                    self.writeCaptureMenu(to: value)
                 } else if let value = step.dropPrefix("window_snapshot=") {
                     if let ask = self.askWindow?.window {
                         // Include the titlebar: it is transparent, so only the
                         // frame view shows whether the title is legible.
                         self.write(view: ask.contentView?.superview ?? NSView(), to: value)
+                    } else if let options = self.recordingOptionsPanel?.window {
+                        self.write(view: options.contentView ?? NSView(), to: value)
                     } else if let hud = self.annotateWindows.last?.window
                         ?? self.mediaPreviews.last?.window {
                         self.write(view: hud.contentView ?? NSView(), to: value)
@@ -852,6 +876,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         write(view: view, to: destination)
     }
 
+    /// The status menu's capture section as text, so a scripted run can prove
+    /// the enable/disable rules without opening the menu.
+    private func writeCaptureMenu(to destination: String) {
+        let lines = CaptureMenuCommand.allCases.compactMap { command -> String? in
+            guard let item = captureMenuItems[command] else { return nil }
+            return "\(item.title)|enabled=\(item.isEnabled)|hidden=\(item.isHidden)"
+        }
+        try? (lines.joined(separator: "\n") + "\n")
+            .write(toFile: destination, atomically: true, encoding: .utf8)
+        Log.shared.info("Capture menu written to \(destination)", source: "app")
+    }
+
     private func writeSettingsSnapshot(to destination: String) {
         // Drop the blinking caret: focused text fields made snapshot diffs
         // flicker by a percent between runs.
@@ -1000,10 +1036,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ShotsProvider(service: captureService, bridge: hostProxy))
         providers.append(CheatsheetProvider(config: configuration.cheatsheets))
         let hideForCapture: @MainActor () -> Void = { [weak self] in
+            self?.screenshotHUD.dismiss()
             self?.panel?.hide(activatePrevious: false)
         }
         providers.append(ShotProvider(service: captureService, beforeCapture: hideForCapture))
-        providers.append(RecProvider(service: captureService, beforeStart: hideForCapture))
+        providers.append(RecProvider(
+            service: captureService,
+            startRequest: { [weak self] in self?.presentRecordingOptions() }
+        ))
         providers.append(WebSearchProvider(
             engines: configuration.webSearchEngines,
             enabled: configuration.webSearchEnabled,
@@ -1393,61 +1433,194 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func captureScreenshot(mode: CaptureMode = .screen) {
+        // A thumbnail from an earlier shot must not end up in this one.
+        screenshotHUD.dismiss()
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.captureKeepingPanel {
                 do {
                     let result = try await self.captureService.screenshot(mode)
-                    if FileManager.default.fileExists(atPath: result.url.path) {
-                        self.searchController.setStatus("Saved \(result.url.lastPathComponent)", duration: 4)
-                    } else {
-                        self.searchController.setStatus("Screenshot copied", duration: 4)
+                    // The service reports a saved file itself; a copy-only shot
+                    // has nothing on disk to name.
+                    if !FileManager.default.fileExists(atPath: result.url.path) {
+                        self.captureFeedback("Screenshot copied")
                     }
                 } catch CaptureError.cancelled {
-                    self.searchController.setStatus("Screenshot cancelled", duration: 3)
+                    self.captureFeedback("Screenshot cancelled")
                 } catch {
-                    // A capture can outlive the launcher, so notify() bounces
-                    // the Dock icon when the panel is gone.
                     Log.shared.error("Screenshot failed: \(error.localizedDescription)", source: "capture")
-                    await self.searchController.notify("Screenshot failed: \(error.localizedDescription)")
+                    self.captureFeedback("Screenshot failed: \(error.localizedDescription)")
                 }
             }
         }
     }
 
-    private func toggleRecording() {
+    /// One place every capture action reports through: the panel when it is
+    /// open, a banner and the menu-bar item when it is not.
+    private func captureFeedback(_ message: String) {
+        guard !message.isEmpty else { return }
+        if panel?.isVisible == true {
+            searchController.setStatus(message, duration: 4)
+        } else {
+            SystemNotification.post(title: "Palette", body: message)
+            flashMenuBar(message)
+        }
+        Log.shared.info("Capture feedback: \(message)", source: "capture")
+    }
+
+    /// Keeps a short status visible in the menu bar while the panel is closed.
+    private func flashMenuBar(_ message: String) {
+        guard let button = statusItem?.button else { return }
+        let text = message.count > 40 ? String(message.prefix(39)) + "…" : message
+        menuBarFlashTask?.cancel()
+        statusItem.length = NSStatusItem.variableLength
+        button.title = " " + text
+        button.toolTip = message
+        menuBarFlashTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.statusItem.length = NSStatusItem.squareLength
+            self.statusItem.button?.title = ""
+            self.statusItem.button?.toolTip = self.statusToolTip
+        }
+    }
+
+    private var statusToolTip: String {
+        "Palette — \(currentHotKey?.prettyDisplay ?? configuration.hotkey)"
+    }
+
+    /// Hotkey and `/rec` both land here: ask for audio, microphone, display and
+    /// area before anything is recorded.
+    private func presentRecordingOptions() {
+        guard !captureService.isRecording else { return }
+        if let existing = recordingOptionsPanel {
+            recordingOptionsPanel = nil
+            existing.discard()
+        }
+        let capture = captureService.config
+        let controller = RecordingOptionsPanelController(
+            options: RecordingOptions(capture: capture),
+            displays: CaptureDisplays.active(),
+            microphones: CaptureMicrophones.active(),
+            format: capture.recordingFormat,
+            themeManager: themeManager,
+            onRecord: { [weak self] options in self?.beginRecording(options) },
+            onCancel: { [weak self] in
+                self?.recordingOptionsPanel = nil
+                self?.captureFeedback("Recording cancelled")
+            }
+        )
+        recordingOptionsPanel = controller
+        // The launcher shares the screen with whatever is about to be recorded.
+        panel?.hide(activatePrevious: false)
+        controller.show()
+    }
+
+    private func beginRecording(_ options: RecordingOptions) {
+        var capture = captureService.config
+        options.apply(to: &capture)
+        // Writing through the service persists the choice for the next press.
+        captureService.config = capture
+        recordingOptionsPanel?.discard()
+        recordingOptionsPanel = nil
+        // The confirmation thumbnail and the options panel must be gone before
+        // screencapture looks at the screen.
+        screenshotHUD.dismiss()
+        if capture.hidePalette { panel?.hide(activatePrevious: false) }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.captureKeepingPanel {
-                if self.captureService.isRecording {
-                    do {
-                        let url = try await self.captureService.stopRecording()
-                        self.searchController.setStatus("Saved \(url.lastPathComponent)", duration: 4)
-                    } catch {
-                        await self.searchController.notify("Recording failed: \(error.localizedDescription)")
-                    }
-                    self.recordingTicker?.invalidate()
-                    self.recordingTicker = nil
-                    self.updateRecordingMenuItem()
-                } else {
-                    do {
-                        try self.captureService.startRecording()
-                        self.searchController.setStatus("Recording started", duration: 3)
-                    } catch {
-                        await self.searchController.notify("Recording failed: \(error.localizedDescription)")
-                    }
-                    self.updateRecordingMenuItem()
-                    self.startRecordingTicker()
-                }
+            // One turn of the run loop plus a beat: closing a panel is not
+            // synchronous with the window server.
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            do {
+                try self.captureService.startRecording()
+                self.startRecordingTicker()
+            } catch {
+                Log.shared.error("Recording failed: \(error.localizedDescription)", source: "capture")
+                self.captureFeedback("Recording failed: \(error.localizedDescription)")
             }
+            self.updateCaptureMenu()
+        }
+    }
+
+    private func toggleRecording() {
+        if captureService.isRecording {
+            stopRecording()
+        } else {
+            presentRecordingOptions()
+        }
+    }
+
+    private func stopRecording() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.captureService.stopRecording()
+            } catch {
+                Log.shared.error("Recording failed: \(error.localizedDescription)", source: "capture")
+                self.captureFeedback("Recording failed: \(error.localizedDescription)")
+            }
+            self.recordingTicker?.invalidate()
+            self.recordingTicker = nil
+            self.updateCaptureMenu()
         }
     }
 
     private func startRecordingTicker() {
         recordingTicker?.invalidate()
         recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateRecordingMenuItem() }
+            Task { @MainActor in self?.updateCaptureMenu() }
         }
+    }
+
+    // MARK: - Last capture
+
+    private func rememberCapture(_ url: URL, recording: Bool) {
+        lastCaptureURL = url
+        if recording {
+            lastRecordingURL = url
+        } else {
+            lastScreenshotURL = url
+        }
+        updateCaptureMenu()
+    }
+
+    private func copyLastPath() {
+        guard let url = lastCaptureURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("No capture to copy")
+            return
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(url.path, forType: .string)
+        ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+        captureFeedback("Path copied")
+    }
+
+    private func revealLastCapture() {
+        guard let url = lastCaptureURL else {
+            captureFeedback("No capture to reveal")
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        captureFeedback("Revealed \(url.lastPathComponent) in Finder")
+    }
+
+    private func showLastRecording() {
+        guard let url = lastRecordingURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("The last recording is no longer on disk")
+            return
+        }
+        openMediaPreview(url)
+    }
+
+    private func showLastScreenshot() {
+        guard let url = lastScreenshotURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("The last screenshot is no longer on disk")
+            return
+        }
+        openAnnotator(url)
     }
 
     // MARK: - Annotate and preview
@@ -1592,13 +1765,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func openMediaPreview(_ url: URL) {
+        // One preview at a time: a new recording replaces the old window
+        // instead of stacking a second player exactly on top of it.
+        let previous = mediaPreviews
+        mediaPreviews.removeAll()
+        for controller in previous { controller.close() }
         let controller = MediaPreviewWindowController(url: url, themeManager: themeManager)
+        controller.onFeedback = { [weak self] message in self?.captureFeedback(message) }
         controller.onClose = { [weak self, weak controller] in
             guard let self, let controller else { return }
             self.mediaPreviews.removeAll { $0 === controller }
             self.updateActivationPolicy()
         }
         mediaPreviews.append(controller)
+        updateActivationPolicy()
         controller.show()
     }
 
@@ -1715,34 +1895,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         aboutWindow?.apply(theme: theme)
     }
 
-    @objc private func stopRecordingFromMenu() {
-        toggleRecording()
+    @objc private func captureMenuAction(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let command = CaptureMenuCommand(rawValue: raw) else { return }
+        switch command {
+        case .startRecording:
+            presentRecordingOptions()
+        case .stopRecording:
+            stopRecording()
+        case .copyLastPath:
+            copyLastPath()
+        case .revealLastCapture:
+            revealLastCapture()
+        case .showLastRecording:
+            showLastRecording()
+        case .showLastScreenshot:
+            showLastScreenshot()
+        }
     }
 
-    /// Keeps the menu bar honest about a running recording.
-    private func updateRecordingMenuItem() {
-        guard let menu = statusItem?.menu else { return }
-        if captureService.isRecording {
-            if recordingMenuItem == nil {
-                Log.shared.info("Recording indicator shown in the menu bar", source: "capture")
-                let item = NSMenuItem(title: "Stop recording", action: #selector(stopRecordingFromMenu), keyEquivalent: "")
-                item.target = self
-                item.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: nil)
-                menu.insertItem(item, at: 0)
-                menu.insertItem(.separator(), at: 1)
-                recordingMenuItem = item
-            }
-            recordingMenuItem?.title = "Stop recording · \(TimerDuration.format(captureService.recordingElapsed))"
-        } else if let item = recordingMenuItem {
-            let index = menu.index(of: item)
-            if index >= 0 {
-                menu.removeItem(at: index)
-                if index < menu.numberOfItems, menu.item(at: index)?.isSeparatorItem == true {
-                    menu.removeItem(at: index)
-                }
-            }
-            recordingMenuItem = nil
-            Log.shared.info("Recording indicator removed from the menu bar", source: "capture")
+    /// Keeps the menu bar honest about a running recording and about the last
+    /// capture, using the same rules the tests pin.
+    private func updateCaptureMenu() {
+        let states = CaptureMenu.items(
+            isRecording: captureService.isRecording,
+            elapsed: captureService.recordingElapsed,
+            lastCapturePath: lastCaptureURL?.path,
+            lastRecordingPath: lastRecordingURL?.path,
+            lastScreenshotPath: lastScreenshotURL?.path
+        )
+        for state in states {
+            guard let item = captureMenuItems[state.command] else { continue }
+            item.title = state.title
+            item.isEnabled = state.enabled
+            item.isHidden = !state.visible
         }
     }
 
@@ -2302,9 +2488,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let button = statusItem.button {
             button.image = Self.statusBarIcon()
             button.image?.isTemplate = true
-            button.toolTip = "Palette — \(currentHotKey?.prettyDisplay ?? configuration.hotkey)"
+            button.toolTip = statusToolTip
         }
         let menu = NSMenu()
+        // Capture section first: starting or stopping a recording must never
+        // need a trip through the launcher.
+        for command in CaptureMenuCommand.allCases {
+            let item = NSMenuItem(title: "", action: #selector(captureMenuAction(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = command.rawValue
+            if command == .stopRecording {
+                item.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: nil)
+            }
+            menu.addItem(item)
+            captureMenuItems[command] = item
+        }
+        menu.addItem(.separator())
+        updateCaptureMenu()
+
         let open = NSMenuItem(title: "Open Palette", action: #selector(togglePalette), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
@@ -2966,6 +3167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         guard menu === statusItem.menu else { return }
+        updateCaptureMenu()
         Task { @MainActor [weak self] in
             await self?.refreshKeepAwakeMenu()
         }
