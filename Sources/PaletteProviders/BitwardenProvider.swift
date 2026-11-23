@@ -567,6 +567,9 @@ public actor BitwardenProvider: PaletteProvider {
             icon: .symbol("exclamationmark.triangle"),
             score: 10_000,
             actions: [PaletteAction(id: "install", title: "Open Terminal", kind: .custom, value: .text("install"))],
+            trouble: ProviderRequirements.requirements(forProviderID: descriptor.id)
+                .first
+                .map(ItemTrouble.missingTool),
             providerID: descriptor.id,
             providerName: descriptor.name
         )

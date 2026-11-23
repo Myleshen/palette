@@ -1234,6 +1234,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func wireControllerCallbacks() {
         searchController.onReload = { [weak self] in self?.reload(quiet: false) }
         searchController.onOpenConfig = { [weak self] in self?.showSettings() }
+        searchController.onOpenSettingsAnchor = { [weak self] anchor in
+            self?.showSettings()
+            // The freshly built hosting view subscribes a beat later.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: .paletteSettingsJump, object: anchor)
+            }
+        }
         searchController.onOpenProviders = { [weak self] in self?.openProviders() }
         searchController.onQuit = { NSApp.terminate(nil) }
     }

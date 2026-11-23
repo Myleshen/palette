@@ -332,7 +332,11 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private func actionItems() -> [PaletteItem] {
-        [
+        // Both rows go through devx and git; say so before Return does nothing.
+        let trouble = ProviderRequirements.requirements(forProviderID: descriptor.id)
+            .first { ToolLocator.shared.path(for: $0.tool) == nil }
+            .map(ItemTrouble.missingTool)
+        return [
             PaletteItem(
                 id: "clone-repo",
                 title: "Clone a repository…",
@@ -341,6 +345,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
                 badge: "new",
                 score: 9_000,
                 actions: [PaletteAction(id: "clone-repo", title: "Clone a repository", kind: .custom)],
+                trouble: trouble,
                 providerID: descriptor.id,
                 providerName: descriptor.name
             ),
@@ -352,6 +357,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
                 badge: "new",
                 score: 8_900,
                 actions: [PaletteAction(id: "new-project", title: "New project", kind: .custom)],
+                trouble: trouble,
                 providerID: descriptor.id,
                 providerName: descriptor.name
             ),
