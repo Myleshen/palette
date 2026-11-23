@@ -1,6 +1,7 @@
 import AppKit
 import PaletteCore
 import PalettePlatform
+import PaletteProviders
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -422,6 +423,14 @@ struct AnnotateView: View {
                 .keyboardShortcut("s", modifiers: [.command, .shift])
             Button("Save") { save() }
                 .keyboardShortcut("s", modifiers: .command)
+            Button("Pin") {
+                // The pin reuses the file already captured, never a fresh shot.
+                guard let path = editor.sourceURL?.path else { return }
+                NotificationCenter.default.post(name: .palettePinRequest, object: path)
+            }
+            .disabled(editor.sourceURL == nil)
+            .help("Float the shot above other windows; hold ⌥ to move, resize or zoom")
+            .keyboardShortcut("p", modifiers: [.command, .shift])
             Button("Done") { finish() }
                 .keyboardShortcut(.escape, modifiers: [])
         }

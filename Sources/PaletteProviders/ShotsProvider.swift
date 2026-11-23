@@ -83,6 +83,7 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
             PaletteAction(id: "open", title: "Open \(name)", kind: .openPath, value: .text(entry.url.path)),
         ]
         if !entry.isVideo {
+            actions.append(PaletteAction(id: "pin", title: "Pin to Screen", kind: .custom, value: .text("pin:\(entry.url.path)")))
             actions.append(PaletteAction(id: "annotate", title: "Annotate \(name)", kind: .custom, value: .text("annotate:\(entry.url.path)")))
             actions.append(PaletteAction(id: "copy", title: "Copy image", kind: .custom, value: .text("copy:\(entry.url.path)")))
             actions.append(PaletteAction(id: "paste", title: "Paste \(name)", kind: .pasteImage, value: .text(entry.url.path)))
@@ -93,10 +94,12 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         var icon = IconSpec.file(entry.url.path)
         if case let .image(base64, _, _) = preview { icon = .base64(base64) }
 
+        let details = "\(Self.age(entry.date)) · \(Self.size(entry.bytes))"
         return PaletteItem(
             id: "shot:\(entry.url.path)",
             title: name,
-            subtitle: "\(Self.age(entry.date)) · \(Self.size(entry.bytes))",
+            // Pins are click-through; say how to move one where users meet them.
+            subtitle: entry.isVideo ? details : "\(details) · ⌥ moves pins",
             icon: icon,
             badge: entry.isVideo ? "MOV" : "SHOT",
             group: Self.day(entry.date),
@@ -110,6 +113,13 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         guard let raw = action.value.text else { return }
+        if raw.hasPrefix("pin:") {
+            let path = String(raw.dropFirst("pin:".count))
+            await MainActor.run {
+                NotificationCenter.default.post(name: .palettePinRequest, object: path)
+            }
+            return
+        }
         if raw.hasPrefix("annotate:") {
             let path = String(raw.dropFirst("annotate:".count))
             await MainActor.run {
@@ -272,6 +282,8 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
 extension Notification.Name {
     /// Posted with the file path when a capture row asks to annotate.
     public static let paletteAnnotateRequest = Notification.Name("palette.annotate.request")
+    /// Posted with the file path when a capture row asks to pin it on screen.
+    public static let palettePinRequest = Notification.Name("palette.pin.request")
     /// Posted with a tab index to open Settings on that tab (used by tests).
     public static let paletteSettingsTab = Notification.Name("palette.settings.tab")
 }

@@ -99,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let screenshotHUD = ScreenshotHUD()
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
+    private let pinnedScreenshots = PinnedScreenshotManager()
     private var askWindow: AskWindowController?
     private var aboutWindow: AboutWindowController?
     private var systemIsShuttingDown = false
@@ -335,6 +336,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let path = note.object as? String else { return }
             Task { @MainActor in self?.openAnnotator(URL(fileURLWithPath: path)) }
         }
+        NotificationCenter.default.addObserver(
+            forName: .palettePinRequest,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let path = note.object as? String else { return }
+            Task { @MainActor in self?.pinScreenshot(URL(fileURLWithPath: path)) }
+        }
         clamshellObserver = NotificationCenter.default.addObserver(
             forName: .paletteClamshellDropped,
             object: nil,
@@ -452,6 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else if step == "close_windows" {
                     self.annotateWindows.forEach { $0.close() }
                     self.mediaPreviews.forEach { $0.close() }
+                    self.pinnedScreenshots.closeAll()
                     try? await Task.sleep(nanoseconds: 300_000_000)
                 } else if step == "settings" {
                     self.showSettings()
@@ -1015,6 +1025,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // A raw screencapture child outlives us unless we stop it here; SIGINT
         // lets it finalise the file before the app disappears.
         captureService.stopRecordingOnQuit()
+        pinnedScreenshots.closeAll()
         watcherTimer?.invalidate()
         clipboardMonitor?.stop()
         hotkeyManagers.values.forEach { $0.unregister() }
@@ -1664,6 +1675,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openAnnotator(url)
     }
 
+    private func pinLastScreenshot() {
+        guard let url = lastScreenshotURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("The last screenshot is no longer on disk")
+            return
+        }
+        pinScreenshot(url)
+    }
+
+    /// Pins the bytes already on disk; the pin is session-only.
+    private func pinScreenshot(_ url: URL) {
+        guard pinnedScreenshots.pin(url: url) else {
+            captureFeedback("Could not pin \(url.lastPathComponent)")
+            return
+        }
+        captureFeedback("Pinned \(url.lastPathComponent) · hold ⌥ to move")
+    }
+
     // MARK: - Annotate and preview
 
     /// Palette is a menu-bar app. Editing and preview windows need a Dock icon
@@ -1952,6 +1980,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showLastRecording()
         case .showLastScreenshot:
             showLastScreenshot()
+        case .pinLastScreenshot:
+            pinLastScreenshot()
         }
     }
 

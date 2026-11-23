@@ -8,6 +8,7 @@ public enum CaptureMenuCommand: String, CaseIterable, Sendable {
     case revealLastCapture
     case showLastRecording
     case showLastScreenshot
+    case pinLastScreenshot
 }
 
 /// One row of the capture section: what it says and whether it applies now.
@@ -72,6 +73,12 @@ public enum CaptureMenu {
             CaptureMenuItemState(
                 command: .showLastScreenshot,
                 title: "Show Last Screenshot",
+                enabled: true,
+                visible: !(lastScreenshotPath ?? "").isEmpty
+            ),
+            CaptureMenuItemState(
+                command: .pinLastScreenshot,
+                title: "Pin Last Screenshot",
                 enabled: true,
                 visible: !(lastScreenshotPath ?? "").isEmpty
             ),
