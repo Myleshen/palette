@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.18.1 — 2026-11-23
+
+### Fixed
+
+- The launcher window no longer shrinks and re-centres when the embedded terminal
+  opens. Every mode keeps the same fixed frame (up to 60% of the display on each
+  axis); the terminal is now inset inside that frame, 24 pt at the sides and 82%
+  of the content height, instead of resizing the window.
+
 ## 2.18.0 — 2026-11-23
 
 ### Added

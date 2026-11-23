@@ -235,6 +235,12 @@ private enum SaveState: Equatable {
 }
 
 struct SettingsView: View {
+    /// Scripted snapshots must not depend on a split-divider position saved by
+    /// the user, so the tests pin the sidebar to its ideal width.
+    private var scriptMode: Bool {
+        ProcessInfo.processInfo.environment["PALETTE_SCRIPT"] != nil
+    }
+
     @ObservedObject private var themeManager: ThemeManager
     @ObservedObject private var updates: UpdateService
     @State private var config: PaletteConfig
@@ -584,7 +590,11 @@ struct SettingsView: View {
                 ? theme.color(theme.palette.surface).opacity(1)
                 : theme.color(theme.palette.bg).opacity(0.35)
         )
-        .navigationSplitViewColumnWidth(min: 195, ideal: 215, max: 270)
+        .navigationSplitViewColumnWidth(
+            min: scriptMode ? 215 : 195,
+            ideal: 215,
+            max: scriptMode ? 215 : 270
+        )
     }
 
     /// Hand-built rather than `.searchable`: the system field cannot render the
