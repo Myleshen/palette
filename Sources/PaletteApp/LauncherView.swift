@@ -236,6 +236,9 @@ enum LauncherMetrics {
     static let providerChipPadding: CGFloat = 12
     /// A long provider name widens its chip only up to this, then ellipsizes.
     static let providerChipMaxWidth: CGFloat = 220
+    /// The left provider rail is always this wide. It never collapses: if the
+    /// providers do not fit, its scroll view does the work.
+    static let railWidth: CGFloat = 220
 }
 
 /// The glass + theme fill + hairline used by every launcher card. Cards share
@@ -462,7 +465,6 @@ private struct ProviderBarChip: View {
 private struct ProviderGlyph: View {
     var entry: SearchController.RailEntry
     var theme: Theme
-    var collapsed: Bool = false
 
     private var symbol: String? {
         entry.icon.flatMap { raw -> String? in
@@ -479,24 +481,16 @@ private struct ProviderGlyph: View {
         if let symbol {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .medium))
-                .frame(width: collapsed ? 24 : 16)
+                .frame(width: 16)
         } else {
             Text(initials)
                 .font(.system(size: 10, weight: .bold))
-                .frame(width: collapsed ? 22 : 16, height: 16)
+                .frame(width: 16, height: 16)
                 .background(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(theme.color(theme.palette.elevated))
                 )
         }
-    }
-}
-
-/// Reports the strip's rendered height so the panel can reserve exactly that.
-private struct ProviderBarHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 
@@ -740,10 +734,8 @@ struct LauncherRootView: View {
     private var isPill: Bool { true }
 
     var body: some View {
-        GeometryReader { proxy in
-            pillLayout(railCollapsed: controller.previewVisible || proxy.size.width < 700)
-        }
-        .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
+        pillLayout()
+            .environment(\.colorScheme, theme.appearance == "light" ? .light : .dark)
         .onAppear {
             DispatchQueue.main.async { searchFocused = true }
         }
@@ -758,7 +750,7 @@ struct LauncherRootView: View {
     }
 
     /// One grid: search pill, the provider switcher, cards, then the footer.
-    private func pillLayout(railCollapsed: Bool) -> some View {
+    private func pillLayout() -> some View {
         VStack(spacing: LauncherMetrics.cardGap) {
             searchBar
             if controller.showsProviderBar {
@@ -766,7 +758,7 @@ struct LauncherRootView: View {
             }
             HStack(alignment: .top, spacing: LauncherMetrics.cardGap) {
                 if controller.providerBar == .left {
-                    rail(collapsed: railCollapsed)
+                    rail()
                 }
                 contentArea
             }
@@ -837,14 +829,6 @@ struct LauncherRootView: View {
         }
         .frame(height: LauncherMetrics.providerBarHeight)
         .background(theme.color(theme.palette.bg))
-        .background(
-            GeometryReader { measured in
-                Color.clear.preference(key: ProviderBarHeightKey.self, value: measured.size.height)
-            }
-        )
-        .onPreferenceChange(ProviderBarHeightKey.self) { height in
-            controller.setProviderBarHeight(height)
-        }
         .cardSurface(theme: theme)
         .onHover { inside in
             barHovered = inside
@@ -987,9 +971,9 @@ struct LauncherRootView: View {
     }
 
     /// Vertical provider rail: Everything first, one row per provider, full
-    /// height between the search pill and the footer. Icons only when the
-    /// preview is open or the panel is narrow.
-    private func rail(collapsed: Bool) -> some View {
+    /// height between the search pill and the footer. Fixed width: providers
+    /// scroll inside it, the rail never narrows to fit.
+    private func rail() -> some View {
         GeometryReader { proxy in
             // Whole rows only: the scroll viewport is trimmed to a row
             // boundary so the last provider cannot be cut by the card edge.
@@ -1001,7 +985,7 @@ struct LauncherRootView: View {
                 // Everything is pinned: the default scope must always be
                 // one click away, even while the provider list scrolls.
                 if let everything = controller.railEntries.first {
-                    railRow(everything, collapsed: collapsed)
+                    railRow(everything)
                         .padding(.horizontal, LauncherMetrics.innerPadding)
                         .padding(.top, LauncherMetrics.innerPadding)
                         .onTapGesture {
@@ -1012,7 +996,7 @@ struct LauncherRootView: View {
                 ScrollView {
                     VStack(spacing: 2) {
                         ForEach(Array(controller.railEntries.dropFirst())) { entry in
-                            railRow(entry, collapsed: collapsed)
+                            railRow(entry)
                                 .id(entry.id)
                                 .onTapGesture {
                                     controller.selectRail(entry.id)
@@ -1034,7 +1018,7 @@ struct LauncherRootView: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(width: collapsed ? 56 : 220)
+        .frame(width: LauncherMetrics.railWidth)
         .frame(maxHeight: .infinity)
         .cardSurface(theme: theme)
     }
@@ -1062,22 +1046,20 @@ struct LauncherRootView: View {
     }
 
 
-    private func railRow(_ entry: SearchController.RailEntry, collapsed: Bool) -> some View {
+    private func railRow(_ entry: SearchController.RailEntry) -> some View {
         let selected = controller.activeRailID == entry.id
-        return HStack(spacing: collapsed ? 0 : 8) {
-            ProviderGlyph(entry: entry, theme: theme, collapsed: collapsed)
-            if !collapsed {
-                Text(railTitle(entry.title, width: 220))
-                    .font(theme.font(size: 11, weight: .medium))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
+        return HStack(spacing: 8) {
+            ProviderGlyph(entry: entry, theme: theme)
+            Text(railTitle(entry.title, width: LauncherMetrics.railWidth))
+                .font(theme.font(size: 11, weight: .medium))
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
         // Accent, not a slightly lighter grey: the active provider has to be
         // obvious at a glance.
         .foregroundColor(theme.color(selected ? theme.palette.accentFg : theme.palette.fgMuted))
-        .padding(.horizontal, collapsed ? 0 : 10)
-        .frame(maxWidth: .infinity, minHeight: 32, alignment: collapsed ? .center : .leading)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
                 .fill(selected ? theme.color(theme.palette.accent) : Color.clear)

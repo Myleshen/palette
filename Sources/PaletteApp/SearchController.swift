@@ -135,8 +135,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public var previewLayout: PreviewPlacement {
         configuration.window.resolvedPreviewLayout(
-            screenWidth: Double(screenSize.width),
-            previewPanelWidth: Double(windowConfig.previewWidth(for: screenSize))
+            frameWidth: Double(configuration.window.launcherSize(for: screenSize).width)
         )
     }
 
@@ -146,16 +145,6 @@ public final class SearchController: ObservableObject, HostBridge {
     /// The strip only occupies height in top mode and only while it has chips.
     public var showsProviderBar: Bool {
         providerBar == .top && !railEntries.isEmpty
-    }
-
-    /// Rendered height of the top provider strip, measured by the view. The
-    /// panel height uses this instead of assuming the chip metrics.
-    private var measuredProviderBarHeight = LauncherMetrics.providerBarHeight
-
-    public func setProviderBarHeight(_ height: CGFloat) {
-        guard abs(height - measuredProviderBarHeight) > 0.5 else { return }
-        measuredProviderBarHeight = height
-        updatePanelHeight()
     }
 
     private var timerObserver: NSObjectProtocol?
@@ -168,7 +157,6 @@ public final class SearchController: ObservableObject, HostBridge {
     public func openClipboard() {
         previewEnabled = true
         clipboardFilter = nil
-        updatePreviewWidth()
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)clip "
@@ -202,8 +190,8 @@ public final class SearchController: ObservableObject, HostBridge {
         railFocused = false
         terminalActive = false
         terminalSessionName = nil
+        panel?.terminalFrame = false
         panel?.suppressAutoHide = false
-        panel?.widthOverride = nil
     }
 
     public func requestFocus() {
@@ -240,14 +228,12 @@ public final class SearchController: ObservableObject, HostBridge {
         if previewProvider {
             if !previewEnabled {
                 previewEnabled = true
-                updatePreviewWidth()
             }
         } else if previewEnabled {
             previewEnabled = false
             previewFocused = false
             panel?.suppressAutoHide = false
             clipboardFilter = nil
-            panel?.widthOverride = nil
         }
         if parsed.isBound {
             items = []
@@ -263,7 +249,6 @@ public final class SearchController: ObservableObject, HostBridge {
             } else {
                 scopeLabel = nil
             }
-            updatePanelHeight()
         } else {
             scopeLabel = nil
         }
@@ -303,7 +288,6 @@ public final class SearchController: ObservableObject, HostBridge {
             }
             actionIndex = 0
             isSearching = false
-            updatePanelHeight()
             return
         }
         let result = await registry.search(raw: raw)
@@ -409,7 +393,6 @@ public final class SearchController: ObservableObject, HostBridge {
         if let diagnostic = result.diagnostics.first(where: { $0.level != .info }) {
             setStatus(diagnostic.message, duration: 6)
         }
-        updatePanelHeight()
     }
 
     // MARK: - Keyboard
@@ -450,14 +433,12 @@ public final class SearchController: ObservableObject, HostBridge {
         if option, characters == "p", previewEnabled {
             previewFocused.toggle()
             panel?.suppressAutoHide = previewFocused
-            updatePanelHeight()
             return true
         }
         if previewFocused {
             if keyCode == 53 {
                 previewFocused = false
                 panel?.suppressAutoHide = false
-                updatePanelHeight()
                 return true
             }
             if control {
@@ -573,7 +554,6 @@ public final class SearchController: ObservableObject, HostBridge {
                 resetting = false
                 previewEnabled = false
                 clipboardFilter = nil
-                panel?.widthOverride = nil
                 scheduleSearch(debounce: false)
             } else {
                 panel?.hide()
@@ -592,7 +572,6 @@ public final class SearchController: ObservableObject, HostBridge {
         }
         guard !items.isEmpty else { return }
         selectionIndex = (selectionIndex + delta + items.count) % items.count
-        if previewEnabled { updatePanelHeight() }
     }
 
     // MARK: - Provider rail
@@ -639,7 +618,6 @@ public final class SearchController: ObservableObject, HostBridge {
             resetting = false
             previewEnabled = false
             clipboardFilter = nil
-            panel?.widthOverride = nil
             scheduleSearch(debounce: false)
         }
     }
@@ -716,7 +694,6 @@ public final class SearchController: ObservableObject, HostBridge {
         guard actionsMode == false, items.indices.contains(index) else { return }
         railFocused = false
         selectionIndex = index
-        if previewEnabled { updatePanelHeight() }
     }
 
     public func activate(_ index: Int) {
@@ -779,7 +756,6 @@ public final class SearchController: ObservableObject, HostBridge {
             ? allActions
             : allActions.filter { Ranking.score(query: needle, candidate: $0.title) != nil }
         actionIndex = 0
-        updatePanelHeight()
     }
 
     private func closeActions() {
@@ -792,7 +768,6 @@ public final class SearchController: ObservableObject, HostBridge {
         let restored = queryBeforeActions
         queryBeforeActions = ""
         query = restored
-        updatePanelHeight()
     }
 
     public func executeAction() {
@@ -1090,7 +1065,6 @@ public final class SearchController: ObservableObject, HostBridge {
             prompt = PromptState(kind: kind, title: title, placeholder: placeholder)
             panel?.suppressAutoHide = true
             focusToken += 1
-            updatePanelHeight()
         }
     }
 
@@ -1112,7 +1086,6 @@ public final class SearchController: ObservableObject, HostBridge {
         promptValue = ""
         panel?.suppressAutoHide = false
         panel?.activatePreviousOnHide = true
-        updatePanelHeight()
         continuation?.resume(returning: value)
         requestFocus()
     }
@@ -1169,98 +1142,11 @@ public final class SearchController: ObservableObject, HostBridge {
         }
     }
 
-    public func updatePanelHeight() {
-        guard let panel else { return }
-        let theme = themeManager.theme
-        let chrome = tabChromeHeight
-        if scratchpadActive {
-            panel.setContentHeight(CGFloat(theme.search.height) + 500 + chrome)
-            return
-        }
-        if terminalActive {
-            panel.setContentHeight(660 + chrome)
-            return
-        }
-
-        var content: CGFloat
-        if prompt != nil {
-            content = 136
-        } else if actionsMode {
-            content = 38 + listHeight
-        } else {
-            content = modeHeaderHeight + listHeight
-        }
-        if previewEnabled {
-            // Clearing the width override matters as much as setting it: an
-            // empty result hides the pane and must not leave the panel wide.
-            updatePreviewWidth()
-        }
-        if previewVisible, previewLayout == .below {
-            // The preview is its own card with one card gap under the list.
-            content += previewPaneHeight + LauncherMetrics.cardGap
-        }
-        panel.setContentHeight(CGFloat(theme.search.height) + content + chrome)
-    }
-
-    /// Everything around the list: both outer insets, the card gaps, the
-    /// footer, and the top provider strip when it is showing. The left rail is
-    /// a sibling card, so it reserves no list height.
-    private var tabChromeHeight: CGFloat {
-        let footer = themeManager.theme.footer.show ? LauncherMetrics.footerHeight : 0
-        let gaps = themeManager.theme.footer.show ? LauncherMetrics.cardGap * 2 : LauncherMetrics.cardGap
-        let bar: CGFloat = showsProviderBar
-            ? measuredProviderBarHeight + LauncherMetrics.cardGap
-            : 0
-        return LauncherMetrics.outerInset * 2 + gaps + footer + bar
-    }
-
-    /// The optional Ask/History or clipboard filter row inside the list card.
-    private var modeHeaderHeight: CGFloat {
-        activeTabID == "clip" || activeTabID == "ask" ? 40 : 0
-    }
-
-    /// The configured row count fixes the panel's height: it does not change
-    /// with how many results exist, how many headers they carry, or whether a
-    /// title wraps. The list scrolls inside this budget instead.
-    private func listHeight(rows: Int) -> CGFloat {
-        let row = CGFloat(themeManager.theme.effectiveRowHeight)
-        let spacing: CGFloat = 6
-        return CGFloat(rows) * row
-            + CGFloat(max(0, rows - 1)) * spacing
-            + LauncherMetrics.innerPadding * 2
-    }
-
-    private var listHeight: CGFloat {
-        listHeight(rows: Int(panel?.effectiveRows() ?? windowConfig.launcherRows))
-    }
-
-    /// Height the panel renders for `rows` in a plain search: the same terms
-    /// `updatePanelHeight` uses, so Settings can show the exact number.
-    public func panelHeight(forRows rows: Int) -> CGFloat {
-        let theme = themeManager.theme
-        let footer = theme.footer.show ? LauncherMetrics.footerHeight : 0
-        let gaps = theme.footer.show ? LauncherMetrics.cardGap * 2 : LauncherMetrics.cardGap
-        let bar = showsProviderBar
-            ? measuredProviderBarHeight + LauncherMetrics.cardGap
-            : 0
-        return CGFloat(theme.search.height)
-            + listHeight(rows: rows)
-            + LauncherMetrics.outerInset * 2
-            + gaps + footer + bar
-    }
-
-    /// The rows the panel would use right now (auto or explicit).
-    public func panelHeightForEffectiveRows() -> CGFloat {
-        panelHeight(forRows: Int(panel?.effectiveRows() ?? windowConfig.launcherRows))
-    }
-
     /// Width left for a result title after the rail, card/row insets, icon,
     /// badge and spacer. Err narrow so a long title is predicted to wrap.
     private var titleColumnWidth: CGFloat {
-        let panelWidth = panel?.widthOverride ?? CGFloat(windowConfig.launcherWidth(for: screenSize))
-        let rail: CGFloat = providerBar == .left
-            ? ((previewVisible || panelWidth < 700) ? 56 : 220)
-            : 0
+        let panelWidth = CGFloat(windowConfig.launcherSize(for: screenSize).width)
+        let rail: CGFloat = providerBar == .left ? LauncherMetrics.railWidth : 0
         return max(120, panelWidth - LauncherMetrics.outerInset * 2 - rail
             - LauncherMetrics.cardGap - LauncherMetrics.innerPadding * 4 - 20 - 10 - 8 - 80)
     }
@@ -1274,36 +1160,19 @@ public final class SearchController: ObservableObject, HostBridge {
         return width > titleColumnWidth
     }
 
-    /// Width of the beside-list preview pane. ⌥P grows it, and the panel
-    /// grows by the same amount so the list keeps its width.
+    /// Width of the beside-list preview pane. ⌥P grows the pane, which takes
+    /// the extra width out of the list area; the window itself never changes.
     public var previewPaneWidth: CGFloat {
         guard previewLayout == .beside, previewFocused else { return 300 }
-        return max(300, min(640, screenSize.width - 420))
+        return max(300, min(640, windowConfig.launcherSize(for: screenSize).width - 420))
     }
 
-    /// Height of the below-list preview pane. ⌥P takes the room the max
-    /// panel height leaves after the list, so nothing is pushed out of view.
+    /// Height of the below-list preview pane. ⌥P grows it inside the fixed
+    /// frame, shrinking the list card instead of the window.
     public var previewPaneHeight: CGFloat {
         guard previewLayout == .below, previewFocused else { return 220 }
-        let base = CGFloat(themeManager.theme.search.height) + tabChromeHeight + listHeight
-        return max(220, min(520, CGFloat(themeManager.theme.window.maxHeight) - base))
-    }
-
-    /// One width rule for previews: `preview_width` beside, launcher width
-    /// below, and a wider panel while focused. Clipboard's own width key must
-    /// not fight this, or the panel jumps between opens and searches.
-    private func updatePreviewWidth() {
-        guard let panel else { return }
-        guard previewVisible, previewLayout == .beside else {
-            panel.widthOverride = nil
-            return
-        }
-        guard previewFocused else {
-            panel.widthOverride = CGFloat(windowConfig.previewWidth(for: screenSize))
-            return
-        }
-        let normal = CGFloat(windowConfig.previewWidth(for: screenSize))
-        panel.widthOverride = min(normal + previewPaneWidth - 300, screenSize.width - 24)
+        let frame = windowConfig.launcherSize(for: screenSize)
+        return min(520, max(220, frame.height - 420))
     }
 
     public func openTerminalPanel(command: String? = nil, sessionName: String? = nil) {
@@ -1316,9 +1185,8 @@ public final class SearchController: ObservableObject, HostBridge {
         previewFocused = false
         actionsMode = false
         actionItems = []
-        panel?.widthOverride = CGFloat(windowConfig.terminalWidth(for: screenSize))
+        panel?.terminalFrame = true
         panel?.show()
-        updatePanelHeight()
         requestFocus()
     }
 
@@ -1326,21 +1194,20 @@ public final class SearchController: ObservableObject, HostBridge {
         guard terminalActive else { return }
         terminalActive = false
         terminalSessionName = nil
-        panel?.widthOverride = nil
+        panel?.terminalFrame = false
         NotificationCenter.default.post(name: .paletteTerminalStop, object: nil)
         resetting = true
         query = ""
         resetting = false
         scheduleSearch(debounce: false)
-        updatePanelHeight()
     }
 
     public func openScratchpad(noteID: String? = nil, seed: String? = nil) {
         if terminalActive { closeTerminalPanel() }
         scratchpadGeneration += 1
         let generation = scratchpadGeneration
+        panel?.terminalFrame = false
         panel?.show()
-        panel?.widthOverride = CGFloat(windowConfig.clipboardWidth(for: screenSize))
         scratchpadActive = true
         previewEnabled = false
         previewFocused = false
@@ -1376,7 +1243,6 @@ public final class SearchController: ObservableObject, HostBridge {
                 }
             }
         }
-        updatePanelHeight()
         requestFocus()
     }
 
@@ -1403,13 +1269,11 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
         scratchpadActive = false
-        panel?.widthOverride = nil
         panel?.suppressAutoHide = false
         resetting = true
         query = ""
         resetting = false
         scheduleSearch(debounce: false)
-        updatePanelHeight()
         requestFocus()
     }
 
@@ -1479,9 +1343,5 @@ public final class SearchController: ObservableObject, HostBridge {
             object: nil,
             userInfo: ["dx": dx, "dy": dy]
         )
-    }
-
-    public func refreshTheme() {
-        updatePanelHeight()
     }
 }

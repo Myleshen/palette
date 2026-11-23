@@ -13,7 +13,6 @@ public final class ThemeManager: ObservableObject {
     public let paths: PalettePaths
     public var selection: ThemeSelection
     public var typography = TypographyConfig()
-    public var window = WindowConfig()
     public var searchPlaceholder = ""
     public var onChange: ((Theme) -> Void)?
 
@@ -119,9 +118,6 @@ public final class ThemeManager: ObservableObject {
         if typography.monoSize > 0 {
             resolved.typography.monoSize = typography.monoSize
         }
-        resolved.window.width = window.launcherWidth
-        resolved.window.maxHeight = window.launcherMaxHeight
-        resolved.list.visibleRows = window.launcherRows
         theme = resolved
         self.diagnostics = diagnostics
         // The status-bar and main menus have no palette, so AppKit only gets the

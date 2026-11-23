@@ -5,7 +5,7 @@ TOML file in this folder (or the bundled defaults) with a `name`, `appearance`,
 and any of these tables:
 
 - `[palette]` — background, foreground, accent, selection, badge, and status colors
-- `[window]` — width, max height, anchor, corner radius, material, opacity
+- `[window]` — anchor, offset, corner radius, material, opacity
 - `[search]`, `[list]`, `[typography]`, `[states.*]`, `[motion]`, `[footer]`
 
 Every key is optional: missing values inherit from the built-in dark or light
@@ -23,8 +23,8 @@ accent = "#89b4fa"
 selection_bg = "#45475a"
 
 [window]
-width = 720
-max_height = 520
+corner_radius = 16
+offset_y = 96
 ```
 
 Apply a theme with `/theme`, edit `[theme]` in `config.toml`, or press ⌘R after

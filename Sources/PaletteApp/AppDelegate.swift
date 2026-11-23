@@ -221,7 +221,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager = ThemeManager(paths: paths, selection: configuration.theme, store: store)
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
-        themeManager.window = configuration.window
         themeManager.searchPlaceholder = configuration.searchPlaceholder
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.requestsPermission = !isScriptMode
@@ -242,7 +241,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.onChange = { [weak self] theme in
             guard let self else { return }
             self.panel?.apply(theme: theme)
-            self.searchController?.refreshTheme()
             self.applyThemeToCaptureWindows(theme)
         }
 
@@ -456,10 +454,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         case "provider_bar":
                             updated.window.providerBar = ProviderBarPlacement(rawValue: parts[1])
                                 ?? updated.window.providerBar
-                        case "width":
-                            updated.window.width = Double(parts[1]) ?? updated.window.width
-                        case "visible_rows":
-                            updated.window.visibleRows = Int(parts[1]) ?? updated.window.visibleRows
                         default:
                             break
                         }
@@ -670,7 +664,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             probeResult: scriptProbeResult,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
-            derivedPanelHeight: searchController?.panelHeightForEffectiveRows() ?? 0,
+            derivedPanelHeight: panel?.panel.frame.height ?? 0,
             providerCount: searchController?.railEntries.count ?? 0,
             providerBarMode: searchController?.providerBar.rawValue ?? "",
             items: searchController?.items ?? []
@@ -2477,11 +2471,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Reload
 
-    /// Dock/undock or a resolution change: re-measure rows on the new screen,
-    /// re-apply the width, and reposition even if the panel is already open.
+    /// Dock/undock or a resolution change: the fixed frame follows the screen
+    /// under the pointer, so reposition even if the panel is already open.
     @objc private func screenParametersChanged() {
         guard let panel else { return }
-        searchController?.updatePanelHeight()
         panel.windowConfig = configuration.window
     }
 
@@ -2496,7 +2489,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configErrorMessage = result.parseError
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
         themeManager.typography = configuration.typography
-        themeManager.window = configuration.window
         themeManager.searchPlaceholder = configuration.searchPlaceholder
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.config = configuration.capture
@@ -2765,9 +2757,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             onExportBackup: { [weak self] in
                 self?.exportBackup()
-            },
-            panelHeightForRows: { [weak self] rows in
-                self?.searchController?.panelHeight(forRows: rows) ?? 0
             }
         )
     }

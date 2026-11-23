@@ -240,7 +240,6 @@ struct SettingsView: View {
     private let onApply: (PaletteConfig) -> String?
     private let onOpen: (URL) -> Void
     private let onExportBackup: () -> Void
-    private let panelHeightForRows: (Int) -> CGFloat
 
     private let contentWidth: CGFloat = 640
     private let providerTabWidth: CGFloat = 26
@@ -260,8 +259,7 @@ struct SettingsView: View {
         diagnostics: [String],
         onApply: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
-        onExportBackup: @escaping () -> Void,
-        panelHeightForRows: @escaping (Int) -> CGFloat
+        onExportBackup: @escaping () -> Void
     ) {
         _config = State(initialValue: config)
         _savedConfig = State(initialValue: config)
@@ -320,17 +318,11 @@ struct SettingsView: View {
         self.onApply = onApply
         self.onOpen = onOpen
         self.onExportBackup = onExportBackup
-        self.panelHeightForRows = panelHeightForRows
     }
 
     private var theme: Theme { themeManager.theme }
     private var muted: Color { theme.color(theme.palette.fgMuted) }
     private var danger: Color { theme.color(theme.palette.danger) }
-
-    /// Exactly what the panel renders for the current rows and screen.
-    private var derivedPanelHeight: CGFloat {
-        panelHeightForRows(config.window.launcherRows(for: screenSize))
-    }
 
     /// The light palette's accent is only 3.4:1 on the card fill; darken it
     /// just for light mode so links stay readable.
@@ -861,34 +853,6 @@ struct SettingsView: View {
         }
     }
 
-    private var screenSize: CGSize {
-        (PanelController.screenUnderPointer() ?? NSScreen.main)?.visibleFrame.size
-            ?? CGSize(width: 1440, height: 900)
-    }
-
-    private var visibleRowsBinding: Binding<Int> {
-        Binding(
-            get: { config.window.launcherRows(for: screenSize) },
-            set: { config.window.visibleRows = min(11, max(6, $0)) }
-        )
-    }
-
-    private var widthBinding: Binding<Double> {
-        Binding(
-            get: { config.window.launcherWidth(for: screenSize) },
-            set: { config.window.width = min(1_400, max(560, $0)) }
-        )
-    }
-
-    /// Stored as 0.8–1.6; the field reads as a percentage.
-    private var scalePercentBinding: Binding<Double> {
-        Binding(
-            get: { (config.window.effectiveScale * 100).rounded() },
-            set: { config.window.scale = min(1.6, max(0.8, $0 / 100)) }
-        )
-    }
-
-    /// Stored in milliseconds; the field reads as seconds.
     private var clearAfterSecondsBinding: Binding<Int> {
         Binding(
             get: { config.clipboard.clearAfterMs / 1_000 },
@@ -931,32 +895,6 @@ struct SettingsView: View {
         )
     }
 
-    private var widthAutomatic: Binding<Bool> {
-        Binding(
-            get: { config.window.width == 0 },
-            set: { automatic in
-                if automatic {
-                    config.window.width = 0
-                } else {
-                    config.window.width = config.window.launcherWidth(for: screenSize)
-                }
-            }
-        )
-    }
-
-    private var rowsAutomatic: Binding<Bool> {
-        Binding(
-            get: { config.window.visibleRows == 0 },
-            set: { automatic in
-                if automatic {
-                    config.window.visibleRows = 0
-                } else {
-                    config.window.visibleRows = config.window.launcherRows(for: screenSize)
-                }
-            }
-        )
-    }
-
     @ViewBuilder
     private var selectedSettingsContent: some View {
         switch selectedTab {
@@ -990,10 +928,6 @@ struct SettingsView: View {
             .init(title: "Provider bar", tab: .launcher, anchor: "launcher-tabs", keywords: "provider bar top left hidden tabs"),
             .init(title: "Search placeholder", tab: .launcher, anchor: "row-Placeholder", keywords: "search hint placeholder text"),
             .init(title: "App order", tab: .launcher, anchor: "launcher-tabs", keywords: "alphabetical frequent sorting"),
-            .init(title: "Fit to the active screen", tab: .launcher, anchor: "launcher-tabs", keywords: "fit screen auto size"),
-            .init(title: "Width", tab: .launcher, anchor: "row-Width", keywords: "launcher width size automatic"),
-            .init(title: "Visible rows", tab: .launcher, anchor: "row-Visible rows", keywords: "rows height automatic"),
-            .init(title: "Scale", tab: .launcher, anchor: "row-Scale", keywords: "scale rem zoom"),
             .init(title: "Preview layout", tab: .launcher, anchor: "row-Preview", keywords: "preview beside below layout"),
             .init(title: "Command prefix", tab: .launcher, anchor: "row-Command prefix", keywords: "prefix provider command slash"),
             .init(title: "Terminal session", tab: .launcher, anchor: "row-Session", keywords: "terminal session zellij tmux fish zsh shell"),
@@ -1256,8 +1190,6 @@ struct SettingsView: View {
         case "web_app_browser": config.webAppBrowser = value
         case "search_position": config.searchPosition = SearchPosition(rawValue: value) ?? .top
         case "provider_bar": config.window.providerBar = ProviderBarPlacement(rawValue: value) ?? .top
-        case "width": config.window.width = Double(value) ?? 0
-        case "visible_rows": config.window.visibleRows = Int(value) ?? 0
         case "provider_filter": providerFilter = value
         case "settings_search": settingsSearch = value
         default:
@@ -1676,34 +1608,18 @@ struct SettingsView: View {
                     .labelsHidden()
                     .frame(maxWidth: 260, alignment: .leading)
                 }
-                toggleRow("Fit to the active screen", isOn: $config.window.autoSize)
-                toggleRow("Site favicons", isOn: $config.window.favicons)
-            } footer: {
-                Text("Provider tabs are the chip strip above the list, or the rail on the left. Hidden keeps Tab and /trigger for switching. Turn individual providers on or off under Providers. Fit sizes the launcher to the screen under the pointer. Site favicons fetch web-app icons from Google; turn them off to keep hostnames on this Mac.")
-            }
-
-            card("Size", anchor: "launcher-size") {
-                numericRow("Width", value: widthBinding, in: 560...1_400, step: 20, unit: "pt",
-                           automatic: widthAutomatic,
-                           automaticValue: "\(Int(config.window.launcherWidth(for: screenSize))) pt")
-                numericRow("Rows", value: visibleRowsBinding, in: 6...11, step: 1,
-                           automatic: rowsAutomatic,
-                           automaticValue: "\(config.window.launcherRows(for: screenSize))")
-                Text("\(Int(derivedPanelHeight.rounded())) pt on this display")
-                    .font(.caption)
-                    .foregroundStyle(muted)
-                numericRow("Scale", value: scalePercentBinding, in: 80...160, step: 5, unit: "%")
                 pickerRow("Preview") {
                     Picker("Preview", selection: $config.window.previewLayout) {
-                        Text("Automatic (window width)").tag(PreviewPlacement.auto)
+                        Text("Automatic (frame width)").tag(PreviewPlacement.auto)
                         Text("Below the list").tag(PreviewPlacement.below)
                         Text("Beside the list").tag(PreviewPlacement.beside)
                     }
                     .labelsHidden()
                     .frame(maxWidth: 260, alignment: .leading)
                 }
+                toggleRow("Site favicons", isOn: $config.window.favicons)
             } footer: {
-                Text("Scale multiplies every launcher size, like rem. Width and rows override it, and Automatic falls back to the screen and scale. Clipboard, Ask, preview, terminal, and scratchpad widths live in config.toml under [window].")
+                Text("Provider tabs are the chip strip above the list, or the rail on the left. Hidden keeps Tab and /trigger for switching. Turn individual providers on or off under Providers. The launcher keeps one fixed frame per screen; the preview fills part of it instead of resizing it. Site favicons fetch web-app icons from Google; turn them off to keep hostnames on this Mac.")
             }
 
             card("Commands", anchor: "launcher-commands") {
@@ -3231,7 +3147,7 @@ struct SettingsView: View {
         case .general:
             return "Restores the editor, terminal, terminal app, notification, and clipboard-history defaults. Startup, permissions, and power are left alone."
         case .launcher:
-            return "Restores launcher position, size, behaviour, command prefix, and the embedded terminal defaults."
+            return "Restores launcher position, layout, behaviour, command prefix, and the embedded terminal defaults."
         case .appearance:
             return "Restores the default theme and the theme's typography."
         case .shortcuts:
