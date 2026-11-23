@@ -13,7 +13,7 @@ public final class SnippetProvider: PaletteProvider, @unchecked Sendable {
         trigger: "snip",
         isGlobal: false,
         priority: 59,
-        icon: "symbol:text.badge"
+        icon: "symbol:doc.text"
     )
 
     public struct Snippet: Identifiable, Equatable, Sendable {

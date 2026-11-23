@@ -1534,6 +1534,8 @@ struct LauncherRootView: View {
                     .truncationMode(.tail)
             } else if controller.actionsMode {
                 hint("esc", "Back")
+            } else if controller.terminalActive {
+                hint("esc", "Close")
             } else if let title = controller.returnHint {
                 primaryActionPill(title)
             }

@@ -782,6 +782,7 @@ public final class SearchController: ObservableObject, HostBridge {
             guard let first = entry.children.first else { return }
             resetToPlainQuery()
             query = registry.parser.prefix + first.trigger + " "
+            scheduleSearch(debounce: false)
             return
         }
         if let scope = entry.scopeProviderID {

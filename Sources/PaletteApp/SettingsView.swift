@@ -584,7 +584,7 @@ struct SettingsView: View {
                 ? theme.color(theme.palette.surface).opacity(1)
                 : theme.color(theme.palette.bg).opacity(0.35)
         )
-        .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
+        .navigationSplitViewColumnWidth(min: 195, ideal: 215, max: 270)
     }
 
     /// Hand-built rather than `.searchable`: the system field cannot render the
