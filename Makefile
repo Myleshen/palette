@@ -64,13 +64,13 @@ debug-app:
 debug: debug-app
 
 layout-check:
-	Scripts/layout-check.sh
+	nice -n 10 taskpolicy -b Scripts/layout-check.sh
 
 e2e:
-	Scripts/e2e.sh
+	nice -n 10 taskpolicy -b Scripts/e2e.sh
 
 test:
-	swift test
+	nice -n 10 taskpolicy -b swift test
 
 clean:
 	swift package clean
