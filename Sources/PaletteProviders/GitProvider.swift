@@ -51,6 +51,22 @@ public final class GitProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
+        // Without git every row would be empty and Return would have nothing
+        // to explain, so say it once and point at the install line.
+        if ToolLocator.shared.path(for: "git") == nil {
+            return [PaletteItem(
+                id: "git-missing",
+                title: "Git not installed",
+                subtitle: "Install with brew install git, then reload",
+                icon: .symbol("exclamationmark.triangle"),
+                score: 10_000,
+                trouble: ProviderRequirements.requirements(forProviderID: descriptor.id)
+                    .first
+                    .map(ItemTrouble.missingTool),
+                providerID: descriptor.id,
+                providerName: descriptor.name
+            )]
+        }
         let cached = await cache.repos
         let at = await cache.at
         let repos: [Repo]

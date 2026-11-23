@@ -542,12 +542,18 @@ struct ResultRow: View {
                     weight: .regular,
                     lineLimit: titleLineLimit
                 )
-                if theme.list.showSubtitles, let subtitle = item.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: theme.typography.subtitleSize))
-                        .foregroundColor(theme.color(subtitleColor))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                if theme.list.showSubtitles, let subtitle = item.subtitle ?? item.trouble?.detail, !subtitle.isEmpty {
+                    HStack(spacing: 3) {
+                        if item.trouble != nil {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: theme.typography.subtitleSize))
+                        }
+                        Text(subtitle)
+                            .font(.system(size: theme.typography.subtitleSize))
+                            .foregroundColor(theme.color(subtitleColor))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
             }
             Spacer(minLength: 8)
@@ -1358,9 +1364,9 @@ struct LauncherRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// One sentence for VoiceOver: title, subtitle, provider.
+    /// One sentence for VoiceOver: title, subtitle, provider, and any trouble.
     private func rowAccessibilityLabel(_ item: PaletteItem) -> String {
-        [item.title, item.subtitle, item.providerName]
+        [item.title, item.trouble?.title, item.subtitle, item.providerName]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
@@ -1528,9 +1534,8 @@ struct LauncherRootView: View {
                     .truncationMode(.tail)
             } else if controller.actionsMode {
                 hint("esc", "Back")
-            } else if let item = controller.selectedItem, let action = item.primaryAction {
-                // No primary action means Return does nothing; never advertise it.
-                primaryActionPill(action.title)
+            } else if let title = controller.returnHint {
+                primaryActionPill(title)
             }
             Spacer(minLength: 4)
             if !controller.actionsMode {

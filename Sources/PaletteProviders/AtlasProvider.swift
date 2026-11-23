@@ -228,10 +228,13 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private func setupItem() -> PaletteItem {
-        PaletteItem(
+        // The folder exists but atlas itself may be the missing piece.
+        let atlasMissing = ToolLocator.shared.path(for: "atlas") == nil && Self.fallbackTool == nil
+        let requirement = ProviderRequirements.requirements(forProviderID: descriptor.id).first
+        return PaletteItem(
             id: "atlas:setup",
-            title: "Atlas state not found — run `atlas`",
-            subtitle: config.stateFile.path,
+            title: atlasMissing ? "Install atlas" : "Atlas state not found — run `atlas`",
+            subtitle: atlasMissing ? requirement?.install : config.stateFile.path,
             icon: .symbol("book.closed"),
             badge: "SETUP",
             score: 10_000,
@@ -242,6 +245,7 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
                 value: .text(config.stateFile.deletingLastPathComponent().path)
             )],
             preview: .text("Run `atlas` to build the index at ~/atlas.html, then reopen Palette."),
+            trouble: atlasMissing ? requirement.map(ItemTrouble.missingTool) : nil,
             providerID: descriptor.id,
             providerName: descriptor.name
         )

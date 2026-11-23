@@ -84,6 +84,28 @@ public enum ItemPreview: Equatable, Sendable, Codable {
     case document(url: String, kind: String)
 }
 
+/// Why a row cannot do its usual job, and where the fix lives. A row with a
+/// trouble and a `settingsAnchor` sends Return to Settings instead of running
+/// its primary action; ⌘K still lists the actions.
+public struct ItemTrouble: Equatable, Sendable, Codable {
+    public var title: String
+    public var detail: String?
+    /// A Settings search anchor, e.g. `providers-missing-tools`.
+    public var settingsAnchor: String?
+
+    public init(title: String, detail: String? = nil, settingsAnchor: String? = nil) {
+        self.title = title
+        self.detail = detail
+        self.settingsAnchor = settingsAnchor
+    }
+}
+
+/// What Return does on a row. A trouble row with an anchor opens the fix.
+public enum ItemReturnRoute: Equatable, Sendable {
+    case action(PaletteAction)
+    case settings(String)
+}
+
 public struct PaletteItem: Identifiable, Equatable, Sendable, Codable {
     public var id: String
     public var title: String
@@ -96,6 +118,8 @@ public struct PaletteItem: Identifiable, Equatable, Sendable, Codable {
     public var score: Double
     public var actions: [PaletteAction]
     public var preview: ItemPreview?
+    /// Set when the row already knows it cannot work as usual.
+    public var trouble: ItemTrouble?
     public var providerID: String
     public var providerName: String?
 
@@ -110,6 +134,7 @@ public struct PaletteItem: Identifiable, Equatable, Sendable, Codable {
         score: Double = 0,
         actions: [PaletteAction] = [],
         preview: ItemPreview? = nil,
+        trouble: ItemTrouble? = nil,
         providerID: String,
         providerName: String? = nil
     ) {
@@ -123,6 +148,7 @@ public struct PaletteItem: Identifiable, Equatable, Sendable, Codable {
         self.score = score
         self.actions = actions
         self.preview = preview
+        self.trouble = trouble
         self.providerID = providerID
         self.providerName = providerName
     }
@@ -136,6 +162,15 @@ public struct PaletteItem: Identifiable, Equatable, Sendable, Codable {
 
     public var secondaryAction: PaletteAction? {
         actions.dropFirst().first
+    }
+
+    /// Return opens the fix on a trouble row, otherwise runs the primary
+    /// action. A trouble without an anchor keeps the action: nothing to open.
+    public var returnRoute: ItemReturnRoute? {
+        if let anchor = trouble?.settingsAnchor, !anchor.isEmpty {
+            return .settings(anchor)
+        }
+        return primaryAction.map(ItemReturnRoute.action)
     }
 }
 

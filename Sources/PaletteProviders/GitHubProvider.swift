@@ -221,7 +221,10 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
                 id: "gh-missing",
                 title: "GitHub CLI not installed",
                 subtitle: "Install with brew install gh, then reload",
-                action: nil
+                action: nil,
+                trouble: ProviderRequirements.requirements(forProviderID: descriptor.id)
+                    .first
+                    .map(ItemTrouble.missingTool)
             )]
         }
 
@@ -904,7 +907,13 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         return .success(entries)
     }
 
-    private func infoRow(id: String, title: String, subtitle: String, action: String?) -> PaletteItem {
+    private func infoRow(
+        id: String,
+        title: String,
+        subtitle: String,
+        action: String?,
+        trouble: ItemTrouble? = nil
+    ) -> PaletteItem {
         PaletteItem(
             id: id,
             title: title,
@@ -914,6 +923,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             group: kind.name,
             score: 1_000,
             actions: action.map { [PaletteAction(id: "auth", title: "Run gh auth login", kind: .custom, value: .text($0))] } ?? [],
+            trouble: trouble,
             providerID: descriptor.id,
             providerName: descriptor.name
         )

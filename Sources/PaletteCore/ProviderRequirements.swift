@@ -44,13 +44,18 @@ public enum ProviderRequirements {
         install: "brew install bitwarden-cli",
         why: "the Bitwarden providers read the vault through the bw CLI"
     )
+    static let git = ProviderRequirement(
+        tool: "git",
+        install: "brew install git",
+        why: "project worktrees and new repositories run git"
+    )
 
     public static let map: [String: [ProviderRequirement]] = [
         "proj": [ProviderRequirement(
             tool: "devx",
             install: "brew install Myleshen/tap/devx",
             why: "/proj lists and creates projects through devx"
-        )],
+        ), git],
         "atlas": [ProviderRequirement(
             tool: "atlas",
             install: "brew install Myleshen/tap/atlas",
@@ -58,6 +63,7 @@ public enum ProviderRequirements {
         )],
         "gh": [gh], "ghr": [gh], "ghp": [gh], "ghi": [gh], "gha": [gh], "ghn": [gh],
         "bw": [bw], "bwu": [bw], "bwt": [bw], "bwn": [bw], "bwo": [bw],
+        "git": [git],
         "docker": [ProviderRequirement(
             tool: "docker",
             install: "brew install --cask docker",
@@ -72,5 +78,17 @@ public enum ProviderRequirements {
 
     public static func requirements(forProviderID id: String) -> [ProviderRequirement] {
         map[id] ?? []
+    }
+}
+
+public extension ItemTrouble {
+    /// A row whose tool is missing: the install line is the detail and Return
+    /// lands on Settings → Providers → Missing tools.
+    static func missingTool(_ requirement: ProviderRequirement) -> ItemTrouble {
+        ItemTrouble(
+            title: "Install \(requirement.tool)",
+            detail: requirement.install,
+            settingsAnchor: "providers-missing-tools"
+        )
     }
 }

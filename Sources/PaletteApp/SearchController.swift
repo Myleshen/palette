@@ -85,6 +85,8 @@ public final class SearchController: ObservableObject, HostBridge {
     public var panel: PanelController?
     public var onReload: (() -> Void)?
     public var onOpenConfig: (() -> Void)?
+    /// Opens Settings already scrolled to a search anchor, for trouble rows.
+    public var onOpenSettingsAnchor: ((String) -> Void)?
     public var onOpenProviders: (() -> Void)?
     public var onQuit: (() -> Void)?
 
@@ -127,6 +129,15 @@ public final class SearchController: ObservableObject, HostBridge {
     public var selectedItem: PaletteItem? {
         guard items.indices.contains(selectionIndex) else { return nil }
         return items[selectionIndex]
+    }
+
+    /// What the footer says Return will do; nil when Return does nothing.
+    public var returnHint: String? {
+        switch selectedItem?.returnRoute {
+        case .settings: return "Fix in Settings"
+        case .action(let action): return action.title
+        case nil: return nil
+        }
     }
 
     /// The pane only exists when there is a row and that row has preview
@@ -385,7 +396,7 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
 
-        items = visible
+        items = markingPasteTrouble(visible)
         highlightTerms = result.parsed.text
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
@@ -426,6 +437,26 @@ public final class SearchController: ObservableObject, HostBridge {
             setStatus(diagnostic.message, duration: 6)
         }
         fillPreview()
+    }
+
+    /// Providers build paste actions without knowing the permission state, so
+    /// the host adds the trouble here: Return then opens Settings → Permissions
+    /// instead of silently falling back to Copy.
+    private func markingPasteTrouble(_ items: [PaletteItem]) -> [PaletteItem] {
+        guard !pasteboard.isAccessibilityTrusted else { return items }
+        return items.map { item in
+            guard item.trouble == nil,
+                  let kind = item.primaryAction?.kind,
+                  kind == .pasteText || kind == .pasteImage || kind == .pasteFiles
+            else { return item }
+            var copy = item
+            copy.trouble = ItemTrouble(
+                title: "Enable Accessibility",
+                detail: "Allow Palette to paste into the previous app",
+                settingsAnchor: "general-permissions"
+            )
+            return copy
+        }
     }
 
     /// A preview that costs a process call (git status, a file digest) is
@@ -854,8 +885,20 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func executePrimary() {
-        guard let item = selectedItem, let action = item.primaryAction else { return }
-        execute(item: item, action: action)
+        guard let item = selectedItem else { return }
+        switch item.returnRoute {
+        case .settings(let anchor):
+            if let onOpenSettingsAnchor {
+                onOpenSettingsAnchor(anchor)
+            } else {
+                onOpenConfig?()
+            }
+            panel?.hide()
+        case .action(let action):
+            execute(item: item, action: action)
+        case nil:
+            return
+        }
     }
 
     public func executeSecondary() {
