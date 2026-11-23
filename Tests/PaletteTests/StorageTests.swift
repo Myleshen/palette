@@ -210,6 +210,58 @@ final class StorageTests: XCTestCase {
         XCTAssertNil(counts["apps:Missing"])
     }
 
+    func testLearnedRankingCapsPrunesAndForgets() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let hash = QueryMemory.digest("chr")
+        // The most picked row survives the four-row cap; the rest are pruned.
+        for _ in 0..<3 {
+            try await store.recordLearnedChoice(prefixHash: hash, itemKey: "apps:keeper")
+        }
+        for index in 0..<5 {
+            try await store.recordLearnedChoice(prefixHash: hash, itemKey: "apps:item\(index)")
+        }
+        let boosts = try await store.learnedBoosts(
+            prefixHash: hash,
+            itemKeys: ["apps:keeper"] + (0..<5).map { "apps:item\($0)" }
+        )
+        XCTAssertEqual(boosts.count, 4)
+        XCTAssertNotNil(boosts["apps:keeper"])
+        XCTAssertGreaterThan(boosts["apps:keeper"]!, boosts.values.min()!)
+
+        // A different prefix sees none of it.
+        let other = try await store.learnedBoosts(prefixHash: QueryMemory.digest("xyz"), itemKeys: ["apps:keeper"])
+        XCTAssertTrue(other.isEmpty)
+
+        try await store.clearLearnedRanking()
+        let afterClear = try await store.learnedRankingCount()
+        XCTAssertEqual(afterClear, 0)
+        let clearedBoosts = try await store.learnedBoosts(prefixHash: hash, itemKeys: ["apps:keeper"])
+        XCTAssertTrue(clearedBoosts.isEmpty)
+
+        // 401 prefixes: the least recently used one falls off.
+        var firstHash = ""
+        for index in 0...400 {
+            let prefixHash = QueryMemory.digest("q\(index)")
+            if index == 0 { firstHash = prefixHash }
+            try await store.recordLearnedChoice(
+                prefixHash: prefixHash,
+                itemKey: "apps:item",
+                at: Date(timeIntervalSince1970: 1_000 + Double(index))
+            )
+        }
+        let prunedCount = try await store.learnedRankingCount()
+        XCTAssertEqual(prunedCount, 400)
+        let oldest = try await store.learnedBoosts(prefixHash: firstHash, itemKeys: ["apps:item"])
+        XCTAssertTrue(oldest.isEmpty)
+        let newest = try await store.learnedBoosts(
+            prefixHash: QueryMemory.digest("q400"),
+            itemKeys: ["apps:item"]
+        )
+        XCTAssertFalse(newest.isEmpty)
+    }
+
     func testScratchNotesAndRecentUses() async throws {
         let (store, url) = try makeStore()
         defer { try? FileManager.default.removeItem(at: url) }

@@ -324,7 +324,17 @@ public final class SearchController: ObservableObject, HostBridge {
         guard !Task.isCancelled else { return }
 
         let previousID = selectedItem?.stableID
-        let boosts = (try? await store.frecencyBoosts(for: result.items.map(\.stableID))) ?? [:]
+        var boosts = (try? await store.frecencyBoosts(for: result.items.map(\.stableID))) ?? [:]
+        // Learned ordering is a tie-breaker for a short plain query only; a
+        // bound /trigger search or a scoped provider never learns or boosts.
+        if scope == nil, !result.parsed.isBound, configuration.learningEnabled,
+           let prefix = QueryMemory.learnablePrefix(result.parsed.text),
+           let learned = try? await store.learnedBoosts(
+                prefixHash: QueryMemory.digest(prefix),
+                itemKeys: result.items.map(\.stableID)
+           ) {
+            for (stableID, boost) in learned { boosts[stableID, default: 0] += boost }
+        }
         guard !Task.isCancelled else { return }
         let merged: [PaletteItem]
         if result.parsed.isBound {
@@ -855,7 +865,7 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func executePrimary() {
         guard let item = selectedItem, let action = item.primaryAction else { return }
-        execute(item: item, action: action)
+        execute(item: item, action: action, learnQuery: learnableQuery)
     }
 
     public func executeSecondary() {
@@ -863,7 +873,14 @@ public final class SearchController: ObservableObject, HostBridge {
             setStatus("No secondary action", duration: 2)
             return
         }
-        execute(item: item, action: action)
+        execute(item: item, action: action, learnQuery: learnableQuery)
+    }
+
+    /// The plain query text this activation may be learned under, if any.
+    private var learnableQuery: String? {
+        let parsed = registry.parser.parse(query)
+        guard !actionsMode, scopeProviderID == nil, !parsed.isBound else { return nil }
+        return QueryMemory.learnablePrefix(parsed.text)
     }
 
     /// The same list ⌘K shows, also used by a row's right-click menu.
@@ -930,8 +947,10 @@ public final class SearchController: ObservableObject, HostBridge {
         execute(item: item, action: action)
     }
 
-    private func execute(item: PaletteItem, action: PaletteAction) {
+    private func execute(item: PaletteItem, action: PaletteAction, learnQuery: String? = nil) {
         let isTransient = ["install", "login", "unlock", "add", "remove", "shortcut", "clear-shortcut", "pin-item", "unpin-item"].contains(action.id)
+        // Digest before the task runs: the query may change while it waits.
+        let prefixHash = learnQuery.map(QueryMemory.digest)
         Task { [weak self] in
             guard let self else { return }
             // Act first: the frecency write must not sit between Enter and the
@@ -939,6 +958,12 @@ public final class SearchController: ObservableObject, HostBridge {
             await self.perform(item: item, action: action)
             if !isTransient {
                 try? await self.store.recordUse(stableID: item.stableID, provider: item.providerID)
+                if let prefixHash, self.configuration.learningEnabled {
+                    try? await self.store.recordLearnedChoice(
+                        prefixHash: prefixHash,
+                        itemKey: item.stableID
+                    )
+                }
             }
         }
     }
