@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.16.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.18.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -24,6 +24,7 @@ Where each headline feature landed. Every fix, and everything before 1.8, is in
 
 | Feature | Version |
 |---|---|
+| Pinned screenshots, on-device OCR, learned ranking, provider groups, 19-pane Settings, update nudge | 2.18.0 |
 | Custom hotkey binder — `[[binding]]` launches an app, runs a shell command, opens a provider trigger, or opens a URL | 2.16.0 |
 | Ask web search on by default; installed-font dropdowns; onboarding shows the real capture keys and Skip applies Essentials | 2.16.0 |
 | Ask chat window — multi-turn, streaming, saved chats, markdown (code, tables, images), optional web search | 2.15.0 |
@@ -102,6 +103,12 @@ The cask downloads the latest GitHub release, installs `Palette.app` into
 rather than notarized. No Apple Developer subscription or App Store listing is
 involved. Manual zip downloads may need System Settings > Privacy & Security >
 Open Anyway.
+
+Palette asks GitHub once a day whether a newer release exists. When there is
+one, the menu bar offers **Palette <version> available — Update…**, which runs
+`brew update && brew upgrade --cask palette` in the embedded terminal; Palette
+never installs anything itself. Turn the check off in Settings → General →
+**Updates** (or `[updates] automatic = false`).
 
 To publish a new version: bump `CFBundleShortVersionString` and
 `CFBundleVersion` in `Resources/Info.plist`, add a `CHANGELOG.md` entry, merge
@@ -240,6 +247,7 @@ trigger word:
 | `/bwn <query>` | Bitwarden notes |
 | `/bwo <query>` | Bitwarden URLs |
 | `/clip <query>` | clipboard history, text/images/files |
+| `/ocr <query>` | on-device text and QR/barcode reading of a clipboard image or screenshot |
 | `/port <query>` | listening TCP ports, with process and PID |
 | `/cmd <query>` | commands from `~/.config/palette/commands.toml` |
 | `/proj <query>` | devx projects and worktrees; clone a repository, create a project |
@@ -295,6 +303,12 @@ themes, and Bitwarden vault fields. Clipboard search scans the whole configured
 history instead of only doing a SQL prefix match, so non-contiguous searches
 work there too. `/edit` still delegates path ranking to the real `fzf` binary
 with `--scheme=path`.
+
+Ranking also learns: when a short plain query reliably leads you to one row,
+that row is boosted as a tie-breaker on later queries (never over a clearly
+better text match), so `chr` can open the Chrome you actually choose. The query
+is stored only as a hash, and Settings → Search → **Learning** has the toggle
+and a **Forget** button.
 
 The empty-query screen is deliberately the **app list**: apps in alphabetical
 order (or most-used), with pinned apps and pinned web apps at the top. Unpinned
@@ -496,7 +510,7 @@ menu-bar **Stop recording · m:ss** item shows while a recording runs. All four
 live in Settings → **Shortcuts** and can be cleared or rebound.
 
 A capture plays a shutter sound and shows a thumbnail for a couple of seconds
-(both toggles in Settings → Search → Screenshots), so it is obvious that it worked. `/shots`
+(both toggles in Settings → **Screenshots**), so it is obvious that it worked. `/shots`
 lists everything in the capture directory, newest first and grouped by day —
 screenshots and recordings together — with a thumbnail (a poster frame for
 videos) on every row and in the preview pane, plus open, annotate, copy image,
@@ -507,10 +521,28 @@ same cache as the preview.
 
 Recordings can target the whole screen, a single display, or a fixed region, and
 optionally include audio from the system default input or a chosen microphone
-(`[capture] recording_microphone`), set under Settings → Search → Recordings or per row in
-`/rec`, which lists every active display by name and resolution.
+(`[capture] recording_microphone`), set under Settings → **Recordings**. Every
+start — the hotkey, `/rec` and the menu — asks first in a compact options panel
+(audio, microphone, display, area) that remembers the last choice, so the
+recording never includes the panel that asked.
 `[capture] gallery = "all" | "palette"` decides whether `/shots` lists everything
 in the folder or only Palette's own `shot-*` and `rec-*` files.
+
+The status menu has a capture section — **Start**, **Stop** with elapsed time,
+**Copy Last Path**, **Reveal Last Capture**, **Show Last Recording** and **Show
+Last Screenshot** — and every capture action reports the same way: in the panel
+when it is open, otherwise a Notification Center banner plus a brief menu-bar
+flash.
+
+**Pins** float a screenshot above every other app and pass clicks straight
+through, so it never gets in the way; hold `⌥` to show the grip and drag, resize
+or scroll to zoom. Pin from the annotator (`⇧⌘P`), from a `/shots` row, or from
+the menu bar, and up to 8 pins cascade down the screen (the oldest closes).
+
+Images are read on device: clipboard images, the last screenshot, pins and the
+annotator offer **Copy Text** (Vision OCR) and **Open Detected Link** from QR,
+EAN and Code128 codes; `/ocr` lists the text found in the clipboard image or a
+given path. Nothing leaves the Mac.
 
 **Annotate** rows in `/shot` open the editor on the capture: pointer, arrow,
 rectangle, text and crop, six colours, `⌘Z` undo, `⌘C` copy, `⌘S` save over the
@@ -522,14 +554,15 @@ while zoomed. Marks are stored as fractions of the image, so they look the same
 at any window size, and cropping remaps them instead of dropping them.
 
 Recordings open in a player window when they stop: play, scrub, reveal in
-Finder, or copy the path. Both behaviours are toggles in Settings → Search → Screenshots
-(`edit_after_capture`, `preview_recording`), and the first capture asks for
-Screen Recording permission once per build.
+Finder, or copy the path. The preview keeps its size and position and no longer
+hides when you switch apps. Both behaviours are toggles in Settings →
+**Screenshots** (`edit_after_capture`, `preview_recording`), and the first
+capture asks for Screen Recording permission once per build.
 
 ### Cheatsheets
 
 `/cheat` lists PDF, HTML, Markdown, text and image files from the folders you add
-in Settings → **Search → Cheatsheets**, one level deep. Selecting a row previews it with
+in Settings → **Cheatsheets**, one level deep. Selecting a row previews it with
 QuickLook inside the launcher; `⌥P` enlarges the preview. Rows also open the file
 and reveal it in Finder. Folders and extensions are ordinary config:
 
@@ -597,7 +630,7 @@ keywords = ["code", "repos"]
 ```
 
 A bookmark opens the URL as a **normal browser window**, not the `/web` app
-mode, and in the browser you pick. Edit rows in Settings → Search → Bookmarks;
+mode, and in the browser you pick. Edit rows in Settings → **Bookmarks**;
 they are written back to the file as you edit.
 
 ### Clipboard transforms
