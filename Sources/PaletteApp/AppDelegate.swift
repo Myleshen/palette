@@ -124,6 +124,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var keepAwakeToggleItem: NSMenuItem?
     private var keepAwakeClamshellItem: NSMenuItem?
     private var keepAwakeStopItem: NSMenuItem?
+    private let updates = UpdateService()
+    private var updateMenuItem: NSMenuItem?
+    private var releaseNotesMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -354,6 +357,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         checkDefaultProviderTools()
         configureClipboard()
         buildStatusItem()
+        updates.onAvailabilityChange = { [weak self] in self?.refreshUpdateMenu() }
+        updates.start(automatic: !isScriptMode && configuration.updates.automatic)
         if case .adopted = recordingAdoption {
             updateCaptureMenu()
             startRecordingTicker()
@@ -2551,6 +2556,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let open = NSMenuItem(title: "Open Palette", action: #selector(togglePalette), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
+
+        // Hidden until a check finds something newer; both point at the
+        // release, never at a self-updater.
+        let update = NSMenuItem(
+            title: "Update Palette…",
+            action: #selector(updatePaletteFromMenu),
+            keyEquivalent: ""
+        )
+        update.target = self
+        update.isHidden = true
+        menu.addItem(update)
+        updateMenuItem = update
+        let notes = NSMenuItem(
+            title: "Release notes",
+            action: #selector(openReleaseNotesFromMenu),
+            keyEquivalent: ""
+        )
+        notes.target = self
+        notes.isHidden = true
+        menu.addItem(notes)
+        releaseNotesMenuItem = notes
         menu.addItem(.separator())
 
         let reload = NSMenuItem(title: "Reload Configuration", action: #selector(reloadFromMenu), keyEquivalent: "r")
@@ -2682,7 +2708,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         runDatabaseMaintenance()
         maintenanceTimer?.invalidate()
         let timer = Timer(timeInterval: 30 * 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.runDatabaseMaintenance() }
+            Task { @MainActor in
+                self?.runDatabaseMaintenance()
+                // The daily gate and failure backoff live in UpdateService, so
+                // a long-running app still checks without a relaunch.
+                self?.updates.checkAutomatically()
+            }
         }
         RunLoop.main.add(timer, forMode: .common)
         maintenanceTimer = timer
@@ -2922,6 +2953,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         searchController.setStatus("Update command copied", duration: 2)
     }
 
+    /// Shows the nudge only when a check found something newer.
+    private func refreshUpdateMenu() {
+        guard let release = updates.available else {
+            updateMenuItem?.isHidden = true
+            releaseNotesMenuItem?.isHidden = true
+            return
+        }
+        updateMenuItem?.title = "Palette \(release.version) available — Update…"
+        updateMenuItem?.isEnabled = true
+        updateMenuItem?.isHidden = false
+        releaseNotesMenuItem?.isHidden = false
+    }
+
+    /// Homebrew does the install; the embedded terminal is where it runs.
+    @objc private func updatePaletteFromMenu() {
+        guard let release = updates.available else { return }
+        searchController.openTerminalPanel(command: UpdatePolicy.brewCommand)
+        searchController.setStatus("Updating Palette to \(release.version)…", duration: 10)
+        updateMenuItem?.title = "Updating…"
+        updateMenuItem?.isEnabled = false
+        releaseNotesMenuItem?.isHidden = true
+    }
+
+    @objc private func openReleaseNotesFromMenu() {
+        guard let release = updates.available else { return }
+        NSWorkspace.shared.open(release.url)
+    }
+
     @objc private func openAskSettingsFromWindow() {
         showSettings()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -3087,6 +3146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             providers: allProviderInfo,
             commands: catalogCommands,
             diagnostics: startupDiagnostics.map { "\($0.level.rawValue): \($0.message)" },
+            updates: updates,
             onApply: { [weak self] updated in
                 self?.applySettings(updated)
             },
@@ -3114,12 +3174,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let configErrorMessage {
             return configErrorMessage
         }
+        let updatesAutomaticChanged = configuration.updates.automatic != updated.updates.automatic
         do {
             try writeConfig(updated)
         } catch {
             return "Could not save settings: \(error.localizedDescription)"
         }
         reload(quiet: true, refreshSettings: false)
+        if updatesAutomaticChanged {
+            updates.setAutomatic(updated.updates.automatic)
+        }
         updateSettingsWindowChrome()
         return nil
     }

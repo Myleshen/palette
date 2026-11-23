@@ -236,6 +236,7 @@ private enum SaveState: Equatable {
 
 struct SettingsView: View {
     @ObservedObject private var themeManager: ThemeManager
+    @ObservedObject private var updates: UpdateService
     @State private var config: PaletteConfig
     /// The last values actually written to disk. A row with an invalid value
     /// keeps what the user typed on screen while the file keeps this.
@@ -320,6 +321,7 @@ struct SettingsView: View {
         providers: [ProviderSettingsInfo],
         commands: [CatalogCommand],
         diagnostics: [String],
+        updates: UpdateService,
         onApply: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
         onExportBackup: @escaping () -> Void
@@ -372,6 +374,7 @@ struct SettingsView: View {
         _cheatsheetFolders = State(initialValue: config.cheatsheets.folders)
         _cheatsheetExtensions = State(initialValue: config.cheatsheets.extensions.joined(separator: ", "))
         _themeManager = ObservedObject(wrappedValue: themeManager)
+        _updates = ObservedObject(wrappedValue: updates)
         self.keepAwake = keepAwake
         self.themesDirectory = themesDirectory
         self.providers = providers
@@ -998,6 +1001,8 @@ struct SettingsView: View {
             .init(title: "Clamshell mode", tab: .general, anchor: "row-Clamshell mode (lid closed)", keywords: "lid closed ac power"),
             .init(title: "Timer sound", tab: .general, anchor: "row-Play a sound when a timer finishes", keywords: "timer sound notification finish"),
             .init(title: "Timer notification", tab: .general, anchor: "row-Show a notification when a timer finishes", keywords: "timer sound notification finish"),
+            .init(title: "Updates", tab: .general, anchor: "general-updates", keywords: "update upgrade homebrew brew release version check now automatic"),
+            .init(title: "Check for updates automatically", tab: .general, anchor: "row-Check for updates automatically", keywords: "update upgrade homebrew brew release version check automatic"),
             .init(title: "Editor", tab: .general, anchor: "row-Editor", keywords: "editor neovide vscode cursor zed"),
             .init(title: "Terminal", tab: .general, anchor: "row-Terminal", keywords: "terminal binary zellij project command embedded"),
             .init(title: "Terminal app", tab: .general, anchor: "row-Terminal app", keywords: "terminal kitty ghostty ssh docker github external app"),
@@ -1432,6 +1437,26 @@ struct SettingsView: View {
                 Text("Presets live in config.toml under [timer]. Start any duration with /timer 25m, /timer 1h30m, or /timer 1:30.")
             }
 
+            card("Updates", anchor: "general-updates") {
+                toggleRow("Check for updates automatically", isOn: $config.updates.automatic)
+                HStack(spacing: 8) {
+                    Button("Check now") { updates.checkNow() }
+                        .disabled(updates.status == .checking)
+                    if updates.status == .checking {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(updateStatusText)
+                        .font(.caption)
+                        .foregroundStyle(updateStatusIsError ? danger : muted)
+                    Spacer(minLength: 0)
+                }
+                Text(lastCheckedText)
+                    .font(.caption)
+                    .foregroundStyle(muted)
+            } footer: {
+                Text("Homebrew installs updates; Palette only tells you. A newer release appears in the menu bar with an Update command that runs brew in the embedded terminal.")
+            }
+
             card("Apps", anchor: "general-apps") {
                 fieldRow("Editor") {
                     TextField("Editor", text: $config.editorOpenWith)
@@ -1484,6 +1509,26 @@ struct SettingsView: View {
     }
 
     // MARK: - About
+
+    private var updateStatusText: String {
+        switch updates.status {
+        case .idle: return ""
+        case .checking: return "Checking…"
+        case .upToDate: return "Up to date"
+        case .available(let version): return "Palette \(version) available"
+        case .failed(let message): return message
+        }
+    }
+
+    private var updateStatusIsError: Bool {
+        if case .failed = updates.status { return true }
+        return false
+    }
+
+    private var lastCheckedText: String {
+        guard let date = updates.lastChecked else { return "Never checked" }
+        return "Last checked \(date.formatted(date: .abbreviated, time: .shortened))"
+    }
 
     private var aboutPane: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -3416,7 +3461,7 @@ struct SettingsView: View {
     private var resetSummary: String {
         switch selectedTab {
         case .general:
-            return "Restores the editor, terminal, terminal app, notification, clipboard-history, and command-prefix defaults. Startup, permissions, and power are left alone."
+            return "Restores the editor, terminal, terminal app, notification, update-check, clipboard-history, and command-prefix defaults. Startup, permissions, and power are left alone."
         case .launcher:
             return "Restores launcher position, search-field behaviour, and layout defaults."
         case .appearance:
@@ -3464,6 +3509,7 @@ struct SettingsView: View {
             config.terminal = defaults.terminal
             config.terminalApp = defaults.terminalApp
             config.timer = TimerConfig()
+            config.updates = UpdateConfig()
             config.clipboard = ClipboardConfig()
             config.providerPrefix = defaults.providerPrefix
             appsMessage = nil
