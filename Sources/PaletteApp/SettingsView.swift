@@ -246,6 +246,8 @@ struct SettingsView: View {
     @State private var saveState: SaveState = .idle
     @State private var resetPending = false
     @State private var clearKeyPending = false
+    @State private var forgetLearnedPending = false
+    @State private var forgetLearnedMessage: String?
     @State private var aliasPopover: String?
     @State private var loginMessage: String?
     @State private var launcherRecordToken = 0
@@ -303,6 +305,8 @@ struct SettingsView: View {
     private let onApply: (PaletteConfig) -> String?
     private let onOpen: (URL) -> Void
     private let onExportBackup: () -> Void
+    /// Clears the learned-ranking rows; returns an error message on failure.
+    private let onForgetLearned: () async -> String?
 
     private let contentWidth: CGFloat = 640
     private let providerTabWidth: CGFloat = 26
@@ -322,7 +326,8 @@ struct SettingsView: View {
         diagnostics: [String],
         onApply: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
-        onExportBackup: @escaping () -> Void
+        onExportBackup: @escaping () -> Void,
+        onForgetLearned: @escaping () async -> String?
     ) {
         _config = State(initialValue: config)
         _savedConfig = State(initialValue: config)
@@ -381,6 +386,7 @@ struct SettingsView: View {
         self.onApply = onApply
         self.onOpen = onOpen
         self.onExportBackup = onExportBackup
+        self.onForgetLearned = onForgetLearned
     }
 
     private var theme: Theme { themeManager.theme }
@@ -407,6 +413,12 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text(resetSummary)
+            }
+            .alert("Forget learned ranking?", isPresented: $forgetLearnedPending) {
+                Button("Forget", role: .destructive) { forgetLearned() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Palette stops preferring rows it learned from your past choices. Only query digests are stored, and all of them are removed.")
             }
             .confirmationDialog(
                 "Clear the saved \(config.ask.endpoint.displayName) API key?",
@@ -1043,6 +1055,7 @@ struct SettingsView: View {
             .init(title: "Captures", tab: .captures, anchor: "search-captures", keywords: "captures list shots gallery folder"),
             .init(title: "About Palette", tab: .about, anchor: "settings-about", keywords: "about version build commit chip macos architecture config state logs reveal diagnostics github releases issue author myleshen licence"),
             .init(title: "Plain queries", tab: .providers, anchor: "providers-default", keywords: "global unprefixed plain query provider default search"),
+            .init(title: "Learning", tab: .search, anchor: "search-learning", keywords: "learn learned ranking memory choices forget prefix order digest"),
             .init(title: "Provider filter", tab: .providers, anchor: "providers-default", keywords: "filter find provider"),
             .init(title: "Provider order", tab: .providers, anchor: "providers-default", keywords: "provider order visibility trigger"),
             .init(title: "Provider aliases", tab: .providers, anchor: "providers-default", keywords: "provider alias shortcut"),
@@ -2351,6 +2364,38 @@ struct SettingsView: View {
             } footer: {
                 Text("Type !keyword in the launcher, for example !yt lo-fi. The search URL must contain {query}, which Palette replaces with the URL-encoded text. An invalid engine is flagged here and the last valid one stays in config.toml.")
             }
+
+            card("Learning", anchor: "search-learning") {
+                toggleRow(
+                    "Learn from my choices",
+                    isOn: $config.learningEnabled,
+                    help: "Remember which row you pick after a short plain query and rank it first next time. Only a digest of the query is stored."
+                )
+                HStack(spacing: 8) {
+                    Button("Forget learned ranking") {
+                        forgetLearnedPending = true
+                    }
+                    if let forgetLearnedMessage {
+                        Text(forgetLearnedMessage)
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } footer: {
+                Text("A learned row only breaks ties: it never outranks a better text match. Bound /trigger searches are never learned from.")
+            }
+        }
+    }
+
+    private func forgetLearned() {
+        forgetLearnedMessage = nil
+        Task { @MainActor in
+            if let error = await onForgetLearned() {
+                forgetLearnedMessage = "Could not clear learned ranking: \(error)"
+            } else {
+                forgetLearnedMessage = "Learned ranking cleared."
+            }
         }
     }
 
@@ -3424,7 +3469,7 @@ struct SettingsView: View {
         case .shortcuts:
             return "Restores every global shortcut to its default. Custom hotkeys are left alone."
         case .search:
-            return "Restores web search and the search engine list."
+            return "Restores web search, the search engine list, and the learning toggle. Learned ranking stays until you press Forget."
         case .ask:
             return "Restores the Ask endpoint, model, tokens, fallback, notifications, and history limits. Saved API keys are left alone."
         case .terminal:
@@ -3488,7 +3533,9 @@ struct SettingsView: View {
         case .search:
             config.webSearchEnabled = defaults.webSearchEnabled
             config.webSearchEngines = WebSearchEngine.defaults
+            config.learningEnabled = defaults.learningEnabled
             engines = WebSearchEngine.defaults
+            forgetLearnedMessage = nil
         case .ask:
             config.ask = AskConfig()
             askKeyMessage = nil

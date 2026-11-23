@@ -83,6 +83,14 @@ public enum Ranking {
         return 0.30 * log1p(Double(uses)) * decay
     }
 
+    /// A learned prefix boost is a tie-breaker only: capped at +2.0, far
+    /// inside the 200-point gap between bands, so it can reorder equal or
+    /// near-equal scores but never outrank a genuinely better text match.
+    public static func learnedBoost(count: Int) -> Double {
+        guard count > 0 else { return 0 }
+        return min(2.0, 0.5 * log1p(Double(count)))
+    }
+
     public static func merge(_ items: [PaletteItem], boosts: [String: Double] = [:]) -> [PaletteItem] {
         var best: [String: PaletteItem] = [:]
         for item in items {

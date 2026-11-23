@@ -434,6 +434,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var clipboard: ClipboardConfig
     public var webSearchEnabled: Bool
     public var webSearchEngines: [WebSearchEngine]
+    /// Rank the row the user picked after a short plain query first.
+    public var learningEnabled: Bool
     public var searchPosition: SearchPosition
     public var webAppBrowser: String
     public var window: WindowConfig
@@ -490,6 +492,7 @@ public struct PaletteConfig: Sendable, Equatable {
         clipboard: ClipboardConfig = ClipboardConfig(),
         webSearchEnabled: Bool = true,
         webSearchEngines: [WebSearchEngine] = WebSearchEngine.defaults,
+        learningEnabled: Bool = true,
         searchPosition: SearchPosition = .top,
         webAppBrowser: String = "Helium",
         window: WindowConfig = WindowConfig(),
@@ -529,6 +532,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.clipboard = clipboard
         self.webSearchEnabled = webSearchEnabled
         self.webSearchEngines = webSearchEngines
+        self.learningEnabled = learningEnabled
         self.searchPosition = searchPosition
         self.webAppBrowser = webAppBrowser
         self.window = window
@@ -985,6 +989,10 @@ public enum ConfigLoader {
             }
         }
 
+        if let search = table.table("search"), let learn = search.bool("learn") {
+            config.learningEnabled = learn
+        }
+
         if let askTable = table.table("ask") {
             var ask = config.ask
             if let raw = askTable.str("provider"),
@@ -1239,6 +1247,11 @@ public enum ConfigLoader {
         url = "https://www.youtube.com/results?search_query={query}"
         keyword = "yt"
 
+        # Plain-query ranking remembers the row you pick. Only a digest of the
+        # query is stored, never the typed text.
+        [search]
+        learn = true
+
         [theme]
         mode = "auto"                 # dark | light | auto
         dark = "siri-graphite"
@@ -1435,6 +1448,9 @@ public enum ConfigWriter {
             if !engine.browser.isEmpty { out.append("browser = \(quote(engine.browser))") }
             if engine.appMode { out.append("app_mode = true") }
         }
+        out.append("")
+        out.append("[search]")
+        out.append("learn = \(config.learningEnabled)")
         for name in config.scopes.keys.sorted() {
             guard let scope = config.scopes[name] else { continue }
             out.append("")

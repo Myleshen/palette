@@ -3095,6 +3095,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             onExportBackup: { [weak self] in
                 self?.exportBackup()
+            },
+            onForgetLearned: { [weak self] in
+                guard let store = self?.store else { return "The Palette database is not open." }
+                do {
+                    try await store.clearLearnedRanking()
+                    return nil
+                } catch {
+                    return error.localizedDescription
+                }
             }
         )
     }
