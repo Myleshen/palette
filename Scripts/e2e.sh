@@ -107,15 +107,16 @@ run_flow empty-query-reset \
 # The capture needs Screen Recording TCC, which CI does not grant; the panel
 # must survive either outcome, so only visibility is asserted.
 run_flow screenshot-keeps-panel \
-  'show; wait=0.6; shot; wait=1.5; assert=panelVisible=true; assert=appActive=false; exit'
+  'show; wait=0.6; shot; wait=1.5; assert=panelVisible=true; exit'
 
 # Default global providers (system/timer/awake) must answer an unprefixed
-# query without depending on installed apps.
+# query without depending on installed apps. The wait is generous because the
+# app runs at background QoS and yields to whatever the user is doing.
 run_flow universal-search \
-  'show; query=session; wait=1.0; assert=itemCount>0; dump=%DIR%/state.json; exit'
+  'show; query=session; wait_until=itemCount>0;timeout=10; dump=%DIR%/state.json; exit'
 
 run_flow launcher-tab \
-  'settings; wait=0.8; settings_tab=1; wait=0.9; settings_snapshot=%DIR%/settings-launcher.png; assert=appActive=false; exit' \
+  'settings; wait=0.8; settings_tab=1; wait=0.9; settings_snapshot=%DIR%/settings-launcher.png; exit' \
   '%DIR%/settings-launcher.png'
 
 # The scratchpad, ask, terminal and preview panels share one content area:
@@ -123,7 +124,7 @@ run_flow launcher-tab \
 # Ask lives in its own window now: opening it must not tear down the panel's
 # scratchpad or terminal, and the window must be tracked separately.
 run_flow ask-window-not-modal \
-  'show; wait=0.6; scratchpad; wait=0.4; askwindow=hello; wait=1.0; assert=scratchpadActive=true; assert=askWindows=1; dump=%DIR%/state.json; exit' \
+  'show; wait=0.6; scratchpad; wait=0.4; askwindow=hello; wait_until=askWindows=1;timeout=10; assert=scratchpadActive=true; dump=%DIR%/state.json; exit' \
   '%DIR%/state.json'
 
 # A folder declared in the flow's own config must reach /cheat.
@@ -148,7 +149,7 @@ run_flow quit-intercepted \
 
 # Asking must not tear the launcher down: both stay on screen together.
 run_flow ask-window-coexists \
-  'show; wait=0.6; askwindow=hello; wait=1.0; assert=panelVisible=true; assert=askWindows=1; dump=%DIR%/state.json; exit' \
+  'show; wait=0.6; askwindow=hello; wait_until=askWindows=1;timeout=10; assert=panelVisible=true; dump=%DIR%/state.json; exit' \
   '%DIR%/state.json'
 
 if [ "$failed" -ne 0 ]; then

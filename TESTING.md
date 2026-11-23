@@ -58,6 +58,13 @@ Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `shift+` (for example `key=cmd+k`). `snapshot` writes the panel content without
 screen-recording permission, so it works on a locked display.
 
+A scripted run never takes focus. Windows are ordered to the back of the normal
+level, panels never become key, the app stays an accessory (no Dock icon), and a
+resign-key auto-hide is ignored so clicking elsewhere cannot break a flow.
+Typing and `key=` steps call the controller directly, so they need no key
+window. The app logs `Script mode: … shown without activation` for every quiet
+presentation, and `assert=appActive=false` proves it from inside the app.
+
 Other hooks: `PALETTE_QUERY`, `PALETTE_SHOW_ON_LAUNCH`,
 `PALETTE_SNAPSHOT`, `PALETTE_SNAPSHOT_DELAY`, `PALETTE_EXIT_AFTER_SNAPSHOT`,
 and `PALETTE_ACTIONS`. `dump` also exposes the Ask window as `askWindows`,
@@ -72,9 +79,13 @@ it does not test Carbon hotkey delivery or real typing. Check those manually.
 make e2e           # Scripts/e2e.sh; builds build/Palette.app if it is missing
 ```
 
-`Scripts/e2e.sh` runs one flow per launch, each with its own temp config, state,
-and cache directory, and fails on a non-zero exit, a missing `SCRIPT OK` in the
-log, or a missing artifact:
+`Scripts/e2e.sh` runs one flow per launch. Each flow gets its own temp
+`PALETTE_CONFIG_DIR`, `PALETTE_STATE_DIR` (SQLite database and logs),
+`PALETTE_CACHE_DIR`, and `PALETTE_SUPPORT_DIR` (Ask key file and web-app
+profiles), so the real `~/.config/palette` and `~/Library/Application Support`
+stay untouched. It fails on a non-zero exit, a missing `SCRIPT OK` in the log,
+a missing quiet-presentation log line, or a missing artifact, and it kills a
+leftover Palette process before exiting:
 
 | Flow | What it asserts |
 |---|---|
@@ -88,6 +99,11 @@ log, or a missing artifact:
 
 The capture flow asserts panel visibility only: a real capture needs Screen
 Recording TCC, which CI does not grant.
+
+`make test`, `make e2e`, and `make layout-check` run under `taskpolicy -b` and
+`nice -n 10`, and the scripts do the same for their internal builds and app
+launches, so a run yields to whatever the user is doing. Timing-sensitive flows
+use `wait_until=` instead of a fixed sleep for that reason.
 
 `make debug-app` builds `build/Palette Debug.app` with its own bundle id and
 isolated config, then launches it through LaunchServices so permission prompts

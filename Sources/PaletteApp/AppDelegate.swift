@@ -216,8 +216,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pasteboard.resumePendingClear()
 
         Log.shared.info("Accessibility trusted=\(pasteboard.isAccessibilityTrusted)", source: "app")
-        if !pasteboard.isAccessibilityTrusted {
-            // Make the permission gap visible instead of silently copying.
+        if !pasteboard.isAccessibilityTrusted, !isScriptMode {
+            // Make the permission gap visible instead of silently copying. A
+            // scripted run must not raise a TCC prompt over the user's screen.
             pasteboard.requestAccessibility()
         }
         appIndex = AppIndex()
