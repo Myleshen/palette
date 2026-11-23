@@ -8,6 +8,8 @@ public enum CaptureMenuCommand: String, CaseIterable, Sendable {
     case revealLastCapture
     case showLastRecording
     case showLastScreenshot
+    case copyTextFromLastScreenshot
+    case openLastScreenshotLink
 }
 
 /// One row of the capture section: what it says and whether it applies now.
@@ -72,6 +74,18 @@ public enum CaptureMenu {
             CaptureMenuItemState(
                 command: .showLastScreenshot,
                 title: "Show Last Screenshot",
+                enabled: true,
+                visible: !(lastScreenshotPath ?? "").isEmpty
+            ),
+            CaptureMenuItemState(
+                command: .copyTextFromLastScreenshot,
+                title: "Copy Text from Last Screenshot",
+                enabled: true,
+                visible: !(lastScreenshotPath ?? "").isEmpty
+            ),
+            CaptureMenuItemState(
+                command: .openLastScreenshotLink,
+                title: "Open Detected Link",
                 enabled: true,
                 visible: !(lastScreenshotPath ?? "").isEmpty
             ),

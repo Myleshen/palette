@@ -31,9 +31,10 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
         // AXStandardWindow, so this stays where it is instead of going
         // full-screen, and a floating level keeps it above the app the user
         // came from.
-        // The toolbar needs ~780 pt; a small screenshot must not squeeze its
-        // buttons to nothing, so the window keeps a floor and letterboxes.
-        let width = max(820, size.width * scale)
+        // The toolbar needs ~920 pt with the OCR buttons; a small screenshot
+        // must not squeeze its buttons to nothing, so the window keeps a floor
+        // and letterboxes.
+        let width = max(960, size.width * scale)
         let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: width, height: max(360, size.height * scale + 44)),
             styleMask: [.titled, .closable, .resizable, .utilityWindow],
@@ -53,7 +54,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
         window.backgroundColor = theme.nsColor(theme.palette.bg)
         window.isOpaque = false
         window.isReleasedWhenClosed = false
-        window.contentMinSize = NSSize(width: 820, height: 320)
+        window.contentMinSize = NSSize(width: 960, height: 320)
         super.init(window: window)
         window.delegate = self
         window.contentView = NSHostingView(rootView: AnnotateView(
@@ -418,6 +419,8 @@ struct AnnotateView: View {
                 .keyboardShortcut("z", modifiers: .command)
             Button("Copy") { copyImage() }
                 .keyboardShortcut("c", modifiers: .command)
+            Button("Copy Text") { recognizeText(openLink: false) }
+            Button("Open Link") { recognizeText(openLink: true) }
             Button("Save As") { saveAs() }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
             Button("Save") { save() }
@@ -692,6 +695,38 @@ struct AnnotateView: View {
         draft.unsaved = false
         notify("Copied to the clipboard")
         closeAfterToast()
+    }
+
+    /// On-device Vision read of the image being edited. The window stays open so
+    /// the result is visible; links are validated as http(s) before opening.
+    private func recognizeText(openLink: Bool) {
+        let image = editor.image
+        Task { @MainActor in
+            guard let recognition = try? await ImageTextRecognition.recognize(image) else {
+                notify("Text recognition failed")
+                return
+            }
+            if openLink {
+                guard let raw = recognition.firstLink,
+                      ImageTextRecognition.isOpenable(raw),
+                      let url = URL(string: raw) else {
+                    notify("No link found")
+                    return
+                }
+                NSWorkspace.shared.open(url)
+                notify("Opened \(url.host ?? raw)")
+            } else {
+                guard !recognition.text.isEmpty else {
+                    notify("No text found")
+                    return
+                }
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(recognition.text, forType: .string)
+                ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+                notify("Text copied (\(recognition.text.count) chars)")
+            }
+        }
     }
 
     private func closeAfterToast() {

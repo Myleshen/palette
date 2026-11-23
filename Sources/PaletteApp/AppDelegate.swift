@@ -1080,7 +1080,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.screenshotHUD.dismiss()
             self?.panel?.hide(activatePrevious: false)
         }
-        providers.append(ShotProvider(service: captureService, beforeCapture: hideForCapture))
+        providers.append(ShotProvider(
+            service: captureService,
+            bridge: hostProxy,
+            lastScreenshot: { [weak self] in self?.lastScreenshotURL },
+            beforeCapture: hideForCapture
+        ))
         providers.append(RecProvider(
             service: captureService,
             startRequest: { [weak self] in self?.presentRecordingOptions() }
@@ -1092,6 +1097,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ))
         providers.append(PinProvider(store: store, bridge: hostProxy))
         providers.append(ClipboardProvider(store: store, bridge: hostProxy))
+        providers.append(OCRProvider(
+            store: store,
+            bridge: hostProxy,
+            lastScreenshot: { [weak self] in self?.lastScreenshotURL }
+        ))
         let askService = AskService(store: store, configuration: configuration.ask)
         self.askService = askService
         providers.append(WebAppProvider(store: store, bridge: hostProxy, browser: configuration.webAppBrowser, favicons: configuration.window.favicons, onChange: { [weak self] in
@@ -1664,6 +1674,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openAnnotator(url)
     }
 
+    /// On-device Vision read of the last screenshot, shared by the two menu
+    /// commands. Nothing is uploaded.
+    private func copyTextFromLastScreenshot() {
+        Task { @MainActor in
+            guard let recognition = await lastScreenshotText() else { return }
+            guard !recognition.text.isEmpty else {
+                captureFeedback("No text found")
+                return
+            }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(recognition.text, forType: .string)
+            ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+            captureFeedback("Text copied (\(recognition.text.count) chars)")
+        }
+    }
+
+    private func openLastScreenshotLink() {
+        Task { @MainActor in
+            guard let recognition = await lastScreenshotText() else { return }
+            guard let raw = recognition.firstLink,
+                  ImageTextRecognition.isOpenable(raw),
+                  let url = URL(string: raw) else {
+                captureFeedback("No link found")
+                return
+            }
+            NSWorkspace.shared.open(url)
+            captureFeedback("Opened \(url.host ?? raw)")
+        }
+    }
+
+    private func lastScreenshotText() async -> RecognizedImageText? {
+        guard let url = lastScreenshotURL, FileManager.default.fileExists(atPath: url.path) else {
+            captureFeedback("The last screenshot is no longer on disk")
+            return nil
+        }
+        guard let image = NSImage(contentsOf: url) else {
+            captureFeedback("Could not read \(url.lastPathComponent)")
+            return nil
+        }
+        do {
+            return try await ImageTextRecognition.recognize(image)
+        } catch {
+            captureFeedback("Text recognition failed")
+            return nil
+        }
+    }
+
     // MARK: - Annotate and preview
 
     /// Palette is a menu-bar app. Editing and preview windows need a Dock icon
@@ -1952,6 +2010,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showLastRecording()
         case .showLastScreenshot:
             showLastScreenshot()
+        case .copyTextFromLastScreenshot:
+            copyTextFromLastScreenshot()
+        case .openLastScreenshotLink:
+            openLastScreenshotLink()
         }
     }
 

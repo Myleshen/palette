@@ -31,6 +31,8 @@ final class CaptureMenuTests: XCTestCase {
         XCTAssertEqual(items[.revealLastCapture]?.enabled, false)
         XCTAssertEqual(items[.showLastRecording]?.visible, false)
         XCTAssertEqual(items[.showLastScreenshot]?.visible, false)
+        XCTAssertEqual(items[.copyTextFromLastScreenshot]?.visible, false)
+        XCTAssertEqual(items[.openLastScreenshotLink]?.visible, false)
     }
 
     func testRecordingDisablesStartAndShowsElapsed() throws {
@@ -54,5 +56,11 @@ final class CaptureMenuTests: XCTestCase {
         let screenshotOnly = state(last: "/tmp/shot.png", lastScreenshot: "/tmp/shot.png")
         XCTAssertEqual(screenshotOnly[.showLastRecording]?.visible, false)
         XCTAssertEqual(screenshotOnly[.showLastScreenshot]?.visible, true)
+        XCTAssertEqual(screenshotOnly[.copyTextFromLastScreenshot]?.visible, true)
+        XCTAssertEqual(screenshotOnly[.openLastScreenshotLink]?.visible, true)
+
+        let recordingOnlyForOCR = state(last: "/tmp/rec.mov", lastRecording: "/tmp/rec.mov")
+        XCTAssertEqual(recordingOnlyForOCR[.copyTextFromLastScreenshot]?.visible, false)
+        XCTAssertEqual(recordingOnlyForOCR[.openLastScreenshotLink]?.visible, false)
     }
 }

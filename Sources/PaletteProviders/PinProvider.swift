@@ -41,6 +41,25 @@ public final class PinProvider: PaletteProvider, @unchecked Sendable {
                     value: .text("unpin")
                 ))
             }
+            // Image pins can be read even when they were pinned before OCR
+            // actions existed. The host resolves the pixels, full resolution
+            // where the original provider still has them.
+            if case .image = item.preview {
+                if !item.actions.contains(where: { $0.id == "ocr-copy" || $0.id == "ocr-pin-copy" }) {
+                    item.actions.append(PaletteAction(
+                        id: "ocr-pin-copy",
+                        title: "Copy Text (OCR)",
+                        kind: .custom
+                    ))
+                }
+                if !item.actions.contains(where: { $0.id == "ocr-open-link" || $0.id == "ocr-pin-open" }) {
+                    item.actions.append(PaletteAction(
+                        id: "ocr-pin-open",
+                        title: "Open Detected Link",
+                        kind: .custom
+                    ))
+                }
+            }
             return item
         }
     }
