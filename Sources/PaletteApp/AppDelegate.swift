@@ -195,7 +195,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
 
-        removeStaleLegacyFiles()
         let fallbackDatabase = paths.stateDir.appendingPathComponent("palette-fallback.sqlite")
         do {
             store = try PaletteStore(path: paths.databaseFile.path)
@@ -2796,25 +2795,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: - Housekeeping
-
-    /// Two paths only, both written by <= 2.15 and unread by 2.16: the old
-    /// Hammerspoon exporter and its profile directory.
-    private func removeStaleLegacyFiles() {
-        guard !isScriptMode else { return }
-        let home = NSHomeDirectory()
-        let stale = [
-            home + "/.hammerspoon/palette-webapps.lua",
-            home + "/Library/Caches/Palette/WebApps",
-        ]
-        for path in stale where FileManager.default.fileExists(atPath: path) {
-            do {
-                try FileManager.default.removeItem(atPath: path)
-                Log.shared.info("Removed stale \(path)", source: "cleanup")
-            } catch {
-                Log.shared.warn("Could not remove stale \(path): \(error.localizedDescription)", source: "cleanup")
-            }
-        }
-    }
 
     /// Every config write goes through here so the watcher can tell our save
     /// from an external edit and never reload in a loop.
