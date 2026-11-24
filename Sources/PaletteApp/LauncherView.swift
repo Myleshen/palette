@@ -1262,9 +1262,7 @@ struct LauncherRootView: View {
                     }
             }
             if controller.isSearching {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.7)
+                PaletteSpinner(color: theme.color(theme.palette.accent))
             }
             if let scope = controller.scopeLabel {
                 Text(scope)

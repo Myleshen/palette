@@ -780,7 +780,7 @@ struct AskWindowView: View {
                 AskMarkdownView(blocks: turn.blocks, theme: theme)
             } else if turn.status == .streaming {
                 HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
+                    PaletteSpinner()
                     Text(turn.progress ?? "Asking \(state.selectedModel.name)…")
                         .font(theme.font(size: theme.typography.subtitleSize))
                         .foregroundStyle(theme.color(theme.palette.fgMuted))
@@ -800,7 +800,7 @@ struct AskWindowView: View {
             case .streaming:
                 if !turn.answer.isEmpty {
                     HStack(spacing: 6) {
-                        ProgressView().controlSize(.mini)
+                        PaletteSpinner(size: 10)
                         // No model name here: a fallback may be the one talking.
                         Text("Streaming…")
                             .font(theme.font(size: metaSize))

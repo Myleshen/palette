@@ -9,6 +9,29 @@
   content card. The window frame is unchanged; there is a single 12 pt gap from
   the window edge.
 
+### Fixed
+
+- **`/neo` no longer hangs or quits the app.** The file index is answered from
+  the last snapshot (memory or the 24 h disk cache) in about a millisecond and
+  refreshed in the background, re-running the query when it lands. The `fd` walk
+  is streamed and capped at 150 000 entries, fuzzy filtering under 20 000 paths
+  runs in-process instead of spawning `fzf` per keystroke, and the deep home
+  walk only runs with indexing consent.
+- **SIGPIPE no longer terminates Palette.** Writing a child's stdin after it
+  exited (for example a cancelled `fzf`) killed the process silently; SIGPIPE is
+  ignored at startup and a closed stdin stops the write and logs it.
+- Clipboard images are no longer stored as SQLite BLOBs. They live as
+  content-addressed files under the state directory with a `clipboard_images`
+  reference table, cascading deletes, dedupe, a 200 MB cap and an orphan sweep;
+  existing databases migrate with a verified backup and one VACUUM. In the test
+  fixture the database dropped from 31.8 MB to 284 KiB.
+- Clipboard queries use `(pinned, created)` and `(kind, created)` indexes.
+- Panel moves and the Settings window swap are deferred out of the SwiftUI layout
+  pass, removing the reentrant-layout fault, and the AppKit `ProgressView`
+  configuration fault (hundreds of lines per session) is replaced by a small
+  SwiftUI spinner.
+- The Hammerspoon bridge and its legacy cache cleanup are gone.
+
 ## 2.18.1 — 2026-11-23
 
 ### Fixed

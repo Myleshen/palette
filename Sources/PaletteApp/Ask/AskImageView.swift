@@ -87,7 +87,7 @@ struct AskImageView: View {
             } else {
                 HStack(spacing: 8) {
                     if loading {
-                        ProgressView().controlSize(.small)
+                        PaletteSpinner()
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(alt.isEmpty ? "Image" : alt)
