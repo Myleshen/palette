@@ -56,9 +56,15 @@ final class CleanupPassTests: XCTestCase {
     // MARK: - Retention
 
     private func makeStore() throws -> (PaletteStore, URL) {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("palette-retention-\(UUID().uuidString).sqlite")
-        return (try PaletteStore(path: url.path), url)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-retention-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("palette.sqlite")
+        let store = try PaletteStore(
+            path: url.path,
+            imagesDirectory: root.appendingPathComponent("clipboard")
+        )
+        return (store, root)
     }
 
     func testClipboardRetentionKeepsPinnedAndEnforcesImageCap() async throws {
@@ -102,10 +108,16 @@ final class CleanupPassTests: XCTestCase {
         let (store, url) = try makeStore()
         defer { try? FileManager.default.removeItem(at: url) }
 
-        _ = try await store.insertClipboardImage(
-            png: Data(repeating: 7, count: 400_000), thumbnail: nil,
-            width: 10, height: 10, maxEntries: 100
-        )
+        // Image bytes are files now, so fill the database with text to make the
+        // freelist large enough for the vacuum gate.
+        let old = Date().addingTimeInterval(-40 * 24 * 60 * 60)
+        for index in 0..<30 {
+            let text = String(
+                repeating: Character(UnicodeScalar(65 + index)!),
+                count: 190_000
+            )
+            _ = try await store.insertClipboard(text: text, maxEntries: 100, at: old)
+        }
         let first = try await store.maintain(
             clipboardRetentionDays: 30, maxImageBytes: 0, askRetentionDays: 30
         )
