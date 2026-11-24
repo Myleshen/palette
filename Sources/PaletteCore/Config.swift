@@ -264,12 +264,9 @@ public struct WindowConfig: Sendable, Equatable {
     /// Usable floor for small screens; clamped to the visible area.
     public static let minPanelWidth: Double = 480
     public static let minPanelHeight: Double = 360
-    /// Embedded terminal inset and height cap inside the launcher frame. The
-    /// window never changes size; only the terminal content sits slightly
-    /// smaller inside it.
-    public static let terminalInsetWidth: Double = 24
-    public static let terminalInsetHeight: Double = 16
-    public static let terminalContentHeightShare: Double = 0.82
+    /// Uniform gap between the stationary window edge and the terminal card
+    /// that fills the launcher under the search pill.
+    public static let terminalInset: Double = 12
     /// Auto preview sits beside only when the fixed frame leaves a useful list.
     public static let besidePreviewMinWidth: Double = 800
 
@@ -298,13 +295,12 @@ public struct WindowConfig: Sendable, Equatable {
         return CGSize(width: width.rounded(.down), height: height.rounded(.down))
     }
 
-    /// The terminal content size for a content area that already had the
-    /// insets taken out: full width, 82% of the height, so the pane reads
-    /// slightly smaller than the window it lives in.
+    /// The terminal takes the whole area under the search pill, inset by one
+    /// uniform gap so the card never touches the window edge.
     public static func terminalContentSize(in available: CGSize) -> CGSize {
         CGSize(
-            width: max(1, available.width),
-            height: max(1, available.height * CGFloat(Self.terminalContentHeightShare))
+            width: max(1, available.width - Self.terminalInset * 2),
+            height: max(1, available.height - Self.terminalInset * 2)
         )
     }
 

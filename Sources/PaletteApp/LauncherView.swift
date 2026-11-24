@@ -774,24 +774,45 @@ struct LauncherRootView: View {
     }
 
     /// One grid: search pill, the provider switcher, cards, then the footer.
+    /// The terminal replaces the whole grid below the pill: it spans the rail's
+    /// width, sits over the footer and takes every remaining point.
+    @ViewBuilder
     private func pillLayout() -> some View {
-        VStack(spacing: LauncherMetrics.cardGap) {
-            searchBar
-            if controller.showsProviderBar {
-                topProviderBar
-            }
-            HStack(alignment: .top, spacing: LauncherMetrics.cardGap) {
-                if controller.providerBar == .left {
-                    rail()
+        if controller.terminalActive {
+            terminalLayout
+        } else {
+            VStack(spacing: LauncherMetrics.cardGap) {
+                searchBar
+                if controller.showsProviderBar {
+                    topProviderBar
                 }
-                contentArea
+                HStack(alignment: .top, spacing: LauncherMetrics.cardGap) {
+                    if controller.providerBar == .left {
+                        rail()
+                    }
+                    contentArea
+                }
+                if theme.footer.show {
+                    footer
+                }
             }
-            if theme.footer.show {
-                footer
+            .padding(LauncherMetrics.outerInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+    }
+
+    private var terminalLayout: some View {
+        VStack(spacing: 0) {
+            searchBar
+                .padding(.horizontal, LauncherMetrics.outerInset)
+                .padding(.top, LauncherMetrics.outerInset)
+            GeometryReader { proxy in
+                let size = WindowConfig.terminalContentSize(in: proxy.size)
+                content
+                    .frame(width: size.width, height: size.height)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .padding(LauncherMetrics.outerInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     /// Horizontal strip: one fixed-height row of rail-style chips. Only whole
@@ -1288,14 +1309,9 @@ struct LauncherRootView: View {
     @ViewBuilder
     private var content: some View {
         if controller.terminalActive {
-            GeometryReader { proxy in
-                let size = WindowConfig.terminalContentSize(in: proxy.size)
-                TerminalPane(controller: controller, theme: theme)
-                    .frame(width: size.width, height: size.height)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .padding(.horizontal, CGFloat(WindowConfig.terminalInsetWidth))
-            .padding(.vertical, CGFloat(WindowConfig.terminalInsetHeight))
+            TerminalPane(controller: controller, theme: theme)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .cardSurface(theme: theme)
         } else if controller.scratchpadActive {
             ScratchpadView(controller: controller, theme: theme)
                 .padding(LauncherMetrics.innerPadding)

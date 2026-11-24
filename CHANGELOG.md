@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.18.2 — 2026-11-24
+
+### Changed
+
+- The embedded terminal now fills the whole area below the search pill — the
+  provider rail and the actions footer step aside — instead of sitting inside the
+  content card. The window frame is unchanged; there is a single 12 pt gap from
+  the window edge.
+
 ## 2.18.1 — 2026-11-23
 
 ### Fixed
