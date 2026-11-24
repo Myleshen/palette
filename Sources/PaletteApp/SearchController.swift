@@ -1441,6 +1441,12 @@ public final class SearchController: ObservableObject, HostBridge {
             clearAfterMs: clearAfterMs ?? (concealed ? configuration.clipboard.clearAfterMs : nil)
         )
         setStatus(concealed ? "Copied securely (clears automatically)" : "Copied to clipboard", duration: 2)
+        // Anything Palette copies on the user's behalf belongs in our own
+        // history too (OCR, preview buttons, copy actions). Concealed copies
+        // are deliberately never stored.
+        if !concealed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            _ = try? await store.insertClipboard(text: text, maxEntries: configuration.clipboard.maxEntries)
+        }
     }
 
     // MARK: - Presentation support

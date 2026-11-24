@@ -33,7 +33,8 @@
 - The Hammerspoon bridge and its legacy cache cleanup are gone.
 - **Copy Text (OCR) did nothing.** The clipboard action routed on the value
   (which holds the entry id) instead of the action id, so it fell through
-  silently. It copies the recognised text now and reports the character count.
+  silently. It copies the recognised text now, reports the character count, and
+  records the text in Palette's own clipboard history (concealed copies never).
 - Typing in a bound provider no longer blanks the list between keystrokes; the
   previous rows stay visible until the next results replace them, so `/neo`
   (and other process-backed searches) stop flickering.
