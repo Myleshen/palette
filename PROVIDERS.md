@@ -50,7 +50,7 @@ Settings → Providers:
 ```toml
 [providers]
 global = [
-  "calc", "search", "web", "win", "unit", "zj",
+  "calc", "search", "web", "win", "zj",
   "bookmark", "pins", "system", "timer", "awake", "cheat",
 ]
 ```

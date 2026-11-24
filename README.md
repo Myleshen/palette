@@ -270,7 +270,6 @@ trigger word:
 | `/rec` | start or stop a screen recording |
 | `/color` | pick a colour and copy its hex |
 | `/win <query>` | switch to any open window |
-| `/unit <amount> <unit> in <unit>` | unit and currency conversion |
 | `/stats` | disk, memory, load, battery, uptime |
 | `/ssh <query>` | hosts from `~/.ssh/config` |
 | `/docker <query>` | containers: start, stop, restart, logs |
@@ -286,7 +285,7 @@ A trailing slash browses a directory breadth-first: `/edit ~/dev/` shows the
 direct children of `~/dev` first, then the next level.
 
 Unprefixed queries search apps (always) plus exactly the providers listed in
-`[providers] global` (default `calc`, `search`, `web`, `win`, `unit`, `zj`,
+`[providers] global` (default `calc`, `search`, `web`, `win`, `zj`,
 `bookmark`, `pins`, `system`, `timer`, `awake`, `cheat`). Settings → Providers →
 **Plain queries** edits that allowlist, so you can add a provider or drop one — for
 example remove `calc`. `/trigger` still targets one provider. `= 2+2` and bare
@@ -804,7 +803,7 @@ changes. Duplicate aliases or triggers are rejected as you set them.
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]
 disabled = []
-global = ["calc", "search", "web", "win", "unit", "zj",
+global = ["calc", "search", "web", "win", "zj",
           "bookmark", "pins", "system", "timer", "awake", "cheat"]
 
 [providers.aliases]
@@ -865,7 +864,7 @@ mono_size = 0
 order = ["apps", "clip", "port", "git", "proj"]
 disabled = []
 global = [
-  "calc", "search", "web", "win", "unit", "zj",
+  "calc", "search", "web", "win", "zj",
   "bookmark", "pins", "system", "timer", "awake", "cheat",
 ]                              # plain queries search exactly these; apps always
 

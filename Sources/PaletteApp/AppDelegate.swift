@@ -1112,7 +1112,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let docker = DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp, bridge: hostProxy)
         docker.onRefresh = { [weak self] in self?.searchController?.refreshResults() }
         providers.append(docker)
-        providers.append(UnitsProvider(bridge: hostProxy))
         providers.append(WindowProvider(launcher: launcher))
         providers.append(ShotsProvider(service: captureService, bridge: hostProxy))
         providers.append(CheatsheetProvider(config: configuration.cheatsheets))

@@ -472,7 +472,7 @@ public struct PaletteConfig: Sendable, Equatable {
 
     /// Providers a plain query searches out of the box, before user changes.
     public static let defaultGlobalProviders = [
-        "calc", "search", "web", "win", "unit", "zj",
+        "calc", "search", "web", "win", "zj",
         "bookmark", "pins", "system", "timer", "awake", "cheat",
     ]
 
@@ -1219,7 +1219,7 @@ public enum ConfigLoader {
         # Plain queries search only these providers (apps always); /trigger
         # targets one.
         global = [
-          "calc", "search", "web", "win", "unit", "zj",
+          "calc", "search", "web", "win", "zj",
           "bookmark", "pins", "system", "timer", "awake", "cheat",
         ]
         # Providers whose missing-tool prompt was already answered.
