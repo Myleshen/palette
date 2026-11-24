@@ -17,6 +17,12 @@ public struct PathsProviderConfiguration: Sendable, Equatable {
     public var maxResults: Int
     public var terminalApp: String
     public var freeform: Bool
+    /// Hard cap on one walk; the disk cache refuses bigger snapshots.
+    public var maxEntries: Int
+    /// How long an in-memory snapshot is served before a background refresh.
+    public var refreshInterval: TimeInterval
+    /// The 2.18 home-indexing consent. The whole-home walk is skipped without it.
+    public var homeIndexingAllowed: Bool
 
     public init(
         id: String,
@@ -32,7 +38,10 @@ public struct PathsProviderConfiguration: Sendable, Equatable {
         secondary: String = "reveal",
         maxResults: Int = 50,
         terminalApp: String = "kitty",
-        freeform: Bool = false
+        freeform: Bool = false,
+        maxEntries: Int = FDEnumerator.defaultMaxEntries,
+        refreshInterval: TimeInterval = 300,
+        homeIndexingAllowed: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -48,6 +57,9 @@ public struct PathsProviderConfiguration: Sendable, Equatable {
         self.maxResults = maxResults
         self.terminalApp = terminalApp
         self.freeform = freeform
+        self.maxEntries = maxEntries
+        self.refreshInterval = refreshInterval
+        self.homeIndexingAllowed = homeIndexingAllowed
     }
 }
 
@@ -58,11 +70,13 @@ private struct PathSnapshot: Sendable {
     let directories: Set<String>
     /// True when the rows came from a live walk, which already validated them.
     let verified: Bool
+    let builtAt: Date
 
-    init(entries: [PathEntry], verified: Bool) {
+    init(entries: [PathEntry], verified: Bool, builtAt: Date = Date()) {
         var paths: [String] = []
         paths.reserveCapacity(entries.count)
         var directories: Set<String> = []
+        directories.reserveCapacity(entries.count / 8)
         for entry in entries {
             paths.append(entry.path)
             if entry.isDirectory { directories.insert(entry.path) }
@@ -70,61 +84,72 @@ private struct PathSnapshot: Sendable {
         self.paths = paths
         self.directories = directories
         self.verified = verified
+        self.builtAt = builtAt
     }
 }
 
-private actor PathCache {
-    private struct Entry {
-        var date: Date
-        var snapshot: PathSnapshot
+/// The last good snapshot plus the one in-flight refresh. A keystroke reads
+/// the snapshot under the lock and never waits on `fd`.
+private final class PathIndexState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var snapshot: PathSnapshot?
+    private var refreshing = false
+    private var diskLoad: Task<Void, Never>?
+    private var homeAllowed: Bool
+
+    init(homeAllowed: Bool) {
+        self.homeAllowed = homeAllowed
     }
 
-    private struct InFlight {
-        let id: UUID
-        let task: Task<PathSnapshot, Error>
+    func current() -> PathSnapshot? {
+        lock.withLock { snapshot }
     }
 
-    private var entries: [String: Entry] = [:]
-    private var inFlight: [String: InFlight] = [:]
-    private let ttl: TimeInterval = 60
-
-    func snapshot(for key: String) -> PathSnapshot? {
-        guard let entry = entries[key], Date().timeIntervalSince(entry.date) < ttl else { return nil }
-        return entry.snapshot
+    func allowHome() {
+        lock.withLock { homeAllowed = true }
     }
 
-    /// One walk per key: a keystroke that lands mid-scan joins the running task
-    /// instead of cancelling it. The walk is an unstructured task, so a
-    /// cancelled caller only abandons its wait.
-    func snapshot(
-        for key: String,
-        loading load: @Sendable @escaping () async throws -> PathSnapshot
-    ) async throws -> PathSnapshot {
-        if let cached = snapshot(for: key) { return cached }
-        if let running = inFlight[key] { return try await running.task.value }
+    func homeIsAllowed() -> Bool {
+        lock.withLock { homeAllowed }
+    }
 
-        let id = UUID()
-        let task = Task { [weak self] () throws -> PathSnapshot in
-            do {
-                let snapshot = try await load()
-                await self?.store(snapshot, key: key, id: id)
-                return snapshot
-            } catch {
-                await self?.clear(key: key, id: id)
-                throw error
-            }
+    func storeLoaded(_ loaded: PathSnapshot) {
+        lock.withLock {
+            // A walk that finished first is newer than the disk cache.
+            if snapshot == nil { snapshot = loaded }
         }
-        inFlight[key] = InFlight(id: id, task: task)
-        return try await task.value
     }
 
-    private func store(_ snapshot: PathSnapshot, key: String, id: UUID) {
-        entries[key] = Entry(date: Date(), snapshot: snapshot)
-        if inFlight[key]?.id == id { inFlight[key] = nil }
+    func diskLoadTask() -> Task<Void, Never>? {
+        lock.withLock { diskLoad }
     }
 
-    private func clear(key: String, id: UUID) {
-        if inFlight[key]?.id == id { inFlight[key] = nil }
+    func setDiskLoad(_ task: Task<Void, Never>) {
+        lock.withLock { diskLoad = task }
+    }
+
+    /// Returns true when this call owns the refresh.
+    func beginRefresh() -> Bool {
+        lock.withLock {
+            guard !refreshing else { return false }
+            refreshing = true
+            return true
+        }
+    }
+
+    /// Returns true when a refresh was in flight, so exactly one completion
+    /// notifies the host.
+    func finishRefresh(_ fresh: PathSnapshot) -> Bool {
+        lock.withLock {
+            snapshot = fresh
+            let wasRefreshing = refreshing
+            refreshing = false
+            return wasRefreshing
+        }
+    }
+
+    func endRefresh() {
+        lock.withLock { refreshing = false }
     }
 }
 
@@ -134,7 +159,9 @@ private actor PathCache {
 public struct PathDiskCache: Sendable {
     public static let maxAge: TimeInterval = 24 * 60 * 60
     private static let version = 1
-    private static let maxEntries = 100_000
+    // shortcut: a snapshot above this is not cached (the walk cap is 150k);
+    // raise both together if the cap grows.
+    private static let maxEntries = 200_000
     private static let maxBytes = 64 * 1024 * 1024
 
     private struct File: Codable {
@@ -151,8 +178,9 @@ public struct PathDiskCache: Sendable {
         self.directory = directory
     }
 
+    /// Blocking JSON decode: callers must be off the main thread.
     public func load(signature: String, now: Date = Date()) -> [PathEntry]? {
-        guard let data = try? Data(contentsOf: url(for: signature)),
+        guard let data = try? Data(contentsOf: url(for: signature), options: .mappedIfSafe),
               data.count <= Self.maxBytes,
               let file = try? JSONDecoder().decode(File.self, from: data),
               file.version == Self.version,
@@ -194,6 +222,13 @@ public struct PathDiskCache: Sendable {
 }
 
 public final class PathsProvider: PaletteProvider, @unchecked Sendable {
+    /// Posted once per finished refresh with the provider id. The host re-runs
+    /// the current query so results replace the "Indexing files…" row without
+    /// the user retyping.
+    public static let indexUpdatedNotification = Notification.Name("palette.pathsIndexUpdated")
+    /// Below this a per-keystroke `fzf` process costs more than a scan.
+    public static let fzfThreshold = 20_000
+
     public let descriptor: ProviderDescriptor
     public let configuration: PathsProviderConfiguration
 
@@ -202,7 +237,7 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
     private let ranker: any FuzzyPathRanking
     private let launcher: LauncherService
     private let diskCache: PathDiskCache
-    private let cache = PathCache()
+    private let index: PathIndexState
 
     public init(
         configuration: PathsProviderConfiguration,
@@ -218,6 +253,7 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         self.diskCache = PathDiskCache(directory: cacheDirectory)
         self.enumerator = enumerator
         self.ranker = ranker
+        self.index = PathIndexState(homeAllowed: configuration.homeIndexingAllowed)
         self.descriptor = ProviderDescriptor(
             id: configuration.id,
             name: configuration.name,
@@ -230,7 +266,12 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
-        let missing = ["fd", "fzf"].filter { ToolLocator.shared.path(for: $0) == nil }
+        #if DEBUG
+        // A keystroke must never do I/O on the main thread: fd/stat, fzf and the
+        // cache decode all run on the caller's background executor.
+        dispatchPrecondition(condition: .notOnQueue(.main))
+        #endif
+        let missing = pathToolMissing
         if !missing.isEmpty {
             guard request.isBound else { return [] }
             return [installRow(missing: missing)]
@@ -240,27 +281,18 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
             return browsed
         }
 
-        let snapshot = try await snapshot()
-        guard !snapshot.paths.isEmpty else {
-            return freeformItems(for: request.text)
+        if let snapshot = await snapshotServingRefresh() {
+            return try await rankedItems(snapshot: snapshot, request: request)
         }
-        let ranked = try await ranker.rank(
-            paths: snapshot.paths,
-            query: request.text,
-            limit: min(configuration.maxResults, max(1, request.limit))
-        )
 
-        var items = ranked.enumerated().map { index, path in
-            item(
-                for: path,
-                rank: index,
-                isDirectory: snapshot.verified ? snapshot.directories.contains(path) : nil
-            )
-        }
-        for extra in freeformItems(for: request.text) where !items.contains(where: { $0.id == extra.id }) {
-            items.insert(extra, at: 0)
-        }
-        return items
+        guard request.isBound else { return freeformItems(for: request.text) }
+        let fallback = canIndex ? indexingRow() : homeConsentRow()
+        return freeformItems(for: request.text) + [fallback]
+    }
+
+    /// `fd` is required; `fzf` is optional and only used above the threshold.
+    private var pathToolMissing: [String] {
+        ToolLocator.shared.path(for: "fd") == nil ? ["fd"] : []
     }
 
     /// True when this provider walks the whole home folder, which is the walk
@@ -269,16 +301,25 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         scope.expandedRoots.contains(NSHomeDirectory())
     }
 
-    /// Loads the disk cache or walks the scope now. Called at launch so the
-    /// first bound query is warm. The whole home folder is only walked once the
-    /// user consented: it is the walk that raises macOS folder prompts.
-    public func prewarm(homeConsent: Bool) async {
-        guard ToolLocator.shared.path(for: "fd") != nil else { return }
-        guard homeConsent || !indexesHomeFolder else { return }
-        _ = try? await snapshot()
+    /// Keystrokes and the notch between them share one flag.
+    private var canIndex: Bool {
+        !indexesHomeFolder || index.homeIsAllowed()
     }
 
-    private var cacheKey: String { "\(configuration.scopeName):\(configuration.kind.rawValue)" }
+    /// Loads the disk cache and refreshes now. Called at launch so the first
+    /// bound query is served from memory; the walk itself never runs on the
+    /// caller's actor and never blocks a query.
+    public func prewarm(homeConsent: Bool) async {
+        if homeConsent { index.allowHome() }
+        guard ToolLocator.shared.path(for: "fd") != nil, canIndex else { return }
+        await loadDiskCache()
+        if let snapshot = index.current(),
+           snapshot.verified,
+           Date().timeIntervalSince(snapshot.builtAt) < configuration.refreshInterval {
+            return
+        }
+        startRefresh()
+    }
 
     /// Identifies the walk: every field that changes which paths `fd` sees.
     private var scopeSignature: String {
@@ -293,20 +334,107 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         ].joined(separator: "|")
     }
 
-    private func snapshot() async throws -> PathSnapshot {
-        let signature = scopeSignature
-        let disk = diskCache
+    /// The last snapshot, never waiting on a walk. A stale one is served as-is
+    /// while exactly one refresh runs in the background.
+    private func snapshotServingRefresh() async -> PathSnapshot? {
+        if let snapshot = index.current() {
+            if !snapshot.verified
+                || Date().timeIntervalSince(snapshot.builtAt) >= configuration.refreshInterval {
+                startRefresh()
+            }
+            return snapshot
+        }
+        await loadDiskCache()
+        if let snapshot = index.current() {
+            startRefresh()
+            return snapshot
+        }
+        startRefresh()
+        return nil
+    }
+
+    /// One JSON decode per launch, off the main thread, shared by every
+    /// keystroke that lands while it is still running.
+    private func loadDiskCache() async {
+        let task: Task<Void, Never>
+        if let existing = index.diskLoadTask() {
+            task = existing
+        } else {
+            let disk = diskCache
+            let signature = scopeSignature
+            let index = self.index
+            task = Task.detached(priority: .utility) {
+                guard let entries = disk.load(signature: signature) else { return }
+                index.storeLoaded(PathSnapshot(entries: entries, verified: false))
+            }
+            index.setDiskLoad(task)
+        }
+        await task.value
+    }
+
+    private func startRefresh() {
+        guard canIndex, index.beginRefresh() else { return }
         let enumerator = self.enumerator
         let scope = self.scope
         let kind = configuration.kind
-        return try await cache.snapshot(for: cacheKey) {
-            if let cached = disk.load(signature: signature) {
-                return PathSnapshot(entries: cached, verified: false)
+        let cap = max(1, configuration.maxEntries)
+        let signature = scopeSignature
+        let disk = diskCache
+        let index = self.index
+        let providerID = configuration.id
+        let scopeLabel = scope.roots.joined(separator: ",")
+
+        // The start line always lands, so a hung build leaves a breadcrumb in
+        // palette.log; the finish line carries the size and duration.
+        Log.shared.info("Index build started scope=\(scopeLabel) cap=\(cap)", source: "paths")
+        Task.detached(priority: .utility) {
+            let started = Date()
+            do {
+                let entries = try await enumerator.enumerateEntries(scope: scope, kind: kind, maxEntries: cap)
+                try Task.checkCancellation()
+                let duration = Date().timeIntervalSince(started)
+                disk.save(entries, signature: signature)
+                let finished = index.finishRefresh(PathSnapshot(entries: entries, verified: true))
+                Log.shared.info(
+                    "Index build finished scope=\(scopeLabel) entries=\(entries.count) duration=\(String(format: "%.1f", duration))s",
+                    source: "paths"
+                )
+                if finished {
+                    NotificationCenter.default.post(name: Self.indexUpdatedNotification, object: providerID)
+                }
+            } catch {
+                index.endRefresh()
+                Log.shared.warn(
+                    "Index build failed scope=\(scopeLabel) after \(String(format: "%.1f", Date().timeIntervalSince(started)))s: \(error.localizedDescription)",
+                    source: "paths"
+                )
             }
-            let entries = try await enumerator.enumerateEntries(scope: scope, kind: kind)
-            disk.save(entries, signature: signature)
-            return PathSnapshot(entries: entries, verified: true)
         }
+    }
+
+    private func rankedItems(snapshot: PathSnapshot, request: SearchRequest) async throws -> [PaletteItem] {
+        let limit = min(configuration.maxResults, max(1, request.limit))
+        let ranker: any FuzzyPathRanking = snapshot.paths.count < Self.fzfThreshold
+            || ToolLocator.shared.path(for: "fzf") == nil
+            ? RankingPathRanker()
+            : self.ranker
+        let ranked = try await ranker.rank(
+            paths: snapshot.paths,
+            query: request.text,
+            limit: limit
+        )
+
+        var items = ranked.enumerated().map { index, path in
+            item(
+                for: path,
+                rank: index,
+                isDirectory: snapshot.verified ? snapshot.directories.contains(path) : nil
+            )
+        }
+        for extra in freeformItems(for: request.text) where !items.contains(where: { $0.id == extra.id }) {
+            items.insert(extra, at: 0)
+        }
+        return items
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
@@ -472,10 +600,39 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         return path
     }
 
+    private func indexingRow() -> PaletteItem {
+        PaletteItem(
+            id: "\(configuration.id):indexing",
+            title: "Indexing files…",
+            subtitle: "Results appear when the \(configuration.scopeName) scan finishes",
+            icon: .symbol("hourglass"),
+            score: 10_000,
+            providerID: configuration.id,
+            providerName: configuration.name
+        )
+    }
+
+    private func homeConsentRow() -> PaletteItem {
+        PaletteItem(
+            id: "\(configuration.id):home-consent",
+            title: "Home indexing is off",
+            subtitle: "Turn on “Index my home folder” in Settings › File indexing",
+            icon: .symbol("lock.shield"),
+            score: 10_000,
+            trouble: ItemTrouble(
+                title: "Home indexing is off",
+                detail: "Palette only walks ~ after you opt in.",
+                settingsAnchor: "providers-indexing"
+            ),
+            providerID: configuration.id,
+            providerName: configuration.name
+        )
+    }
+
     private func installRow(missing: [String]) -> PaletteItem {
         PaletteItem(
             id: "install-tools",
-            title: "Install fd and fzf",
+            title: "Install fd",
             subtitle: "Missing \(missing.joined(separator: " and ")) — run brew install fd fzf",
             icon: .symbol("exclamationmark.triangle"),
             score: 10_000,

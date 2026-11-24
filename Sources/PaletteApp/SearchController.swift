@@ -102,6 +102,7 @@ public final class SearchController: ObservableObject, HostBridge {
     private var searchTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var statusTask: Task<Void, Never>?
+    private var pathsIndexObserver: NSObjectProtocol?
     private var promptContinuation: CheckedContinuation<String?, Never>?
     private var resetting = false
     private var hasShown = false
@@ -124,6 +125,23 @@ public final class SearchController: ObservableObject, HostBridge {
         self.pasteboard = pasteboard
         self.themeManager = themeManager
         self.clipboardMonitor = clipboardMonitor
+        // A finished background walk re-runs the current query, so the
+        // "Indexing files…" row is replaced without retyping.
+        pathsIndexObserver = NotificationCenter.default.addObserver(
+            forName: PathsProvider.indexUpdatedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let id = note.object as? String else { return }
+            Task { @MainActor in self?.pathsIndexDidUpdate(id) }
+        }
+    }
+
+    private func pathsIndexDidUpdate(_ providerID: String) {
+        guard panel?.isVisible == true else { return }
+        let bound = registry.parser.parse(query).providerID == providerID
+        guard bound || scopeProviderID == providerID else { return }
+        scheduleSearch(debounce: false)
     }
 
     public var selectedItem: PaletteItem? {
