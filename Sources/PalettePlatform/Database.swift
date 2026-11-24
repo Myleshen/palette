@@ -116,14 +116,29 @@ public struct MaintenanceReport: Sendable, Equatable {
 public actor PaletteStore {
     private var database: OpaquePointer?
     private let filePath: String
+    private let imageFiles: ClipboardImageFiles
+    /// True only when moving old image BLOBs out of the table failed; reads
+    /// then fall back to the columns so a full disk never hides history.
+    private var hasLegacyBlobColumns = false
     /// VACUUM rewrites the whole file, so at most once per launch.
     private var hasVacuumed = false
     /// Bumped by every clipboard write so the provider's search snapshot knows
     /// when its copy is stale without polling the table.
     private var clipboardRevisionValue = 0
 
-    public init(path: String) throws {
+    private static let imageCacheLimit = 64 << 20
+    private static let thumbnailCacheLimit = 16 << 20
+    private var imageCache: [String: Data] = [:]
+    private var imageCacheBytes = 0
+    private var thumbnailCache: [String: Data] = [:]
+    private var thumbnailCacheBytes = 0
+    private var loggedMissingFiles: Set<String> = []
+
+    public init(path: String, imagesDirectory: URL? = nil) throws {
         self.filePath = path
+        self.imageFiles = ClipboardImageFiles(
+            directory: imagesDirectory ?? ClipboardImageFiles.defaultDirectory(forDatabase: path)
+        )
         try FileManager.default.createDirectory(
             at: URL(fileURLWithPath: path).deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -137,7 +152,11 @@ public actor PaletteStore {
         try Self.execute("PRAGMA synchronous=NORMAL;", on: handle)
         try Self.execute("PRAGMA busy_timeout=3000;", on: handle)
         try Self.execute("PRAGMA foreign_keys=ON;", on: handle)
-        try Self.migrate(handle)
+        hasLegacyBlobColumns = try Self.migrate(
+            handle,
+            imageFiles: imageFiles,
+            databasePath: path
+        )
     }
 
     deinit {
@@ -146,7 +165,11 @@ public actor PaletteStore {
         }
     }
 
-    private static func migrate(_ database: OpaquePointer?) throws {
+    private static func migrate(
+        _ database: OpaquePointer?,
+        imageFiles: ClipboardImageFiles,
+        databasePath: String
+    ) throws -> Bool {
         try execute("""
         CREATE TABLE IF NOT EXISTS items (
             id TEXT PRIMARY KEY,
@@ -163,12 +186,9 @@ public actor PaletteStore {
             created REAL NOT NULL,
             pinned INTEGER NOT NULL DEFAULT 0,
             kind TEXT NOT NULL DEFAULT 'text',
-            image BLOB,
-            thumbnail BLOB,
             width INTEGER NOT NULL DEFAULT 0,
             height INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS clipboard_created ON clipboard(created DESC);
 
         CREATE TABLE IF NOT EXISTS meta (
             key TEXT PRIMARY KEY,
@@ -255,12 +275,6 @@ public actor PaletteStore {
         if try !hasColumn("clipboard", "kind", on: database) {
             try execute("ALTER TABLE clipboard ADD COLUMN kind TEXT NOT NULL DEFAULT 'text';", on: database)
         }
-        if try !hasColumn("clipboard", "image", on: database) {
-            try execute("ALTER TABLE clipboard ADD COLUMN image BLOB;", on: database)
-        }
-        if try !hasColumn("clipboard", "thumbnail", on: database) {
-            try execute("ALTER TABLE clipboard ADD COLUMN thumbnail BLOB;", on: database)
-        }
         if try !hasColumn("clipboard", "width", on: database) {
             try execute("ALTER TABLE clipboard ADD COLUMN width INTEGER NOT NULL DEFAULT 0;", on: database)
         }
@@ -270,6 +284,289 @@ public actor PaletteStore {
         if try !hasColumn("ask_chat_messages", "sources", on: database) {
             try execute("ALTER TABLE ask_chat_messages ADD COLUMN sources TEXT;", on: database)
         }
+
+        // Image bytes live in content-addressed files, never in the table.
+        try execute("""
+        CREATE TABLE IF NOT EXISTS clipboard_images (
+            clipboard_id TEXT PRIMARY KEY REFERENCES clipboard(id) ON DELETE CASCADE,
+            sha256 TEXT NOT NULL,
+            relative_path TEXT NOT NULL,
+            thumb_relative_path TEXT,
+            byte_count INTEGER NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS clipboard_images_sha ON clipboard_images(sha256);
+        """, on: database)
+
+        var legacyBlobsRemain = false
+        let hasImage = try hasColumn("clipboard", "image", on: database)
+        let hasThumbnail = try hasColumn("clipboard", "thumbnail", on: database)
+        if hasImage || hasThumbnail {
+            do {
+                try migrateImageBlobs(
+                    database,
+                    imageFiles: imageFiles,
+                    databasePath: databasePath
+                )
+                try rebuildClipboardTable(database)
+                try run(database, """
+                INSERT INTO meta (key, value) VALUES ('clipboard_vacuum_pending', '1')
+                ON CONFLICT(key) DO UPDATE SET value = '1';
+                """, [])
+            } catch {
+                // Keep the old columns and history; the next launch retries.
+                legacyBlobsRemain = true
+                Log.shared.warn(
+                    "Clipboard image migration deferred: \(error.localizedDescription)",
+                    source: "storage"
+                )
+            }
+        }
+
+        try execute("""
+        CREATE INDEX IF NOT EXISTS clipboard_created ON clipboard(created DESC);
+        CREATE INDEX IF NOT EXISTS clipboard_pinned_created ON clipboard(pinned DESC, created DESC);
+        CREATE INDEX IF NOT EXISTS clipboard_kind_created ON clipboard(kind, created DESC);
+        """, on: database)
+        return legacyBlobsRemain
+    }
+
+    private struct LegacyImageRow {
+        var id: String
+        var image: Data?
+        var thumbnail: Data?
+        var width: Int
+        var height: Int
+    }
+
+    /// Copies every legacy image/thumbnail BLOB to the files store, verifies the
+    /// bytes, then records the file in `clipboard_images`. The table rebuild is
+    /// a separate step, so a failure here leaves the original rows intact.
+    private static func migrateImageBlobs(
+        _ database: OpaquePointer?,
+        imageFiles: ClipboardImageFiles,
+        databasePath: String
+    ) throws {
+        _ = try backupDatabase(database, path: databasePath)
+        let batchSize = 32
+        var offset = 0
+        var migrated = 0
+        while true {
+            let rows = try legacyImageBatch(database, offset: offset, limit: batchSize)
+            if rows.isEmpty { break }
+            var metadata: [(id: String, stored: ClipboardImageFiles.Stored, thumb: ClipboardImageFiles.Stored?, row: LegacyImageRow)] = []
+            for row in rows {
+                let stored: ClipboardImageFiles.Stored
+                let thumb: ClipboardImageFiles.Stored?
+                if let image = row.image, !image.isEmpty {
+                    stored = try imageFiles.store(image, in: .images)
+                    if let thumbnail = row.thumbnail, !thumbnail.isEmpty {
+                        thumb = try imageFiles.store(thumbnail, in: .thumbs)
+                    } else {
+                        thumb = nil
+                    }
+                } else if let thumbnail = row.thumbnail, !thumbnail.isEmpty {
+                    stored = try imageFiles.store(thumbnail, in: .thumbs)
+                    thumb = nil
+                } else {
+                    continue
+                }
+                metadata.append((row.id, stored, thumb, row))
+            }
+
+            try execute("BEGIN IMMEDIATE;", on: database)
+            do {
+                for entry in metadata {
+                    try run(database, """
+                    INSERT INTO clipboard_images
+                        (clipboard_id, sha256, relative_path, thumb_relative_path, byte_count, width, height)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(clipboard_id) DO UPDATE SET
+                        sha256 = excluded.sha256,
+                        relative_path = excluded.relative_path,
+                        thumb_relative_path = excluded.thumb_relative_path,
+                        byte_count = excluded.byte_count,
+                        width = excluded.width,
+                        height = excluded.height;
+                    """, [
+                        entry.id,
+                        entry.stored.sha256,
+                        entry.stored.relativePath,
+                        entry.thumb?.relativePath,
+                        String(entry.stored.byteCount),
+                        String(entry.row.width),
+                        String(entry.row.height),
+                    ])
+                }
+                try execute("COMMIT;", on: database)
+            } catch {
+                try? execute("ROLLBACK;", on: database)
+                throw error
+            }
+
+            migrated += rows.count
+            offset += rows.count
+            if migrated % 256 == 0 {
+                Log.shared.info("Clipboard image migration: \(migrated) rows moved", source: "storage")
+            }
+        }
+        if migrated > 0 {
+            Log.shared.info(
+                "Clipboard image migration moved \(migrated) rows to \(imageFiles.directory.path)",
+                source: "storage"
+            )
+        }
+    }
+
+    private static func legacyImageBatch(
+        _ database: OpaquePointer?,
+        offset: Int,
+        limit: Int
+    ) throws -> [LegacyImageRow] {
+        var statement: OpaquePointer?
+        let sql = """
+        SELECT id, image, thumbnail, width, height FROM clipboard
+        WHERE image IS NOT NULL OR thumbnail IS NOT NULL
+        ORDER BY rowid LIMIT ? OFFSET ?;
+        """
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw ProviderError.failed(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int(statement, 1, Int32(limit))
+        sqlite3_bind_int(statement, 2, Int32(offset))
+        var rows: [LegacyImageRow] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idText = sqlite3_column_text(statement, 0) else { continue }
+            rows.append(LegacyImageRow(
+                id: String(cString: idText),
+                image: dataColumn(statement, 1),
+                thumbnail: dataColumn(statement, 2),
+                width: Int(sqlite3_column_int(statement, 3)),
+                height: Int(sqlite3_column_int(statement, 4))
+            ))
+        }
+        return rows
+    }
+
+    private static func dataColumn(_ statement: OpaquePointer?, _ index: Int32) -> Data? {
+        guard sqlite3_column_type(statement, index) == SQLITE_BLOB,
+              let bytes = sqlite3_column_blob(statement, index) else { return nil }
+        let count = Int(sqlite3_column_bytes(statement, index))
+        return count > 0 ? Data(bytes: bytes, count: count) : nil
+    }
+
+    /// Rebuilds `clipboard` without the two BLOB columns in one transaction.
+    /// `clipboard_images` keeps its rows: foreign keys are off for the swap and
+    /// the renamed table takes the old name, so the references resolve again.
+    private static func rebuildClipboardTable(_ database: OpaquePointer?) throws {
+        let before = try intValue(database, "SELECT COUNT(*) FROM clipboard;")
+        try execute("PRAGMA foreign_keys=OFF;", on: database)
+        defer { try? execute("PRAGMA foreign_keys=ON;", on: database) }
+        try execute("BEGIN IMMEDIATE;", on: database)
+        do {
+            try execute("""
+            CREATE TABLE clipboard_new (
+                id TEXT PRIMARY KEY,
+                hash TEXT NOT NULL UNIQUE,
+                text TEXT NOT NULL,
+                created REAL NOT NULL,
+                pinned INTEGER NOT NULL DEFAULT 0,
+                kind TEXT NOT NULL DEFAULT 'text',
+                width INTEGER NOT NULL DEFAULT 0,
+                height INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO clipboard_new (id, hash, text, created, pinned, kind, width, height)
+                SELECT id, hash, text, created, pinned, kind, width, height FROM clipboard;
+            """, on: database)
+            let after = try intValue(database, "SELECT COUNT(*) FROM clipboard_new;")
+            guard after == before else {
+                throw ProviderError.failed("Clipboard rebuild would lose rows")
+            }
+            try execute("DROP TABLE clipboard;", on: database)
+            try execute("ALTER TABLE clipboard_new RENAME TO clipboard;", on: database)
+            let orphans = try intValue(database, "SELECT COUNT(*) FROM pragma_foreign_key_check;")
+            guard orphans == 0 else {
+                throw ProviderError.failed("Clipboard rebuild would orphan image metadata")
+            }
+            try execute("COMMIT;", on: database)
+        } catch {
+            try? execute("ROLLBACK;", on: database)
+            throw error
+        }
+    }
+
+    /// A one-file snapshot before the first image migration. Uses SQLite's
+    /// backup API so the copy is consistent even with an active WAL.
+    @discardableResult
+    private static func backupDatabase(_ database: OpaquePointer?, path: String) throws -> URL {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let stamp = formatter.string(from: Date())
+        var candidate = URL(fileURLWithPath: "\(path).bak-\(stamp)")
+        var suffix = 1
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = URL(fileURLWithPath: "\(path).bak-\(stamp)-\(suffix)")
+            suffix += 1
+        }
+        var destination: OpaquePointer?
+        guard sqlite3_open(candidate.path, &destination) == SQLITE_OK else {
+            throw ProviderError.failed("Could not create the clipboard migration backup")
+        }
+        defer {
+            sqlite3_close(destination)
+            // The copy inherited WAL mode; leave one self-contained file.
+            for suffix in ["-wal", "-shm"] {
+                try? FileManager.default.removeItem(atPath: candidate.path + suffix)
+            }
+        }
+        guard let backup = sqlite3_backup_init(destination, "main", database, "main") else {
+            throw ProviderError.failed(String(cString: sqlite3_errmsg(destination)))
+        }
+        let step = sqlite3_backup_step(backup, -1)
+        let finish = sqlite3_backup_finish(backup)
+        guard step == SQLITE_DONE, finish == SQLITE_OK else {
+            throw ProviderError.failed("Could not copy the database for the migration backup")
+        }
+        // The source is in WAL mode, so the copy inherits that mode. Fold and
+        // remove the side files: the backup is one self-contained database.
+        try? execute("PRAGMA wal_checkpoint(TRUNCATE);", on: destination)
+        try? execute("PRAGMA journal_mode=DELETE;", on: destination)
+        Log.shared.info("Clipboard migration backup kept at \(candidate.path)", source: "storage")
+        return candidate
+    }
+
+    private static func run(
+        _ database: OpaquePointer?,
+        _ sql: String,
+        _ values: [String?]
+    ) throws {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw ProviderError.failed(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+        for (offset, value) in values.enumerated() {
+            if let value {
+                sqlite3_bind_text(statement, Int32(offset + 1), value, -1, sqliteTransient)
+            } else {
+                sqlite3_bind_null(statement, Int32(offset + 1))
+            }
+        }
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw ProviderError.failed(String(cString: sqlite3_errmsg(database)))
+        }
+    }
+
+    private static func intValue(_ database: OpaquePointer?, _ sql: String) throws -> Int {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw ProviderError.failed(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
+        return Int(sqlite3_column_int64(statement, 0))
     }
 
     private static func hasColumn(_ table: String, _ column: String, on database: OpaquePointer?) throws -> Bool {
@@ -469,51 +766,96 @@ public actor PaletteStore {
         at date: Date = Date()
     ) throws -> Bool {
         guard !png.isEmpty, png.count <= 20_000_000, width > 0, height > 0 else { return false }
-        let hash = SHA256.hash(data: png).map { String(format: "%02x", $0) }.joined()
+        let hash = ClipboardImageFiles.sha256(png)
         let existing = try clipboardContains(hash: hash)
-        let statement = try prepare("""
-        INSERT INTO clipboard (id, hash, text, created, pinned, kind, image, thumbnail, width, height)
-        VALUES (?, ?, '', ?, 0, 'image', ?, ?, ?, ?)
-        ON CONFLICT(hash) DO UPDATE SET created = excluded.created;
-        """)
-        defer { sqlite3_finalize(statement) }
-        bind(statement, 1, UUID().uuidString)
-        bind(statement, 2, hash)
-        sqlite3_bind_double(statement, 3, date.timeIntervalSince1970)
-        sqlite3_bind_blob(statement, 4, (png as NSData).bytes, Int32(png.count), sqliteTransient)
-        if let thumbnail {
-            sqlite3_bind_blob(statement, 5, (thumbnail as NSData).bytes, Int32(thumbnail.count), sqliteTransient)
-        } else {
-            sqlite3_bind_null(statement, 5)
+        let stored = try imageFiles.store(png, in: .images)
+        let thumb = try thumbnail.map { try imageFiles.store($0, in: .thumbs) }
+        let id = UUID().uuidString
+
+        try transaction {
+            let statement = try prepare("""
+            INSERT INTO clipboard (id, hash, text, created, pinned, kind, width, height)
+            VALUES (?, ?, '', ?, 0, 'image', ?, ?)
+            ON CONFLICT(hash) DO UPDATE SET created = excluded.created;
+            """)
+            defer { sqlite3_finalize(statement) }
+            bind(statement, 1, id)
+            bind(statement, 2, hash)
+            sqlite3_bind_double(statement, 3, date.timeIntervalSince1970)
+            sqlite3_bind_int(statement, 4, Int32(width))
+            sqlite3_bind_int(statement, 5, Int32(height))
+            try step(statement)
+
+            let rowID: String
+            if existing {
+                rowID = try clipboardID(hash: hash) ?? id
+            } else {
+                rowID = id
+            }
+            let metadata = try prepare("""
+            INSERT INTO clipboard_images
+                (clipboard_id, sha256, relative_path, thumb_relative_path, byte_count, width, height)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(clipboard_id) DO UPDATE SET
+                sha256 = excluded.sha256,
+                relative_path = excluded.relative_path,
+                thumb_relative_path = excluded.thumb_relative_path,
+                byte_count = excluded.byte_count,
+                width = excluded.width,
+                height = excluded.height;
+            """)
+            defer { sqlite3_finalize(metadata) }
+            bind(metadata, 1, rowID)
+            bind(metadata, 2, stored.sha256)
+            bind(metadata, 3, stored.relativePath)
+            bind(metadata, 4, thumb?.relativePath)
+            sqlite3_bind_int(metadata, 5, Int32(stored.byteCount))
+            sqlite3_bind_int(metadata, 6, Int32(width))
+            sqlite3_bind_int(metadata, 7, Int32(height))
+            try step(metadata)
         }
-        sqlite3_bind_int(statement, 6, Int32(width))
-        sqlite3_bind_int(statement, 7, Int32(height))
-        try step(statement)
+
         try trimClipboard(maxEntries: maxEntries)
         clipboardRevisionValue += 1
         return !existing
     }
 
     public func clipboardImage(id: String) throws -> Data? {
-        let statement = try prepare("SELECT image FROM clipboard WHERE id = ? AND kind = 'image' LIMIT 1;")
+        let statement = try prepare("""
+        SELECT ci.relative_path FROM clipboard c
+        JOIN clipboard_images ci ON ci.clipboard_id = c.id
+        WHERE c.id = ? AND c.kind = 'image' LIMIT 1;
+        """)
         defer { sqlite3_finalize(statement) }
         bind(statement, 1, id)
-        guard sqlite3_step(statement) == SQLITE_ROW,
-              let bytes = sqlite3_column_blob(statement, 0) else { return nil }
-        let count = Int(sqlite3_column_bytes(statement, 0))
-        guard count > 0 else { return nil }
-        return Data(bytes: bytes, count: count)
+        if sqlite3_step(statement) == SQLITE_ROW,
+           let text = sqlite3_column_text(statement, 0),
+           let data = imageData(relativePath: String(cString: text)) {
+            return data
+        }
+        return try legacyImage(id: id)
     }
 
     public func clipboardThumbnail(id: String) throws -> Data? {
-        let statement = try prepare("SELECT thumbnail FROM clipboard WHERE id = ? LIMIT 1;")
+        let statement = try prepare("""
+        SELECT c.kind, ci.relative_path, ci.thumb_relative_path FROM clipboard c
+        LEFT JOIN clipboard_images ci ON ci.clipboard_id = c.id
+        WHERE c.id = ? LIMIT 1;
+        """)
         defer { sqlite3_finalize(statement) }
         bind(statement, 1, id)
-        guard sqlite3_step(statement) == SQLITE_ROW,
-              let bytes = sqlite3_column_blob(statement, 0) else { return nil }
-        let count = Int(sqlite3_column_bytes(statement, 0))
-        guard count > 0 else { return nil }
-        return Data(bytes: bytes, count: count)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        let kind = sqlite3_column_text(statement, 0).map { String(cString: $0) } ?? "text"
+        let relative = sqlite3_column_text(statement, 1).map { String(cString: $0) }
+        let thumb = sqlite3_column_text(statement, 2).map { String(cString: $0) }
+        if let path = thumbnailRelativePath(
+            kind: ClipboardKind(rawValue: kind) ?? .text,
+            relative: relative,
+            thumb: thumb
+        ), let data = thumbnailData(relativePath: path) {
+            return data
+        }
+        return try legacyThumbnail(id: id)
     }
 
     /// Finder copies are stored once per selection, with the paths joined by
@@ -528,25 +870,51 @@ public actor PaletteStore {
         guard !cleaned.isEmpty else { return false }
         let text = cleaned.joined(separator: "\n")
         guard text.count <= 50_000 else { return false }
-        let hash = SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+        let hash = ClipboardImageFiles.sha256(Data(text.utf8))
         let existing = try clipboardContains(hash: hash)
+        let thumb = try thumbnail.map { try imageFiles.store($0, in: .thumbs) }
+        let id = UUID().uuidString
 
-        let statement = try prepare("""
-        INSERT INTO clipboard (id, hash, text, created, pinned, kind, thumbnail)
-        VALUES (?, ?, ?, ?, 0, 'files', ?)
-        ON CONFLICT(hash) DO UPDATE SET created = excluded.created;
-        """)
-        defer { sqlite3_finalize(statement) }
-        bind(statement, 1, UUID().uuidString)
-        bind(statement, 2, hash)
-        bind(statement, 3, text)
-        sqlite3_bind_double(statement, 4, date.timeIntervalSince1970)
-        if let thumbnail {
-            sqlite3_bind_blob(statement, 5, (thumbnail as NSData).bytes, Int32(thumbnail.count), sqliteTransient)
-        } else {
-            sqlite3_bind_null(statement, 5)
+        try transaction {
+            let statement = try prepare("""
+            INSERT INTO clipboard (id, hash, text, created, pinned, kind)
+            VALUES (?, ?, ?, ?, 0, 'files')
+            ON CONFLICT(hash) DO UPDATE SET created = excluded.created;
+            """)
+            defer { sqlite3_finalize(statement) }
+            bind(statement, 1, id)
+            bind(statement, 2, hash)
+            bind(statement, 3, text)
+            sqlite3_bind_double(statement, 4, date.timeIntervalSince1970)
+            try step(statement)
+
+            guard let thumb else { return }
+            let rowID: String
+            if existing {
+                rowID = try clipboardID(hash: hash) ?? id
+            } else {
+                rowID = id
+            }
+            let metadata = try prepare("""
+            INSERT INTO clipboard_images
+                (clipboard_id, sha256, relative_path, thumb_relative_path, byte_count, width, height)
+            VALUES (?, ?, ?, NULL, ?, 0, 0)
+            ON CONFLICT(clipboard_id) DO UPDATE SET
+                sha256 = excluded.sha256,
+                relative_path = excluded.relative_path,
+                thumb_relative_path = NULL,
+                byte_count = excluded.byte_count,
+                width = 0,
+                height = 0;
+            """)
+            defer { sqlite3_finalize(metadata) }
+            bind(metadata, 1, rowID)
+            bind(metadata, 2, thumb.sha256)
+            bind(metadata, 3, thumb.relativePath)
+            sqlite3_bind_int(metadata, 4, Int32(thumb.byteCount))
+            try step(metadata)
         }
-        try step(statement)
+
         try trimClipboard(maxEntries: maxEntries)
         clipboardRevisionValue += 1
         return !existing
@@ -561,17 +929,16 @@ public actor PaletteStore {
         var conditions: [String] = []
         let search = query?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let search, !search.isEmpty {
-            conditions.append("text LIKE ? ESCAPE '\\'")
+            conditions.append("c.text LIKE ? ESCAPE '\\'")
         }
         if kind != nil {
-            conditions.append("kind = ?")
+            conditions.append("c.kind = ?")
         }
-        let thumbnailColumn = includeThumbnails ? "thumbnail" : "NULL"
-        var sql = "SELECT id, text, created, pinned, kind, width, height, \(thumbnailColumn) FROM clipboard"
+        var sql = Self.clipboardSelect
         if !conditions.isEmpty {
             sql += " WHERE " + conditions.joined(separator: " AND ")
         }
-        sql += " ORDER BY pinned DESC, created DESC LIMIT ?;"
+        sql += " ORDER BY c.pinned DESC, c.created DESC LIMIT ?;"
 
         let statement = try prepare(sql)
         defer { sqlite3_finalize(statement) }
@@ -592,63 +959,28 @@ public actor PaletteStore {
 
         var entries: [ClipboardEntry] = []
         while sqlite3_step(statement) == SQLITE_ROW {
-            guard let idText = sqlite3_column_text(statement, 0),
-                  let bodyText = sqlite3_column_text(statement, 1) else { continue }
-            let kind = sqlite3_column_text(statement, 4).map { String(cString: $0) } ?? "text"
-            var thumbnail: Data?
-            if sqlite3_column_type(statement, 7) != SQLITE_NULL,
-               let bytes = sqlite3_column_blob(statement, 7) {
-                let count = Int(sqlite3_column_bytes(statement, 7))
-                if count > 0 { thumbnail = Data(bytes: bytes, count: count) }
+            if let entry = try makeEntry(from: statement, includeThumbnails: includeThumbnails) {
+                entries.append(entry)
             }
-            entries.append(ClipboardEntry(
-                id: String(cString: idText),
-                text: String(cString: bodyText),
-                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 2)),
-                pinned: sqlite3_column_int(statement, 3) != 0,
-                kind: ClipboardKind(rawValue: kind) ?? .text,
-                imageWidth: Int(sqlite3_column_int(statement, 5)),
-                imageHeight: Int(sqlite3_column_int(statement, 6)),
-                thumbnailPNG: thumbnail
-            ))
         }
         return entries
     }
 
     public func clipboardEntry(id: String) throws -> ClipboardEntry? {
-        let statement = try prepare("""
-        SELECT id, text, created, pinned, kind, width, height, thumbnail
-        FROM clipboard WHERE id = ? LIMIT 1;
-        """)
+        let statement = try prepare("\(Self.clipboardSelect) WHERE c.id = ? LIMIT 1;")
         defer { sqlite3_finalize(statement) }
         bind(statement, 1, id)
-        guard sqlite3_step(statement) == SQLITE_ROW,
-              let idText = sqlite3_column_text(statement, 0),
-              let bodyText = sqlite3_column_text(statement, 1) else { return nil }
-        let kind = sqlite3_column_text(statement, 4).map { String(cString: $0) } ?? "text"
-        var thumbnail: Data?
-        if sqlite3_column_type(statement, 7) != SQLITE_NULL,
-           let bytes = sqlite3_column_blob(statement, 7) {
-            let count = Int(sqlite3_column_bytes(statement, 7))
-            if count > 0 { thumbnail = Data(bytes: bytes, count: count) }
-        }
-        return ClipboardEntry(
-            id: String(cString: idText),
-            text: String(cString: bodyText),
-            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 2)),
-            pinned: sqlite3_column_int(statement, 3) != 0,
-            kind: ClipboardKind(rawValue: kind) ?? .text,
-            imageWidth: Int(sqlite3_column_int(statement, 5)),
-            imageHeight: Int(sqlite3_column_int(statement, 6)),
-            thumbnailPNG: thumbnail
-        )
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return try makeEntry(from: statement, includeThumbnails: true)
     }
 
     public func deleteClipboard(id: String) throws {
+        let paths = try imageRelativePaths(forIDs: [id])
         let statement = try prepare("DELETE FROM clipboard WHERE id = ?;")
         defer { sqlite3_finalize(statement) }
         bind(statement, 1, id)
         try step(statement)
+        try releaseImageFiles(paths)
         clipboardRevisionValue += 1
     }
 
@@ -662,7 +994,10 @@ public actor PaletteStore {
     }
 
     public func clearClipboard() throws {
-        try execute("DELETE FROM clipboard WHERE pinned = 0;")
+        let ids = try stringValues("SELECT id FROM clipboard WHERE pinned = 0;")
+        let paths = try imageRelativePaths(forIDs: ids)
+        try deleteClipboardRows(ids: ids)
+        try releaseImageFiles(paths)
         clipboardRevisionValue += 1
     }
 
@@ -708,11 +1043,7 @@ public actor PaletteStore {
     public func clipboardEntries(ids: [String], includeThumbnails: Bool = true) throws -> [ClipboardEntry] {
         guard !ids.isEmpty else { return [] }
         let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ", ")
-        let thumbnailColumn = includeThumbnails ? "thumbnail" : "NULL"
-        let statement = try prepare("""
-        SELECT id, text, created, pinned, kind, width, height, \(thumbnailColumn)
-        FROM clipboard WHERE id IN (\(placeholders));
-        """)
+        let statement = try prepare("\(Self.clipboardSelect) WHERE c.id IN (\(placeholders));")
         defer { sqlite3_finalize(statement) }
         for (offset, id) in ids.enumerated() {
             bind(statement, Int32(offset + 1), id)
@@ -720,27 +1051,256 @@ public actor PaletteStore {
 
         var entries: [ClipboardEntry] = []
         while sqlite3_step(statement) == SQLITE_ROW {
-            guard let idText = sqlite3_column_text(statement, 0),
-                  let bodyText = sqlite3_column_text(statement, 1) else { continue }
-            let kind = sqlite3_column_text(statement, 4).map { String(cString: $0) } ?? "text"
-            var thumbnail: Data?
-            if sqlite3_column_type(statement, 7) != SQLITE_NULL,
-               let bytes = sqlite3_column_blob(statement, 7) {
-                let count = Int(sqlite3_column_bytes(statement, 7))
-                if count > 0 { thumbnail = Data(bytes: bytes, count: count) }
+            if let entry = try makeEntry(from: statement, includeThumbnails: includeThumbnails) {
+                entries.append(entry)
             }
-            entries.append(ClipboardEntry(
-                id: String(cString: idText),
-                text: String(cString: bodyText),
-                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 2)),
-                pinned: sqlite3_column_int(statement, 3) != 0,
-                kind: ClipboardKind(rawValue: kind) ?? .text,
-                imageWidth: Int(sqlite3_column_int(statement, 5)),
-                imageHeight: Int(sqlite3_column_int(statement, 6)),
-                thumbnailPNG: thumbnail
-            ))
         }
         return entries
+    }
+
+    // MARK: - Clipboard image files
+
+    private static let clipboardSelect = """
+    SELECT c.id, c.text, c.created, c.pinned, c.kind, c.width, c.height,
+           ci.relative_path, ci.thumb_relative_path
+    FROM clipboard c
+    LEFT JOIN clipboard_images ci ON ci.clipboard_id = c.id
+    """
+
+    private func makeEntry(from statement: OpaquePointer?, includeThumbnails: Bool) throws -> ClipboardEntry? {
+        guard let idText = sqlite3_column_text(statement, 0),
+              let bodyText = sqlite3_column_text(statement, 1) else { return nil }
+        let id = String(cString: idText)
+        let kindText = sqlite3_column_text(statement, 4).map { String(cString: $0) } ?? "text"
+        let kind = ClipboardKind(rawValue: kindText) ?? .text
+        var thumbnail: Data?
+        if includeThumbnails {
+            let relative = sqlite3_column_text(statement, 7).map { String(cString: $0) }
+            let thumb = sqlite3_column_text(statement, 8).map { String(cString: $0) }
+            if let path = thumbnailRelativePath(kind: kind, relative: relative, thumb: thumb) {
+                thumbnail = thumbnailData(relativePath: path)
+            }
+            if thumbnail == nil, hasLegacyBlobColumns {
+                thumbnail = try legacyThumbnail(id: id)
+            }
+        }
+        return ClipboardEntry(
+            id: id,
+            text: String(cString: bodyText),
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 2)),
+            pinned: sqlite3_column_int(statement, 3) != 0,
+            kind: kind,
+            imageWidth: Int(sqlite3_column_int(statement, 5)),
+            imageHeight: Int(sqlite3_column_int(statement, 6)),
+            thumbnailPNG: thumbnail
+        )
+    }
+
+    /// File entries have no full image, only the lead item's icon, so their
+    /// primary file is the thumbnail.
+    private func thumbnailRelativePath(
+        kind: ClipboardKind,
+        relative: String?,
+        thumb: String?
+    ) -> String? {
+        kind == .files ? relative : thumb
+    }
+
+    private func imageData(relativePath: String) -> Data? {
+        if let hit = imageCache[relativePath] {
+            if imageFiles.exists(relativePath: relativePath) { return hit }
+            imageCache.removeValue(forKey: relativePath)
+            imageCacheBytes -= hit.count
+            logMissing(relativePath)
+            return nil
+        }
+        guard let data = imageFiles.read(relativePath: relativePath), !data.isEmpty else {
+            logMissing(relativePath)
+            return nil
+        }
+        if imageCacheBytes + data.count > Self.imageCacheLimit {
+            imageCache.removeAll(keepingCapacity: true)
+            imageCacheBytes = 0
+        }
+        imageCache[relativePath] = data
+        imageCacheBytes += data.count
+        return data
+    }
+
+    private func thumbnailData(relativePath: String) -> Data? {
+        if let hit = thumbnailCache[relativePath] {
+            if imageFiles.exists(relativePath: relativePath) { return hit }
+            thumbnailCache.removeValue(forKey: relativePath)
+            thumbnailCacheBytes -= hit.count
+            logMissing(relativePath)
+            return nil
+        }
+        guard let data = imageFiles.read(relativePath: relativePath), !data.isEmpty else {
+            logMissing(relativePath)
+            return nil
+        }
+        if thumbnailCacheBytes + data.count > Self.thumbnailCacheLimit {
+            thumbnailCache.removeAll(keepingCapacity: true)
+            thumbnailCacheBytes = 0
+        }
+        thumbnailCache[relativePath] = data
+        thumbnailCacheBytes += data.count
+        return data
+    }
+
+    /// A missing file is data loss, but it must not spam the log on every
+    /// keystroke; the UI already falls back to a placeholder icon.
+    private func logMissing(_ relativePath: String) {
+        guard loggedMissingFiles.insert(relativePath).inserted else { return }
+        Log.shared.warn("Clipboard image file is missing: \(relativePath)", source: "storage")
+    }
+
+    private func legacyImage(id: String) throws -> Data? {
+        guard hasLegacyBlobColumns else { return nil }
+        let statement = try prepare("SELECT image FROM clipboard WHERE id = ? AND kind = 'image' LIMIT 1;")
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, id)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return Self.dataColumn(statement, 0)
+    }
+
+    private func legacyThumbnail(id: String) throws -> Data? {
+        guard hasLegacyBlobColumns else { return nil }
+        let statement = try prepare("SELECT thumbnail FROM clipboard WHERE id = ? LIMIT 1;")
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, id)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return Self.dataColumn(statement, 0)
+    }
+
+    private func clipboardID(hash: String) throws -> String? {
+        let statement = try prepare("SELECT id FROM clipboard WHERE hash = ? LIMIT 1;")
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, hash)
+        guard sqlite3_step(statement) == SQLITE_ROW,
+              let text = sqlite3_column_text(statement, 0) else { return nil }
+        return String(cString: text)
+    }
+
+    private func imageRelativePaths(forIDs ids: [String]) throws -> [String] {
+        guard !ids.isEmpty else { return [] }
+        let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ", ")
+        let statement = try prepare("""
+        SELECT relative_path, thumb_relative_path FROM clipboard_images
+        WHERE clipboard_id IN (\(placeholders));
+        """)
+        defer { sqlite3_finalize(statement) }
+        for (offset, id) in ids.enumerated() {
+            bind(statement, Int32(offset + 1), id)
+        }
+        var paths: [String] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let path = sqlite3_column_text(statement, 0).map({ String(cString: $0) }) {
+                paths.append(path)
+            }
+            if let thumb = sqlite3_column_text(statement, 1).map({ String(cString: $0) }) {
+                paths.append(thumb)
+            }
+        }
+        return paths
+    }
+
+    /// Removes a file only once no clipboard row references it; identical
+    /// images and identical file icons share one file.
+    private func releaseImageFiles(_ paths: [String]) throws {
+        for relativePath in Set(paths) {
+            guard try referenceCount(forFile: relativePath) == 0 else { continue }
+            try? imageFiles.delete(relativePath: relativePath)
+            if let cached = imageCache.removeValue(forKey: relativePath) {
+                imageCacheBytes -= cached.count
+            }
+            if let cached = thumbnailCache.removeValue(forKey: relativePath) {
+                thumbnailCacheBytes -= cached.count
+            }
+            loggedMissingFiles.remove(relativePath)
+        }
+    }
+
+    private func referenceCount(forFile relativePath: String) throws -> Int {
+        let statement = try prepare("""
+        SELECT (SELECT COUNT(*) FROM clipboard_images WHERE relative_path = ?1)
+             + (SELECT COUNT(*) FROM clipboard_images WHERE thumb_relative_path = ?1);
+        """)
+        defer { sqlite3_finalize(statement) }
+        bind(statement, 1, relativePath)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
+        return Int(sqlite3_column_int(statement, 0))
+    }
+
+    private func deleteClipboardRows(ids: [String]) throws {
+        guard !ids.isEmpty else { return }
+        let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ", ")
+        let statement = try prepare("DELETE FROM clipboard WHERE id IN (\(placeholders));")
+        defer { sqlite3_finalize(statement) }
+        for (offset, id) in ids.enumerated() {
+            bind(statement, Int32(offset + 1), id)
+        }
+        try step(statement)
+    }
+
+    private func stringValues(_ sql: String) throws -> [String] {
+        let statement = try prepare(sql)
+        defer { sqlite3_finalize(statement) }
+        var values: [String] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let text = sqlite3_column_text(statement, 0) {
+                values.append(String(cString: text))
+            }
+        }
+        return values
+    }
+
+    private func transaction(_ body: () throws -> Void) throws {
+        try execute("BEGIN IMMEDIATE;")
+        do {
+            try body()
+            try execute("COMMIT;")
+        } catch {
+            try? execute("ROLLBACK;")
+            throw error
+        }
+    }
+
+    /// Deletes files no `clipboard_images` row points at: leftovers from a
+    /// failed migration, a crash between file write and row insert, or a
+    /// manual database edit. Run once per launch.
+    @discardableResult
+    public func sweepClipboardImages() throws -> Int {
+        let referenced = Set(try stringValues("""
+        SELECT relative_path FROM clipboard_images
+        UNION
+        SELECT thumb_relative_path FROM clipboard_images WHERE thumb_relative_path IS NOT NULL;
+        """))
+        var removed = 0
+        for relativePath in imageFiles.allRelativePaths() where !referenced.contains(relativePath) {
+            guard (try? imageFiles.delete(relativePath: relativePath)) != nil else { continue }
+            if let cached = imageCache.removeValue(forKey: relativePath) {
+                imageCacheBytes -= cached.count
+            }
+            if let cached = thumbnailCache.removeValue(forKey: relativePath) {
+                thumbnailCacheBytes -= cached.count
+            }
+            removed += 1
+        }
+        if removed > 0 {
+            Log.shared.info("Clipboard image sweep removed \(removed) orphan file(s)", source: "storage")
+        }
+        return removed
+    }
+
+    /// One VACUUM after the BLOB migration, requested by the migrator so it can
+    /// run off the main thread instead of blocking launch.
+    public func vacuumAfterClipboardMigration() throws {
+        guard try metaValue("clipboard_vacuum_pending") == "1" else { return }
+        hasVacuumed = true
+        try execute("VACUUM;")
+        try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        try setMeta("clipboard_vacuum_pending", value: nil)
     }
 
     public func clipboardCount() throws -> Int {
@@ -1252,15 +1812,16 @@ public actor PaletteStore {
     }
 
     private func trimClipboard(maxEntries: Int) throws {
-        let statement = try prepare("""
-        DELETE FROM clipboard
+        let doomed = try stringValues("""
+        SELECT id FROM clipboard
         WHERE pinned = 0 AND id NOT IN (
-            SELECT id FROM clipboard WHERE pinned = 0 ORDER BY created DESC LIMIT ?
+            SELECT id FROM clipboard WHERE pinned = 0 ORDER BY created DESC LIMIT \(max(1, maxEntries))
         );
         """)
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_int(statement, 1, Int32(max(1, maxEntries)))
-        try step(statement)
+        guard !doomed.isEmpty else { return }
+        let paths = try imageRelativePaths(forIDs: doomed)
+        try deleteClipboardRows(ids: doomed)
+        try releaseImageFiles(paths)
     }
 
     // MARK: - Retention
@@ -1281,19 +1842,34 @@ public actor PaletteStore {
 
         if clipboardRetentionDays > 0 {
             let cutoff = now.timeIntervalSince1970 - TimeInterval(clipboardRetentionDays * 24 * 60 * 60)
-            let expired = try prepare("DELETE FROM clipboard WHERE pinned = 0 AND created < ?;")
+            let expired = try prepare("SELECT id FROM clipboard WHERE pinned = 0 AND created < ?;")
             sqlite3_bind_double(expired, 1, cutoff)
-            try step(expired)
+            var doomed: [String] = []
+            while sqlite3_step(expired) == SQLITE_ROW {
+                if let idText = sqlite3_column_text(expired, 0) {
+                    doomed.append(String(cString: idText))
+                }
+            }
             sqlite3_finalize(expired)
-            report.clipboardRemoved += Int(sqlite3_changes(database))
+            if !doomed.isEmpty {
+                let paths = try imageRelativePaths(forIDs: doomed)
+                try deleteClipboardRows(ids: doomed)
+                try releaseImageFiles(paths)
+                report.clipboardRemoved += doomed.count
+            }
         }
 
         if maxImageBytes >= 0 {
-            let total = try intValue("SELECT COALESCE(SUM(LENGTH(image)), 0) FROM clipboard WHERE kind = 'image';")
+            let total = try intValue("""
+            SELECT COALESCE(SUM(ci.byte_count), 0) FROM clipboard c
+            JOIN clipboard_images ci ON ci.clipboard_id = c.id
+            WHERE c.kind = 'image';
+            """)
             if total > maxImageBytes {
                 let statement = try prepare("""
-                SELECT id, COALESCE(LENGTH(image), 0) FROM clipboard
-                WHERE kind = 'image' AND pinned = 0 ORDER BY created ASC;
+                SELECT c.id, ci.byte_count FROM clipboard c
+                JOIN clipboard_images ci ON ci.clipboard_id = c.id
+                WHERE c.kind = 'image' AND c.pinned = 0 ORDER BY c.created ASC;
                 """)
                 var excess = total - maxImageBytes
                 var doomed: [String] = []
@@ -1304,13 +1880,12 @@ public actor PaletteStore {
                     excess -= Int(sqlite3_column_int64(statement, 1))
                 }
                 sqlite3_finalize(statement)
-                for id in doomed {
-                    let delete = try prepare("DELETE FROM clipboard WHERE id = ?;")
-                    bind(delete, 1, id)
-                    try step(delete)
-                    sqlite3_finalize(delete)
+                if !doomed.isEmpty {
+                    let paths = try imageRelativePaths(forIDs: doomed)
+                    try deleteClipboardRows(ids: doomed)
+                    try releaseImageFiles(paths)
+                    report.clipboardRemoved += doomed.count
                 }
-                report.clipboardRemoved += doomed.count
             }
         }
 

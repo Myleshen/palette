@@ -153,18 +153,6 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(rendered.contains("scale ="))
     }
 
-    func testUnitConversion() throws {
-        let km = try XCTUnwrap(Units.parse("10 km in mi"))
-        XCTAssertEqual(Units.convert(km), 6.2137, accuracy: 0.001)
-        let temp = try XCTUnwrap(Units.parse("72 f to c"))
-        XCTAssertEqual(Units.convert(temp), 22.2222, accuracy: 0.001)
-        let data = try XCTUnwrap(Units.parse("1.5 gib in mb"))
-        XCTAssertEqual(Units.convert(data), 1610.612, accuracy: 0.01)
-        XCTAssertNil(Units.parse("10 km in kg"), "different kinds do not convert")
-        XCTAssertNil(Units.parse("banana"))
-        XCTAssertTrue(try XCTUnwrap(Units.parse("20 usd in eur")).isCurrency)
-    }
-
     func testSSHConfigParsing() {
         let text = """
         # comment

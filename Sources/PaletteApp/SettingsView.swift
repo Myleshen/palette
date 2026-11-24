@@ -380,7 +380,9 @@ struct SettingsView: View {
         _providerAliasesDraft = State(initialValue: aliasState)
         _newAlias = State(initialValue: [String: String]())
         _disabledProviders = State(initialValue: config.disabledProviders.filter { $0 != "apps" })
-        _globalProviders = State(initialValue: config.globalProviders)
+        _globalProviders = State(initialValue: config.globalProviders.filter { id in
+            providers.contains { $0.id == id }
+        })
         let configuredShell = config.terminalSession.shell.trimmingCharacters(in: .whitespaces)
         let shellName = (configuredShell as NSString).lastPathComponent.lowercased()
         _terminalShellChoice = State(initialValue: configuredShell.isEmpty
@@ -672,7 +674,7 @@ struct SettingsView: View {
                 Text("Could not save: \(message)")
                     .foregroundStyle(.red)
             case .pending:
-                ProgressView().controlSize(.small)
+                PaletteSpinner()
                 Text("Saving…")
             case .saved:
                 Image(systemName: "checkmark.circle.fill")
@@ -1478,7 +1480,7 @@ struct SettingsView: View {
                     Button("Check now") { updates.checkNow() }
                         .disabled(updates.status == .checking)
                     if updates.status == .checking {
-                        ProgressView().controlSize(.small)
+                        PaletteSpinner()
                     }
                     Text(updateStatusText)
                         .font(.caption)

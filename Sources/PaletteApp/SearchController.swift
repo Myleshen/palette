@@ -102,6 +102,7 @@ public final class SearchController: ObservableObject, HostBridge {
     private var searchTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var statusTask: Task<Void, Never>?
+    private var pathsIndexObserver: NSObjectProtocol?
     private var promptContinuation: CheckedContinuation<String?, Never>?
     private var resetting = false
     private var hasShown = false
@@ -124,6 +125,23 @@ public final class SearchController: ObservableObject, HostBridge {
         self.pasteboard = pasteboard
         self.themeManager = themeManager
         self.clipboardMonitor = clipboardMonitor
+        // A finished background walk re-runs the current query, so the
+        // "Indexing files…" row is replaced without retyping.
+        pathsIndexObserver = NotificationCenter.default.addObserver(
+            forName: PathsProvider.indexUpdatedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let id = note.object as? String else { return }
+            Task { @MainActor in self?.pathsIndexDidUpdate(id) }
+        }
+    }
+
+    private func pathsIndexDidUpdate(_ providerID: String) {
+        guard panel?.isVisible == true else { return }
+        let bound = registry.parser.parse(query).providerID == providerID
+        guard bound || scopeProviderID == providerID else { return }
+        scheduleSearch(debounce: false)
     }
 
     public var selectedItem: PaletteItem? {
@@ -270,9 +288,13 @@ public final class SearchController: ObservableObject, HostBridge {
             clipboardFilter = nil
         }
         if parsed.isBound {
-            items = []
-            selectionIndex = 0
-            actionIndex = 0
+            // Keep the previous rows visible while the next query runs: clearing
+            // on each keystroke made the list (and its preview) blink empty.
+            if items.first?.providerID != parsed.providerID {
+                items = []
+                selectionIndex = 0
+                actionIndex = 0
+            }
             highlightTerms = parsed.text
                 .split(whereSeparator: \.isWhitespace)
                 .map(String.init)
@@ -1016,6 +1038,7 @@ public final class SearchController: ObservableObject, HostBridge {
             switch action.kind {
             case .openPath:
                 if let path = action.value.text {
+                    ensureFileExists(at: path)
                     // Hide first so Enter feels instant; launching the app can
                     // take longer than the animation.
                     panel?.hide(activatePrevious: false)
@@ -1028,6 +1051,7 @@ public final class SearchController: ObservableObject, HostBridge {
                     return
                 }
                 let app = value["app"] ?? configuration.editorOpenWith
+                ensureFileExists(at: path)
                 panel?.hide(activatePrevious: false)
                 try launcher.openPath(path, with: app)
 
@@ -1194,8 +1218,8 @@ public final class SearchController: ObservableObject, HostBridge {
                     onOpenConfig?()
                     panel?.hide()
                 } else if action.id == "retry" {
-                    // Re-run the current query, e.g. currency rates after a
-                    // dropped connection; the panel stays where it is.
+                    // Re-run the current query, e.g. after a dropped
+                    // connection; the panel stays where it is.
                     scheduleSearch(debounce: false)
                 } else if action.id == "enter-provider" {
                     if let trigger = action.value.text {
@@ -1412,6 +1436,19 @@ public final class SearchController: ObservableObject, HostBridge {
         setStatus(message, duration: nil)
     }
 
+    /// Setup rows point at files that may not exist yet; create an empty one so
+    /// the editor opens instead of the panel silently closing.
+    private func ensureFileExists(at path: String) {
+        let expanded = PathExpansion.expand(path)
+        guard !FileManager.default.fileExists(atPath: expanded) else { return }
+        let url = URL(fileURLWithPath: expanded)
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: expanded, contents: Data())
+    }
+
     public func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {
         pasteboard.write(
             text: text,
@@ -1419,6 +1456,12 @@ public final class SearchController: ObservableObject, HostBridge {
             clearAfterMs: clearAfterMs ?? (concealed ? configuration.clipboard.clearAfterMs : nil)
         )
         setStatus(concealed ? "Copied securely (clears automatically)" : "Copied to clipboard", duration: 2)
+        // Anything Palette copies on the user's behalf belongs in our own
+        // history too (OCR, preview buttons, copy actions). Concealed copies
+        // are deliberately never stored.
+        if !concealed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            _ = try? await store.insertClipboard(text: text, maxEntries: configuration.clipboard.maxEntries)
+        }
     }
 
     // MARK: - Presentation support

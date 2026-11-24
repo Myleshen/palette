@@ -31,17 +31,18 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
     /// Sizing comes from config's fixed per-screen frame. The panel never
     /// sizes itself to its content, a preview, or a mode.
     public var windowConfig = WindowConfig() {
-        didSet { if isShowing { position() } }
+        didSet { if isShowing { schedulePosition() } }
     }
 
     /// Config `search_position` wins over the theme's window anchor.
     public var anchorOverride: String? {
-        didSet { if isShowing { position() } }
+        didSet { if isShowing { schedulePosition() } }
     }
 
     private var keyMonitor: Any?
     private var theme: Theme
     private var isShowing = false
+    private var positionPending = false
 
     public init(theme: Theme, content: NSView) {
         self.theme = theme
@@ -108,7 +109,22 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         self.theme = theme
         panel.hasShadow = false
         panel.appearance = NSAppearance(named: theme.appearance == "light" ? .aqua : .darkAqua)
-        if isShowing { position() }
+        if isShowing { schedulePosition() }
+    }
+
+    /// Moving the panel inside a SwiftUI render pass re-enters
+    /// `NSHostingView.layout` (AppKit logs "laid out reentrantly"), and a theme
+    /// or config change can arrive from a Settings onChange. Defer the
+    /// `setFrame` to the next runloop turn, which is outside that pass.
+    private func schedulePosition() {
+        guard !positionPending else { return }
+        positionPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.positionPending = false
+            guard self.isShowing else { return }
+            self.position()
+        }
     }
 
     public func show() {

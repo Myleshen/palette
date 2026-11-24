@@ -36,7 +36,9 @@ public enum ManifestProviderFactory {
                 secondary: paths.secondary,
                 maxResults: paths.maxResults,
                 terminalApp: configuration.terminalApp,
-                freeform: paths.freeform
+                freeform: paths.freeform,
+                maxEntries: paths.maxEntries,
+                homeIndexingAllowed: configuration.indexingHomeConsent ?? false
             )
             return PathsProvider(
                 configuration: config,

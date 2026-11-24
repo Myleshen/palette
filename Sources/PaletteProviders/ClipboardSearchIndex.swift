@@ -29,6 +29,11 @@ actor ClipboardSearchIndex {
     private(set) var buildCount = 0
 
     func entries(for store: PaletteStore) async -> [Entry] {
+        #if DEBUG
+        // Reading 50k rows and folding them runs off the main actor; a main
+        // thread build would freeze the panel for as long as the query takes.
+        dispatchPrecondition(condition: .notOnQueue(.main))
+        #endif
         let current = await store.clipboardRevision()
         guard current != revision || Date().timeIntervalSince(builtAt) >= Self.maxAge else {
             return entries

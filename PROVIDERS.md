@@ -50,7 +50,7 @@ Settings → Providers:
 ```toml
 [providers]
 global = [
-  "calc", "search", "web", "win", "unit", "zj",
+  "calc", "search", "web", "win", "zj",
   "bookmark", "pins", "system", "timer", "awake", "cheat",
 ]
 ```
@@ -75,6 +75,7 @@ open_with = "neovide"          # app name, or an absolute command
 secondary = "reveal"           # reveal | open | copy
 max_results = 2000
 freeform = true                # accept typed absolute/~/relative paths
+max_entries = 150000           # hard cap on one walk
 ```
 
 `kind = "any"` is `/edit` (files and folders); `kind = "directories"` is `/editf`. `/neo` and `/neof` remain aliases.
@@ -92,6 +93,12 @@ then ranks with fzf:
 ```
 fzf --filter "<query>" --scheme=path --read0 --print0
 ```
+
+The walk streams `fd` output and stops at `max_entries`. The last snapshot is
+kept in memory and on disk (24 h); a query is answered from it immediately, and
+one background refresh repopulates it without blocking a keystroke. Below 20k
+entries the query is filtered in-process instead of spawning fzf, so fzf is
+optional.
 
 Scopes are defined once in `config.toml` and shared by every paths provider:
 

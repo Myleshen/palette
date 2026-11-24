@@ -12,9 +12,15 @@ private actor SilentBridge: HostBridge {
 
 final class StorageTests: XCTestCase {
     private func makeStore() throws -> (PaletteStore, URL) {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("palette-store-\(UUID().uuidString).sqlite")
-        let store = try PaletteStore(path: url.path)
-        return (store, url)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-store-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("palette.sqlite")
+        let store = try PaletteStore(
+            path: url.path,
+            imagesDirectory: root.appendingPathComponent("clipboard")
+        )
+        return (store, root)
     }
 
     func testFrecencyAndMetadata() async throws {

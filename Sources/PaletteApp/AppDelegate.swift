@@ -195,7 +195,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         ToolLocator.shared.configure(extraPaths: configuration.toolsPath)
 
-        removeStaleLegacyFiles()
         let fallbackDatabase = paths.stateDir.appendingPathComponent("palette-fallback.sqlite")
         do {
             store = try PaletteStore(path: paths.databaseFile.path)
@@ -222,6 +221,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 fputs("Palette: database unavailable: \(error)\n", stderr)
                 NSApp.terminate(nil)
                 return
+            }
+        }
+
+        if let store {
+            // Image bytes live beside the database now. Drop leftovers from a
+            // crash or a failed migration, then vacuum once if the migration
+            // asked for it; both are off the launch path.
+            Task.detached {
+                _ = try? await store.sweepClipboardImages()
+                try? await store.vacuumAfterClipboardMigration()
             }
         }
 
@@ -1103,7 +1112,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let docker = DockerProvider(launcher: launcher, terminalApp: configuration.terminalApp, bridge: hostProxy)
         docker.onRefresh = { [weak self] in self?.searchController?.refreshResults() }
         providers.append(docker)
-        providers.append(UnitsProvider(bridge: hostProxy))
         providers.append(WindowProvider(launcher: launcher))
         providers.append(ShotsProvider(service: captureService, bridge: hostProxy))
         providers.append(CheatsheetProvider(config: configuration.cheatsheets))
@@ -2797,25 +2805,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Housekeeping
 
-    /// Two paths only, both written by <= 2.15 and unread by 2.16: the old
-    /// Hammerspoon exporter and its profile directory.
-    private func removeStaleLegacyFiles() {
-        guard !isScriptMode else { return }
-        let home = NSHomeDirectory()
-        let stale = [
-            home + "/.hammerspoon/palette-webapps.lua",
-            home + "/Library/Caches/Palette/WebApps",
-        ]
-        for path in stale where FileManager.default.fileExists(atPath: path) {
-            do {
-                try FileManager.default.removeItem(atPath: path)
-                Log.shared.info("Removed stale \(path)", source: "cleanup")
-            } catch {
-                Log.shared.warn("Could not remove stale \(path): \(error.localizedDescription)", source: "cleanup")
-            }
-        }
-    }
-
     /// Every config write goes through here so the watcher can tell our save
     /// from an external edit and never reload in a loop.
     private func writeConfig(_ config: PaletteConfig) throws {
@@ -3182,59 +3171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let manager = FileManager.default
         defer { try? manager.removeItem(at: temp) }
         do {
-            try manager.createDirectory(at: temp, withIntermediateDirectories: true)
-            var included: [String] = []
-
-            func copy(_ source: URL, as name: String) {
-                guard manager.fileExists(atPath: source.path) else { return }
-                if (try? manager.copyItem(at: source, to: temp.appendingPathComponent(name))) != nil {
-                    included.append(name)
-                }
-            }
-
-            copy(paths.configFile, as: "config.toml")
-            copy(paths.themesDir, as: "themes")
-            copy(paths.providersDir, as: "providers")
-            copy(paths.databaseFile, as: "palette.sqlite")
-            for suffix in ["-wal", "-shm"] {
-                copy(URL(fileURLWithPath: paths.databaseFile.path + suffix), as: "palette.sqlite" + suffix)
-            }
-            copy(paths.configDir.appendingPathComponent("ask-key.bin"), as: "ask-key.bin")
-            copy(paths.configDir.appendingPathComponent("ask-keys.bin"), as: "ask-keys.bin")
-            copy(paths.bookmarksFile, as: "bookmarks.toml")
-            copy(paths.configDir.appendingPathComponent("commands.toml"), as: "commands.toml")
-            copy(paths.configDir.appendingPathComponent("snippets.toml"), as: "snippets.toml")
-
-            // Pasted text is the sensitive part of the clipboard history. Fold
-            // the WAL into the copy, drop text rows, then vacuum so no deleted
-            // page survives in the zip.
-            let database = temp.appendingPathComponent("palette.sqlite")
-            let sqlite = Process()
-            sqlite.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-            sqlite.arguments = [
-                database.path,
-                "PRAGMA journal_mode=DELETE; DELETE FROM clipboard WHERE kind = 'text'; VACUUM;",
-            ]
-            try sqlite.run()
-            sqlite.waitUntilExit()
-            guard sqlite.terminationStatus == 0 else {
-                throw NSError(domain: "PaletteBackup", code: Int(sqlite.terminationStatus))
-            }
-            for suffix in ["-wal", "-shm"] {
-                try? manager.removeItem(at: URL(fileURLWithPath: database.path + suffix))
-            }
-
-            let readme = """
-            Palette backup
-            ==============
-            Included in this archive:
-            \(included.map { "- \($0)" }.joined(separator: "\n"))
-
-            ask-key.bin and ask-keys.bin hold API keys stored by Palette; they
-            are encrypted. Everything else is plain text or a normal SQLite
-            database. Clipboard history is included without its text entries.
-            """
-            try readme.write(to: temp.appendingPathComponent("README.txt"), atomically: true, encoding: .utf8)
+            _ = try BackupExporter.stage(paths: paths, into: temp)
 
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
@@ -3287,7 +3224,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Keep an open Settings window in sync when config.toml is reloaded.
     private func refreshSettingsWindow() {
         guard let settingsWindow, settingsWindow.isVisible else { return }
-        settingsWindow.contentView = makeSettingsHostingView()
+        // Re-hosting a window mid-render makes AppKit lay the old NSHostingView
+        // out reentrantly; the swap itself is cheap on the next runloop turn.
+        DispatchQueue.main.async { [weak self, weak settingsWindow] in
+            guard let self, let settingsWindow, settingsWindow.isVisible else { return }
+            settingsWindow.contentView = self.makeSettingsHostingView()
+        }
     }
 
     /// Auto-apply writes the same canonical file the old Save button wrote, then
