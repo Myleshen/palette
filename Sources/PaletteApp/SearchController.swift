@@ -1216,8 +1216,8 @@ public final class SearchController: ObservableObject, HostBridge {
                     onOpenConfig?()
                     panel?.hide()
                 } else if action.id == "retry" {
-                    // Re-run the current query, e.g. currency rates after a
-                    // dropped connection; the panel stays where it is.
+                    // Re-run the current query, e.g. after a dropped
+                    // connection; the panel stays where it is.
                     scheduleSearch(debounce: false)
                 } else if action.id == "enter-provider" {
                     if let trigger = action.value.text {

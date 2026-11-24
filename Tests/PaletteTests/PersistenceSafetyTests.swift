@@ -33,7 +33,7 @@ final class PersistenceSafetyTests: XCTestCase {
         """.write(to: paths.configFile, atomically: true, encoding: .utf8)
 
         let config = ConfigLoader.load(paths: paths).config
-        for id in ["calc", "search", "web", "win", "unit", "system", "timer", "awake"] {
+        for id in ["calc", "search", "web", "win", "system", "timer", "awake"] {
             XCTAssertTrue(config.globalProviders.contains(id), "\(id) answers a plain query")
         }
         XCTAssertTrue(config.globalProviders.contains("emoji"), "the user's extra survives")
