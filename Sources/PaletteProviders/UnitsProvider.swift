@@ -23,6 +23,10 @@ public final class UnitsProvider: PaletteProvider, @unchecked Sendable {
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty {
+            guard request.isBound else { return [] }
+            return [hintRow()]
+        }
         guard let conversion = Units.parse(query) else { return [] }
         if conversion.isCurrency {
             guard let result = await Currency.convert(conversion) else {
@@ -38,8 +42,25 @@ public final class UnitsProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
+        if action.id == "unit-hint" {
+            await bridge.notify("Type a value, for example 10 km to miles")
+            return
+        }
         guard let value = action.value.text else { return }
         await bridge.copyToClipboard(value, concealed: false, clearAfterMs: nil)
+    }
+
+    private func hintRow() -> PaletteItem {
+        PaletteItem(
+            id: "unit:hint",
+            title: "Convert a value",
+            subtitle: "10 km to miles · 100 usd to eur · 20 c to f — mm cm m km in ft yd mi · g kg oz lb · ml l cup pint gal · b kb mb gb tb · c f k · usd eur gbp inr jpy aud cad chf sgd aed",
+            icon: .symbol("arrow.left.arrow.right"),
+            badge: "CONVERT",
+            actions: [PaletteAction(id: "unit-hint", title: "How to use", kind: .custom)],
+            providerID: descriptor.id,
+            providerName: descriptor.name
+        )
     }
 
     private func row(_ conversion: Units.Conversion, value: Double) -> PaletteItem {

@@ -1038,6 +1038,7 @@ public final class SearchController: ObservableObject, HostBridge {
             switch action.kind {
             case .openPath:
                 if let path = action.value.text {
+                    ensureFileExists(at: path)
                     // Hide first so Enter feels instant; launching the app can
                     // take longer than the animation.
                     panel?.hide(activatePrevious: false)
@@ -1050,6 +1051,7 @@ public final class SearchController: ObservableObject, HostBridge {
                     return
                 }
                 let app = value["app"] ?? configuration.editorOpenWith
+                ensureFileExists(at: path)
                 panel?.hide(activatePrevious: false)
                 try launcher.openPath(path, with: app)
 
@@ -1432,6 +1434,19 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func beginProgress(_ message: String) async {
         setStatus(message, duration: nil)
+    }
+
+    /// Setup rows point at files that may not exist yet; create an empty one so
+    /// the editor opens instead of the panel silently closing.
+    private func ensureFileExists(at path: String) {
+        let expanded = PathExpansion.expand(path)
+        guard !FileManager.default.fileExists(atPath: expanded) else { return }
+        let url = URL(fileURLWithPath: expanded)
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: expanded, contents: Data())
     }
 
     public func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {
