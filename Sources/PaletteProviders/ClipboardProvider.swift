@@ -92,8 +92,9 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        let command = action.value.text ?? action.id
-        switch command {
+        // Route on the action id: OCR carries the entry id in `value`, so
+        // switching on the value made the action fall through to `default`.
+        switch action.id {
         case "delete":
             try await store.deleteClipboard(id: item.id)
             await bridge.notify("Clipboard entry deleted")

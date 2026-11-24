@@ -288,9 +288,13 @@ public final class SearchController: ObservableObject, HostBridge {
             clipboardFilter = nil
         }
         if parsed.isBound {
-            items = []
-            selectionIndex = 0
-            actionIndex = 0
+            // Keep the previous rows visible while the next query runs: clearing
+            // on each keystroke made the list (and its preview) blink empty.
+            if items.first?.providerID != parsed.providerID {
+                items = []
+                selectionIndex = 0
+                actionIndex = 0
+            }
             highlightTerms = parsed.text
                 .split(whereSeparator: \.isWhitespace)
                 .map(String.init)
