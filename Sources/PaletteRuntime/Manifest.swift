@@ -1,5 +1,6 @@
 import Foundation
 import PaletteCore
+import PalettePlatform
 import TOMLKit
 
 public struct PathsManifest: Sendable, Equatable {
@@ -9,6 +10,8 @@ public struct PathsManifest: Sendable, Equatable {
     public var secondary: String
     public var maxResults: Int
     public var freeform: Bool
+    /// Hard cap on one walk, `max_entries` in provider.toml.
+    public var maxEntries: Int
 
     public init(
         kind: PathKind,
@@ -16,7 +19,8 @@ public struct PathsManifest: Sendable, Equatable {
         openWith: String = "neovide",
         secondary: String = "reveal",
         maxResults: Int = 50,
-        freeform: Bool = false
+        freeform: Bool = false,
+        maxEntries: Int = 150_000
     ) {
         self.kind = kind
         self.scope = scope
@@ -24,6 +28,7 @@ public struct PathsManifest: Sendable, Equatable {
         self.secondary = secondary
         self.maxResults = maxResults
         self.freeform = freeform
+        self.maxEntries = maxEntries
     }
 }
 
@@ -191,7 +196,8 @@ public enum ManifestLoader {
                 openWith: table.str("open_with") ?? "neovide",
                 secondary: table.str("secondary") ?? "reveal",
                 maxResults: max(1, table.int("max_results") ?? 50),
-                freeform: table.bool("freeform") ?? false
+                freeform: table.bool("freeform") ?? false,
+                maxEntries: max(1, table.int("max_entries") ?? FDEnumerator.defaultMaxEntries)
             )
         } else if engine != nil, engine != "command" {
             diagnostics.append(Diagnostic(.error, "Provider '\(id)' uses unknown engine '\(engine ?? "")'.", source: "providers"))

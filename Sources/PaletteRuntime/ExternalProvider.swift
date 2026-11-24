@@ -326,12 +326,18 @@ public actor ExternalProvider: PaletteProvider {
               var line = String(data: data, encoding: .utf8) else { return }
         line += "\n"
         let payload = Data(line.utf8)
+        let fd = input.fileDescriptor
         let providerID = manifest.id
+        // Raw write: FileHandle's write path can raise on EPIPE, and SIGPIPE is
+        // ignored at startup so a provider that stopped reading is just a short
+        // write, logged rather than fatal.
         writeQueue.async {
-            do {
-                try input.write(contentsOf: payload)
-            } catch {
-                Log.shared.error("Provider write failed: \(error.localizedDescription)", source: "provider:\(providerID)")
+            let written = ProcessRunner.writeAll(payload, to: fd)
+            if written < payload.count {
+                Log.shared.warn(
+                    "Provider '\(providerID)' closed stdin; dropped \(payload.count - written) bytes",
+                    source: "provider:\(providerID)"
+                )
             }
         }
     }

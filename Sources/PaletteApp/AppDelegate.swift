@@ -3225,7 +3225,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Keep an open Settings window in sync when config.toml is reloaded.
     private func refreshSettingsWindow() {
         guard let settingsWindow, settingsWindow.isVisible else { return }
-        settingsWindow.contentView = makeSettingsHostingView()
+        // Re-hosting a window mid-render makes AppKit lay the old NSHostingView
+        // out reentrantly; the swap itself is cheap on the next runloop turn.
+        DispatchQueue.main.async { [weak self, weak settingsWindow] in
+            guard let self, let settingsWindow, settingsWindow.isVisible else { return }
+            settingsWindow.contentView = self.makeSettingsHostingView()
+        }
     }
 
     /// Auto-apply writes the same canonical file the old Save button wrote, then

@@ -47,9 +47,34 @@ public enum ProcessRunner {
         stdin: Data? = nil,
         timeout: TimeInterval? = nil
     ) async throws -> ProcessResult {
+        try await execute(arguments, cwd: cwd, environment: additions, stdin: stdin, timeout: timeout, onStdout: nil)
+    }
+
+    /// Streams stdout while the child runs instead of buffering it. `onChunk`
+    /// runs on the reader thread; returning false closes the pipe, which ends
+    /// the child, so a caller can stop a walk at its cap. `stdout` in the
+    /// result is empty because the bytes already went to the callback.
+    public static func stream(
+        _ arguments: [String],
+        cwd: String? = nil,
+        timeout: TimeInterval? = nil,
+        onChunk: @escaping @Sendable (UnsafeRawBufferPointer) -> Bool
+    ) async throws -> ProcessResult {
+        try await execute(arguments, cwd: cwd, environment: [:], stdin: nil, timeout: timeout, onStdout: onChunk)
+    }
+
+    private static func execute(
+        _ arguments: [String],
+        cwd: String?,
+        environment additions: [String: String],
+        stdin: Data?,
+        timeout: TimeInterval?,
+        onStdout: (@Sendable (UnsafeRawBufferPointer) -> Bool)?
+    ) async throws -> ProcessResult {
         guard !arguments.isEmpty else {
             throw ProviderError.failed("Empty command")
         }
+        let program = (arguments[0] as NSString).lastPathComponent
         let executable = try resolveExecutable(arguments[0])
 
         var environment = sanitizedEnvironment(ProcessInfo.processInfo.environment)
@@ -131,20 +156,7 @@ public enum ProcessRunner {
                     pidBox.store(pid)
                     Darwin.close(outFDs[1])
                     Darwin.close(errFDs[1])
-                    if stdin != nil {
-                        Darwin.close(stdinFDs[0])
-                        if let stdin {
-                            stdin.withUnsafeBytes { buffer in
-                                var offset = 0
-                                while offset < buffer.count {
-                                    let written = write(stdinFDs[1], buffer.baseAddress!.advanced(by: offset), buffer.count - offset)
-                                    if written <= 0 { if errno == EINTR { continue }; break }
-                                    offset += written
-                                }
-                            }
-                        }
-                        Darwin.close(stdinFDs[1])
-                    }
+                    if stdin != nil { Darwin.close(stdinFDs[0]) }
 
                     let outReader = PipeReader(outFDs[0])
                     let errReader = PipeReader(errFDs[0])
@@ -153,7 +165,11 @@ public enum ProcessRunner {
                     var errData = Data()
                     group.enter()
                     DispatchQueue.global(qos: .userInitiated).async {
-                        outData = outReader.readAll()
+                        if let onStdout {
+                            outReader.readChunks(onStdout)
+                        } else {
+                            outData = outReader.readAll()
+                        }
                         outReader.close()
                         group.leave()
                     }
@@ -181,6 +197,22 @@ public enum ProcessRunner {
                         }
                         timeoutWork = work
                         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: work)
+                    }
+
+                    // Drain stdout before feeding stdin: a child that writes a lot
+                    // before reading (fzf sorts as it reads) would otherwise fill
+                    // its stdout pipe and deadlock us mid-write. The timeout is
+                    // armed first so a child that stops reading stdin entirely is
+                    // still killed rather than blocking this write forever.
+                    if let stdin {
+                        let written = writeAll(stdin, to: stdinFDs[1])
+                        if written < stdin.count {
+                            Log.shared.warn(
+                                "\(program) closed stdin after \(written) of \(stdin.count) bytes",
+                                source: "process"
+                            )
+                        }
+                        Darwin.close(stdinFDs[1])
                     }
 
                     var status: Int32 = 0
@@ -240,6 +272,36 @@ public enum ProcessRunner {
 
     private static func cStrings(_ values: [String]) -> [UnsafeMutablePointer<CChar>?] {
         values.map { strdup($0) } + [nil]
+    }
+
+    /// Writes until the child stops reading. Returns the byte count written, so
+    /// a short write (the child closed stdin, often because a timeout or a new
+    /// keystroke killed it) is reported instead of silently dropped. SIGPIPE is
+    /// ignored at startup, so EPIPE surfaces here as a return value rather than
+    /// terminating Palette. `writeFn` exists for tests: they inject short writes
+    /// and EPIPE without a real signal.
+    @discardableResult
+    public static func writeAll(
+        _ data: Data,
+        to fd: Int32,
+        using writeFn: ((UnsafeRawPointer, Int) -> Int)? = nil
+    ) -> Int {
+        let writeOnce = writeFn ?? { Darwin.write(fd, $0, $1) }
+        var offset = 0
+        data.withUnsafeBytes { buffer in
+            guard let base = buffer.baseAddress else { return }
+            while offset < buffer.count {
+                let written = writeOnce(base.advanced(by: offset), buffer.count - offset)
+                if written > 0 {
+                    offset += written
+                } else if written < 0, errno == EINTR {
+                    continue
+                } else {
+                    break
+                }
+            }
+        }
+        return offset
     }
 
     private static func exitStatus(_ status: Int32) -> Int32 {
@@ -330,6 +392,29 @@ private final class PipeReader: @unchecked Sendable {
             }
         }
         return data
+    }
+
+    /// Reads chunks as they arrive. The handler returns false to stop reading,
+    /// which closes the read end and ends the child on its next write.
+    func readChunks(_ handler: (UnsafeRawBufferPointer) -> Bool) {
+        let fd = currentDescriptor()
+        guard fd >= 0 else { return }
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let count = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
+            if count > 0 {
+                let keepGoing = buffer.withUnsafeBytes { raw in
+                    handler(UnsafeRawBufferPointer(rebasing: raw[0..<count]))
+                }
+                if !keepGoing { break }
+            } else if count == 0 {
+                break
+            } else if errno == EINTR {
+                continue
+            } else {
+                break
+            }
+        }
     }
 
     func close() {

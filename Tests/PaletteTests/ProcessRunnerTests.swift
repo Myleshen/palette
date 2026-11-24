@@ -60,4 +60,35 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertTrue(result.timedOut)
         XCTAssertLessThan(elapsed, 3.5)
     }
+
+    /// fzf or a provider can close stdin while Palette is still writing. The
+    /// helper must stop at the short write instead of spinning; SIGPIPE is
+    /// ignored at startup, and the injected writer proves the loop without
+    /// raising a real signal.
+    func testWriteAllStopsAtAShortWrite() {
+        var calls = 0
+        let written = ProcessRunner.writeAll(Data(repeating: 7, count: 100), to: -1) { _, count in
+            calls += 1
+            // First write takes 8 bytes, then the child is gone (EPIPE).
+            return calls == 1 ? min(8, count) : -1
+        }
+        XCTAssertEqual(written, 8)
+        XCTAssertEqual(calls, 2)
+    }
+
+    func testWriteAllWritesEverythingWhenTheChildReads() {
+        let data = Data(repeating: 7, count: 1000)
+        let written = ProcessRunner.writeAll(data, to: -1) { _, count in count }
+        XCTAssertEqual(written, data.count)
+    }
+
+    func testStreamDeliversStdoutChunks() async throws {
+        var received = Data()
+        let result = try await ProcessRunner.stream(["/bin/sh", "-c", "printf 'a\\0b\\0c'"]) { chunk in
+            received.append(contentsOf: chunk)
+            return true
+        }
+        XCTAssertEqual(result.status, 0)
+        XCTAssertEqual(FDEnumerator.splitNUL(received), ["a", "b", "c"])
+    }
 }
