@@ -224,6 +224,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
+        if let store {
+            // Image bytes live beside the database now. Drop leftovers from a
+            // crash or a failed migration, then vacuum once if the migration
+            // asked for it; both are off the launch path.
+            Task.detached {
+                _ = try? await store.sweepClipboardImages()
+                try? await store.vacuumAfterClipboardMigration()
+            }
+        }
+
         seedUserProviders()
         seedCommandsFile()
         seedBookmarksFile()
@@ -3162,59 +3172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let manager = FileManager.default
         defer { try? manager.removeItem(at: temp) }
         do {
-            try manager.createDirectory(at: temp, withIntermediateDirectories: true)
-            var included: [String] = []
-
-            func copy(_ source: URL, as name: String) {
-                guard manager.fileExists(atPath: source.path) else { return }
-                if (try? manager.copyItem(at: source, to: temp.appendingPathComponent(name))) != nil {
-                    included.append(name)
-                }
-            }
-
-            copy(paths.configFile, as: "config.toml")
-            copy(paths.themesDir, as: "themes")
-            copy(paths.providersDir, as: "providers")
-            copy(paths.databaseFile, as: "palette.sqlite")
-            for suffix in ["-wal", "-shm"] {
-                copy(URL(fileURLWithPath: paths.databaseFile.path + suffix), as: "palette.sqlite" + suffix)
-            }
-            copy(paths.configDir.appendingPathComponent("ask-key.bin"), as: "ask-key.bin")
-            copy(paths.configDir.appendingPathComponent("ask-keys.bin"), as: "ask-keys.bin")
-            copy(paths.bookmarksFile, as: "bookmarks.toml")
-            copy(paths.configDir.appendingPathComponent("commands.toml"), as: "commands.toml")
-            copy(paths.configDir.appendingPathComponent("snippets.toml"), as: "snippets.toml")
-
-            // Pasted text is the sensitive part of the clipboard history. Fold
-            // the WAL into the copy, drop text rows, then vacuum so no deleted
-            // page survives in the zip.
-            let database = temp.appendingPathComponent("palette.sqlite")
-            let sqlite = Process()
-            sqlite.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-            sqlite.arguments = [
-                database.path,
-                "PRAGMA journal_mode=DELETE; DELETE FROM clipboard WHERE kind = 'text'; VACUUM;",
-            ]
-            try sqlite.run()
-            sqlite.waitUntilExit()
-            guard sqlite.terminationStatus == 0 else {
-                throw NSError(domain: "PaletteBackup", code: Int(sqlite.terminationStatus))
-            }
-            for suffix in ["-wal", "-shm"] {
-                try? manager.removeItem(at: URL(fileURLWithPath: database.path + suffix))
-            }
-
-            let readme = """
-            Palette backup
-            ==============
-            Included in this archive:
-            \(included.map { "- \($0)" }.joined(separator: "\n"))
-
-            ask-key.bin and ask-keys.bin hold API keys stored by Palette; they
-            are encrypted. Everything else is plain text or a normal SQLite
-            database. Clipboard history is included without its text entries.
-            """
-            try readme.write(to: temp.appendingPathComponent("README.txt"), atomically: true, encoding: .utf8)
+            _ = try BackupExporter.stage(paths: paths, into: temp)
 
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")

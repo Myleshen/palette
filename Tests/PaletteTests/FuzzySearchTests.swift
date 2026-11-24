@@ -12,9 +12,15 @@ private actor FuzzyBridge: HostBridge {
 
 final class FuzzySearchTests: XCTestCase {
     private func makeStore() throws -> (PaletteStore, URL) {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("palette-fuzzy-\(UUID().uuidString).sqlite")
-        return (try PaletteStore(path: url.path), url)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-fuzzy-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("palette.sqlite")
+        let store = try PaletteStore(
+            path: url.path,
+            imagesDirectory: root.appendingPathComponent("clipboard")
+        )
+        return (store, root)
     }
 
     func testRankingAcceptsAbbreviationsAndNonContiguousTerms() {

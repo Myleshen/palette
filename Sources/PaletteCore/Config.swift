@@ -626,6 +626,8 @@ public struct PalettePaths: Sendable {
     public var providersDir: URL { configDir.appendingPathComponent("providers", isDirectory: true) }
     public var themesDir: URL { configDir.appendingPathComponent("themes", isDirectory: true) }
     public var databaseFile: URL { stateDir.appendingPathComponent("palette.sqlite") }
+    /// Content-addressed clipboard image files, beside the database.
+    public var clipboardImagesDir: URL { stateDir.appendingPathComponent("clipboard", isDirectory: true) }
     public var logsDir: URL { stateDir.appendingPathComponent("logs", isDirectory: true) }
     public var logFile: URL { logsDir.appendingPathComponent("palette.log") }
 
