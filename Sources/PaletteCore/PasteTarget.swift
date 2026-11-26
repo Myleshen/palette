@@ -34,16 +34,11 @@ public enum PasteTarget {
         "co.zeit.hyper",
     ]
 
-    /// Terminals known to pass a keyed ⌘V through to whatever runs inside
-    /// them (Neovide hands nvim `<d+v>`). Without an Edit ▸ Paste menu item
-    /// they get the clipboard only.
-    public static let terminalBundleIDs: Set<String> = [
+    /// Terminals that pass a keyed ⌘V through to whatever runs inside them
+    /// (Neovide hands nvim `<d+v>`). They get a menu press or the clipboard
+    /// only, never a bare ⌘V. Every other terminal pastes ⌘V itself.
+    public static let copyOnlyWhenNoMenuBundleIDs: Set<String> = [
         "org.neovide.neovide",
-        "net.kovidgoyal.kitty",
-        "com.googlecode.iterm2",
-        "dev.wez.wezterm",
-        "org.alacritty",
-        "com.mitchellh.ghostty",
     ]
 
     /// False when Palette should copy and skip the synthetic keystroke.
@@ -61,7 +56,7 @@ public enum PasteTarget {
             return .keystroke
         }
         if menuAvailable { return .menu }
-        if let bundleID, terminalBundleIDs.contains(bundleID) { return .copyOnly }
+        if let bundleID, copyOnlyWhenNoMenuBundleIDs.contains(bundleID) { return .copyOnly }
         return .keystroke
     }
 }

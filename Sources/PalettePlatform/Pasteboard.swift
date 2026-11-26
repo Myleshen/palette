@@ -553,9 +553,9 @@ public final class PasteboardService {
             Log.shared.info("Paste delivered via the Edit menu", source: "clipboard")
             return
         }
-        // A terminal whose menu press failed must not get a bare ⌘V: Neovide
-        // would hand nvim `<d+v>`. It keeps the clipboard-only behaviour.
-        if let bundleID = app.bundleIdentifier, PasteTarget.terminalBundleIDs.contains(bundleID) {
+        // Neovide must not get a bare ⌘V: it would hand nvim `<d+v>`. It keeps
+        // the clipboard-only behaviour when the menu press did not work.
+        if let bundleID = app.bundleIdentifier, PasteTarget.copyOnlyWhenNoMenuBundleIDs.contains(bundleID) {
             Log.shared.warn("Paste skipped: no usable Edit menu in \(bundleID)", source: "clipboard")
             return
         }

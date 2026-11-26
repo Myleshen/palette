@@ -23,18 +23,25 @@ final class PasteRouteTests: XCTestCase {
         }
     }
 
-    func testTerminalsWithoutAMenuGetTheClipboardOnly() {
+    func testNeovideWithoutAMenuGetsTheClipboardOnly() {
+        XCTAssertEqual(
+            PasteTarget.route(bundleID: "org.neovide.neovide", menuAvailable: false),
+            .copyOnly
+        )
+    }
+
+    func testOtherTerminalsWithoutAMenuStillGetTheKeystroke() {
         for bundleID in [
-            "org.neovide.neovide",
             "net.kovidgoyal.kitty",
             "com.googlecode.iterm2",
             "dev.wez.wezterm",
             "org.alacritty",
             "com.mitchellh.ghostty",
+            "co.zeit.hyper",
         ] {
             XCTAssertEqual(
                 PasteTarget.route(bundleID: bundleID, menuAvailable: false),
-                .copyOnly,
+                .keystroke,
                 bundleID
             )
         }
