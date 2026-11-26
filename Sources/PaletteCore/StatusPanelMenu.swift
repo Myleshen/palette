@@ -259,6 +259,13 @@ public enum StatusPanelLayout {
     /// Breathing room between the panel and the screen edge.
     public static let margin: CGFloat = 8
 
+    /// The height the panel asks for: the measured content, capped so the panel
+    /// fits the screen. A screen shorter than the content scrolls instead.
+    public static func panelHeight(content: CGFloat, screen: CGRect) -> CGFloat {
+        let maxHeight = max(120, screen.height - margin * 2 - gap)
+        return min(max(1, content), maxHeight)
+    }
+
     /// `anchor` is the status button in screen coordinates, `screen` the
     /// visible frame. The panel hangs right-aligned under the button and never
     /// leaves the screen; a screen too short for the content caps the height so

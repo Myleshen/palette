@@ -636,6 +636,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     } else if let other = NSApp.keyWindow ?? NSApp.windows.last(where: { $0.isVisible }) {
                         self.write(view: other.contentView ?? NSView(), to: value)
                     }
+                } else if step == "statuspanel" {
+                    self.statusPanel.show()
+                } else if step == "statuspanelclose" {
+                    self.statusPanel.hide()
+                } else if let value = step.dropPrefix("statuspanel_snapshot=") {
+                    self.writeStatusPanelSnapshot(to: value)
                 } else if let value = step.dropPrefix("settings_snapshot=") {
                     self.writeSettingsSnapshot(to: value)
                 } else if let value = step.dropPrefix("onboarding_snapshot=") {
@@ -987,6 +993,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // A scripted run stays off the user's screen; the window was never
         // ordered above other apps, so there is nothing to restore.
         if !isScriptMode { settingsWindow?.orderFrontRegardless() }
+    }
+
+    private func writeStatusPanelSnapshot(to destination: String) {
+        guard let window = statusPanel?.window, let view = window.contentView else { return }
+        write(view: view, to: destination)
     }
 
     private func writeOnboardingSnapshot(to destination: String) {
