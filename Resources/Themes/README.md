@@ -12,6 +12,12 @@ terminal background, foreground, cursor and ANSI colours onto Palette's palette
 and derives surface, muted, border, badge and row states. A user theme in this
 folder with the same name overrides the bundled copy.
 
+The bundled `omarchy-*.toml` files are colour ports of the themes shipped with
+[Omarchy](https://github.com/basecamp/omarchy), which is MIT-licensed. Only
+colour values were copied from each theme's `colors.toml`; the originals live at
+<https://github.com/basecamp/omarchy/tree/master/themes>. They use the same
+mapping as the Ghostty ports.
+
 
 
 - `[palette]` — background, foreground, accent, selection, badge, and status colors

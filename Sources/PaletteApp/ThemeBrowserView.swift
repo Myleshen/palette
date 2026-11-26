@@ -428,8 +428,10 @@ struct ThemeBrowserView: View {
     }
 
     private func accessibilityLabel(_ info: ThemeInfo, section: ThemeSection) -> String {
-        let name = info.shortDisplayName
-        return info.name.hasPrefix("ghostty-") ? info.displayName : "\(section.title) · \(name)"
+        // Bundled ports already carry their source in the display name.
+        info.section == .builtIn
+            ? "\(section.title) · \(info.shortDisplayName)"
+            : info.displayName
     }
 
     private func loadCatalog() async {

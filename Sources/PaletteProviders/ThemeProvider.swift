@@ -49,7 +49,12 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
         // preview both mark the theme that is actually on screen.
         var items: [PaletteItem] = catalog.compactMap { info in
             let isCurrent = info.name == current || info.displayName == current
-            let port = info.name.hasPrefix("ghostty-") ? "Ghostty port" : ""
+            let port: String
+            switch info.section {
+            case .ghostty: port = "Ghostty port"
+            case .omarchy: port = "Omarchy port"
+            case .builtIn, .custom: port = ""
+            }
             let score: Double
             if request.text.isEmpty {
                 score = isCurrent ? 100 : 0
