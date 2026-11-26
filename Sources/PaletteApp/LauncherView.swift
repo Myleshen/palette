@@ -1367,11 +1367,9 @@ struct LauncherRootView: View {
                                 )
                                 .id(item.stableID)
                                 .onTapGesture { controller.activate(index) }
-                                .contextMenu {
-                                    ForEach(controller.actions(for: item)) { action in
-                                        Button(action.title) {
-                                            controller.run(action, on: item)
-                                        }
+                                .overlay {
+                                    RightClickMenuArea { point in
+                                        showRowActions(item, at: point)
                                     }
                                 }
                                 .accessibilityElement(children: .combine)
@@ -1404,6 +1402,54 @@ struct LauncherRootView: View {
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
     }
+
+    /// Right-click opens the same non-tracking panel the Settings menus use,
+    /// so a screenshot hotkey still fires while it is open. The native
+    /// `.contextMenu` it replaces ran an `NSMenu` tracking loop. ⌘K remains the
+    /// keyboard and VoiceOver path for the same actions.
+    private func showRowActions(_ item: PaletteItem, at point: NSPoint) {
+        let actions = controller.actions(for: item)
+        var actionsByID: [String: PaletteAction] = [:]
+        let items = actions.enumerated().map { index, action in
+            let id = "\(index)|\(action.id)"
+            actionsByID[id] = action
+            return PaletteMenuItem(id: id, title: action.title, shortcut: action.shortcut)
+        }
+        presentMenu(items, at: point) { id in
+            guard let action = actionsByID[id] else { return }
+            controller.run(action, on: item)
+        }
+    }
+
+    /// The one-item menu a right-click on an action row used to open.
+    private func showActionRowMenu(_ action: PaletteAction, index: Int, at point: NSPoint) {
+        presentMenu(
+            [PaletteMenuItem(id: action.id, title: action.title, shortcut: action.shortcut)],
+            at: point
+        ) { _ in
+            controller.actionIndex = index
+            controller.executeAction()
+        }
+    }
+
+    /// The menu panel takes key focus for Esc/arrows; the launcher must not
+    /// auto-hide when that happens, and gets key back on dismissal.
+    private func presentMenu(
+        _ items: [PaletteMenuItem],
+        at point: NSPoint,
+        select: @escaping (String) -> Void
+    ) {
+        let previousSuppress = controller.panel?.suppressAutoHide ?? false
+        controller.panel?.suppressAutoHide = true
+        PaletteMenuController.shared.show(
+            items: items,
+            at: point,
+            theme: theme,
+            onSelect: select,
+            onDismiss: { controller.panel?.suppressAutoHide = previousSuppress }
+        )
+    }
+
 
     private var actionsView: some View {
         VStack(spacing: 0) {
@@ -1438,10 +1484,9 @@ struct LauncherRootView: View {
                                 controller.actionIndex = index
                                 controller.executeAction()
                             }
-                            .contextMenu {
-                                Button(action.title) {
-                                    controller.actionIndex = index
-                                    controller.executeAction()
+                            .overlay {
+                                RightClickMenuArea { point in
+                                    showActionRowMenu(action, index: index, at: point)
                                 }
                             }
                         }

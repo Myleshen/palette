@@ -258,6 +258,7 @@ public final class PasteboardService {
     }
 
     public func requestAccessibility() {
+        // Native by necessity: macOS owns the TCC permission prompt.
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
     }

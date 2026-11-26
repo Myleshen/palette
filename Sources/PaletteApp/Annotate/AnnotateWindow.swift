@@ -113,6 +113,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func presentSaveError() {
+        // Native by necessity: an error the user must acknowledge before closing.
         let alert = NSAlert()
         alert.messageText = "Could not save the annotations"
         alert.informativeText = saveError ?? "The file could not be written."
@@ -144,6 +145,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard draft.unsaved else { return true }
         Log.shared.info("Annotator: close prompted with unsaved changes", source: "capture")
+        // Native by necessity: a save/discard/cancel sheet on window close.
         let alert = NSAlert()
         alert.messageText = "Save annotations?"
         alert.informativeText = closePromptText
@@ -780,6 +782,7 @@ struct AnnotateView: View {
             notify("This image has no source to copy from")
             return
         }
+        // Native by necessity: the file browser is macOS-owned.
         let panel = NSSavePanel()
         let base = source.deletingPathExtension().lastPathComponent
         let ext = source.pathExtension.isEmpty ? "png" : source.pathExtension
