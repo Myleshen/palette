@@ -80,4 +80,68 @@ final class WindowGeometryTests: XCTestCase {
         let portrait = window.launcherSize(for: CGSize(width: 900, height: 1440))
         XCTAssertEqual(window.resolvedPreviewLayout(frameWidth: Double(portrait.width)), .below)
     }
+
+    // MARK: - Horizontal placement
+
+    func testPanelIsCentredOnTheDisplay() {
+        let display = CGRect(x: 0, y: 0, width: 1_710, height: 1_073)
+        let width = WindowConfig().launcherSize(for: display.size).width
+        XCTAssertEqual(width, 1_026)
+        XCTAssertEqual(display.midX, 855)
+        let x = LauncherPanelLayout.horizontalOrigin(
+            display: display,
+            visible: display,
+            width: width
+        )
+        XCTAssertEqual(x, 342)
+    }
+
+    func testLeftDockLeavesThePanelCentredOnTheDisplay() {
+        let display = CGRect(x: 0, y: 0, width: 1_710, height: 1_073)
+        let visible = CGRect(x: 80, y: 0, width: 1_630, height: 1_073)
+        let width: CGFloat = 1_026
+        let x = LauncherPanelLayout.horizontalOrigin(
+            display: display,
+            visible: visible,
+            width: width
+        )
+        XCTAssertEqual(x, 342)
+        XCTAssertGreaterThanOrEqual(x, visible.minX)
+        XCTAssertLessThanOrEqual(x + width, visible.maxX)
+    }
+
+    func testRightDockLeavesThePanelCentredOnTheDisplay() {
+        let display = CGRect(x: 0, y: 0, width: 1_710, height: 1_073)
+        let visible = CGRect(x: 0, y: 0, width: 1_630, height: 1_073)
+        let width: CGFloat = 1_026
+        let x = LauncherPanelLayout.horizontalOrigin(
+            display: display,
+            visible: visible,
+            width: width
+        )
+        XCTAssertEqual(x, 342)
+        XCTAssertLessThanOrEqual(x + width, visible.maxX)
+        // Centring on the visible frame was the bug: 302, 40pt to the left.
+        XCTAssertNotEqual(x, visible.midX - width / 2)
+    }
+
+    func testNarrowUsableAreaClampsThePanelIntoTheVisibleFrame() {
+        let display = CGRect(x: 0, y: 0, width: 1_710, height: 1_073)
+        let visible = CGRect(x: 0, y: 0, width: 1_310, height: 1_073)
+        let width: CGFloat = 1_026
+        let x = LauncherPanelLayout.horizontalOrigin(
+            display: display,
+            visible: visible,
+            width: width
+        )
+        XCTAssertEqual(x, visible.maxX - LauncherPanelLayout.margin - width)
+        XCTAssertEqual(x, 272)
+        XCTAssertGreaterThanOrEqual(x, visible.minX + LauncherPanelLayout.margin)
+        XCTAssertLessThanOrEqual(x + width, visible.maxX - LauncherPanelLayout.margin)
+        // A visible frame narrower than the panel keeps its leading edge on screen.
+        XCTAssertEqual(
+            LauncherPanelLayout.horizontalOrigin(display: display, visible: visible, width: 1_400),
+            visible.minX
+        )
+    }
 }

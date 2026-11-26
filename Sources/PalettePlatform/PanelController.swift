@@ -199,12 +199,16 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
         let size = windowConfig.launcherSize(for: metrics)
         let width = min(size.width, visible.width - 24)
         let height = min(size.height, visible.height - 24)
-        var x = visible.midX - width / 2
+        let x = LauncherPanelLayout.horizontalOrigin(
+            display: screen.frame,
+            visible: visible,
+            width: width
+        )
         var y: CGFloat
 
         switch (anchorOverride ?? theme.window.anchor).lowercased() {
         case "center":
-            y = visible.midY - height / 2
+            y = screen.frame.midY - height / 2
         case "bottom":
             let offset = theme.window.offsetYPercent
                 ? visible.height * CGFloat(theme.window.offsetY) / 100
@@ -217,7 +221,6 @@ public final class PanelController: NSWindowController, NSWindowDelegate {
             y = visible.maxY - offset - height
         }
 
-        x = max(visible.minX + 12, min(x, visible.maxX - width - 12))
         y = max(visible.minY + 12, min(y, visible.maxY - height - 12))
         panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
     }
