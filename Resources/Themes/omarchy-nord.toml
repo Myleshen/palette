@@ -1,0 +1,38 @@
+# Ported from Omarchy's bundled "Nord" theme.
+# Source: https://github.com/basecamp/omarchy/blob/master/themes/nord/colors.toml
+# Omarchy is MIT-licensed; colour values only, no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Omarchy · Nord"
+appearance = "dark"
+
+[palette]
+bg = "#2e3440"
+surface = "#21252e"
+elevated = "#434853"
+fg = "#d8dee9"
+fg_muted = "#9ca2ae"
+accent = "#81a1c1"
+accent_fg = "#000000"
+selection_bg = "#4c566a"
+selection_fg = "#d8dee9"
+match_fg = "#b48ead"
+border = "#505662"
+separator = "#43485380"
+danger = "#bf616a"
+warning = "#ebcb8b"
+success = "#a3be8c"
+info = "#81a1c1"
+badge_bg = "#434853"
+badge_fg = "#d8dee9"
+
+[states.selected]
+bg = "#4c566a"
+fg = "#d8dee9"
+[states.hover]
+bg = "#434853"
+[states.disabled]
+fg = "#9ca2ae"
+
+[footer]
+hint_color = "#9ca2ae"

@@ -54,7 +54,7 @@ final class ThemeContrastTests: XCTestCase {
         XCTAssertFalse(names.isEmpty)
         XCTAssertEqual(Set(names).count, names.count, "bundled theme names must be unique")
         for name in names {
-            XCTAssertTrue(name.hasPrefix("ghostty-") || name.hasPrefix("rex-"), "unprefixed name \(name)")
+            XCTAssertTrue(name.hasPrefix("ghostty-") || name.hasPrefix("omarchy-") || name.hasPrefix("rex-"), "unprefixed name \(name)")
         }
 
         let catalogNames = ThemeLoader.catalog(themesDirectory: themesDirectory, bundledThemesDirectory: bundled).map(\.name)
@@ -79,6 +79,24 @@ final class ThemeContrastTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(selectionBg.contrast(with: selectionFg), 4.5, "\(name) selection")
             XCTAssertGreaterThanOrEqual(badgeBg.contrast(with: badgeFg), 4.5, "\(name) badge")
             XCTAssertGreaterThanOrEqual(bg.contrast(with: muted), 3.0, "\(name) muted")
+        }
+    }
+
+    func testOmarchyThemesAreBundledUnderTheirSection() throws {
+        let bundled = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources/Themes", isDirectory: true)
+        let names = ThemeLoader.bundledThemeNames(themesDirectory: bundled)
+            .filter { $0.hasPrefix("omarchy-") }
+        XCTAssertFalse(names.isEmpty)
+        let catalog = ThemeLoader.catalog(themesDirectory: themesDirectory, bundledThemesDirectory: bundled)
+        for name in names {
+            let info = try XCTUnwrap(catalog.first { $0.name == name }, name)
+            XCTAssertEqual(info.section, .omarchy, name)
+            XCTAssertTrue(info.displayName.hasPrefix("Omarchy · "), name)
+            XCTAssertEqual(info.canonicalName, String(name.dropFirst("omarchy-".count)))
         }
     }
 

@@ -32,15 +32,18 @@ final class ThemeBrowserTests: XCTestCase {
             theme("siri-silver", "Siri Silver"),
             theme("ghostty-dracula", "Ghostty · Dracula"),
             theme("ghostty-nord", "Ghostty · Nord"),
+            theme("omarchy-nord", "Omarchy · Nord"),
+            theme("omarchy-tokyo-night", "Omarchy · Tokyo Night"),
             theme("my-blue", "My Blue", builtin: false),
         ])
     }
 
     func testSectionsSplitSourcesAndKeepOrder() {
         let catalog = sampleCatalog
-        XCTAssertEqual(catalog.sections.map(\.section), [.builtIn, .ghostty, .custom])
-        XCTAssertEqual(catalog.sections.map(\.count), [2, 2, 1])
+        XCTAssertEqual(catalog.sections.map(\.section), [.builtIn, .ghostty, .omarchy, .custom])
+        XCTAssertEqual(catalog.sections.map(\.count), [2, 2, 2, 1])
         XCTAssertEqual(catalog.sections[1].themes.map(\.name), ["ghostty-dracula", "ghostty-nord"])
+        XCTAssertEqual(catalog.sections[2].themes.map(\.name), ["omarchy-nord", "omarchy-tokyo-night"])
     }
 
     func testSearchFiltersAcrossSectionsCaseInsensitively() {
@@ -49,15 +52,19 @@ final class ThemeBrowserTests: XCTestCase {
                        ["catppuccin-mocha"])
         XCTAssertEqual(Set(catalog.filtered("dracula").flatMap(\.themes).map(\.name)),
                        ["ghostty-dracula"])
-        // The canonical name without the Ghostty prefix also matches.
+        // The canonical name without the source prefix also matches.
         XCTAssertEqual(Set(catalog.filtered("nord").flatMap(\.themes).map(\.name)),
-                       ["ghostty-nord"])
+                       ["ghostty-nord", "omarchy-nord"])
         XCTAssertEqual(Set(catalog.filtered("my blue").flatMap(\.themes).map(\.name)),
                        ["my-blue"])
         // Sections with no match disappear.
         XCTAssertEqual(catalog.filtered("ghostty").map(\.section), [.ghostty])
+        XCTAssertEqual(Set(catalog.filtered("omarchy").flatMap(\.themes).map(\.name)),
+                       ["omarchy-nord", "omarchy-tokyo-night"])
+        XCTAssertEqual(Set(catalog.filtered("tokyo").flatMap(\.themes).map(\.name)),
+                       ["omarchy-tokyo-night"])
         XCTAssertTrue(catalog.filtered("nothing-matches").isEmpty)
-        XCTAssertEqual(catalog.filtered("   ").count, 3)
+        XCTAssertEqual(catalog.filtered("   ").count, 4)
     }
 
     func testSelectionDoesNotMutateConfig() {

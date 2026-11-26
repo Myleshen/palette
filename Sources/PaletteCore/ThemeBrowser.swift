@@ -4,10 +4,21 @@ import Foundation
 public enum ThemeSection: String, CaseIterable, Identifiable, Sendable {
     case builtIn = "Built-in"
     case ghostty = "Ghostty"
+    case omarchy = "Omarchy"
     case custom = "Custom"
 
     public var id: String { rawValue }
     public var title: String { rawValue }
+
+    /// File-name prefix bundled ports use, so a section can be recognised
+    /// without listing each port in the browser.
+    var sourcePrefix: String? {
+        switch self {
+        case .ghostty: return "ghostty-"
+        case .omarchy: return "omarchy-"
+        case .builtIn, .custom: return nil
+        }
+    }
 }
 
 public extension ThemeInfo {
@@ -15,14 +26,19 @@ public extension ThemeInfo {
     /// already tells a user override from a shipped theme.
     var section: ThemeSection {
         guard isBuiltin else { return .custom }
-        return name.hasPrefix("ghostty-") ? .ghostty : .builtIn
+        for section in [ThemeSection.omarchy, .ghostty] {
+            if let prefix = section.sourcePrefix, name.hasPrefix(prefix) {
+                return section
+            }
+        }
+        return .builtIn
     }
 
-    /// `ghostty-dracula` → `dracula`, so typing the terminal name without the
-    /// section prefix still finds it.
+    /// `ghostty-dracula` → `dracula` and `omarchy-nord` → `nord`, so typing the
+    /// scheme name without the source prefix still finds it.
     var canonicalName: String {
-        let prefix = "ghostty-"
-        return name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name
+        guard let prefix = section.sourcePrefix, name.hasPrefix(prefix) else { return name }
+        return String(name.dropFirst(prefix.count))
     }
 
     /// `Ghostty · Dracula` → `Dracula`; other names are unchanged.
