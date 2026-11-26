@@ -17,6 +17,8 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
     private let launcher: LauncherService
     private var onSelect: (@MainActor (String) -> Void)?
     private var currentName: (@MainActor () -> String)?
+    private var paletteAvailable: (@MainActor () -> Bool)?
+    private var onApplyPalette: (@MainActor (String) -> Void)?
     /// Parsing hundreds of theme files per keystroke is the cost being avoided;
     /// the key is both directories' mtimes, and the TTL bounds content edits
     /// (which do not move a directory's mtime).
@@ -26,12 +28,16 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
         themesDirectory: URL,
         launcher: LauncherService,
         onSelect: (@MainActor (String) -> Void)? = nil,
-        currentName: (@MainActor () -> String)? = nil
+        currentName: (@MainActor () -> String)? = nil,
+        paletteAvailable: (@MainActor () -> Bool)? = nil,
+        onApplyPalette: (@MainActor (String) -> Void)? = nil
     ) {
         self.themesDirectory = themesDirectory
         self.launcher = launcher
         self.onSelect = onSelect
         self.currentName = currentName
+        self.paletteAvailable = paletteAvailable
+        self.onApplyPalette = onApplyPalette
     }
 
     public func setCallbacks(
@@ -45,6 +51,7 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         let catalog = await catalog()
         let current = await MainActor.run { currentName?() ?? "" }
+        let paletteEnabled = await MainActor.run { paletteAvailable?() ?? false }
         // `current` is the resolved theme's display name, so `.auto` and a live
         // preview both mark the theme that is actually on screen.
         var items: [PaletteItem] = catalog.compactMap { info in
@@ -58,6 +65,18 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
             } else {
                 return nil
             }
+            var actions = [
+                // The pick is written into `[theme]`, so it survives relaunch.
+                PaletteAction(id: "select", title: "Use Theme", kind: .custom, value: .text(info.name)),
+            ]
+            if paletteEnabled {
+                actions.append(PaletteAction(
+                    id: "apply-palette",
+                    title: "Apply Palette",
+                    kind: .custom,
+                    value: .text(info.name)
+                ))
+            }
             return PaletteItem(
                 id: info.name,
                 title: info.displayName,
@@ -65,10 +84,7 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
                 icon: .symbol(info.appearance == "light" ? "sun.max" : "moon"),
                 badge: isCurrent ? "ACTIVE" : nil,
                 score: score,
-                actions: [
-                    // The pick is written into `[theme]`, so it survives relaunch.
-                    PaletteAction(id: "select", title: "Use Theme", kind: .custom, value: .text(info.name)),
-                ],
+                actions: actions,
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )
@@ -114,6 +130,8 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
         switch action.value.text {
         case "open-folder":
             await MainActor.run { launcher.openPath(themesDirectory.path) }
+        case let name? where action.id == "apply-palette":
+            await MainActor.run { onApplyPalette?(name) }
         case let name?:
             await MainActor.run { onSelect?(name) }
         default:

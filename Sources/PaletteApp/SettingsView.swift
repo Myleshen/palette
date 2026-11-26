@@ -47,6 +47,7 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
     case providerFiles
     case configFiles
     case diagnostics
+    case theming
 
     var id: Int { rawValue }
     var title: String {
@@ -70,6 +71,7 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providerFiles: return "Provider Files"
         case .configFiles: return "Config Files"
         case .diagnostics: return "Diagnostics"
+        case .theming: return "Theming"
         }
     }
     var icon: String {
@@ -93,6 +95,7 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providerFiles: return "folder.fill"
         case .configFiles: return "doc.text.fill"
         case .diagnostics: return "stethoscope"
+        case .theming: return "paintbrush.pointed.fill"
         }
     }
     /// Fixed tile colours like System Settings, deliberately not read from the
@@ -118,6 +121,7 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providerFiles: return Color(red: 0.76, green: 0.53, blue: 0.16)
         case .configFiles: return Color(red: 0.36, green: 0.42, blue: 0.50)
         case .diagnostics: return Color(red: 0.20, green: 0.62, blue: 0.52)
+        case .theming: return Color(red: 0.80, green: 0.36, blue: 0.22)
         }
     }
 }
@@ -135,8 +139,9 @@ private extension SettingsTab {
             .search, .ask, .terminal, .bookmarks, .cheatsheets, .webApps,
             .screenshots, .afterCapture, .recordings, .captures,
         ]),
-        SettingsTabGroup(title: "System", tabs: [.about, .providers]),
+        SettingsTabGroup(title: "Theming", tabs: [.theming]),
         SettingsTabGroup(title: "Advanced", tabs: [.providerFiles, .configFiles, .diagnostics]),
+        SettingsTabGroup(title: "System", tabs: [.about, .providers]),
     ]
 }
 
@@ -243,6 +248,7 @@ struct SettingsView: View {
 
     @ObservedObject private var themeManager: ThemeManager
     @ObservedObject private var updates: UpdateService
+    @ObservedObject private var theming: ThemingEngine
     @State private var config: PaletteConfig
     /// The last values actually written to disk. A row with an invalid value
     /// keeps what the user typed on screen while the file keeps this.
@@ -294,6 +300,9 @@ struct SettingsView: View {
     @State private var terminalShellChoice: String
     @State private var cheatsheetFolders: [String]
     @State private var cheatsheetExtensions: String
+    @State private var wallpaperPreviewImage: NSImage?
+    @State private var copiedInclude: String?
+    @State private var removePoliciesPending = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
@@ -330,6 +339,7 @@ struct SettingsView: View {
         config: PaletteConfig,
         keepAwake: KeepAwakeService,
         themeManager: ThemeManager,
+        theming: ThemingEngine,
         themesDirectory: URL,
         accessibilityTrusted: Bool,
         providers: [ProviderSettingsInfo],
@@ -402,6 +412,7 @@ struct SettingsView: View {
         self.onOpen = onOpen
         self.onExportBackup = onExportBackup
         self.onForgetLearned = onForgetLearned
+        _theming = ObservedObject(wrappedValue: theming)
     }
 
     private var theme: Theme { themeManager.theme }
@@ -449,6 +460,20 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("The key is deleted from the encrypted local key file. This cannot be undone.")
+            }
+            .confirmationDialog(
+                "Remove the managed palette policies?",
+                isPresented: $removePoliciesPending,
+                titleVisibility: .visible
+            ) {
+                Button("Remove policies", role: .destructive) {
+                    Task { @MainActor in
+                        await theming.removePolicies(config.theming)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Each selected browser stops using Palette's theme. Running browsers may need a restart.")
             }
     }
 
@@ -1023,6 +1048,7 @@ struct SettingsView: View {
         case .providerFiles: providerFilesPane
         case .configFiles: configFilesPane
         case .diagnostics: diagnosticsPane
+        case .theming: themingPane
         }
     }
 
@@ -1056,7 +1082,8 @@ struct SettingsView: View {
             .init(title: "Search placeholder", tab: .launcher, anchor: "row-Placeholder", keywords: "search hint placeholder text"),
             .init(title: "App order", tab: .launcher, anchor: "launcher-tabs", keywords: "alphabetical frequent sorting"),
             .init(title: "Preview layout", tab: .launcher, anchor: "row-Preview", keywords: "preview beside below layout"),
-            .init(title: "Themes", tab: .appearance, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
+            .init(title: "Palette", tab: .theming, anchor: "appearance-theme", keywords: "palette theme browser ghostty search preview dark light catppuccin gruvbox aetheria"),
+            .init(title: "Themes", tab: .theming, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
@@ -1103,6 +1130,14 @@ struct SettingsView: View {
             .init(title: "File indexing", tab: .providers, anchor: "providers-indexing", keywords: "home folder index consent fd walk permissions privacy"),
             .init(title: "Config Files", tab: .configFiles, anchor: "config-files", keywords: "config log crash backup export reveal diagnostics"),
             .init(title: "Diagnostics", tab: .diagnostics, anchor: "diagnostics-lines", keywords: "diagnostics startup warnings log"),
+            .init(title: "Theming", tab: .theming, anchor: "theming-section", keywords: "theming cross app palette terminal editor export managed files"),
+            .init(title: "Other apps", tab: .theming, anchor: "theming-section", keywords: "other apps palette source theme wallpaper extract desktop picture follow"),
+            .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
+            .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium neovide apps"),
+            .init(title: "Browsers", tab: .theming, anchor: "theming-targets", keywords: "browsers helium chrome edge brave vivaldi chromium arc managed policy mobileconfig admin all profiles seed install remove"),
+            .init(title: "Helium policy", tab: .theming, anchor: "theming-targets", keywords: "helium managed policy mobileconfig admin all profiles seed install remove profiles"),
+            .init(title: "Include lines", tab: .theming, anchor: "theming-targets", keywords: "include line config-file source copy kitty ghostty zellij neovim fish starship bat delta btop yazi"),
+            .init(title: "Apply", tab: .theming, anchor: "theming-section", keywords: "apply palette revert previous generated files"),
         ]
     }
 
@@ -1957,27 +1992,6 @@ struct SettingsView: View {
 
     private var appearance: some View {
         VStack(alignment: .leading, spacing: 20) {
-            card("Theme", anchor: "appearance-theme") {
-                pickerRow("Mode") {
-                    Picker("Mode", selection: $config.theme.mode) {
-                        Text("Auto").tag(ThemeMode.auto)
-                        Text("Dark").tag(ThemeMode.dark)
-                        Text("Light").tag(ThemeMode.light)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 260)
-                }
-                ThemeBrowserView(
-                    themeManager: themeManager,
-                    selection: $config.theme,
-                    themesDirectory: themesDirectory
-                )
-                Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
-            } footer: {
-                Text("Theme files use TOML. Browsing previews a theme without changing anything; Use Theme applies it and saves the choice for the current mode.")
-            }
-
             card("Typography", anchor: "appearance-typography") {
                 fieldRow("UI family", help: "Leave on Inherit to use the theme's \(theme.typography.family).") {
                     fontFamilyPicker($config.typography.uiFamily, inherited: theme.typography.family)
@@ -2032,6 +2046,458 @@ struct SettingsView: View {
             } footer: {
                 Text("Palette replaces glass with an opaque background when Reduce Transparency is on, and Settings follows the same rule.")
             }
+        }
+    }
+
+    // MARK: - Theming
+
+    private enum OtherAppsPalette: String, CaseIterable, Identifiable {
+        case palette
+        case theme
+        case wallpaper
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .palette: return "Palette theme"
+            case .theme: return "Another theme"
+            case .wallpaper: return "Wallpaper"
+            }
+        }
+    }
+
+    private var themingPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Palette", anchor: "appearance-theme") {
+                pickerRow("Mode") {
+                    Picker("Mode", selection: $config.theme.mode) {
+                        Text("Auto").tag(ThemeMode.auto)
+                        Text("Dark").tag(ThemeMode.dark)
+                        Text("Light").tag(ThemeMode.light)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+                }
+                ThemeBrowserView(
+                    themeManager: themeManager,
+                    selection: $config.theme,
+                    themesDirectory: themesDirectory
+                )
+                Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
+            } footer: {
+                Text("Theme files use TOML. Browsing previews a theme without changing anything; Use Theme applies it and saves the choice for the current mode. This is Palette's own palette.")
+            }
+
+            card("Other apps", anchor: "theming-section") {
+                toggleRow(
+                    "Use Palette's palette in other apps",
+                    isOn: $config.theming.enabled,
+                    help: "Off by default. Palette always themes itself; this also writes managed palette files for terminals and editors."
+                )
+                if !config.theming.enabled {
+                    Text("Palette themes itself here and in Appearance; enable this to also theme other apps.")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    pickerRow("Palette for other apps", help: "Palette theme uses the palette chosen in Palette above.") {
+                        Picker("Palette for other apps", selection: otherAppsPaletteBinding) {
+                            ForEach(OtherAppsPalette.allCases) { option in
+                                Text(option.title).tag(option)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 380)
+                    }
+                    if config.theming.source == .theme && !config.theming.theme.isEmpty {
+                        pickerRow("Theme override", help: "Empty follows the Palette theme above.") {
+                            Picker("Theme override", selection: $config.theming.theme) {
+                                Text("Use the Palette theme").tag("")
+                                ForEach(otherAppsThemeChoices, id: \.name) { info in
+                                    Text("\(info.shortDisplayName) · \(info.section.title)").tag(info.name)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(maxWidth: 360, alignment: .leading)
+                        }
+                    }
+                    if config.theming.source == .wallpaper {
+                        HStack(alignment: .top, spacing: 12) {
+                            Group {
+                                if let wallpaperPreviewImage {
+                                    Image(nsImage: wallpaperPreviewImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(theme.color(theme.palette.elevated))
+                                        .overlay {
+                                            Image(systemName: "photo")
+                                                .foregroundStyle(muted)
+                                        }
+                                }
+                            }
+                            .frame(width: 168, height: 96)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(theme.color(theme.palette.border), lineWidth: 1)
+                            )
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(theming.wallpaperURLs.first?.lastPathComponent ?? "No desktop picture found")
+                                    .font(.caption)
+                                    .foregroundStyle(muted)
+                                    .lineLimit(2)
+                                Button("Extract palette") {
+                                    Task { @MainActor in
+                                        await theming.previewWallpaper(darkMode: config.theming.darkMode)
+                                    }
+                                }
+                                .disabled(theming.busy)
+                                if let palette = theming.previewPalette {
+                                    HStack(spacing: 3) {
+                                        ForEach(Array(palette.ansi.enumerated()), id: \.offset) { _, hex in
+                                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                .fill(theme.color(hex))
+                                                .frame(width: 14, height: 18)
+                                        }
+                                    }
+                                    Text("\(palette.background) on \(palette.foreground)")
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(muted)
+                                }
+                            }
+                        }
+                        .task {
+                            wallpaperPreviewImage = theming.wallpaperURLs.first.flatMap(NSImage.init(contentsOf:))
+                        }
+                        toggleRow(
+                            "Follow wallpaper changes",
+                            isOn: $config.theming.followWallpaper,
+                            help: "Checks the desktop image every five seconds while Palette is running. Only wallpaper-sourced palettes auto-apply."
+                        )
+                        pickerRow("Appearance") {
+                            Picker("Appearance", selection: $config.theming.darkMode) {
+                                Text("Auto").tag("auto")
+                                Text("Dark").tag("dark")
+                                Text("Light").tag("light")
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 260)
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+                    HStack(spacing: 8) {
+                        Button("Apply Palette") { applyTheming() }
+                            .disabled(theming.busy)
+                        Button("Revert to previous") { revertTheming() }
+                            .disabled(theming.busy || !theming.hasPrevious)
+                        if theming.busy {
+                            PaletteSpinner()
+                        }
+                    }
+                    Text(theming.status)
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let result = theming.lastResult {
+                        if !result.written.isEmpty {
+                            Text("Wrote: \(result.written.joined(separator: ", "))")
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                        ForEach(result.changes, id: \.self) { change in
+                            Text("Changed \(change)")
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        ForEach(result.targets.filter { $0.state == .skipped }, id: \.id) { target in
+                            Text("\(target.title): \(target.note)")
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        ForEach(result.notices.prefix(6), id: \.self) { note in
+                            Text(note)
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            } footer: {
+                Text("Theme palettes apply when you press Apply Palette. Wallpaper palettes can also follow the desktop image automatically. Revert swaps back the previous generated set in one step.")
+            }
+
+            if config.theming.enabled {
+                card("Targets", anchor: "theming-targets") {
+                    ForEach(ThemingTarget.allCases.filter { !$0.isBrowser }) { target in
+                        if target.isImplemented {
+                            toggleRow(
+                                target.title,
+                                isOn: themingTargetBinding(target),
+                                help: target.fileName
+                            )
+                        } else {
+                            HStack(spacing: 8) {
+                                Toggle(target.title, isOn: .constant(false))
+                                    .toggleStyle(.checkbox)
+                                    .disabled(true)
+                                    .font(theme.font(size: 13))
+                                Text(target.statusLabel)
+                                    .font(.caption)
+                                    .foregroundStyle(muted)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+                    Text("Browsers")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(muted)
+                    Text("admin once · all profiles of that browser · seed colour, approximate")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                    ForEach(theming.browserRows()) { browser in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if browser.supportsThemePolicy {
+                                toggleRow(
+                                    browser.targetTitle,
+                                    isOn: themingTargetBinding(browser.target),
+                                    help: "Managed policy \(browser.policyIdentifier)"
+                                )
+                            } else {
+                                HStack(spacing: 8) {
+                                    Toggle(browser.targetTitle, isOn: .constant(false))
+                                        .toggleStyle(.checkbox)
+                                        .disabled(true)
+                                        .font(theme.font(size: 13))
+                                    Text("Unsupported — does not implement BrowserThemeColor.")
+                                        .font(.caption)
+                                        .foregroundStyle(muted)
+                                }
+                            }
+                            Text(browserPolicyStatus(browser))
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                    }
+
+                    if !selectedBrowsers.isEmpty {
+                        Divider().padding(.vertical, 4)
+                        HStack(spacing: 8) {
+                            Button(theming.policyBusy ? "Installing…" : "Install Policies…") {
+                                Task { @MainActor in
+                                    await theming.installPolicies(config.theming)
+                                }
+                            }
+                            .disabled(theming.policyBusy || browserPolicyFiles.isEmpty)
+                            .help("Press Apply Palette to generate the policy files first.")
+                            Button("Remove Policies…") {
+                                removePoliciesPending = true
+                            }
+                            .disabled(theming.policyBusy)
+                            if theming.policyBusy {
+                                PaletteSpinner()
+                            }
+                        }
+                        if let status = theming.policyStatus {
+                            Text(status)
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                        if let error = theming.policyError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(danger)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if !browserInstallCommand.isEmpty {
+                            HStack(alignment: .top, spacing: 8) {
+                                Text(browserInstallCommand)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 8)
+                                Button(copiedInclude == browserInstallCommand ? "Copied" : "Copy") {
+                                    copyInclude(browserInstallCommand)
+                                }
+                                .controlSize(.small)
+                            }
+                            HStack(alignment: .top, spacing: 8) {
+                                Text(browserRemoveCommand)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 8)
+                                Button(copiedInclude == browserRemoveCommand ? "Copied" : "Copy") {
+                                    copyInclude(browserRemoveCommand)
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+                    let selected = config.theming.targets
+                        .compactMap(ThemingTarget.init(rawValue:))
+                        .filter(\.isImplemented)
+                    Text("Include lines")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(muted)
+                    if selected.isEmpty {
+                        Text("Pick at least one app above.")
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                    }
+                    ForEach(selected) { target in
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(target.title)
+                                    .font(.caption)
+                                    .foregroundStyle(muted)
+                                Text(target.includeHint)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 8)
+                            Button(copiedInclude == target.includeHint ? "Copied" : "Copy") {
+                                copyInclude(target.includeHint)
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                } footer: {
+                    Text("Only checked apps get a generated file and an include line. Palette never edits the app's own config; it writes only \(PalettePaths.resolve().themeDir.path).")
+                }
+                .task { await theming.refreshPolicyStates() }
+            }
+        }
+    }
+
+    private var selectedBrowsers: [ChromiumBrowser] {
+        config.theming.targets.compactMap { raw in
+            guard let target = ThemingTarget(rawValue: raw) else { return nil }
+            return ChromiumBrowser.browser(for: target)
+        }
+        .filter(\.supportsThemePolicy)
+    }
+
+    private var browserPolicyFiles: [String] {
+        selectedBrowsers.compactMap { browser in
+            let path = theming.policyURL(for: browser).path
+            return FileManager.default.fileExists(atPath: path) ? path : nil
+        }
+    }
+
+    private var browserInstallCommand: String {
+        ChromiumPolicy.installCommand(paths: browserPolicyFiles)
+    }
+
+    private var browserRemoveCommand: String {
+        ChromiumPolicy.removeCommand(identifiers: selectedBrowsers.map(\.policyIdentifier))
+    }
+
+    private func browserPolicyStatus(_ browser: ChromiumBrowser) -> String {
+        guard browser.supportsThemePolicy else {
+            return "Unsupported — does not implement BrowserThemeColor."
+        }
+        switch theming.policyStates[browser.bundleID] {
+        case true?: return "Installed — all profiles"
+        case false?: return "Not installed"
+        case nil: return "Not checked"
+        }
+    }
+
+    private var otherAppsPaletteBinding: Binding<OtherAppsPalette> {
+        Binding(
+            get: {
+                if config.theming.source == .wallpaper { return .wallpaper }
+                return config.theming.theme.isEmpty ? .palette : .theme
+            },
+            set: { option in
+                switch option {
+                case .palette:
+                    config.theming.source = .theme
+                    config.theming.theme = ""
+                case .theme:
+                    config.theming.source = .theme
+                    if config.theming.theme.isEmpty {
+                        config.theming.theme = themeManager.currentThemeID
+                    }
+                case .wallpaper:
+                    config.theming.source = .wallpaper
+                }
+            }
+        )
+    }
+
+    private var otherAppsThemeChoices: [ThemeInfo] {
+        let themes = themeCatalogThemes
+        let selected = config.theming.theme
+        guard !selected.isEmpty, !themes.contains(where: { $0.name == selected }) else {
+            return themes
+        }
+        let missing = ThemeInfo(
+            name: selected,
+            displayName: selected,
+            appearance: "dark",
+            isBuiltin: false
+        )
+        return [missing] + themes
+    }
+
+    private var themeCatalogThemes: [ThemeInfo] {
+        ThemeLoader.catalog(themesDirectory: themesDirectory).sorted {
+            $0.shortDisplayName.localizedCaseInsensitiveCompare($1.shortDisplayName) == .orderedAscending
+        }
+    }
+
+    private func themingTargetBinding(_ target: ThemingTarget) -> Binding<Bool> {
+        Binding(
+            get: { config.theming.targets.contains(target.rawValue) },
+            set: { enabled in
+                var targets = config.theming.targets
+                if enabled {
+                    if !targets.contains(target.rawValue) { targets.append(target.rawValue) }
+                } else {
+                    targets.removeAll { $0 == target.rawValue }
+                }
+                config.theming.targets = targets
+            }
+        )
+    }
+
+    private func applyTheming() {
+        let themingConfig = config.theming
+        let fallback = themeManager.currentThemeID
+        Task { @MainActor in
+            _ = await theming.apply(themingConfig, fallbackThemeName: fallback)
+        }
+    }
+
+    private func revertTheming() {
+        Task { @MainActor in
+            _ = await theming.revert()
+        }
+    }
+
+    private func copyInclude(_ hint: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(hint, forType: .string)
+        copiedInclude = hint
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if copiedInclude == hint { copiedInclude = nil }
         }
     }
 
@@ -3604,7 +4070,7 @@ struct SettingsView: View {
         case .launcher:
             return "Restores launcher position, search-field behaviour, and layout defaults."
         case .appearance:
-            return "Restores the default theme and the theme's typography."
+            return "Restores typography and font defaults. Palette's theme lives in Theming."
         case .shortcuts:
             return "Restores every global shortcut to its default. Custom hotkeys are left alone."
         case .search:
@@ -3637,6 +4103,8 @@ struct SettingsView: View {
             return "Config Files only opens files and exports a backup; there is nothing to reset."
         case .diagnostics:
             return "Diagnostics is read-only; there is nothing to reset."
+        case .theming:
+            return "Restores Palette's default theme and turns cross-app theming off. Generated files already on disk are left alone until the next Apply."
         }
     }
 
@@ -3658,7 +4126,6 @@ struct SettingsView: View {
             config.window = WindowConfig()
             config.searchPlaceholder = defaults.searchPlaceholder
         case .appearance:
-            config.theme = ThemeSelection()
             config.typography = TypographyConfig()
         case .shortcuts:
             config.hotkey = defaults.hotkey
@@ -3717,6 +4184,9 @@ struct SettingsView: View {
             config.capture.recordingMicrophone = capture.recordingMicrophone
         case .captures:
             config.capture.gallery = CaptureConfig().gallery
+        case .theming:
+            config.theme = ThemeSelection()
+            config.theming = ThemingConfig()
         case .about, .providerFiles, .configFiles, .diagnostics:
             break
         case .providers:
