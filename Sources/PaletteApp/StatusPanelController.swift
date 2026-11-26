@@ -127,6 +127,18 @@ final class StatusPanelController: NSWindowController {
 
     var isOpen: Bool { window?.isVisible == true }
 
+    /// Script-only observables: the dump proves the panel rendered rows and
+    /// that the arrows moved the highlight.
+    var scriptRowCount: Int { model.sections.flatMap(\.rows).count }
+    var scriptHighlightedTitle: String {
+        guard let command = model.highlighted,
+              let row = model.sections.flatMap(\.rows).first(where: { $0.command == command })
+        else { return "" }
+        return row.title
+    }
+
+    func scriptKey(_ event: NSEvent) -> Bool { handleKey(event) }
+
     func show() {
         guard let window else { return }
         refresh()

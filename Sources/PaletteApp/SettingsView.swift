@@ -3506,44 +3506,11 @@ struct SettingsView: View {
     }
 
     private func engineBrowserButton(_ engine: Binding<WebSearchEngine>) -> some View {
-        let browsers = BrowserCatalog.activeBrowsers()
-        var items: [PaletteMenuItem] = [
-            PaletteMenuItem(
-                id: "default-browser",
-                title: "Default browser",
-                checked: engine.wrappedValue.browser.isEmpty
-            ),
-            .separator("browsers"),
-        ]
-        items += browsers.map { name in
-            PaletteMenuItem(
-                id: "browser:\(name)",
-                title: name,
-                checked: engine.wrappedValue.browser == name
-            )
-        }
-        if !engine.wrappedValue.browser.isEmpty,
-           !browsers.contains(engine.wrappedValue.browser) {
-            items.append(PaletteMenuItem(
-                id: "missing-browser",
-                title: "\(engine.wrappedValue.browser) (not installed)",
-                enabled: false
-            ))
-        }
-        items.append(.separator("mode"))
-        // A Toggle inside the old native menu crashed: the menu dismissed while
-        // the array-element binding wrote, and the reload invalidated the
-        // index. Two plain actions mutate the engine by identity instead.
-        items.append(PaletteMenuItem(
-            id: "app-mode",
-            title: "Open in web app",
-            checked: engine.wrappedValue.appMode
-        ))
-        items.append(PaletteMenuItem(
-            id: "tab-mode",
-            title: "Open in a browser tab",
-            checked: !engine.wrappedValue.appMode
-        ))
+        let items = EngineBrowserMenu.items(
+            browser: engine.wrappedValue.browser,
+            browsers: BrowserCatalog.activeBrowsers(),
+            appMode: engine.wrappedValue.appMode
+        )
         return PaletteMenuButton(
             title: engine.wrappedValue.appMode
                 ? "Web app · \(engine.wrappedValue.browser.isEmpty ? "default" : engine.wrappedValue.browser)"

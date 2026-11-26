@@ -2,6 +2,20 @@ import AppKit
 import PaletteCore
 import SwiftUI
 
+/// Script-only counter: one row incremented per row SwiftUI actually brings on
+/// screen. A `VStack` instead of the `LazyVStack` would render all 900+ rows in
+/// the first frame and the e2e laziness assertion would catch it.
+@MainActor
+enum ThemeBrowserRenderProbe {
+    static var rows = 0
+    static var catalogSize = 0
+
+    static func reset(catalogSize: Int) {
+        rows = 0
+        self.catalogSize = catalogSize
+    }
+}
+
 /// Settings → Appearance theme browser. The catalogue loads off the main
 /// thread and rows parse their theme only when SwiftUI asks for them, so the
 /// first frame is a search field and an empty list, not 923 TOML files.
@@ -242,7 +256,10 @@ struct ThemeBrowserView: View {
         .accessibilityLabel(accessibilityLabel(info, section: section))
         .accessibilityValue(isCurrent ? "Current theme" : info.appearance)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
-        .onAppear { requestSwatch(info.name) }
+        .onAppear {
+            ThemeBrowserRenderProbe.rows += 1
+            requestSwatch(info.name)
+        }
     }
 
     private var swatchPlaceholder: some View {
@@ -473,6 +490,7 @@ struct ThemeBrowserView: View {
         if session.selectedInfo == nil {
             session = ThemeBrowserSession(catalog: catalog, selected: catalog.allThemes.first?.name)
         }
+        ThemeBrowserRenderProbe.reset(catalogSize: catalog.count)
         browser = session
         if let name = session.selected { requestSwatch(name) }
         listFocused = true

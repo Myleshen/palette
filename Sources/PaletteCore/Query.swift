@@ -58,7 +58,7 @@ public struct QueryDisplay: Sendable {
     /// What the text field shows for an internal query.
     public func visible(for query: String) -> String {
         let parsed = parser.parse(query)
-        guard parsed.isBound, let trigger = parsed.trigger else { return query }
+        guard parsed.isBound, parsed.trigger != nil else { return query }
         return parsed.text
     }
 

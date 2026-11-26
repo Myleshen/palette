@@ -43,6 +43,15 @@ final class PaletteMenuController: NSWindowController {
 
     var isOpen: Bool { window?.isVisible == true }
 
+    /// Script-only observables: the dump proves the panel really holds the
+    /// rows the caller built, and the arrows moved the highlight.
+    var scriptRowCount: Int { model.selection.items.count }
+    var scriptHighlightedID: String? { model.selection.highlightedID }
+
+    /// Script-only key path. Real events reach the panel's own keyDown; a
+    /// scripted run posts them here because no window owns the keyboard.
+    func scriptKey(_ event: NSEvent) -> Bool { handleKey(event) }
+
     private init() {
         let panel = PaletteMenuPanel(
             contentRect: NSRect(x: 0, y: 0, width: PaletteMenuLayout.width, height: 100),
@@ -527,21 +536,30 @@ struct PaletteMenuPicker<Value: Equatable>: View {
     }
 
     private var items: [PaletteMenuItem] {
-        var result: [PaletteMenuItem] = []
-        var lastHeading: String?
-        for (index, choice) in choices.enumerated() {
-            if let heading = choice.heading, heading != lastHeading {
-                result.append(.heading("heading:\(index)", heading))
-                lastHeading = heading
-            }
-            result.append(PaletteMenuItem(
-                id: "choice:\(index)",
-                title: choice.label,
-                checked: choice.value == selection
-            ))
-        }
-        return result
+        paletteMenuPickerItems(choices: choices, selected: selection)
     }
+}
+
+/// The rows a picker builds, shared with the scripted probe so the harness can
+/// assert the same count the UI renders.
+func paletteMenuPickerItems<Value: Equatable>(
+    choices: [PaletteMenuChoice<Value>],
+    selected: Value
+) -> [PaletteMenuItem] {
+    var result: [PaletteMenuItem] = []
+    var lastHeading: String?
+    for (index, choice) in choices.enumerated() {
+        if let heading = choice.heading, heading != lastHeading {
+            result.append(.heading("heading:\(index)", heading))
+            lastHeading = heading
+        }
+        result.append(PaletteMenuItem(
+            id: "choice:\(index)",
+            title: choice.label,
+            checked: choice.value == selected
+        ))
+    }
+    return result
 }
 
 /// Holds the button's backing view so its frame can be read in screen
