@@ -3001,7 +3001,7 @@ struct SettingsView: View {
                     }
                 }
             } footer: {
-                Text("Type !keyword in the launcher, for example !yt lo-fi. The search URL must contain {query}, which Palette replaces with the URL-encoded text. An invalid engine is flagged here and the last valid one stays in config.toml.")
+                Text("Type !keyword in the launcher, for example !yt lo-fi. The search URL must contain {query}, which Palette replaces with the URL-encoded text. An invalid engine is flagged here and the last valid one stays in config.toml. “Web app” opens the result in a dedicated Palette web-app window for that site (its own browser profile), not in a PWA installed inside Helium/Chrome — those live in the browser's own profile and cannot be handed a search URL.")
             }
 
             card("Learning", anchor: "search-learning") {
@@ -3444,7 +3444,9 @@ struct SettingsView: View {
                 }
             }
         } label: {
-            Text(engine.wrappedValue.browser.isEmpty ? "Default" : engine.wrappedValue.browser)
+            Text(engine.wrappedValue.appMode
+                ? "Web app · \(engine.wrappedValue.browser.isEmpty ? "default" : engine.wrappedValue.browser)"
+                : (engine.wrappedValue.browser.isEmpty ? "Default" : engine.wrappedValue.browser))
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
