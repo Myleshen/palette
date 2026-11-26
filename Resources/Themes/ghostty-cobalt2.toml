@@ -23,7 +23,7 @@ separator = "#2b3d4c80"
 danger = "#ff0000"
 warning = "#ffe50a"
 success = "#38de21"
-info = "#1460d2"
+info = "#206adc"
 badge_bg = "#2b3d4c"
 badge_fg = "#ffffff"
 

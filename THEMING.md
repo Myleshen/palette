@@ -143,19 +143,27 @@ Pairs are checked after `extends` resolution and derived values:
 
 | Pair | Minimum |
 |---|---|
-| `fg` on `bg` (body text) | 4.5:1 |
+| `fg` on `bg` (body text) | 7.0:1 |
+| `fg_muted` on `bg` | 4.5:1 |
+| `accent` on `bg`, `surface` and `elevated` | 4.5:1 |
 | `accent` / `accent_fg` | 4.5:1 |
 | `selection_bg` / `selection_fg` | 4.5:1 |
 | `badge_bg` / `badge_fg` | 4.5:1 |
 | `states.selected.bg` / `states.selected.fg` | 4.5:1 |
-| `fg_muted` on `bg` | 3.0:1 |
+| `danger` / `warning` / `success` / `info` on `bg` | 3.0:1 |
 
-A failing foreground is repaired rather than shipped: `accent_fg`,
-`selection_fg`, `badge_fg`, and `states.selected.fg` are replaced with
-`#111111` or `#ffffff`, whichever contrasts more with the background, and an
-info diagnostic records the old and new value. Body and muted text only produce
-a warning, because `bg` belongs to the theme. `states.selected` takes part in
-both the check and the repair.
+A failing foreground is repaired rather than shipped, in OKLab: only lightness
+moves, hue stays fixed, and chroma is reduced only when sRGB requires it. The
+search takes the smallest lightness change that clears the bar. `bg` is never
+changed, so a mid-tone background is capped at the best ratio it can physically
+reach. A warning diagnostic records every adjustment for user themes; bundled
+files are rewritten ahead of time with the same repair:
+
+```sh
+swift run ThemeRepair Resources/Themes
+```
+
+`states.selected` takes part in both the check and the repair.
 
 ### Metrics
 
