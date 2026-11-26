@@ -3422,7 +3422,27 @@ struct SettingsView: View {
                     .disabled(true)
             }
             Divider()
-            Toggle("Open in web app", isOn: engine.appMode)
+            // A Toggle inside this Menu crashed: the menu dismisses while the
+            // array-element binding writes, and the reload invalidates the
+            // index. Two plain actions mutate the engine by identity instead.
+            Button {
+                setEngineAppMode(engine.wrappedValue, true)
+            } label: {
+                if engine.wrappedValue.appMode {
+                    Label("Open in web app", systemImage: "checkmark")
+                } else {
+                    Text("Open in web app")
+                }
+            }
+            Button {
+                setEngineAppMode(engine.wrappedValue, false)
+            } label: {
+                if !engine.wrappedValue.appMode {
+                    Label("Open in a browser tab", systemImage: "checkmark")
+                } else {
+                    Text("Open in a browser tab")
+                }
+            }
         } label: {
             Text(engine.wrappedValue.browser.isEmpty ? "Default" : engine.wrappedValue.browser)
                 .lineLimit(1)
@@ -3430,6 +3450,13 @@ struct SettingsView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Mutates by identity so a menu dismissal cannot leave a stale index
+    /// binding pointing at a different engine.
+    private func setEngineAppMode(_ engine: WebSearchEngine, _ value: Bool) {
+        guard let index = config.webSearchEngines.firstIndex(where: { $0.id == engine.id }) else { return }
+        config.webSearchEngines[index].appMode = value
     }
 
     private var webAppBrowserBinding: Binding<String> {
