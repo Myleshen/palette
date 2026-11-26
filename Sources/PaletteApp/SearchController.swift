@@ -73,7 +73,6 @@ public final class SearchController: ObservableObject, HostBridge {
     /// Bumped by Restart; the pane starts a fresh process when it changes.
     @Published public private(set) var terminalRestartToken = 0
     @Published public var scratchpadText = ""
-    @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
     /// Per-invocation multiplexer session name (e.g. `ssh-host`); nil uses the
     /// configured session.
@@ -239,7 +238,6 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openClipboard() {
         previewEnabled = true
-        clipboardFilter = nil
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)clip "
@@ -318,7 +316,6 @@ public final class SearchController: ObservableObject, HostBridge {
             previewEnabled = false
             previewFocused = false
             panel?.suppressAutoHide = false
-            clipboardFilter = nil
         }
         if parsed.isBound {
             // Keep the previous rows visible while the next query runs: clearing
@@ -727,7 +724,6 @@ public final class SearchController: ObservableObject, HostBridge {
                 return true
             default:
                 if let number = Int(characters), (1...9).contains(number) {
-                    if selectModeChip(at: number - 1) { return true }
                     let index = number - 1
                     if items.indices.contains(index) {
                         selectionIndex = index
@@ -859,7 +855,6 @@ public final class SearchController: ObservableObject, HostBridge {
         resetting = false
         previewEnabled = false
         previewFocused = false
-        clipboardFilter = nil
     }
 
     public func moveRail(by delta: Int) {
@@ -877,32 +872,6 @@ public final class SearchController: ObservableObject, HostBridge {
     public var activeProviderID: String {
         if let scopeProviderID { return scopeProviderID }
         return registry.parser.parse(query).providerID ?? "apps"
-    }
-
-    public var effectiveClipboardFilter: String? {
-        let text = registry.parser.parse(query).text.lowercased()
-        if text.hasPrefix("image") { return "image" }
-        if text.hasPrefix("file") { return "files" }
-        if text.hasPrefix("text") { return "text" }
-        return nil
-    }
-
-    public func setClipboardFilter(_ kind: String?) {
-        clipboardFilter = kind
-        query = "/clip" + (kind.map { " " + $0 } ?? " ")
-    }
-
-    /// ⌘1/⌘2 (and ⌘3/⌘4 for clipboard filters) pick a visible mode chip.
-    private func selectModeChip(at index: Int) -> Bool {
-        switch activeTabID {
-        case "clip":
-            let filters: [String?] = [nil, "text", "image", "files"]
-            guard filters.indices.contains(index) else { return false }
-            setClipboardFilter(filters[index])
-            return true
-        default:
-            return false
-        }
     }
 
     private func cycleScope() {
