@@ -179,7 +179,11 @@ public struct WebSearchEngine: Sendable, Equatable, Identifiable {
 
 public struct ClipboardConfig: Sendable, Equatable {
     public var enabled: Bool
-    public var maxEntries: Int
+    /// Unpinned rows kept per kind: text, images and file selections are
+    /// trimmed independently, so a run of screenshots cannot evict text.
+    public var maxText: Int
+    public var maxImages: Int
+    public var maxFiles: Int
     public var pollMs: Int
     public var clearAfterMs: Int
     /// Clipboard rows older than this many days are dropped on launch and
@@ -193,7 +197,9 @@ public struct ClipboardConfig: Sendable, Equatable {
 
     public init(
         enabled: Bool = true,
-        maxEntries: Int = 5_000,
+        maxText: Int = 100,
+        maxImages: Int = 20,
+        maxFiles: Int = 20,
         pollMs: Int = 500,
         clearAfterMs: Int = 30_000,
         retentionDays: Int = 30,
@@ -201,7 +207,9 @@ public struct ClipboardConfig: Sendable, Equatable {
         ignoredApps: [String] = []
     ) {
         self.enabled = enabled
-        self.maxEntries = maxEntries
+        self.maxText = maxText
+        self.maxImages = maxImages
+        self.maxFiles = maxFiles
         self.pollMs = pollMs
         self.clearAfterMs = clearAfterMs
         self.retentionDays = retentionDays
@@ -1082,7 +1090,16 @@ public enum ConfigLoader {
         if let clipboardTable = table.table("clipboard") {
             var clipboard = config.clipboard
             clipboard.enabled = clipboardTable.bool("enabled") ?? clipboard.enabled
-            clipboard.maxEntries = max(10, clipboardTable.int("max_entries") ?? clipboard.maxEntries)
+            // `max_entries` was one global cap before the per-kind limits; it
+            // now maps to text and is dropped the next time the file is written.
+            clipboard.maxText = max(
+                10,
+                clipboardTable.int("max_text")
+                    ?? clipboardTable.int("max_entries")
+                    ?? clipboard.maxText
+            )
+            clipboard.maxImages = max(1, clipboardTable.int("max_images") ?? clipboard.maxImages)
+            clipboard.maxFiles = max(1, clipboardTable.int("max_files") ?? clipboard.maxFiles)
             clipboard.pollMs = max(150, clipboardTable.int("poll_ms") ?? clipboard.pollMs)
             clipboard.clearAfterMs = max(0, clipboardTable.int("clear_after_ms") ?? clipboard.clearAfterMs)
             clipboard.retentionDays = max(0, clipboardTable.int("retention_days") ?? clipboard.retentionDays)
@@ -1314,7 +1331,10 @@ public enum ConfigLoader {
 
         [clipboard]
         enabled = true
-        max_entries = 5000
+        # Unpinned entries kept per kind; pinned rows are always kept.
+        max_text = 100
+        max_images = 20
+        max_files = 20
         poll_ms = 500
         clear_after_ms = 30000
         retention_days = 30
@@ -1499,7 +1519,9 @@ public enum ConfigWriter {
         out.append("")
         out.append("[clipboard]")
         out.append("enabled = \(config.clipboard.enabled)")
-        out.append("max_entries = \(config.clipboard.maxEntries)")
+        out.append("max_text = \(config.clipboard.maxText)")
+        out.append("max_images = \(config.clipboard.maxImages)")
+        out.append("max_files = \(config.clipboard.maxFiles)")
         out.append("poll_ms = \(config.clipboard.pollMs)")
         out.append("clear_after_ms = \(config.clipboard.clearAfterMs)")
         out.append("retention_days = \(config.clipboard.retentionDays)")

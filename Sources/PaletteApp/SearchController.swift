@@ -1460,7 +1460,7 @@ public final class SearchController: ObservableObject, HostBridge {
         // history too (OCR, preview buttons, copy actions). Concealed copies
         // are deliberately never stored.
         if !concealed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            _ = try? await store.insertClipboard(text: text, maxEntries: configuration.clipboard.maxEntries)
+            _ = try? await store.insertClipboard(text: text, maxEntries: configuration.clipboard.maxText)
         }
     }
 

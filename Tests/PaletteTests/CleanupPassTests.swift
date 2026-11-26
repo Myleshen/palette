@@ -96,12 +96,14 @@ final class CleanupPassTests: XCTestCase {
         XCTAssertEqual(entries.filter { $0.kind == .image }.count, 1)
         XCTAssertEqual(entries.first { $0.kind == .image }?.imageWidth, 2)
 
-        // max_entries is still applied by the insert path.
+        // The text limit is applied per kind, so the image row survives.
         for index in 0..<5 {
             _ = try await store.insertClipboard(text: "cap \(index)", maxEntries: 3)
         }
         let capped = try await store.clipboardCount()
-        XCTAssertEqual(capped, 3)
+        XCTAssertEqual(capped, 4)
+        let cappedTexts = try await store.clipboardEntries(limit: 100, kind: .text)
+        XCTAssertEqual(cappedTexts.count, 3)
     }
 
     func testLargeTrimVacuumsOnlyOncePerLaunch() async throws {

@@ -1036,7 +1036,7 @@ struct SettingsView: View {
             .init(title: "Editor", tab: .general, anchor: "row-Editor", keywords: "editor neovide vscode cursor zed"),
             .init(title: "Terminal", tab: .general, anchor: "row-Terminal", keywords: "terminal binary zellij project command embedded"),
             .init(title: "Terminal app", tab: .general, anchor: "row-Terminal app", keywords: "terminal kitty ghostty ssh docker github external app"),
-            .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries poll clear retention secrets"),
+            .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries text images files poll clear retention secrets"),
             .init(title: "Ignored clipboard apps", tab: .general, anchor: "row-Never record from", keywords: "clipboard ignore apps password manager 1password secrets bundle id"),
             .init(title: "Commands", tab: .general, anchor: "general-commands", keywords: "command prefix provider slash"),
             .init(title: "Command prefix", tab: .general, anchor: "row-Command prefix", keywords: "prefix provider command slash"),
@@ -1519,8 +1519,12 @@ struct SettingsView: View {
 
             card("Clipboard history", anchor: "general-clipboard") {
                 toggleRow("Record clipboard history", isOn: $config.clipboard.enabled)
-                numericRow("Maximum entries", value: $config.clipboard.maxEntries,
-                           in: 50...50_000, step: 500)
+                numericRow("Text entries", value: $config.clipboard.maxText,
+                           in: 10...10_000, step: 10)
+                numericRow("Image entries", value: $config.clipboard.maxImages,
+                           in: 1...100, step: 1)
+                numericRow("File entries", value: $config.clipboard.maxFiles,
+                           in: 1...200, step: 1)
                 numericRow("Poll interval", value: $config.clipboard.pollMs,
                            in: 200...2_000, step: 50, unit: "ms")
                 numericRow("Clear copied secrets after", value: clearAfterSecondsBinding,
@@ -1531,7 +1535,7 @@ struct SettingsView: View {
                            in: 0...2_048, step: 50, unit: "MB")
                 ignoredAppsRow
             } footer: {
-                Text("Text and PNG images are stored. Copies an app marks concealed or transient are never recorded, even when that app is allowed below. Zero seconds keeps secrets until you clear the history.")
+                Text("Text, images and file selections are limited separately, so a run of screenshots never evicts text. Pinned entries are always kept. Copies an app marks concealed or transient are never recorded, even when that app is allowed below. Zero seconds keeps secrets until you clear the history.")
             }
             .task {
                 guard ignoredAppChoices.isEmpty else { return }

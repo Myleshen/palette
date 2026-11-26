@@ -324,6 +324,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.updateCaptureMenu()
             self.captureFeedback(message)
         }
+        captureService.onCopiedToPasteboard = { [weak self] copy in
+            self?.recordPaletteCopy(copy)
+        }
         captureService.onScreenshot = { [weak self] url in
             guard let self else { return }
             self.rememberCapture(url, recording: false)
@@ -1815,7 +1818,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task { await searchController.notify("Could not open \(url.lastPathComponent) for editing") }
             return
         }
-        let controller = AnnotateWindowController(image: image, url: url, themeManager: themeManager)
+        let controller = AnnotateWindowController(
+            image: image,
+            url: url,
+            themeManager: themeManager,
+            onCopiedToPasteboard: { [weak self] copy in self?.recordPaletteCopy(copy) }
+        )
         controller.onClose = { [weak self, weak controller] in
             guard let self, let controller else { return }
             self.annotateWindows.removeAll { $0 === controller }
@@ -2131,6 +2139,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Palette's own copies are skipped by the monitor, so screenshots,
+    /// annotated images and recordings are recorded here instead. Path and
+    /// reveal copies never reach this.
+    private func recordPaletteCopy(_ copy: PaletteClipboardCopy) {
+        guard let store else { return }
+        let limits = configuration.clipboard
+        Task { [weak self] in
+            _ = try? await store.insertPaletteCopy(
+                copy,
+                maxImages: limits.maxImages,
+                maxFiles: limits.maxFiles
+            )
+            await MainActor.run { self?.searchController?.clipboardDidChange() }
+        }
+    }
+
     private func configureClipboard() {
         guard !isScriptMode, configuration.clipboard.enabled else {
             clipboardMonitor?.stop()
@@ -2138,7 +2162,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         let store = store!
-        let limit = configuration.clipboard.maxEntries
+        let textLimit = configuration.clipboard.maxText
+        let imageLimit = configuration.clipboard.maxImages
+        let fileLimit = configuration.clipboard.maxFiles
         // A reload (including every Settings keystroke) must not drop a copy
         // that landed while the config was being applied, so an existing
         // monitor keeps its last change count.
@@ -2149,20 +2175,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task {
                 switch capture {
                 case .text(let text):
-                    _ = try? await store.insertClipboard(text: text, maxEntries: limit)
+                    _ = try? await store.insertClipboard(text: text, maxEntries: textLimit)
                 case .image(let png, let thumbnail, let width, let height):
                     _ = try? await store.insertClipboardImage(
                         png: png,
                         thumbnail: thumbnail,
                         width: width,
                         height: height,
-                        maxEntries: limit
+                        maxEntries: imageLimit
                     )
                 case .files(let paths, let thumbnail):
                     _ = try? await store.insertClipboardFiles(
                         paths: paths,
                         thumbnail: thumbnail,
-                        maxEntries: limit
+                        maxEntries: fileLimit
                     )
                 }
                 await MainActor.run {
