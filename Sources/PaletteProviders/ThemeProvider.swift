@@ -17,6 +17,10 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
     private let launcher: LauncherService
     private var onSelect: (@MainActor (String) -> Void)?
     private var currentName: (@MainActor () -> String)?
+    /// Parsing hundreds of theme files per keystroke is the cost being avoided;
+    /// the key is both directories' mtimes, and the TTL bounds content edits
+    /// (which do not move a directory's mtime).
+    private let catalogCache = ShortCache<[ThemeInfo]>(ttl: 30)
 
     public init(
         themesDirectory: URL,
@@ -39,7 +43,7 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
-        let catalog = ThemeLoader.catalog(themesDirectory: themesDirectory)
+        let catalog = await catalog()
         let current = await MainActor.run { currentName?() ?? "" }
         // `current` is the resolved theme's display name, so `.auto` and a live
         // preview both mark the theme that is actually on screen.
@@ -86,6 +90,24 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
             ))
         }
         return items
+    }
+
+    private func catalog() async -> [ThemeInfo] {
+        let bundled = ThemeLoader.bundledThemesDirectory
+        let key = [
+            Self.modified(themesDirectory),
+            bundled.map(Self.modified) ?? "-",
+        ].joined(separator: "|")
+        if let cached = await catalogCache.get(key) { return cached }
+        let infos = ThemeLoader.catalog(themesDirectory: themesDirectory, bundledThemesDirectory: bundled)
+        await catalogCache.set(infos, key: key)
+        return infos
+    }
+
+    private static func modified(_ directory: URL) -> String {
+        guard let date = (try? directory.resourceValues(forKeys: [.contentModificationDateKey]))?
+            .contentModificationDate else { return "-" }
+        return "\(directory.path)|\(Int(date.timeIntervalSince1970))"
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {

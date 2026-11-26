@@ -26,6 +26,11 @@ public enum Ranking {
         score(foldedTerms: terms.map(normalize), foldedCandidate: normalize(candidate))
     }
 
+    /// Scores one pre-folded term against a pre-folded candidate.
+    public static func score(foldedTerm: String, foldedCandidate: String) -> Double? {
+        score(normalizedNeedle: foldedTerm, haystack: foldedCandidate)
+    }
+
     /// Scores pre-folded terms against a pre-folded candidate. A cached search
     /// index folds both sides once instead of on every keystroke.
     public static func score(foldedTerms: [String], foldedCandidate: String) -> Double? {

@@ -16,12 +16,16 @@ public actor BitwardenVault {
     private var listCache: (date: Date, data: Data)?
     private var itemCache: [String: (date: Date, data: Data)] = [:]
     private var listTask: Task<ListResult, Never>?
+    private var lastListAttempt: Date?
     private var generation = 0
     private let persistCache: Bool
     private let cacheScope: String
 
     private static let cacheTTL = SecureVaultCache.ttl
     private static let maxItemCache = 128
+    /// After an expired snapshot fails to refresh, keep showing it and wait
+    /// this long before spawning `bw` again.
+    private static let refreshBackoff: TimeInterval = 30
 
     public init(
         persistCache: Bool = true,
@@ -99,49 +103,77 @@ public actor BitwardenVault {
                 timedOut: false, fromCache: true
             )
         }
-        // Coalesce simultaneous searches for the same vault instead of spawning
-        // two `bw list` processes.
-        if let listTask {
-            return await listTask.value
+        // An expired snapshot stays on screen while one refresh runs in the
+        // background. After a failed refresh, wait a little before trying
+        // again so a burst of keystrokes does not spawn the CLI per key.
+        if let stale = listCache {
+            if listTask == nil, let lastListAttempt,
+               Date().timeIntervalSince(lastListAttempt) < Self.refreshBackoff {
+                return ListResult(
+                    data: stale.data, status: 0, stderr: "",
+                    timedOut: false, fromCache: true
+                )
+            }
+            _ = startList(bw: bw, session: session)
+            return ListResult(
+                data: stale.data, status: 0, stderr: "",
+                timedOut: false, fromCache: true
+            )
         }
+        return await startList(bw: bw, session: session).value
+    }
+
+    /// The user-visible rows a cached snapshot can already answer with.
+    public func hasCachedList() -> Bool { listCache != nil }
+
+    /// Coalesce simultaneous searches for the same vault instead of spawning
+    /// two `bw list` processes. The result is cached before the task resolves.
+    private func startList(bw: String, session: String) -> Task<ListResult, Never> {
+        if let listTask { return listTask }
+        lastListAttempt = Date()
         let startedAt = Date()
         let activeGeneration = generation
-        let task = Task<ListResult, Never> {
+        let task = Task<ListResult, Never> { [weak self] in
+            let result: ListResult
             do {
-                let result = try await ProcessRunner.run(
+                let output = try await ProcessRunner.run(
                     [bw, "list", "items"],
                     environment: ["BW_SESSION": session],
-                    timeout: 60
+                    timeout: 15
                 )
-                guard result.status == 0, !result.stdout.isEmpty else {
-                    return ListResult(
-                        data: nil, status: result.status,
-                        stderr: result.stderrString, timedOut: result.timedOut,
+                if output.status == 0, !output.stdout.isEmpty {
+                    let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
+                    Log.shared.info("Bitwarden list fetched in \(ms) ms", source: "bitwarden")
+                    result = ListResult(
+                        data: output.stdout, status: 0, stderr: "",
+                        timedOut: false, fromCache: false
+                    )
+                } else {
+                    result = ListResult(
+                        data: nil, status: output.status,
+                        stderr: output.stderrString, timedOut: output.timedOut,
                         fromCache: false
                     )
                 }
-                let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
-                Log.shared.info("Bitwarden list fetched in \(ms) ms", source: "bitwarden")
-                return ListResult(
-                    data: result.stdout, status: 0, stderr: "",
-                    timedOut: false, fromCache: false
-                )
             } catch {
-                return ListResult(
+                result = ListResult(
                     data: nil, status: -1, stderr: error.localizedDescription,
                     timedOut: false, fromCache: false
                 )
             }
+            await self?.store(result, generation: activeGeneration)
+            return result
         }
         listTask = task
-        let result = await task.value
-        listTask = nil
-        if let data = result.data, generation == activeGeneration {
-            listCache = (Date(), data)
-            itemCache.removeAll()
-            if persistCache { SecureVaultCache.save(data: data, email: email, scope: cacheScope) }
-        }
-        return result
+        return task
+    }
+
+    private func store(_ result: ListResult, generation activeGeneration: Int) {
+        if generation == activeGeneration { listTask = nil }
+        guard generation == activeGeneration, let data = result.data else { return }
+        listCache = (Date(), data)
+        itemCache.removeAll()
+        if persistCache { SecureVaultCache.save(data: data, email: email, scope: cacheScope) }
     }
 
     /// Reuse the JSON from the cached list for copy/open actions instead of a
@@ -411,7 +443,14 @@ public actor BitwardenProvider: PaletteProvider {
         guard let session else { return [] }
 
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A cold vault read can take seconds; a cached one returns at once, so
+        // the footer only reports work that is actually happening.
+        let cold = await vault.hasCachedList() == false
+        if cold { await bridge.beginProgress("Reading vault…") }
         let list = await vault.list(bw: bw, session: session)
+        if cold {
+            await bridge.notify(list.data == nil ? "Vault read failed" : "Vault loaded")
+        }
         if let data = list.data {
             guard let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
                 Log.shared.warn("Bitwarden returned an unreadable item list", source: "bitwarden")
@@ -554,6 +593,8 @@ public actor BitwardenProvider: PaletteProvider {
             await vault.login(bw: bw, bridge: bridge, environment: environment)
         case "unlock":
             await vault.unlock(bw: bw, bridge: bridge, environment: environment)
+        case "retry":
+            await vault.refresh()
         default:
             break
         }

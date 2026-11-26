@@ -17,6 +17,9 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
     private let launcher: LauncherService
     private let terminalApp: String
     private let bridge: HostBridge?
+    /// `docker ps -a` measured ~330 ms, so one listing serves every keystroke
+    /// inside a short window and a container change clears it.
+    private let psCache = ShortCache<String>(ttl: 5)
     /// Re-runs the current search after a container changes state.
     public var onRefresh: (() -> Void)?
 
@@ -50,25 +53,32 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
             )]
         }
 
-        guard let result = try? await ProcessRunner.run(
-            [docker, "ps", "-a", "--format", "{{.Names}}\t{{.State}}\t{{.Image}}\t{{.Status}}"],
-            timeout: 8
-        ), result.status == 0 else {
-            return [PaletteItem(
-                id: "docker-down",
-                title: "Docker is not running",
-                subtitle: "Start Docker Desktop or the daemon, then reload",
-                icon: .symbol("shippingbox"),
-                badge: "SETUP",
-                group: "Docker",
-                score: 1_000,
-                actions: [PaletteAction(id: "open-app", title: "Open Docker", kind: .custom, value: .text("open-app"))],
-                providerID: descriptor.id,
-                providerName: descriptor.name
-            )]
+        let stdout: String
+        if let cached = await psCache.get("ps") {
+            stdout = cached
+        } else {
+            guard let result = try? await ProcessRunner.run(
+                [docker, "ps", "-a", "--format", "{{.Names}}\t{{.State}}\t{{.Image}}\t{{.Status}}"],
+                timeout: 8
+            ), result.status == 0 else {
+                return [PaletteItem(
+                    id: "docker-down",
+                    title: "Docker is not running",
+                    subtitle: "Start Docker Desktop or the daemon, then reload",
+                    icon: .symbol("shippingbox"),
+                    badge: "SETUP",
+                    group: "Docker",
+                    score: 1_000,
+                    actions: [PaletteAction(id: "open-app", title: "Open Docker", kind: .custom, value: .text("open-app"))],
+                    providerID: descriptor.id,
+                    providerName: descriptor.name
+                )]
+            }
+            stdout = result.stdoutString
+            await psCache.set(stdout, key: "ps")
         }
 
-        let containers = result.stdoutString
+        let containers = stdout
             .split(separator: "\n")
             .map { $0.split(separator: "\t", omittingEmptySubsequences: false).map(String.init) }
             .filter { $0.count >= 4 }
@@ -150,6 +160,7 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
                     .map(String.init) ?? ""
                 await bridge?.notify(line.isEmpty ? "docker \(command) \(name) failed" : line)
             }
+            await psCache.invalidate()
             await MainActor.run { onRefresh?() }
         }
     }
