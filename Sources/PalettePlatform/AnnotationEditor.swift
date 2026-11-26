@@ -84,6 +84,8 @@ public final class AnnotationEditor: ObservableObject {
     /// Text size as a fraction of the image height, adjustable while the text
     /// tool is active.
     @Published public var textSize: CGFloat = 0.05
+    public static let minTextSize: CGFloat = 0.01
+    public static let maxTextSize: CGFloat = 0.3
     @Published public var shapes: [AnnotationShape] = []
     /// Index of the mark under the last click, for moving and deleting.
     @Published public var selected: Int?
@@ -160,6 +162,16 @@ public final class AnnotationEditor: ObservableObject {
     private func measured(_ shape: AnnotationShape) -> AnnotationShape {
         guard case let .text(at, text, size, color, box) = shape, box == .zero else { return shape }
         return .text(at: at, text: text, size: size, color: color, box: textBox(text: text, size: size))
+    }
+
+    /// The text mark at `index` rendered at `size`, clamped to a legible range
+    /// and re-measured so the outline and hit box follow the glyphs. Returns
+    /// nil for any other kind of mark.
+    public func resizedText(at index: Int, to size: CGFloat) -> AnnotationShape? {
+        guard shapes.indices.contains(index),
+              case let .text(at, text, _, color, _) = shapes[index] else { return nil }
+        let clamped = min(Self.maxTextSize, max(Self.minTextSize, size))
+        return .text(at: at, text: text, size: clamped, color: color, box: textBox(text: text, size: clamped))
     }
 
     public func remove(at index: Int) {
