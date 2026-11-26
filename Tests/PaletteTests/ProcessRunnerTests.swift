@@ -1,3 +1,4 @@
+import Darwin
 import XCTest
 import PaletteCore
 import PalettePlatform
@@ -80,6 +81,34 @@ final class ProcessRunnerTests: XCTestCase {
         let data = Data(repeating: 7, count: 1000)
         let written = ProcessRunner.writeAll(data, to: -1) { _, count in count }
         XCTAssertEqual(written, data.count)
+    }
+
+    /// End to end through the real pipe: a child that exits without reading
+    /// leaves a short write, which is logged instead of raising SIGPIPE.
+    func testClosedStdinIsLoggedAndDoesNotRaiseSIGPIPE() async throws {
+        let previous = signal(SIGPIPE, SIG_IGN)
+        defer { _ = signal(SIGPIPE, previous) }
+
+        let logURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-process-log-\(UUID().uuidString).log")
+        Log.shared.configure(url: logURL)
+        defer { try? FileManager.default.removeItem(at: logURL) }
+
+        let payload = Data(repeating: 7, count: 1_000_000)
+        let result = try await ProcessRunner.run(["/usr/bin/true"], stdin: payload, timeout: 10)
+        XCTAssertEqual(result.status, 0)
+
+        var logged = ""
+        for _ in 0..<50 {
+            logged = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
+            if logged.contains("closed stdin after") { break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(
+            logged.contains("closed stdin after"),
+            "the short write was not logged: \(logged.debugDescription)"
+        )
+        XCTAssertTrue(logged.contains("of 1000000 bytes"))
     }
 
     func testStreamDeliversStdoutChunks() async throws {

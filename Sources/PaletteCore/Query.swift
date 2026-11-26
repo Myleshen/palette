@@ -36,6 +36,12 @@ public struct ParsedQuery: Equatable, Sendable {
     }
 
     public var isBound: Bool { providerID != nil }
+
+    /// Typing inside a bound provider keeps the rows already on screen; moving
+    /// to another provider (or global search) starts a fresh list.
+    public func keepsPreviousRows(previousProviderID: String?) -> Bool {
+        providerID == previousProviderID
+    }
 }
 
 /// Resolves Noctalia-style prefixes: a shared prefix character plus a bare

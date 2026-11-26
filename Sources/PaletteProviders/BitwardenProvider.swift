@@ -388,6 +388,13 @@ public actor BitwardenProvider: PaletteProvider {
 
     private static let allKinds = BitwardenKind.allCases
 
+    /// Custom action ids `activate` routes. Bitwarden routes on the action
+    /// value too, but every emitted row uses one of these ids.
+    static let handledCustomActions: Set<String> = [
+        "install", "login", "unlock", "retry", "primary", "open-url",
+    ]
+    static let hostHandledCustomActions: Set<String> = []
+
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
         guard let bw = ToolLocator.shared.path(for: "bw") else {
             return [installRow()]
@@ -453,6 +460,7 @@ public actor BitwardenProvider: PaletteProvider {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
+        guard Self.handledCustomActions.contains(action.id) else { return }
         if let command = action.value.text, ["install", "login", "unlock", "retry"].contains(command) {
             try await runRowCommand(command)
             return

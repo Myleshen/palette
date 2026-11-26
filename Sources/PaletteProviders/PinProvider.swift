@@ -14,6 +14,10 @@ public final class PinProvider: PaletteProvider, @unchecked Sendable {
     private let store: PaletteStore
     private let bridge: HostBridge
 
+    /// Custom action ids `activate` routes; the OCR rows belong to the host.
+    static let handledCustomActions: Set<String> = ["unpin-item"]
+    static let hostHandledCustomActions: Set<String> = ["ocr-pin-copy", "ocr-pin-open"]
+
     public init(store: PaletteStore, bridge: HostBridge) {
         self.store = store
         self.bridge = bridge
@@ -65,7 +69,7 @@ public final class PinProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        guard action.id == "unpin-item" else {
+        guard Self.handledCustomActions.contains(action.id) else {
             throw ProviderError.failed("Pinned items are opened through their original provider")
         }
         try await store.unpinItem(id: item.stableID)

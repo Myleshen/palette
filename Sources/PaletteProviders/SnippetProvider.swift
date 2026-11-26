@@ -26,6 +26,10 @@ public final class SnippetProvider: PaletteProvider, @unchecked Sendable {
     private let bridge: HostBridge
     private let fileURL: URL
 
+    /// Custom action ids `activate` routes; `snippet-scratch` is the host's.
+    static let handledCustomActions: Set<String> = ["snippet-copy", "snippet-raw"]
+    static let hostHandledCustomActions: Set<String> = ["snippet-scratch"]
+
     public init(bridge: HostBridge, fileURL: URL = PalettePaths.resolve().configDir.appendingPathComponent("snippets.toml")) {
         self.bridge = bridge
         self.fileURL = fileURL
@@ -43,7 +47,8 @@ public final class SnippetProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        guard let raw = action.value.text else { return }
+        guard Self.handledCustomActions.contains(action.id),
+              let raw = action.value.text else { return }
         let expanded = SnippetExpansion.expand(
             raw,
             clipboard: NSPasteboard.general.string(forType: .string) ?? ""

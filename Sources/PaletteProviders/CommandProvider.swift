@@ -32,6 +32,10 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
     private let terminal: String
     private let fileURL: URL
 
+    /// Custom action ids `activate` routes; the host owns the other two.
+    static let handledCustomActions: Set<String> = ["run"]
+    static let hostHandledCustomActions: Set<String> = ["cmd-run-panel", "term-here"]
+
     public init(
         launcher: LauncherService,
         bridge: HostBridge,
@@ -69,7 +73,8 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        guard let command = Self.load(from: fileURL).first(where: { $0.id == action.value.text }) else { return }
+        guard Self.handledCustomActions.contains(action.id),
+              let command = Self.load(from: fileURL).first(where: { $0.id == action.value.text }) else { return }
         if command.confirm {
             guard await bridge.prompt(kind: .confirm, title: "Run \(command.title)?", placeholder: nil) != nil else { return }
         }

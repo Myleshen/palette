@@ -16,6 +16,10 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
     private let bridge: HostBridge
     private let terminal: String
 
+    /// Custom action ids `activate` routes.
+    static let handledCustomActions: Set<String> = ["install", "create", "attach"]
+    static let hostHandledCustomActions: Set<String> = []
+
     public init(terminal: String, launcher: LauncherService, bridge: HostBridge) {
         self.terminal = terminal
         self.launcher = launcher
@@ -143,7 +147,8 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
-        guard let value = action.value.text else { return }
+        guard Self.handledCustomActions.contains(action.id),
+              let value = action.value.text else { return }
         if value == "install" {
             try await MainActor.run {
                 try launcher.openTerminal(command: "brew install zellij", app: terminal)
