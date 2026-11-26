@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Jump Start" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Jump Start"
+appearance = "dark"
+
+[palette]
+bg = "#071e35"
+surface = "#051626"
+elevated = "#203449"
+fg = "#e8f1fa"
+fg_muted = "#99a7b5"
+accent = "#f3cf7d"
+accent_fg = "#000000"
+selection_bg = "#383b51"
+selection_fg = "#e8f1fa"
+match_fg = "#d9aae8"
+border = "#34485c"
+separator = "#20344980"
+danger = "#ee798a"
+warning = "#f1c86b"
+success = "#83c7a3"
+info = "#81b9f2"
+badge_bg = "#203449"
+badge_fg = "#e8f1fa"
+
+[states.selected]
+bg = "#383b51"
+fg = "#e8f1fa"
+[states.hover]
+bg = "#203449"
+[states.disabled]
+fg = "#99a7b5"
+
+[footer]
+hint_color = "#99a7b5"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "SeedFlip Phosphor" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · SeedFlip Phosphor"
+appearance = "dark"
+
+[palette]
+bg = "#0c0c0c"
+surface = "#090909"
+elevated = "#242424"
+fg = "#b3ffb3"
+fg_muted = "#79aa79"
+accent = "#00ff88"
+accent_fg = "#000000"
+selection_bg = "#242424"
+selection_fg = "#b3ffb3"
+match_fg = "#f589f5"
+border = "#2d3d2d"
+separator = "#24242480"
+danger = "#f04242"
+warning = "#f0d342"
+success = "#42f07c"
+info = "#428bf0"
+badge_bg = "#242424"
+badge_fg = "#b3ffb3"
+
+[states.selected]
+bg = "#242424"
+fg = "#b3ffb3"
+[states.hover]
+bg = "#242424"
+[states.disabled]
+fg = "#79aa79"
+
+[footer]
+hint_color = "#79aa79"

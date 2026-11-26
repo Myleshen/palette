@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Seafoam Pastel" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Seafoam Pastel"
+appearance = "dark"
+
+[palette]
+bg = "#243435"
+surface = "#1a2526"
+elevated = "#3a4849"
+fg = "#d4e7d4"
+fg_muted = "#96a89c"
+accent = "#7ac3cf"
+accent_fg = "#000000"
+selection_bg = "#ffffff"
+selection_fg = "#857510"
+match_fg = "#d6b2a1"
+border = "#475855"
+separator = "#3a484980"
+danger = "#825d4d"
+warning = "#ada16d"
+success = "#728c62"
+info = "#4d7b82"
+badge_bg = "#3a4849"
+badge_fg = "#d4e7d4"
+
+[states.selected]
+bg = "#ffffff"
+fg = "#857510"
+[states.hover]
+bg = "#3a4849"
+[states.disabled]
+fg = "#96a89c"
+
+[footer]
+hint_color = "#96a89c"

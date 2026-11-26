@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Fairyfloss" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Fairyfloss"
+appearance = "dark"
+
+[palette]
+bg = "#5a5475"
+surface = "#413c54"
+elevated = "#6a6583"
+fg = "#f8f8f2"
+fg_muted = "#c1bfc6"
+accent = "#c2ffdf"
+accent_fg = "#000000"
+selection_bg = "#8077a8"
+selection_fg = "#141210"
+match_fg = "#ffb8d1"
+border = "#7a758e"
+separator = "#6a658380"
+danger = "#f92672"
+warning = "#e6c000"
+success = "#c2ffdf"
+info = "#c2ffdf"
+badge_bg = "#6a6583"
+badge_fg = "#f8f8f2"
+
+[states.selected]
+bg = "#8077a8"
+fg = "#141210"
+[states.hover]
+bg = "#6a6583"
+[states.disabled]
+fg = "#c1bfc6"
+
+[footer]
+hint_color = "#c1bfc6"

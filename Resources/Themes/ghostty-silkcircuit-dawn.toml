@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "SilkCircuit Dawn" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SilkCircuit Dawn"
+appearance = "light"
+
+[palette]
+bg = "#faf8ff"
+surface = "#edecf2"
+elevated = "#fdfcff"
+fg = "#2b2540"
+fg_muted = "#736f83"
+accent = "#1454dc"
+accent_fg = "#ffffff"
+selection_bg = "#d4c8f0"
+selection_fg = "#2b2540"
+match_fg = "#b40077"
+border = "#d1ced9"
+separator = "#fdfcff80"
+danger = "#c1272d"
+warning = "#796100"
+success = "#1d6e46"
+info = "#1454dc"
+badge_bg = "#fdfcff"
+badge_fg = "#2b2540"
+
+[states.selected]
+bg = "#d4c8f0"
+fg = "#2b2540"
+[states.hover]
+bg = "#fdfcff"
+[states.disabled]
+fg = "#736f83"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#736f83"

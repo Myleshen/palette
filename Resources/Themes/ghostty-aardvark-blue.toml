@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Aardvark Blue" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Aardvark Blue"
+appearance = "dark"
+
+[palette]
+bg = "#102040"
+surface = "#0c172e"
+elevated = "#283653"
+fg = "#dddddd"
+fg_muted = "#959ba6"
+accent = "#60a4ec"
+accent_fg = "#000000"
+selection_bg = "#bfdbfe"
+selection_fg = "#000000"
+match_fg = "#e26be2"
+border = "#39465f"
+separator = "#28365380"
+danger = "#aa342e"
+warning = "#dbba00"
+success = "#4b8c0f"
+info = "#1370d3"
+badge_bg = "#283653"
+badge_fg = "#dddddd"
+
+[states.selected]
+bg = "#bfdbfe"
+fg = "#000000"
+[states.hover]
+bg = "#283653"
+[states.disabled]
+fg = "#959ba6"
+
+[footer]
+hint_color = "#959ba6"

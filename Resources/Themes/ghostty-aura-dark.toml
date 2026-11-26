@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Aura Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Aura Dark"
+appearance = "dark"
+
+[palette]
+bg = "#15141b"
+surface = "#0f0e13"
+elevated = "#2c2c32"
+fg = "#cdccce"
+fg_muted = "#8d8c8f"
+accent = "#a277ff"
+accent_fg = "#000000"
+selection_bg = "#cdccce"
+selection_fg = "#15141b"
+match_fg = "#61ffca"
+border = "#3a393f"
+separator = "#2c2c3280"
+danger = "#ff6767"
+warning = "#ffca85"
+success = "#61ffca"
+info = "#a277ff"
+badge_bg = "#2c2c32"
+badge_fg = "#cdccce"
+
+[states.selected]
+bg = "#cdccce"
+fg = "#15141b"
+[states.hover]
+bg = "#2c2c32"
+[states.disabled]
+fg = "#8d8c8f"
+
+[footer]
+hint_color = "#8d8c8f"

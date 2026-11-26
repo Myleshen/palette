@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Primary" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Primary"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#000000"
+fg_muted = "#595959"
+accent = "#4285f4"
+accent_fg = "#000000"
+selection_bg = "#656565"
+selection_fg = "#eeeeee"
+match_fg = "#db4437"
+border = "#cccccc"
+separator = "#ffffff80"
+danger = "#db4437"
+warning = "#f4b400"
+success = "#0f9d58"
+info = "#4285f4"
+badge_bg = "#ffffff"
+badge_fg = "#000000"
+
+[states.selected]
+bg = "#656565"
+fg = "#eeeeee"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#595959"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#595959"

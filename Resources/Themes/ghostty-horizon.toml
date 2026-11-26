@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Horizon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Horizon"
+appearance = "dark"
+
+[palette]
+bg = "#1c1e26"
+surface = "#14161b"
+elevated = "#33343c"
+fg = "#d5d8da"
+fg_muted = "#94979b"
+accent = "#3fc4de"
+accent_fg = "#000000"
+selection_bg = "#6c6f93"
+selection_fg = "#ffffff"
+match_fg = "#f075b5"
+border = "#41434a"
+separator = "#33343c80"
+danger = "#e95678"
+warning = "#fab795"
+success = "#29d398"
+info = "#26bbd9"
+badge_bg = "#33343c"
+badge_fg = "#d5d8da"
+
+[states.selected]
+bg = "#6c6f93"
+fg = "#ffffff"
+[states.hover]
+bg = "#33343c"
+[states.disabled]
+fg = "#94979b"
+
+[footer]
+hint_color = "#94979b"

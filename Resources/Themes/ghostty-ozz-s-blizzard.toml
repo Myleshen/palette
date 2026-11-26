@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Ozz's Blizzard" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Ozz's Blizzard"
+appearance = "dark"
+
+[palette]
+bg = "#0a0f1a"
+surface = "#070b13"
+elevated = "#232731"
+fg = "#6581a1"
+fg_muted = "#4b617b"
+accent = "#4cc9f0"
+accent_fg = "#000000"
+selection_bg = "#e76f6f"
+selection_fg = "#152c29"
+match_fg = "#a78bfa"
+border = "#1c2635"
+separator = "#23273180"
+danger = "#e76f6f"
+warning = "#8b8b4c"
+success = "#2a9d8f"
+info = "#4cc9f0"
+badge_bg = "#232731"
+badge_fg = "#7790ac"
+
+[states.selected]
+bg = "#e76f6f"
+fg = "#152c29"
+[states.hover]
+bg = "#232731"
+[states.disabled]
+fg = "#4b617b"
+
+[footer]
+hint_color = "#4b617b"

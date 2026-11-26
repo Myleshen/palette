@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Alabaster" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Alabaster"
+appearance = "light"
+
+[palette]
+bg = "#f7f7f7"
+surface = "#ebebeb"
+elevated = "#fbfbfb"
+fg = "#000000"
+fg_muted = "#565656"
+accent = "#325cc0"
+accent_fg = "#ffffff"
+selection_bg = "#bfdbfe"
+selection_fg = "#000000"
+match_fg = "#7a3e9d"
+border = "#c6c6c6"
+separator = "#fbfbfb80"
+danger = "#aa3731"
+warning = "#cb9000"
+success = "#448c27"
+info = "#325cc0"
+badge_bg = "#fbfbfb"
+badge_fg = "#000000"
+
+[states.selected]
+bg = "#bfdbfe"
+fg = "#000000"
+[states.hover]
+bg = "#fbfbfb"
+[states.disabled]
+fg = "#565656"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#565656"

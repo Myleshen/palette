@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Safety Glass" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Safety Glass"
+appearance = "light"
+
+[palette]
+bg = "#f2fbfa"
+surface = "#e6eeed"
+elevated = "#f9fdfd"
+fg = "#142322"
+fg_muted = "#626f6e"
+accent = "#123a78"
+accent_fg = "#ffffff"
+selection_bg = "#d7ebe8"
+selection_fg = "#142322"
+match_fg = "#5e3186"
+border = "#c6d0cf"
+separator = "#f9fdfd80"
+danger = "#842424"
+warning = "#634c00"
+success = "#125a37"
+info = "#17458b"
+badge_bg = "#f9fdfd"
+badge_fg = "#142322"
+
+[states.selected]
+bg = "#d7ebe8"
+fg = "#142322"
+[states.hover]
+bg = "#f9fdfd"
+[states.disabled]
+fg = "#626f6e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#626f6e"

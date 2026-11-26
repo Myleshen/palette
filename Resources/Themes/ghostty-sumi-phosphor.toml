@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Sumi Phosphor" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Sumi Phosphor"
+appearance = "dark"
+
+[palette]
+bg = "#12100e"
+surface = "#0d0c0a"
+elevated = "#2a2826"
+fg = "#bab4a8"
+fg_muted = "#7f7b72"
+accent = "#70a0d8"
+accent_fg = "#000000"
+selection_bg = "#3a3834"
+selection_fg = "#e8e4dc"
+match_fg = "#b088c8"
+border = "#34312d"
+separator = "#2a282680"
+danger = "#d45848"
+warning = "#d4a03c"
+success = "#5ca868"
+info = "#5a82b8"
+badge_bg = "#2a2826"
+badge_fg = "#bab4a8"
+
+[states.selected]
+bg = "#3a3834"
+fg = "#e8e4dc"
+[states.hover]
+bg = "#2a2826"
+[states.disabled]
+fg = "#7f7b72"
+
+[footer]
+hint_color = "#7f7b72"

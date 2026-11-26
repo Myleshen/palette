@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Noctis Lilac" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Noctis Lilac"
+appearance = "light"
+
+[palette]
+bg = "#f2f1f8"
+surface = "#e6e5ec"
+elevated = "#f9f9fc"
+fg = "#0c006b"
+fg_muted = "#5c549c"
+accent = "#0094f0"
+accent_fg = "#000000"
+selection_bg = "#d5d3e5"
+selection_fg = "#0c006b"
+match_fg = "#ff5792"
+border = "#c4c1dc"
+separator = "#f9f9fc80"
+danger = "#e34e1c"
+warning = "#f49725"
+success = "#00b368"
+info = "#0094f0"
+badge_bg = "#f9f9fc"
+badge_fg = "#0c006b"
+
+[states.selected]
+bg = "#d5d3e5"
+fg = "#0c006b"
+[states.hover]
+bg = "#f9f9fc"
+[states.disabled]
+fg = "#5c549c"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#5c549c"

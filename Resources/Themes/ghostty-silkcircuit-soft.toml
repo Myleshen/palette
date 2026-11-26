@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "SilkCircuit Soft" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SilkCircuit Soft"
+appearance = "dark"
+
+[palette]
+bg = "#1a1626"
+surface = "#13101b"
+elevated = "#312d3c"
+fg = "#f8f8f2"
+fg_muted = "#aaa9ab"
+accent = "#a2bbff"
+accent_fg = "#000000"
+selection_bg = "#44475a"
+selection_fg = "#f8f8f2"
+match_fg = "#ffb3ff"
+border = "#46434f"
+separator = "#312d3c80"
+danger = "#ff6677"
+warning = "#ffe699"
+success = "#66ff99"
+info = "#92aaff"
+badge_bg = "#312d3c"
+badge_fg = "#f8f8f2"
+
+[states.selected]
+bg = "#44475a"
+fg = "#f8f8f2"
+[states.hover]
+bg = "#312d3c"
+[states.disabled]
+fg = "#aaa9ab"
+
+[footer]
+hint_color = "#aaa9ab"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Night Owl" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Night Owl"
+appearance = "dark"
+
+[palette]
+bg = "#011627"
+surface = "#01101c"
+elevated = "#1a2d3d"
+fg = "#d6deeb"
+fg_muted = "#8b98a6"
+accent = "#82aaff"
+accent_fg = "#000000"
+selection_bg = "#5f7e97"
+selection_fg = "#09090a"
+match_fg = "#c792ea"
+border = "#2c3e4e"
+separator = "#1a2d3d80"
+danger = "#ef5350"
+warning = "#addb67"
+success = "#22da6e"
+info = "#82aaff"
+badge_bg = "#1a2d3d"
+badge_fg = "#d6deeb"
+
+[states.selected]
+bg = "#5f7e97"
+fg = "#09090a"
+[states.hover]
+bg = "#1a2d3d"
+[states.disabled]
+fg = "#8b98a6"
+
+[footer]
+hint_color = "#8b98a6"

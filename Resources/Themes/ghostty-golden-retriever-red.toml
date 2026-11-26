@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Golden Retriever Red" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Golden Retriever Red"
+appearance = "light"
+
+[palette]
+bg = "#fff0e3"
+surface = "#f2e4d8"
+elevated = "#fff8f2"
+fg = "#6b3d2a"
+fg_muted = "#9f7c6b"
+accent = "#468bd6"
+accent_fg = "#000000"
+selection_bg = "#d28b6c"
+selection_fg = "#462b1f"
+match_fg = "#b05cc7"
+border = "#e1ccbe"
+separator = "#fff8f280"
+danger = "#d3542c"
+warning = "#d9a441"
+success = "#7a9b45"
+info = "#468bd6"
+badge_bg = "#fff8f2"
+badge_fg = "#6b3d2a"
+
+[states.selected]
+bg = "#d28b6c"
+fg = "#462b1f"
+[states.hover]
+bg = "#fff8f2"
+[states.disabled]
+fg = "#9f7c6b"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#9f7c6b"

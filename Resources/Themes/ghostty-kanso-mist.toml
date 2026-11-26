@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Kanso Mist" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Kanso Mist"
+appearance = "dark"
+
+[palette]
+bg = "#22262d"
+surface = "#181b20"
+elevated = "#383c42"
+fg = "#c5c9c7"
+fg_muted = "#8c9091"
+accent = "#7fb4ca"
+accent_fg = "#000000"
+selection_bg = "#43464e"
+selection_fg = "#c5c9c7"
+match_fg = "#a292a3"
+border = "#43474c"
+separator = "#383c4280"
+danger = "#c4746e"
+warning = "#c4b28a"
+success = "#8a9a7b"
+info = "#8ba4b0"
+badge_bg = "#383c42"
+badge_fg = "#c5c9c7"
+
+[states.selected]
+bg = "#43464e"
+fg = "#c5c9c7"
+[states.hover]
+bg = "#383c42"
+[states.disabled]
+fg = "#8c9091"
+
+[footer]
+hint_color = "#8c9091"

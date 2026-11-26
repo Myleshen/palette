@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lumina Harbor Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Harbor Dark"
+appearance = "dark"
+
+[palette]
+bg = "#0d111d"
+surface = "#090c15"
+elevated = "#252934"
+fg = "#dde1eb"
+fg_muted = "#9498a3"
+accent = "#b1deff"
+accent_fg = "#000000"
+selection_bg = "#423139"
+selection_fg = "#dde1eb"
+match_fg = "#ebc4f5"
+border = "#373b46"
+separator = "#25293480"
+danger = "#d0756c"
+warning = "#eace8c"
+success = "#9bd8b4"
+info = "#91c5ea"
+badge_bg = "#252934"
+badge_fg = "#dde1eb"
+
+[states.selected]
+bg = "#423139"
+fg = "#dde1eb"
+[states.hover]
+bg = "#252934"
+[states.disabled]
+fg = "#9498a3"
+
+[footer]
+hint_color = "#9498a3"

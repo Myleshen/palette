@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Tumbling Stones" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Tumbling Stones"
+appearance = "dark"
+
+[palette]
+bg = "#141212"
+surface = "#0e0d0d"
+elevated = "#2c2a2a"
+fg = "#f1e9e2"
+fg_muted = "#a49e99"
+accent = "#a2c4cf"
+accent_fg = "#000000"
+selection_bg = "#553337"
+selection_fg = "#fff9ed"
+match_fg = "#d0b8c5"
+border = "#403d3c"
+separator = "#2c2a2a80"
+danger = "#eb655f"
+warning = "#d6b5a1"
+success = "#9fb5a5"
+info = "#89aebc"
+badge_bg = "#2c2a2a"
+badge_fg = "#f1e9e2"
+
+[states.selected]
+bg = "#553337"
+fg = "#fff9ed"
+[states.hover]
+bg = "#2c2a2a"
+[states.disabled]
+fg = "#a49e99"
+
+[footer]
+hint_color = "#a49e99"

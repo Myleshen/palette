@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Scarlet Protocol" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Scarlet Protocol"
+appearance = "dark"
+
+[palette]
+bg = "#1c153d"
+surface = "#140f2c"
+elevated = "#332c50"
+fg = "#e94774"
+fg_muted = "#b23a66"
+accent = "#76ff9f"
+accent_fg = "#000000"
+selection_bg = "#c1deff"
+selection_fg = "#000000"
+match_fg = "#bd35ec"
+border = "#451f48"
+separator = "#332c5080"
+danger = "#ff0051"
+warning = "#faf945"
+success = "#00dc84"
+info = "#0271b6"
+badge_bg = "#332c50"
+badge_fg = "#ee7395"
+
+[states.selected]
+bg = "#c1deff"
+fg = "#000000"
+[states.hover]
+bg = "#332c50"
+[states.disabled]
+fg = "#b23a66"
+
+[footer]
+hint_color = "#b23a66"

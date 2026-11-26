@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Fideloper" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Fideloper"
+appearance = "dark"
+
+[palette]
+bg = "#292f33"
+surface = "#1e2225"
+elevated = "#3e4447"
+fg = "#dbdae0"
+fg_muted = "#9d9ea3"
+accent = "#7c85c4"
+accent_fg = "#000000"
+selection_bg = "#efb8ac"
+selection_fg = "#4e4e4e"
+match_fg = "#c0236f"
+border = "#4d5156"
+separator = "#3e444780"
+danger = "#cb1e2d"
+warning = "#b7ab9b"
+success = "#edb8ac"
+info = "#2e78c2"
+badge_bg = "#3e4447"
+badge_fg = "#dbdae0"
+
+[states.selected]
+bg = "#efb8ac"
+fg = "#4e4e4e"
+[states.hover]
+bg = "#3e4447"
+[states.disabled]
+fg = "#9d9ea3"
+
+[footer]
+hint_color = "#9d9ea3"

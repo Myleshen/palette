@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Oxocarbon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Oxocarbon"
+appearance = "dark"
+
+[palette]
+bg = "#161616"
+surface = "#101010"
+elevated = "#2d2d2d"
+fg = "#f2f4f8"
+fg_muted = "#a5a6a9"
+accent = "#00c15a"
+accent_fg = "#000000"
+selection_bg = "#393939"
+selection_fg = "#a7a7a7"
+match_fg = "#c693ff"
+border = "#424243"
+separator = "#2d2d2d80"
+danger = "#00dfdb"
+warning = "#ff4297"
+success = "#00b4ff"
+info = "#00c15a"
+badge_bg = "#2d2d2d"
+badge_fg = "#f2f4f8"
+
+[states.selected]
+bg = "#393939"
+fg = "#a7a7a7"
+[states.hover]
+bg = "#2d2d2d"
+[states.disabled]
+fg = "#a5a6a9"
+
+[footer]
+hint_color = "#a5a6a9"

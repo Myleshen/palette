@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Nordfox" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Nordfox"
+appearance = "dark"
+
+[palette]
+bg = "#2e3440"
+surface = "#21252e"
+elevated = "#434853"
+fg = "#cdcecf"
+fg_muted = "#95989d"
+accent = "#8cafd2"
+accent_fg = "#000000"
+selection_bg = "#3e4a5b"
+selection_fg = "#cdcecf"
+match_fg = "#c895bf"
+border = "#4e535d"
+separator = "#43485380"
+danger = "#bf616a"
+warning = "#ebcb8b"
+success = "#a3be8c"
+info = "#81a1c1"
+badge_bg = "#434853"
+badge_fg = "#cdcecf"
+
+[states.selected]
+bg = "#3e4a5b"
+fg = "#cdcecf"
+[states.hover]
+bg = "#434853"
+[states.disabled]
+fg = "#95989d"
+
+[footer]
+hint_color = "#95989d"

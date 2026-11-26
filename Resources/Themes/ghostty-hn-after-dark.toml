@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "HN After Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · HN After Dark"
+appearance = "dark"
+
+[palette]
+bg = "#181818"
+surface = "#111111"
+elevated = "#2f2f2f"
+fg = "#f6f6ef"
+fg_muted = "#a8a8a4"
+accent = "#83b7ff"
+accent_fg = "#000000"
+selection_bg = "#454545"
+selection_fg = "#ffffff"
+match_fg = "#d89ce0"
+border = "#444443"
+separator = "#2f2f2f80"
+danger = "#ff765c"
+warning = "#e5b94d"
+success = "#65c878"
+info = "#5599ff"
+badge_bg = "#2f2f2f"
+badge_fg = "#f6f6ef"
+
+[states.selected]
+bg = "#454545"
+fg = "#ffffff"
+[states.hover]
+bg = "#2f2f2f"
+[states.disabled]
+fg = "#a8a8a4"
+
+[footer]
+hint_color = "#a8a8a4"

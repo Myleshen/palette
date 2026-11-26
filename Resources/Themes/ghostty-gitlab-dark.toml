@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "GitLab Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · GitLab Dark"
+appearance = "dark"
+
+[palette]
+bg = "#28262b"
+surface = "#1d1b1f"
+elevated = "#3e3c40"
+fg = "#ffffff"
+fg_muted = "#b4b3b5"
+accent = "#7fb6ed"
+accent_fg = "#000000"
+selection_bg = "#ad95e9"
+selection_fg = "#28262b"
+match_fg = "#fcacc5"
+border = "#535155"
+separator = "#3e3c4080"
+danger = "#f57f6c"
+warning = "#d99530"
+success = "#52b87a"
+info = "#7fb6ed"
+badge_bg = "#3e3c40"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#ad95e9"
+fg = "#28262b"
+[states.hover]
+bg = "#3e3c40"
+[states.disabled]
+fg = "#b4b3b5"
+
+[footer]
+hint_color = "#b4b3b5"

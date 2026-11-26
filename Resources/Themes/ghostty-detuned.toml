@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Detuned" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Detuned"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#c7c7c7"
+fg_muted = "#818181"
+accent = "#00beff"
+accent_fg = "#000000"
+selection_bg = "#c1deff"
+selection_fg = "#000000"
+match_fg = "#be9eff"
+border = "#282828"
+separator = "#1a1a1a80"
+danger = "#fe4386"
+warning = "#e6da73"
+success = "#a6e32d"
+info = "#0094d9"
+badge_bg = "#1a1a1a"
+badge_fg = "#c7c7c7"
+
+[states.selected]
+bg = "#c1deff"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#818181"
+
+[footer]
+hint_color = "#818181"

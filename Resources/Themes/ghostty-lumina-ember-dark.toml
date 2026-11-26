@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lumina Ember Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Ember Dark"
+appearance = "dark"
+
+[palette]
+bg = "#171511"
+surface = "#110f0c"
+elevated = "#2e2c29"
+fg = "#e4ddd0"
+fg_muted = "#9c978d"
+accent = "#b0d7f4"
+accent_fg = "#000000"
+selection_bg = "#46342a"
+selection_fg = "#e4ddd0"
+match_fg = "#f0bcdf"
+border = "#403d37"
+separator = "#2e2c2980"
+danger = "#cb7870"
+warning = "#e5cc88"
+success = "#a9cc97"
+info = "#94bedc"
+badge_bg = "#2e2c29"
+badge_fg = "#e4ddd0"
+
+[states.selected]
+bg = "#46342a"
+fg = "#e4ddd0"
+[states.hover]
+bg = "#2e2c29"
+[states.disabled]
+fg = "#9c978d"
+
+[footer]
+hint_color = "#9c978d"

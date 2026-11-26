@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Paper Tiger" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Paper Tiger"
+appearance = "light"
+
+[palette]
+bg = "#fffaf0"
+surface = "#f2ede4"
+elevated = "#fffdf8"
+fg = "#181818"
+fg_muted = "#696764"
+accent = "#123a78"
+accent_fg = "#ffffff"
+selection_bg = "#eadfc8"
+selection_fg = "#181818"
+match_fg = "#602f88"
+border = "#d1cdc5"
+separator = "#fffdf880"
+danger = "#861f1f"
+warning = "#674b00"
+success = "#0d5b30"
+info = "#17468f"
+badge_bg = "#fffdf8"
+badge_fg = "#181818"
+
+[states.selected]
+bg = "#eadfc8"
+fg = "#181818"
+[states.hover]
+bg = "#fffdf8"
+[states.disabled]
+fg = "#696764"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#696764"

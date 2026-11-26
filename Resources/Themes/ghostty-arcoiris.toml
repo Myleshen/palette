@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Arcoiris" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Arcoiris"
+appearance = "dark"
+
+[palette]
+bg = "#201f1e"
+surface = "#171616"
+elevated = "#363534"
+fg = "#eee4d9"
+fg_muted = "#a69f98"
+accent = "#b3e8f3"
+accent_fg = "#000000"
+selection_bg = "#25524a"
+selection_fg = "#f3fffd"
+match_fg = "#cbbaf9"
+border = "#494643"
+separator = "#36353480"
+danger = "#da2700"
+warning = "#ffc656"
+success = "#12c258"
+info = "#518bfc"
+badge_bg = "#363534"
+badge_fg = "#eee4d9"
+
+[states.selected]
+bg = "#25524a"
+fg = "#f3fffd"
+[states.hover]
+bg = "#363534"
+[states.disabled]
+fg = "#a69f98"
+
+[footer]
+hint_color = "#a69f98"

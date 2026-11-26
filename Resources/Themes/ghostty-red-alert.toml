@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Red Alert" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Red Alert"
+appearance = "dark"
+
+[palette]
+bg = "#762423"
+surface = "#551a19"
+elevated = "#843a39"
+fg = "#ffffff"
+fg_muted = "#cfb2b2"
+accent = "#65aaf1"
+accent_fg = "#000000"
+selection_bg = "#073642"
+selection_fg = "#ffffff"
+match_fg = "#ddb7df"
+border = "#91504f"
+separator = "#843a3980"
+danger = "#d62e4e"
+warning = "#beb86b"
+success = "#71be6b"
+info = "#489bee"
+badge_bg = "#843a39"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#073642"
+fg = "#ffffff"
+[states.hover]
+bg = "#843a39"
+[states.disabled]
+fg = "#cfb2b2"
+
+[footer]
+hint_color = "#cfb2b2"

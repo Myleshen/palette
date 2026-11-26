@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lumina Olive Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Olive Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1a1b0c"
+surface = "#131309"
+elevated = "#313224"
+fg = "#e1dfce"
+fg_muted = "#9b9a8a"
+accent = "#c4ddff"
+accent_fg = "#000000"
+selection_bg = "#3d4224"
+selection_fg = "#e1dfce"
+match_fg = "#f0bbeb"
+border = "#424233"
+separator = "#31322480"
+danger = "#d3726a"
+warning = "#ebc27c"
+success = "#b5d5c6"
+info = "#a2c4f0"
+badge_bg = "#313224"
+badge_fg = "#e1dfce"
+
+[states.selected]
+bg = "#3d4224"
+fg = "#e1dfce"
+[states.hover]
+bg = "#313224"
+[states.disabled]
+fg = "#9b9a8a"
+
+[footer]
+hint_color = "#9b9a8a"

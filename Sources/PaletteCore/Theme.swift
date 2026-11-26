@@ -254,13 +254,37 @@ public enum ThemeLoader {
         "siri-graphite",
     ]
 
+    /// Bundled resource themes ship inside the app and next to the package, so
+    /// they need no first-run copy into the user's themes directory.
+    public static var bundledThemesDirectory: URL? {
+        guard let themes = PalettePaths.resolve().bundledResources()?
+            .appendingPathComponent("Themes", isDirectory: true) else { return nil }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: themes.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return nil }
+        return themes
+    }
+
+    public static func bundledThemeNames(
+        themesDirectory: URL? = ThemeLoader.bundledThemesDirectory
+    ) -> [String] {
+        guard let themesDirectory,
+              let files = try? FileManager.default.contentsOfDirectory(at: themesDirectory, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        return files.filter { $0.pathExtension == "toml" }
+            .map { $0.deletingPathExtension().lastPathComponent }
+            .sorted()
+    }
+
     public static func load(
         name: String,
         themesDirectory: URL,
+        bundledThemesDirectory: URL? = ThemeLoader.bundledThemesDirectory,
         fallback: Theme = .defaultDark
     ) -> ThemeLoadResult {
         var diagnostics: [Diagnostic] = []
-        var theme = resolve(name: name, themesDirectory: themesDirectory, fallback: fallback, visited: [], diagnostics: &diagnostics)
+        var theme = resolve(name: name, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, fallback: fallback, visited: [], diagnostics: &diagnostics)
         correctContrast(&theme, diagnostics: &diagnostics)
         validate(theme, diagnostics: &diagnostics)
         return ThemeLoadResult(theme: theme, diagnostics: diagnostics)
@@ -301,35 +325,84 @@ public enum ThemeLoader {
         foreground = replacement
     }
 
-    public static func catalog(themesDirectory: URL) -> [ThemeInfo] {
+    public static func catalog(
+        themesDirectory: URL,
+        bundledThemesDirectory: URL? = ThemeLoader.bundledThemesDirectory
+    ) -> [ThemeInfo] {
         var infos: [ThemeInfo] = []
-        for name in builtinNames {
-            var diagnostics: [Diagnostic] = []
-            let theme = resolve(name: name, themesDirectory: themesDirectory, fallback: .defaultDark, visited: [], diagnostics: &diagnostics)
-            infos.append(ThemeInfo(name: name, displayName: theme.name, appearance: theme.appearance, isBuiltin: true))
+        var index: [String: Int] = [:]
+        // A user file with a bundled theme's name replaces its catalogue entry,
+        // matching resolution order where the user directory wins.
+        func add(_ info: ThemeInfo) {
+            if let existing = index[info.name] {
+                infos[existing] = info
+            } else {
+                index[info.name] = infos.count
+                infos.append(info)
+            }
         }
 
-        guard let files = try? FileManager.default.contentsOfDirectory(at: themesDirectory, includingPropertiesForKeys: nil) else {
-            return infos
+        for name in builtinNames {
+            var diagnostics: [Diagnostic] = []
+            let theme = resolve(name: name, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, fallback: .defaultDark, visited: [], diagnostics: &diagnostics)
+            add(ThemeInfo(name: name, displayName: theme.name, appearance: theme.appearance, isBuiltin: true))
         }
-        for file in files where file.pathExtension == "toml" {
-            let name = file.deletingPathExtension().lastPathComponent
-            guard !builtinNames.contains(name) else { continue }
-            var display = name
-            var appearance = "dark"
-            if let text = try? String(contentsOf: file, encoding: .utf8),
-               let table = try? TOMLTable(string: text) {
-                display = table.str("name") ?? display
-                appearance = table.str("appearance") ?? appearance
+
+        if let bundledThemesDirectory {
+            for info in bundledCatalog(bundledThemesDirectory) {
+                add(info)
             }
-            infos.append(ThemeInfo(name: name, displayName: display, appearance: appearance, isBuiltin: false))
+        }
+
+        if let files = try? FileManager.default.contentsOfDirectory(at: themesDirectory, includingPropertiesForKeys: nil) {
+            for file in files where file.pathExtension == "toml" {
+                let name = file.deletingPathExtension().lastPathComponent
+                guard !builtinNames.contains(name) else { continue }
+                add(themeInfo(at: file, name: name, isBuiltin: false))
+            }
         }
         return infos.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    /// Bundled resources never change while the app runs, so parsing their
+    /// headers once keeps catalog lookups cheap with hundreds of themes.
+    private static let bundledCatalogLock = NSLock()
+    private static var bundledCatalogCache: [String: [ThemeInfo]] = [:]
+
+    private static func bundledCatalog(_ directory: URL) -> [ThemeInfo] {
+        let key = directory.standardizedFileURL.path
+        bundledCatalogLock.lock()
+        if let cached = bundledCatalogCache[key] {
+            bundledCatalogLock.unlock()
+            return cached
+        }
+        bundledCatalogLock.unlock()
+
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        let infos = files.filter { $0.pathExtension == "toml" }
+            .map { themeInfo(at: $0, name: $0.deletingPathExtension().lastPathComponent, isBuiltin: true) }
+
+        bundledCatalogLock.lock()
+        bundledCatalogCache[key] = infos
+        bundledCatalogLock.unlock()
+        return infos
+    }
+
+    private static func themeInfo(at file: URL, name: String, isBuiltin: Bool) -> ThemeInfo {
+        var display = name
+        var appearance = "dark"
+        if let text = try? String(contentsOf: file, encoding: .utf8),
+           let table = try? TOMLTable(string: text) {
+            display = table.str("name") ?? display
+            appearance = table.str("appearance") ?? appearance
+        }
+        return ThemeInfo(name: name, displayName: display, appearance: appearance, isBuiltin: isBuiltin)
     }
 
     private static func resolve(
         name: String,
         themesDirectory: URL,
+        bundledThemesDirectory: URL?,
         fallback: Theme,
         visited: Set<String>,
         diagnostics: inout [Diagnostic]
@@ -345,15 +418,21 @@ public enum ThemeLoader {
         if name == "default-light" { return .defaultLight }
 
         if let source = builtinSource(name) {
-            return parseSource(source, name: name, base: name.contains("latte") ? .defaultLight : .defaultDark, themesDirectory: themesDirectory, visited: visited, diagnostics: &diagnostics, fallback: fallback)
+            return parseSource(source, name: name, base: name.contains("latte") ? .defaultLight : .defaultDark, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, visited: visited, diagnostics: &diagnostics, fallback: fallback)
         }
 
         let file = themesDirectory.appendingPathComponent(name).appendingPathExtension("toml")
-        guard let text = try? String(contentsOf: file, encoding: .utf8) else {
-            diagnostics.append(Diagnostic(.warning, "Theme '\(name)' not found; using fallback.", source: "theme"))
-            return fallback
+        if let text = try? String(contentsOf: file, encoding: .utf8) {
+            return parseSource(text, name: name, base: fallback, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, visited: visited, diagnostics: &diagnostics, fallback: fallback)
         }
-        return parseSource(text, name: name, base: fallback, themesDirectory: themesDirectory, visited: visited, diagnostics: &diagnostics, fallback: fallback)
+        if let bundledThemesDirectory {
+            let bundled = bundledThemesDirectory.appendingPathComponent(name).appendingPathExtension("toml")
+            if let text = try? String(contentsOf: bundled, encoding: .utf8) {
+                return parseSource(text, name: name, base: .defaultDark, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, useAppearanceBase: true, visited: visited, diagnostics: &diagnostics, fallback: fallback)
+            }
+        }
+        diagnostics.append(Diagnostic(.warning, "Theme '\(name)' not found; using fallback.", source: "theme"))
+        return fallback
     }
 
     private static func parseSource(
@@ -361,6 +440,8 @@ public enum ThemeLoader {
         name: String,
         base: Theme,
         themesDirectory: URL,
+        bundledThemesDirectory: URL?,
+        useAppearanceBase: Bool = false,
         visited: Set<String>,
         diagnostics: inout [Diagnostic],
         fallback: Theme
@@ -372,7 +453,11 @@ public enum ThemeLoader {
 
         var resolvedBase = base
         if let parent = table.str("extends"), !parent.isEmpty, parent != name {
-            resolvedBase = resolve(name: parent, themesDirectory: themesDirectory, fallback: base, visited: visited, diagnostics: &diagnostics)
+            resolvedBase = resolve(name: parent, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, fallback: base, visited: visited, diagnostics: &diagnostics)
+        } else if useAppearanceBase {
+            // Ported terminal themes declare their own appearance and inherit
+            // the matching Palette defaults instead of the caller's fallback.
+            resolvedBase = table.str("appearance")?.lowercased() == "light" ? .defaultLight : .defaultDark
         }
 
         return parse(table, name: name, base: resolvedBase, diagnostics: &diagnostics)

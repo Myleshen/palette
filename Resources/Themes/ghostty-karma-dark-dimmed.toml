@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Karma Dark Dimmed" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Karma Dark Dimmed"
+appearance = "dark"
+
+[palette]
+bg = "#14181f"
+surface = "#0e1116"
+elevated = "#2c2f35"
+fg = "#e2def0"
+fg_muted = "#9a99a7"
+accent = "#ebd870"
+accent_fg = "#000000"
+selection_bg = "#2f2d3d"
+selection_fg = "#e2def0"
+match_fg = "#b6a4d6"
+border = "#3d4049"
+separator = "#2c2f3580"
+danger = "#e87691"
+warning = "#ebd870"
+success = "#82c891"
+info = "#6cc4d2"
+badge_bg = "#2c2f35"
+badge_fg = "#e2def0"
+
+[states.selected]
+bg = "#2f2d3d"
+fg = "#e2def0"
+[states.hover]
+bg = "#2c2f35"
+[states.disabled]
+fg = "#9a99a7"
+
+[footer]
+hint_color = "#9a99a7"

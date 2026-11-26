@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Tomorrow Night Burns" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Tomorrow Night Burns"
+appearance = "dark"
+
+[palette]
+bg = "#151515"
+surface = "#0f0f0f"
+elevated = "#2c2c2c"
+fg = "#a1b0b8"
+fg_muted = "#707a7f"
+accent = "#fc595f"
+accent_fg = "#000000"
+selection_bg = "#b0bec5"
+selection_fg = "#2a2d32"
+match_fg = "#df9395"
+border = "#313436"
+separator = "#2c2c2c80"
+danger = "#832e31"
+warning = "#d3494e"
+success = "#a63c40"
+info = "#fc595f"
+badge_bg = "#2c2c2c"
+badge_fg = "#a1b0b8"
+
+[states.selected]
+bg = "#b0bec5"
+fg = "#2a2d32"
+[states.hover]
+bg = "#2c2c2c"
+[states.disabled]
+fg = "#707a7f"
+
+[footer]
+hint_color = "#707a7f"

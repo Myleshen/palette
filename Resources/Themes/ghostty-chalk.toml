@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Chalk" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Chalk"
+appearance = "dark"
+
+[palette]
+bg = "#2b2d2e"
+surface = "#1f2021"
+elevated = "#404243"
+fg = "#d2d8d9"
+fg_muted = "#989c9d"
+accent = "#4196ff"
+accent_fg = "#000000"
+selection_bg = "#e4e8ed"
+selection_fg = "#3f4041"
+match_fg = "#fc5275"
+border = "#4c4f50"
+separator = "#40424380"
+danger = "#b23a52"
+warning = "#b9ac4a"
+success = "#789b6a"
+info = "#2a7fac"
+badge_bg = "#404243"
+badge_fg = "#d2d8d9"
+
+[states.selected]
+bg = "#e4e8ed"
+fg = "#3f4041"
+[states.hover]
+bg = "#404243"
+[states.disabled]
+fg = "#989c9d"
+
+[footer]
+hint_color = "#989c9d"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Keys Ocean Sunset HC" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Keys Ocean Sunset HC"
+appearance = "dark"
+
+[palette]
+bg = "#060910"
+surface = "#04060c"
+elevated = "#1f2228"
+fg = "#f0f4fa"
+fg_muted = "#9ea2a8"
+accent = "#88c4ff"
+accent_fg = "#000000"
+selection_bg = "#2c4875"
+selection_fg = "#ffffff"
+match_fg = "#f0a8d8"
+border = "#35383f"
+separator = "#1f222880"
+danger = "#ff6361"
+warning = "#ffa600"
+success = "#4ad68a"
+info = "#6aa8f0"
+badge_bg = "#1f2228"
+badge_fg = "#f0f4fa"
+
+[states.selected]
+bg = "#2c4875"
+fg = "#ffffff"
+[states.hover]
+bg = "#1f2228"
+[states.disabled]
+fg = "#9ea2a8"
+
+[footer]
+hint_color = "#9ea2a8"

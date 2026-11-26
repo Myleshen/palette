@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Black Metal (Nile)" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Black Metal (Nile)"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#c1c1c1"
+fg_muted = "#7d7d7d"
+accent = "#888888"
+accent_fg = "#000000"
+selection_bg = "#c1c1c1"
+selection_fg = "#000000"
+match_fg = "#999999"
+border = "#272727"
+separator = "#1a1a1a80"
+danger = "#5f8787"
+warning = "#777755"
+success = "#aa9988"
+info = "#888888"
+badge_bg = "#1a1a1a"
+badge_fg = "#c1c1c1"
+
+[states.selected]
+bg = "#c1c1c1"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#7d7d7d"
+
+[footer]
+hint_color = "#7d7d7d"

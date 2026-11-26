@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Homebrew" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Homebrew"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#00ff00"
+fg_muted = "#00a600"
+accent = "#23ff18"
+accent_fg = "#000000"
+selection_bg = "#083905"
+selection_fg = "#ffffff"
+match_fg = "#e500e5"
+border = "#003300"
+separator = "#1a1a1a80"
+danger = "#990000"
+warning = "#999900"
+success = "#00a600"
+info = "#0d0dbf"
+badge_bg = "#1a1a1a"
+badge_fg = "#00ff00"
+
+[states.selected]
+bg = "#083905"
+fg = "#ffffff"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#00a600"
+
+[footer]
+hint_color = "#00a600"

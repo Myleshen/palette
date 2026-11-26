@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Pierre Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Pierre Dark"
+appearance = "dark"
+
+[palette]
+bg = "#070707"
+surface = "#050505"
+elevated = "#202020"
+fg = "#fbfbfb"
+fg_muted = "#a6a6a6"
+accent = "#69b1ff"
+accent_fg = "#000000"
+selection_bg = "#19283c"
+selection_fg = "#fbfbfb"
+match_fg = "#d568ea"
+border = "#383838"
+separator = "#20202080"
+danger = "#ff2e3f"
+warning = "#ffca00"
+success = "#0dbe4e"
+info = "#009fff"
+badge_bg = "#202020"
+badge_fg = "#fbfbfb"
+
+[states.selected]
+bg = "#19283c"
+fg = "#fbfbfb"
+[states.hover]
+bg = "#202020"
+[states.disabled]
+fg = "#a6a6a6"
+
+[footer]
+hint_color = "#a6a6a6"

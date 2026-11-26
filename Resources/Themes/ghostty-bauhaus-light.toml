@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Bauhaus Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Bauhaus Light"
+appearance = "light"
+
+[palette]
+bg = "#e5dbd3"
+surface = "#dad0c8"
+elevated = "#f3efeb"
+fg = "#2b2119"
+fg_muted = "#6c625a"
+accent = "#254283"
+accent_fg = "#ffffff"
+selection_bg = "#c1bdbe"
+selection_fg = "#2b2119"
+match_fg = "#790d83"
+border = "#c0b6ae"
+separator = "#f3efeb80"
+danger = "#c5031f"
+warning = "#7e5c05"
+success = "#546903"
+info = "#4060a3"
+badge_bg = "#f3efeb"
+badge_fg = "#2b2119"
+
+[states.selected]
+bg = "#c1bdbe"
+fg = "#2b2119"
+[states.hover]
+bg = "#f3efeb"
+[states.disabled]
+fg = "#6c625a"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6c625a"

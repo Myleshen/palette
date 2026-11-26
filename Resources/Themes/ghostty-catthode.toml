@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Catthode" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Catthode"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#ffffff"
+fg_muted = "#a6a6a6"
+accent = "#9cd9e6"
+accent_fg = "#000000"
+selection_bg = "#2d2d2d"
+selection_fg = "#ffffff"
+match_fg = "#eba4be"
+border = "#333333"
+separator = "#1a1a1a80"
+danger = "#ff6b6b"
+warning = "#ffb86c"
+success = "#b9d665"
+info = "#9cd9e6"
+badge_bg = "#1a1a1a"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#2d2d2d"
+fg = "#ffffff"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#a6a6a6"
+
+[footer]
+hint_color = "#a6a6a6"

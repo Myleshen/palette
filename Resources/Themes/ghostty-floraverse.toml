@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Floraverse" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Floraverse"
+appearance = "dark"
+
+[palette]
+bg = "#0e0d15"
+surface = "#0a090f"
+elevated = "#26252c"
+fg = "#dbd1b9"
+fg_muted = "#938c80"
+accent = "#40a4cf"
+accent_fg = "#000000"
+selection_bg = "#f3e0b8"
+selection_fg = "#08002e"
+match_fg = "#f12aae"
+border = "#373436"
+separator = "#26252c80"
+danger = "#7e1a46"
+warning = "#cd751c"
+success = "#5d731a"
+info = "#1d6da1"
+badge_bg = "#26252c"
+badge_fg = "#dbd1b9"
+
+[states.selected]
+bg = "#f3e0b8"
+fg = "#08002e"
+[states.hover]
+bg = "#26252c"
+[states.disabled]
+fg = "#938c80"
+
+[footer]
+hint_color = "#938c80"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Duskfox" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Duskfox"
+appearance = "dark"
+
+[palette]
+bg = "#232136"
+surface = "#191827"
+elevated = "#39374a"
+fg = "#e0def4"
+fg_muted = "#9e9cb2"
+accent = "#65b1cd"
+accent_fg = "#000000"
+selection_bg = "#433c59"
+selection_fg = "#e0def4"
+match_fg = "#ccb1ed"
+border = "#49475c"
+separator = "#39374a80"
+danger = "#eb6f92"
+warning = "#f6c177"
+success = "#a3be8c"
+info = "#569fba"
+badge_bg = "#39374a"
+badge_fg = "#e0def4"
+
+[states.selected]
+bg = "#433c59"
+fg = "#e0def4"
+[states.hover]
+bg = "#39374a"
+[states.disabled]
+fg = "#9e9cb2"
+
+[footer]
+hint_color = "#9e9cb2"

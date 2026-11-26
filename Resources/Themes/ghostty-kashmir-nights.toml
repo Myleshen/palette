@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Kashmir Nights" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Kashmir Nights"
+appearance = "dark"
+
+[palette]
+bg = "#291714"
+surface = "#1e110e"
+elevated = "#3e2e2c"
+fg = "#f4dfc9"
+fg_muted = "#ad998a"
+accent = "#b5c2d2"
+accent_fg = "#000000"
+selection_bg = "#604136"
+selection_fg = "#fff9ed"
+match_fg = "#ceb5d0"
+border = "#523f38"
+separator = "#3e2e2c80"
+danger = "#dc805e"
+warning = "#e6b46a"
+success = "#b6b18a"
+info = "#9cacc1"
+badge_bg = "#3e2e2c"
+badge_fg = "#f4dfc9"
+
+[states.selected]
+bg = "#604136"
+fg = "#fff9ed"
+[states.hover]
+bg = "#3e2e2c"
+[states.disabled]
+fg = "#ad998a"
+
+[footer]
+hint_color = "#ad998a"

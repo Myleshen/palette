@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Patina Dark Soft" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Patina Dark Soft"
+appearance = "dark"
+
+[palette]
+bg = "#1a1a1a"
+surface = "#131313"
+elevated = "#313131"
+fg = "#dbd7ca"
+fg_muted = "#97958c"
+accent = "#6db3c2"
+accent_fg = "#000000"
+selection_bg = "#3a3835"
+selection_fg = "#dbd7ca"
+match_fg = "#c98a7d"
+border = "#41403d"
+separator = "#31313180"
+danger = "#cb7676"
+warning = "#e6cc77"
+success = "#549c7d"
+info = "#6db3c2"
+badge_bg = "#313131"
+badge_fg = "#dbd7ca"
+
+[states.selected]
+bg = "#3a3835"
+fg = "#dbd7ca"
+[states.hover]
+bg = "#313131"
+[states.disabled]
+fg = "#97958c"
+
+[footer]
+hint_color = "#97958c"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "London Soho Night" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · London Soho Night"
+appearance = "dark"
+
+[palette]
+bg = "#1a1612"
+surface = "#13100d"
+elevated = "#312d2a"
+fg = "#ebe0c8"
+fg_muted = "#a29988"
+accent = "#88a8c8"
+accent_fg = "#000000"
+selection_bg = "#3a2f24"
+selection_fg = "#ebe0c8"
+match_fg = "#ed85b8"
+border = "#443e36"
+separator = "#312d2a80"
+danger = "#d4574a"
+warning = "#e8b04a"
+success = "#8fae5e"
+info = "#6a8fb5"
+badge_bg = "#312d2a"
+badge_fg = "#ebe0c8"
+
+[states.selected]
+bg = "#3a2f24"
+fg = "#ebe0c8"
+[states.hover]
+bg = "#312d2a"
+[states.disabled]
+fg = "#a29988"
+
+[footer]
+hint_color = "#a29988"

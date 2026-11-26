@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Undead" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Undead"
+appearance = "dark"
+
+[palette]
+bg = "#3d3c1c"
+surface = "#2c2b14"
+elevated = "#505033"
+fg = "#f3edcf"
+fg_muted = "#b3af90"
+accent = "#ded157"
+accent_fg = "#000000"
+selection_bg = "#5d5c37"
+selection_fg = "#fff8e3"
+match_fg = "#cdb6c1"
+border = "#615f40"
+separator = "#50503380"
+danger = "#e69a72"
+warning = "#d9c164"
+success = "#a8c97c"
+info = "#91bdb5"
+badge_bg = "#505033"
+badge_fg = "#f3edcf"
+
+[states.selected]
+bg = "#5d5c37"
+fg = "#fff8e3"
+[states.hover]
+bg = "#505033"
+[states.disabled]
+fg = "#b3af90"
+
+[footer]
+hint_color = "#b3af90"

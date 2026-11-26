@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Candlelight" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Candlelight"
+appearance = "dark"
+
+[palette]
+bg = "#432708"
+surface = "#301c06"
+elevated = "#563d21"
+fg = "#f8e7c4"
+fg_muted = "#b9a482"
+accent = "#92b8c5"
+accent_fg = "#000000"
+selection_bg = "#cfc1aa"
+selection_fg = "#534b3b"
+match_fg = "#c49eaf"
+border = "#674d2e"
+separator = "#563d2180"
+danger = "#e89661"
+warning = "#dfbb53"
+success = "#9ab57c"
+info = "#83aebd"
+badge_bg = "#563d21"
+badge_fg = "#f8e7c4"
+
+[states.selected]
+bg = "#cfc1aa"
+fg = "#534b3b"
+[states.hover]
+bg = "#563d21"
+[states.disabled]
+fg = "#b9a482"
+
+[footer]
+hint_color = "#b9a482"

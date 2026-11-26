@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Carbon Paper" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Carbon Paper"
+appearance = "light"
+
+[palette]
+bg = "#f8f6ed"
+surface = "#eceae1"
+elevated = "#fcfbf7"
+fg = "#1d2028"
+fg_muted = "#6a6b6d"
+accent = "#123a78"
+accent_fg = "#ffffff"
+selection_bg = "#ddd9cb"
+selection_fg = "#1d2028"
+match_fg = "#603187"
+border = "#cccbc6"
+separator = "#fcfbf780"
+danger = "#842424"
+warning = "#654d00"
+success = "#145a37"
+info = "#17458b"
+badge_bg = "#fcfbf7"
+badge_fg = "#1d2028"
+
+[states.selected]
+bg = "#ddd9cb"
+fg = "#1d2028"
+[states.hover]
+bg = "#fcfbf7"
+[states.disabled]
+fg = "#6a6b6d"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6a6b6d"

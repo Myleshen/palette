@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Belafonte Day" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Belafonte Day"
+appearance = "light"
+
+[palette]
+bg = "#d5ccba"
+surface = "#cac2b1"
+elevated = "#ece8e0"
+fg = "#45373c"
+fg_muted = "#776b68"
+accent = "#426a79"
+accent_fg = "#ffffff"
+selection_bg = "#968c83"
+selection_fg = "#2c2326"
+match_fg = "#97522c"
+border = "#b8aea1"
+separator = "#ece8e080"
+danger = "#be100e"
+warning = "#d08b30"
+success = "#858162"
+info = "#426a79"
+badge_bg = "#ece8e0"
+badge_fg = "#45373c"
+
+[states.selected]
+bg = "#968c83"
+fg = "#2c2326"
+[states.hover]
+bg = "#ece8e0"
+[states.disabled]
+fg = "#776b68"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#776b68"

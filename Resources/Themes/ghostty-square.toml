@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Square" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Square"
+appearance = "dark"
+
+[palette]
+bg = "#1a1a1a"
+surface = "#131313"
+elevated = "#313131"
+fg = "#acacab"
+fg_muted = "#797978"
+accent = "#b6defb"
+accent_fg = "#000000"
+selection_bg = "#4d4d4d"
+selection_fg = "#ffffff"
+match_fg = "#ad7fa8"
+border = "#373737"
+separator = "#31313180"
+danger = "#e9897c"
+warning = "#ecebbe"
+success = "#b6377d"
+info = "#a9cdeb"
+badge_bg = "#313131"
+badge_fg = "#acacab"
+
+[states.selected]
+bg = "#4d4d4d"
+fg = "#ffffff"
+[states.hover]
+bg = "#313131"
+[states.disabled]
+fg = "#797978"
+
+[footer]
+hint_color = "#797978"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Galizur" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Galizur"
+appearance = "dark"
+
+[palette]
+bg = "#071317"
+surface = "#050e11"
+elevated = "#202b2e"
+fg = "#ddeeff"
+fg_muted = "#92a1ae"
+accent = "#3377ff"
+accent_fg = "#000000"
+selection_bg = "#202b2e"
+selection_fg = "#ddeeff"
+match_fg = "#aa77ff"
+border = "#323f45"
+separator = "#202b2e80"
+danger = "#aa1122"
+warning = "#ccaa22"
+success = "#33aa11"
+info = "#2255cc"
+badge_bg = "#202b2e"
+badge_fg = "#ddeeff"
+
+[states.selected]
+bg = "#202b2e"
+fg = "#ddeeff"
+[states.hover]
+bg = "#202b2e"
+[states.disabled]
+fg = "#92a1ae"
+
+[footer]
+hint_color = "#92a1ae"

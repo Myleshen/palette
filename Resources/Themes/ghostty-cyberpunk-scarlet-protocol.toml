@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Cyberpunk Scarlet Protocol" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Cyberpunk Scarlet Protocol"
+appearance = "dark"
+
+[palette]
+bg = "#101116"
+surface = "#0c0c10"
+elevated = "#28292d"
+fg = "#e73566"
+fg_muted = "#b12c52"
+accent = "#76ff9f"
+accent_fg = "#000000"
+selection_bg = "#c1deff"
+selection_fg = "#000000"
+match_fg = "#bd35ec"
+border = "#3b1826"
+separator = "#28292d80"
+danger = "#ff0051"
+warning = "#faf945"
+success = "#01dc84"
+info = "#0271b6"
+badge_bg = "#28292d"
+badge_fg = "#ed658b"
+
+[states.selected]
+bg = "#c1deff"
+fg = "#000000"
+[states.hover]
+bg = "#28292d"
+[states.disabled]
+fg = "#b12c52"
+
+[footer]
+hint_color = "#b12c52"

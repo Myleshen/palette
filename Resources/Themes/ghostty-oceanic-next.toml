@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Oceanic Next" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Oceanic Next"
+appearance = "dark"
+
+[palette]
+bg = "#162c35"
+surface = "#102026"
+elevated = "#2d4149"
+fg = "#c0c5ce"
+fg_muted = "#848f98"
+accent = "#6699cc"
+accent_fg = "#000000"
+selection_bg = "#4f5b66"
+selection_fg = "#cdd1d8"
+match_fg = "#c594c5"
+border = "#384b54"
+separator = "#2d414980"
+danger = "#ec5f67"
+warning = "#fac863"
+success = "#99c794"
+info = "#6699cc"
+badge_bg = "#2d4149"
+badge_fg = "#c0c5ce"
+
+[states.selected]
+bg = "#4f5b66"
+fg = "#cdd1d8"
+[states.hover]
+bg = "#2d4149"
+[states.disabled]
+fg = "#848f98"
+
+[footer]
+hint_color = "#848f98"

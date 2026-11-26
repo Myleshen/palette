@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Zacess High Contrast Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Zacess High Contrast Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#000000"
+fg_muted = "#595959"
+accent = "#005bdc"
+accent_fg = "#ffffff"
+selection_bg = "#015f5e"
+selection_fg = "#ffffff"
+match_fg = "#b400ac"
+border = "#cccccc"
+separator = "#ffffff80"
+danger = "#ca0000"
+warning = "#875b00"
+success = "#017424"
+info = "#005bdc"
+badge_bg = "#ffffff"
+badge_fg = "#000000"
+
+[states.selected]
+bg = "#015f5e"
+fg = "#ffffff"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#595959"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#595959"

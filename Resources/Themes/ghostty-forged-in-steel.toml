@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Forged in Steel" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Forged in Steel"
+appearance = "dark"
+
+[palette]
+bg = "#14232f"
+surface = "#0e1922"
+elevated = "#2c3944"
+fg = "#e8f1f5"
+fg_muted = "#9ea9b0"
+accent = "#a0cbea"
+accent_fg = "#000000"
+selection_bg = "#354b5a"
+selection_fg = "#ffffff"
+match_fg = "#c0c8d9"
+border = "#3e4c57"
+separator = "#2c394480"
+danger = "#db7779"
+warning = "#bcb9a1"
+success = "#95b9b7"
+info = "#83b8da"
+badge_bg = "#2c3944"
+badge_fg = "#e8f1f5"
+
+[states.selected]
+bg = "#354b5a"
+fg = "#ffffff"
+[states.hover]
+bg = "#2c3944"
+[states.disabled]
+fg = "#9ea9b0"
+
+[footer]
+hint_color = "#9ea9b0"

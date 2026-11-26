@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Catppuccin Mocha" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Catppuccin Mocha"
+appearance = "dark"
+
+[palette]
+bg = "#1e1e2e"
+surface = "#161621"
+elevated = "#343443"
+fg = "#cdd6f4"
+fg_muted = "#9096af"
+accent = "#aeccfc"
+accent_fg = "#000000"
+selection_bg = "#f5e0dc"
+selection_fg = "#1e1e2e"
+match_fg = "#f5c2e7"
+border = "#414356"
+separator = "#34344380"
+danger = "#f38ba8"
+warning = "#f9e2af"
+success = "#a6e3a1"
+info = "#89b4fa"
+badge_bg = "#343443"
+badge_fg = "#cdd6f4"
+
+[states.selected]
+bg = "#f5e0dc"
+fg = "#1e1e2e"
+[states.hover]
+bg = "#343443"
+[states.disabled]
+fg = "#9096af"
+
+[footer]
+hint_color = "#9096af"

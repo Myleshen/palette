@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Pro" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Pro"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#f2f2f2"
+fg_muted = "#9d9d9d"
+accent = "#0000ff"
+accent_fg = "#ffffff"
+selection_bg = "#414141"
+selection_fg = "#adadad"
+match_fg = "#e500e5"
+border = "#303030"
+separator = "#1a1a1a80"
+danger = "#990000"
+warning = "#999900"
+success = "#00a600"
+info = "#2009db"
+badge_bg = "#1a1a1a"
+badge_fg = "#f2f2f2"
+
+[states.selected]
+bg = "#414141"
+fg = "#adadad"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#9d9d9d"
+
+[footer]
+hint_color = "#9d9d9d"

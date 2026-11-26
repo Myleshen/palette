@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Everforest Light Med" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+name = "Ghostty · Everforest Light Med"
+appearance = "light"
+
+[palette]
+bg = "#efebd4"
+surface = "#e3dfc9"
+elevated = "#f8f6ec"
+fg = "#5c6a72"
+fg_muted = "#7d8788"
+accent = "#3a94c5"
+accent_fg = "#000000"
+selection_bg = "#f8f6ec"
+selection_fg = "#5c6a72"
+match_fg = "#df69ba"
+border = "#d2d1c0"
+separator = "#f8f6ec80"
+danger = "#e67e80"
+warning = "#c1a266"
+success = "#9ab373"
+info = "#7fbbb3"
+badge_bg = "#f8f6ec"
+badge_fg = "#5c6a72"
+
+[states.selected]
+bg = "#f8f6ec"
+fg = "#5c6a72"
+[states.hover]
+bg = "#f8f6ec"
+[states.disabled]
+fg = "#7d8788"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7d8788"

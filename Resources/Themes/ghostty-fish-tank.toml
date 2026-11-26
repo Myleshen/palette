@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Fish Tank" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Fish Tank"
+appearance = "dark"
+
+[palette]
+bg = "#232537"
+surface = "#191b28"
+elevated = "#393b4b"
+fg = "#ecf0fe"
+fg_muted = "#a6a9b8"
+accent = "#fecd5e"
+accent_fg = "#000000"
+selection_bg = "#fcf7e9"
+selection_fg = "#232537"
+match_fg = "#fda5cd"
+border = "#4b4e5f"
+separator = "#393b4b80"
+danger = "#c6004a"
+warning = "#fecd5e"
+success = "#acf157"
+info = "#525fb8"
+badge_bg = "#393b4b"
+badge_fg = "#ecf0fe"
+
+[states.selected]
+bg = "#fcf7e9"
+fg = "#232537"
+[states.hover]
+bg = "#393b4b"
+[states.disabled]
+fg = "#a6a9b8"
+
+[footer]
+hint_color = "#a6a9b8"

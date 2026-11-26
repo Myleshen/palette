@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "One Double Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · One Double Light"
+appearance = "light"
+
+[palette]
+bg = "#fafafa"
+surface = "#ededed"
+elevated = "#fdfdfd"
+fg = "#383a43"
+fg_muted = "#7c7d83"
+accent = "#1065de"
+accent_fg = "#ffffff"
+selection_bg = "#454e5e"
+selection_fg = "#bfbfbf"
+match_fg = "#b50da9"
+border = "#d3d4d5"
+separator = "#fdfdfd80"
+danger = "#f74840"
+warning = "#cc8100"
+success = "#25a343"
+info = "#0087c1"
+badge_bg = "#fdfdfd"
+badge_fg = "#383a43"
+
+[states.selected]
+bg = "#454e5e"
+fg = "#bfbfbf"
+[states.hover]
+bg = "#fdfdfd"
+[states.disabled]
+fg = "#7c7d83"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7c7d83"

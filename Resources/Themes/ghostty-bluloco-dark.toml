@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Bluloco Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Bluloco Dark"
+appearance = "dark"
+
+[palette]
+bg = "#282c34"
+surface = "#1d2025"
+elevated = "#3e4148"
+fg = "#b9c0cb"
+fg_muted = "#868c96"
+accent = "#ffcc00"
+accent_fg = "#000000"
+selection_bg = "#b9c0ca"
+selection_fg = "#272b33"
+match_fg = "#ff78f8"
+border = "#454a52"
+separator = "#3e414880"
+danger = "#fc2f52"
+warning = "#ff936a"
+success = "#25a45c"
+info = "#3476ff"
+badge_bg = "#3e4148"
+badge_fg = "#b9c0cb"
+
+[states.selected]
+bg = "#b9c0ca"
+fg = "#272b33"
+[states.hover]
+bg = "#3e4148"
+[states.disabled]
+fg = "#868c96"
+
+[footer]
+hint_color = "#868c96"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Harper" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Harper"
+appearance = "dark"
+
+[palette]
+bg = "#010101"
+surface = "#010101"
+elevated = "#1a1a1a"
+fg = "#a8a49d"
+fg_muted = "#6e6b66"
+accent = "#489e48"
+accent_fg = "#000000"
+selection_bg = "#5a5753"
+selection_fg = "#d2d0cc"
+match_fg = "#b296c6"
+border = "#222220"
+separator = "#1a1a1a80"
+danger = "#f8b63f"
+warning = "#d6da25"
+success = "#7fb5e1"
+info = "#489e48"
+badge_bg = "#1a1a1a"
+badge_fg = "#a8a49d"
+
+[states.selected]
+bg = "#5a5753"
+fg = "#d2d0cc"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#6e6b66"
+
+[footer]
+hint_color = "#6e6b66"

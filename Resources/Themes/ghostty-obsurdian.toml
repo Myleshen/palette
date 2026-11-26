@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Obsurdian" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Obsurdian"
+appearance = "dark"
+
+[palette]
+bg = "#0a0a0a"
+surface = "#070707"
+elevated = "#232323"
+fg = "#f5f5f5"
+fg_muted = "#a3a3a3"
+accent = "#ffd54a"
+accent_fg = "#000000"
+selection_bg = "#3a3a3a"
+selection_fg = "#ffffff"
+match_fg = "#ffa8dc"
+border = "#393939"
+separator = "#23232380"
+danger = "#ff6b6b"
+warning = "#ffe37a"
+success = "#66d98b"
+info = "#82aaff"
+badge_bg = "#232323"
+badge_fg = "#f5f5f5"
+
+[states.selected]
+bg = "#3a3a3a"
+fg = "#ffffff"
+[states.hover]
+bg = "#232323"
+[states.disabled]
+fg = "#a3a3a3"
+
+[footer]
+hint_color = "#a3a3a3"

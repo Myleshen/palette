@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Elemental" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Elemental"
+appearance = "dark"
+
+[palette]
+bg = "#22211d"
+surface = "#181815"
+elevated = "#383734"
+fg = "#8f8a85"
+fg_muted = "#6f6b67"
+accent = "#facb80"
+accent_fg = "#000000"
+selection_bg = "#413829"
+selection_fg = "#facd77"
+match_fg = "#cd7c54"
+border = "#383632"
+separator = "#38373480"
+danger = "#98290f"
+warning = "#7f7111"
+success = "#479a43"
+info = "#497f7d"
+badge_bg = "#383734"
+badge_fg = "#a5a19d"
+
+[states.selected]
+bg = "#413829"
+fg = "#facd77"
+[states.hover]
+bg = "#383734"
+[states.disabled]
+fg = "#6f6b67"
+
+[footer]
+hint_color = "#6f6b67"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ghost Circuit" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ghost Circuit"
+appearance = "dark"
+
+[palette]
+bg = "#07100f"
+surface = "#050c0b"
+elevated = "#202827"
+fg = "#e9f4f0"
+fg_muted = "#9aa4a1"
+accent = "#a2c8ef"
+accent_fg = "#000000"
+selection_bg = "#1d3430"
+selection_fg = "#f4fffb"
+match_fg = "#dabbe8"
+border = "#343e3c"
+separator = "#20282780"
+danger = "#ed7f86"
+warning = "#e7cc69"
+success = "#72d2a2"
+info = "#82b3e8"
+badge_bg = "#202827"
+badge_fg = "#e9f4f0"
+
+[states.selected]
+bg = "#1d3430"
+fg = "#f4fffb"
+[states.hover]
+bg = "#202827"
+[states.disabled]
+fg = "#9aa4a1"
+
+[footer]
+hint_color = "#9aa4a1"

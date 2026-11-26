@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Black Cat" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Black Cat"
+appearance = "dark"
+
+[palette]
+bg = "#180a2b"
+surface = "#11071f"
+elevated = "#2f2340"
+fg = "#f5edff"
+fg_muted = "#a89eb5"
+accent = "#99c5f2"
+accent_fg = "#000000"
+selection_bg = "#b3abbf"
+selection_fg = "#3b393d"
+match_fg = "#ce99f2"
+border = "#443755"
+separator = "#2f234080"
+danger = "#ff8992"
+warning = "#edc85e"
+success = "#9fda65"
+info = "#8bbdf0"
+badge_bg = "#2f2340"
+badge_fg = "#f5edff"
+
+[states.selected]
+bg = "#b3abbf"
+fg = "#3b393d"
+[states.hover]
+bg = "#2f2340"
+[states.disabled]
+fg = "#a89eb5"
+
+[footer]
+hint_color = "#a89eb5"

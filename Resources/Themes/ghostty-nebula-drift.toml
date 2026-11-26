@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Nebula Drift" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Nebula Drift"
+appearance = "dark"
+
+[palette]
+bg = "#0a0420"
+surface = "#070317"
+elevated = "#231d36"
+fg = "#e2e0fa"
+fg_muted = "#9693ae"
+accent = "#d58bff"
+accent_fg = "#000000"
+selection_bg = "#221645"
+selection_fg = "#8b8799"
+match_fg = "#c77dff"
+border = "#35304c"
+separator = "#231d3680"
+danger = "#ff5c8d"
+warning = "#ffcb6b"
+success = "#66e6a8"
+info = "#7c9bff"
+badge_bg = "#231d36"
+badge_fg = "#e2e0fa"
+
+[states.selected]
+bg = "#221645"
+fg = "#8b8799"
+[states.hover]
+bg = "#231d36"
+[states.disabled]
+fg = "#9693ae"
+
+[footer]
+hint_color = "#9693ae"

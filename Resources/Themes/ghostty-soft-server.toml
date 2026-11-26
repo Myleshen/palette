@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Soft Server" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Soft Server"
+appearance = "dark"
+
+[palette]
+bg = "#242626"
+surface = "#1a1b1b"
+elevated = "#3a3c3c"
+fg = "#99a3a2"
+fg_muted = "#707777"
+accent = "#62b1df"
+accent_fg = "#000000"
+selection_bg = "#7f8786"
+selection_fg = "#1d1f1e"
+match_fg = "#606edf"
+border = "#3b3f3f"
+separator = "#3a3c3c80"
+danger = "#a2686a"
+warning = "#a3906a"
+success = "#9aa56a"
+info = "#6b8fa3"
+badge_bg = "#3a3c3c"
+badge_fg = "#a1aaa9"
+
+[states.selected]
+bg = "#7f8786"
+fg = "#1d1f1e"
+[states.hover]
+bg = "#3a3c3c"
+[states.disabled]
+fg = "#707777"
+
+[footer]
+hint_color = "#707777"

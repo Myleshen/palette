@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Sedona" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Sedona"
+appearance = "dark"
+
+[palette]
+bg = "#55172f"
+surface = "#3d1122"
+elevated = "#662e44"
+fg = "#fff0dc"
+fg_muted = "#c3a49f"
+accent = "#acd2ed"
+accent_fg = "#000000"
+selection_bg = "#772c47"
+selection_fg = "#fff8ea"
+match_fg = "#e7b2d5"
+border = "#774252"
+separator = "#662e4480"
+danger = "#f58d79"
+warning = "#efc257"
+success = "#83cd94"
+info = "#8fc1e5"
+badge_bg = "#662e44"
+badge_fg = "#fff0dc"
+
+[states.selected]
+bg = "#772c47"
+fg = "#fff8ea"
+[states.hover]
+bg = "#662e44"
+[states.disabled]
+fg = "#c3a49f"
+
+[footer]
+hint_color = "#c3a49f"

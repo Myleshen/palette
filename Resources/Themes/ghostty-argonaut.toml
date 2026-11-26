@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Argonaut" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Argonaut"
+appearance = "dark"
+
+[palette]
+bg = "#0e1019"
+surface = "#0a0c12"
+elevated = "#262830"
+fg = "#fffaf4"
+fg_muted = "#aba8a7"
+accent = "#0092ff"
+accent_fg = "#000000"
+selection_bg = "#002a3b"
+selection_fg = "#ffffff"
+match_fg = "#9a5feb"
+border = "#3e3f45"
+separator = "#26283080"
+danger = "#ff000f"
+warning = "#ffb900"
+success = "#8ce10b"
+info = "#008df8"
+badge_bg = "#262830"
+badge_fg = "#fffaf4"
+
+[states.selected]
+bg = "#002a3b"
+fg = "#ffffff"
+[states.hover]
+bg = "#262830"
+[states.disabled]
+fg = "#aba8a7"
+
+[footer]
+hint_color = "#aba8a7"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Serendipity Midnight" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Serendipity Midnight"
+appearance = "dark"
+
+[palette]
+bg = "#151726"
+surface = "#0f111b"
+elevated = "#2c2e3c"
+fg = "#dee0ef"
+fg_muted = "#989aa9"
+accent = "#94b8ff"
+accent_fg = "#000000"
+selection_bg = "#6b6d7c"
+selection_fg = "#eff0f7"
+match_fg = "#9ccfd8"
+border = "#3d3f4e"
+separator = "#2c2e3c80"
+danger = "#ee8679"
+warning = "#a78bfa"
+success = "#5ba2d0"
+info = "#94b8ff"
+badge_bg = "#2c2e3c"
+badge_fg = "#dee0ef"
+
+[states.selected]
+bg = "#6b6d7c"
+fg = "#eff0f7"
+[states.hover]
+bg = "#2c2e3c"
+[states.disabled]
+fg = "#989aa9"
+
+[footer]
+hint_color = "#989aa9"

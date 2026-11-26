@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Chester" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Chester"
+appearance = "dark"
+
+[palette]
+bg = "#2c3643"
+surface = "#202730"
+elevated = "#414a56"
+fg = "#ffffff"
+fg_muted = "#b5b9bd"
+accent = "#288ad6"
+accent_fg = "#000000"
+selection_bg = "#67747c"
+selection_fg = "#ffffff"
+match_fg = "#d34590"
+border = "#565e69"
+separator = "#414a5680"
+danger = "#fa5e5b"
+warning = "#ffc83f"
+success = "#16c98d"
+info = "#288ad6"
+badge_bg = "#414a56"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#67747c"
+fg = "#ffffff"
+[states.hover]
+bg = "#414a56"
+[states.disabled]
+fg = "#b5b9bd"
+
+[footer]
+hint_color = "#b5b9bd"

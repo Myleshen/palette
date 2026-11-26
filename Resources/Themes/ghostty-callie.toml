@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Callie" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Callie"
+appearance = "dark"
+
+[palette]
+bg = "#1c1220"
+surface = "#140d17"
+elevated = "#332a36"
+fg = "#e0d3df"
+fg_muted = "#9b8f9c"
+accent = "#bfd5fd"
+accent_fg = "#000000"
+selection_bg = "#3d2c42"
+selection_fg = "#e0d3df"
+match_fg = "#f5c5d7"
+border = "#433946"
+separator = "#332a3680"
+danger = "#eaaba8"
+warning = "#d6ba86"
+success = "#9dcca3"
+info = "#a4beef"
+badge_bg = "#332a36"
+badge_fg = "#e0d3df"
+
+[states.selected]
+bg = "#3d2c42"
+fg = "#e0d3df"
+[states.hover]
+bg = "#332a36"
+[states.disabled]
+fg = "#9b8f9c"
+
+[footer]
+hint_color = "#9b8f9c"

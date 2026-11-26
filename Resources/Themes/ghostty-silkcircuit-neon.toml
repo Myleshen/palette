@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "SilkCircuit Neon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · SilkCircuit Neon"
+appearance = "dark"
+
+[palette]
+bg = "#12101a"
+surface = "#0d0c13"
+elevated = "#2a2831"
+fg = "#f8f8f2"
+fg_muted = "#a8a7a6"
+accent = "#80ffea"
+accent_fg = "#000000"
+selection_bg = "#44475a"
+selection_fg = "#f8f8f2"
+match_fg = "#ff69ff"
+border = "#403e45"
+separator = "#2a283180"
+danger = "#ff6363"
+warning = "#f1fa8c"
+success = "#50fa7b"
+info = "#82aaff"
+badge_bg = "#2a2831"
+badge_fg = "#f8f8f2"
+
+[states.selected]
+bg = "#44475a"
+fg = "#f8f8f2"
+[states.hover]
+bg = "#2a2831"
+[states.disabled]
+fg = "#a8a7a6"
+
+[footer]
+hint_color = "#a8a7a6"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Mesa Twilight" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Mesa Twilight"
+appearance = "dark"
+
+[palette]
+bg = "#172b54"
+surface = "#111f3c"
+elevated = "#2e4065"
+fg = "#fff0df"
+fg_muted = "#aeabae"
+accent = "#9fcaf0"
+accent_fg = "#000000"
+selection_bg = "#34496d"
+selection_fg = "#fff8ed"
+match_fg = "#d9b6e5"
+border = "#455270"
+separator = "#2e406580"
+danger = "#f1958c"
+warning = "#e9c96c"
+success = "#83cba2"
+info = "#83b9e6"
+badge_bg = "#2e4065"
+badge_fg = "#fff0df"
+
+[states.selected]
+bg = "#34496d"
+fg = "#fff8ed"
+[states.hover]
+bg = "#2e4065"
+[states.disabled]
+fg = "#aeabae"
+
+[footer]
+hint_color = "#aeabae"

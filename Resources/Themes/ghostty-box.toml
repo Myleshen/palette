@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Box" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Box"
+appearance = "dark"
+
+[palette]
+bg = "#141d2b"
+surface = "#0e151f"
+elevated = "#2c3440"
+fg = "#9fef00"
+fg_muted = "#6ea60f"
+accent = "#9fef00"
+accent_fg = "#000000"
+selection_bg = "#a4b1cd"
+selection_fg = "#141d2b"
+match_fg = "#fd28ff"
+border = "#304722"
+separator = "#2c344080"
+danger = "#cc0403"
+warning = "#cecb00"
+success = "#19cb00"
+info = "#0d73cc"
+badge_bg = "#2c3440"
+badge_fg = "#9fef00"
+
+[states.selected]
+bg = "#a4b1cd"
+fg = "#141d2b"
+[states.hover]
+bg = "#2c3440"
+[states.disabled]
+fg = "#6ea60f"
+
+[footer]
+hint_color = "#6ea60f"

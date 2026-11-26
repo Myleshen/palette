@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Havn Skumring" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Havn Skumring"
+appearance = "dark"
+
+[palette]
+bg = "#111522"
+surface = "#0c0f18"
+elevated = "#292c38"
+fg = "#d6dbeb"
+fg_muted = "#9196a5"
+accent = "#5186cb"
+accent_fg = "#000000"
+selection_bg = "#2b514b"
+selection_fg = "#dce0ef"
+match_fg = "#9b7cee"
+border = "#383d4a"
+separator = "#292c3880"
+danger = "#ea563e"
+warning = "#f8b330"
+success = "#6ead7b"
+info = "#596cf7"
+badge_bg = "#292c38"
+badge_fg = "#d6dbeb"
+
+[states.selected]
+bg = "#2b514b"
+fg = "#dce0ef"
+[states.hover]
+bg = "#292c38"
+[states.disabled]
+fg = "#9196a5"
+
+[footer]
+hint_color = "#9196a5"

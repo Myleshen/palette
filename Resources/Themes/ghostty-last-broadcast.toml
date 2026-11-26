@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Last Broadcast" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Last Broadcast"
+appearance = "dark"
+
+[palette]
+bg = "#08090d"
+surface = "#060609"
+elevated = "#212225"
+fg = "#f2efe8"
+fg_muted = "#a09e9b"
+accent = "#ffca72"
+accent_fg = "#000000"
+selection_bg = "#30281d"
+selection_fg = "#fff8eb"
+match_fg = "#e4bbed"
+border = "#373739"
+separator = "#21222580"
+danger = "#ff806f"
+warning = "#efcb69"
+success = "#79d09e"
+info = "#8bb4ed"
+badge_bg = "#212225"
+badge_fg = "#f2efe8"
+
+[states.selected]
+bg = "#30281d"
+fg = "#fff8eb"
+[states.hover]
+bg = "#212225"
+[states.disabled]
+fg = "#a09e9b"
+
+[footer]
+hint_color = "#a09e9b"

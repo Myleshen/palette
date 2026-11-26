@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Rouge 2" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Rouge 2"
+appearance = "dark"
+
+[palette]
+bg = "#17182b"
+surface = "#11111f"
+elevated = "#2e2f40"
+fg = "#a2a3aa"
+fg_muted = "#71727e"
+accent = "#98b3cd"
+accent_fg = "#000000"
+selection_bg = "#5d5d6b"
+selection_fg = "#dfe5ee"
+match_fg = "#8283a1"
+border = "#333444"
+separator = "#2e2f4080"
+danger = "#c6797e"
+warning = "#dbcdab"
+success = "#969e92"
+info = "#6e94b9"
+badge_bg = "#2e2f40"
+badge_fg = "#a2a3aa"
+
+[states.selected]
+bg = "#5d5d6b"
+fg = "#dfe5ee"
+[states.hover]
+bg = "#2e2f40"
+[states.disabled]
+fg = "#71727e"
+
+[footer]
+hint_color = "#71727e"

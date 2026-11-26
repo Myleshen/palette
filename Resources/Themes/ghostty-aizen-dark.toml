@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Aizen Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Aizen Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1a1a1a"
+surface = "#131313"
+elevated = "#313131"
+fg = "#d0d6f0"
+fg_muted = "#9094a5"
+accent = "#f8b080"
+accent_fg = "#000000"
+selection_bg = "#333333"
+selection_fg = "#d0d6f0"
+match_fg = "#c8a2f4"
+border = "#3e4045"
+separator = "#31313180"
+danger = "#f08898"
+warning = "#f5dea4"
+success = "#a4e09c"
+info = "#84b4f8"
+badge_bg = "#313131"
+badge_fg = "#d0d6f0"
+
+[states.selected]
+bg = "#333333"
+fg = "#d0d6f0"
+[states.hover]
+bg = "#313131"
+[states.disabled]
+fg = "#9094a5"
+
+[footer]
+hint_color = "#9094a5"

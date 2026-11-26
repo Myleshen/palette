@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "SeedFlip Carbon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SeedFlip Carbon"
+appearance = "light"
+
+[palette]
+bg = "#fafafa"
+surface = "#ededed"
+elevated = "#fdfdfd"
+fg = "#000000"
+fg_muted = "#575757"
+accent = "#335d99"
+accent_fg = "#ffffff"
+selection_bg = "#fdfdfd"
+selection_fg = "#000000"
+match_fg = "#993399"
+border = "#c8c8c8"
+separator = "#fdfdfd80"
+danger = "#993333"
+warning = "#998833"
+success = "#339955"
+info = "#335d99"
+badge_bg = "#fdfdfd"
+badge_fg = "#000000"
+
+[states.selected]
+bg = "#fdfdfd"
+fg = "#000000"
+[states.hover]
+bg = "#fdfdfd"
+[states.disabled]
+fg = "#575757"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#575757"

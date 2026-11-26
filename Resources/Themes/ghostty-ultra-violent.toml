@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ultra Violent" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ultra Violent"
+appearance = "dark"
+
+[palette]
+bg = "#242728"
+surface = "#1a1c1d"
+elevated = "#3a3d3e"
+fg = "#c1c1c1"
+fg_muted = "#8a8b8b"
+accent = "#7fecff"
+accent_fg = "#000000"
+selection_bg = "#574c49"
+selection_fg = "#c3c7cb"
+match_fg = "#e681ff"
+border = "#434647"
+separator = "#3a3d3e80"
+danger = "#ff0090"
+warning = "#fff727"
+success = "#b6ff00"
+info = "#47e0fb"
+badge_bg = "#3a3d3e"
+badge_fg = "#c1c1c1"
+
+[states.selected]
+bg = "#574c49"
+fg = "#c3c7cb"
+[states.hover]
+bg = "#3a3d3e"
+[states.disabled]
+fg = "#8a8b8b"
+
+[footer]
+hint_color = "#8a8b8b"

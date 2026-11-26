@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Yngwie's Strat" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Yngwie's Strat"
+appearance = "light"
+
+[palette]
+bg = "#fbe68b"
+surface = "#eedb84"
+elevated = "#fdf4cb"
+fg = "#25231f"
+fg_muted = "#706745"
+accent = "#244f85"
+accent_fg = "#ffffff"
+selection_bg = "#b6a251"
+selection_fg = "#211e19"
+match_fg = "#67416c"
+border = "#d0bf75"
+separator = "#fdf4cb80"
+danger = "#9c2922"
+warning = "#785015"
+success = "#37663e"
+info = "#244f85"
+badge_bg = "#fdf4cb"
+badge_fg = "#25231f"
+
+[states.selected]
+bg = "#b6a251"
+fg = "#211e19"
+[states.hover]
+bg = "#fdf4cb"
+[states.disabled]
+fg = "#706745"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#706745"

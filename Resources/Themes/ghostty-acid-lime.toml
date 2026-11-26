@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Acid Lime" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Acid Lime"
+appearance = "dark"
+
+[palette]
+bg = "#080c05"
+surface = "#060904"
+elevated = "#21241e"
+fg = "#d4efbc"
+fg_muted = "#8da07c"
+accent = "#c2ff33"
+accent_fg = "#000000"
+selection_bg = "#1b2a10"
+selection_fg = "#8b8d89"
+match_fg = "#a6ff6b"
+border = "#31392a"
+separator = "#21241e80"
+danger = "#ff3344"
+warning = "#eeff5c"
+success = "#97e63c"
+info = "#4deca0"
+badge_bg = "#21241e"
+badge_fg = "#d4efbc"
+
+[states.selected]
+bg = "#1b2a10"
+fg = "#8b8d89"
+[states.hover]
+bg = "#21241e"
+[states.disabled]
+fg = "#8da07c"
+
+[footer]
+hint_color = "#8da07c"

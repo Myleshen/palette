@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Eight Hundred" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Eight Hundred"
+appearance = "dark"
+
+[palette]
+bg = "#101c28"
+surface = "#0c141d"
+elevated = "#28333e"
+fg = "#e9e6d9"
+fg_muted = "#9d9f9b"
+accent = "#aacdf3"
+accent_fg = "#000000"
+selection_bg = "#395468"
+selection_fg = "#ffffff"
+match_fg = "#d8bcee"
+border = "#3b444b"
+separator = "#28333e80"
+danger = "#f08b81"
+warning = "#f3c76c"
+success = "#8ed1a3"
+info = "#8bb9ea"
+badge_bg = "#28333e"
+badge_fg = "#e9e6d9"
+
+[states.selected]
+bg = "#395468"
+fg = "#ffffff"
+[states.hover]
+bg = "#28333e"
+[states.disabled]
+fg = "#9d9f9b"
+
+[footer]
+hint_color = "#9d9f9b"

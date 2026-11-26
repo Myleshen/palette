@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Flexoki Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Flexoki Light"
+appearance = "light"
+
+[palette]
+bg = "#fffcf0"
+surface = "#f2efe4"
+elevated = "#fffef8"
+fg = "#100f0f"
+fg_muted = "#64625e"
+accent = "#205ea6"
+accent_fg = "#ffffff"
+selection_bg = "#cecdc3"
+selection_fg = "#100f0f"
+match_fg = "#a02f6f"
+border = "#cfcdc3"
+separator = "#fffef880"
+danger = "#af3029"
+warning = "#ad8301"
+success = "#66800b"
+info = "#205ea6"
+badge_bg = "#fffef8"
+badge_fg = "#100f0f"
+
+[states.selected]
+bg = "#cecdc3"
+fg = "#100f0f"
+[states.hover]
+bg = "#fffef8"
+[states.disabled]
+fg = "#64625e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#64625e"

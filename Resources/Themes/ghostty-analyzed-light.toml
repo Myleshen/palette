@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Analyzed Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Analyzed Light"
+appearance = "light"
+
+[palette]
+bg = "#f6f5f0"
+surface = "#eae9e4"
+elevated = "#fbfbf8"
+fg = "#253449"
+fg_muted = "#6e7883"
+accent = "#1b5396"
+accent_fg = "#ffffff"
+selection_bg = "#d5e6ef"
+selection_fg = "#253449"
+match_fg = "#673891"
+border = "#cccecf"
+separator = "#fbfbf880"
+danger = "#b13e55"
+warning = "#8a590c"
+success = "#16765c"
+info = "#215ea8"
+badge_bg = "#fbfbf8"
+badge_fg = "#253449"
+
+[states.selected]
+bg = "#d5e6ef"
+fg = "#253449"
+[states.hover]
+bg = "#fbfbf8"
+[states.disabled]
+fg = "#6e7883"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6e7883"

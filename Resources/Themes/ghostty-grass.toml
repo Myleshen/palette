@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Grass" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Grass"
+appearance = "dark"
+
+[palette]
+bg = "#13773d"
+surface = "#0e562c"
+elevated = "#2b8550"
+fg = "#fff0a5"
+fg_muted = "#afc882"
+accent = "#0000a3"
+accent_fg = "#ffffff"
+selection_bg = "#2b8550"
+selection_fg = "#ffffff"
+match_fg = "#ff55ff"
+border = "#428f52"
+separator = "#2b855080"
+danger = "#ff5959"
+warning = "#e7b000"
+success = "#00bb00"
+info = "#0000a3"
+badge_bg = "#2b8550"
+badge_fg = "#fffdf4"
+
+[states.selected]
+bg = "#2b8550"
+fg = "#ffffff"
+[states.hover]
+bg = "#2b8550"
+[states.disabled]
+fg = "#afc882"
+
+[footer]
+hint_color = "#afc882"

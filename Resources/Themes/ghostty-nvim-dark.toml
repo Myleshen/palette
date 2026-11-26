@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Nvim Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Nvim Dark"
+appearance = "dark"
+
+[palette]
+bg = "#14161b"
+surface = "#0e1013"
+elevated = "#2c2d32"
+fg = "#e0e2ea"
+fg_muted = "#999ba2"
+accent = "#a6dbff"
+accent_fg = "#000000"
+selection_bg = "#4f5258"
+selection_fg = "#e0e2ea"
+match_fg = "#ffcaff"
+border = "#3d3f44"
+separator = "#2c2d3280"
+danger = "#ffc0b9"
+warning = "#fce094"
+success = "#b3f6c0"
+info = "#a6dbff"
+badge_bg = "#2c2d32"
+badge_fg = "#e0e2ea"
+
+[states.selected]
+bg = "#4f5258"
+fg = "#e0e2ea"
+[states.hover]
+bg = "#2c2d32"
+[states.disabled]
+fg = "#999ba2"
+
+[footer]
+hint_color = "#999ba2"

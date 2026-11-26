@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Lumina Canopy Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Canopy Light"
+appearance = "light"
+
+[palette]
+bg = "#f1f9ef"
+surface = "#e5ede3"
+elevated = "#f9fcf8"
+fg = "#1e3323"
+fg_muted = "#68786a"
+accent = "#0e5686"
+accent_fg = "#ffffff"
+selection_bg = "#cecda8"
+selection_fg = "#1e3323"
+match_fg = "#70396c"
+border = "#c7d1c6"
+separator = "#f9fcf880"
+danger = "#860c2c"
+warning = "#905705"
+success = "#337545"
+info = "#046aa7"
+badge_bg = "#f9fcf8"
+badge_fg = "#1e3323"
+
+[states.selected]
+bg = "#cecda8"
+fg = "#1e3323"
+[states.hover]
+bg = "#f9fcf8"
+[states.disabled]
+fg = "#68786a"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#68786a"

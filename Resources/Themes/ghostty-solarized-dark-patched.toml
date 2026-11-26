@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Solarized Dark Patched" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Solarized Dark Patched"
+appearance = "dark"
+
+[palette]
+bg = "#001e27"
+surface = "#00161c"
+elevated = "#1a343d"
+fg = "#768789"
+fg_muted = "#576b6f"
+accent = "#708284"
+accent_fg = "#000000"
+selection_bg = "#1a343d"
+selection_fg = "#909d9d"
+match_fg = "#c61c6f"
+border = "#18333b"
+separator = "#1a343d80"
+danger = "#d11c24"
+warning = "#a57706"
+success = "#738a05"
+info = "#2176c7"
+badge_bg = "#1a343d"
+badge_fg = "#8c9a9c"
+
+[states.selected]
+bg = "#1a343d"
+fg = "#909d9d"
+[states.hover]
+bg = "#1a343d"
+[states.disabled]
+fg = "#576b6f"
+
+[footer]
+hint_color = "#576b6f"

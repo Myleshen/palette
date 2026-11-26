@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Brogrammer" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Brogrammer"
+appearance = "dark"
+
+[palette]
+bg = "#131313"
+surface = "#0e0e0e"
+elevated = "#2b2b2b"
+fg = "#d6dbe5"
+fg_muted = "#92959c"
+accent = "#2a84d2"
+accent_fg = "#000000"
+selection_bg = "#2b2b2b"
+selection_fg = "#d6dbe5"
+match_fg = "#4e5ab7"
+border = "#3a3b3d"
+separator = "#2b2b2b80"
+danger = "#f81118"
+warning = "#ecba0f"
+success = "#2dc55e"
+info = "#2a84d2"
+badge_bg = "#2b2b2b"
+badge_fg = "#d6dbe5"
+
+[states.selected]
+bg = "#2b2b2b"
+fg = "#d6dbe5"
+[states.hover]
+bg = "#2b2b2b"
+[states.disabled]
+fg = "#92959c"
+
+[footer]
+hint_color = "#92959c"

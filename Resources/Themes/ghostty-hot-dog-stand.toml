@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Hot Dog Stand" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+name = "Ghostty · Hot Dog Stand"
+appearance = "dark"
+
+[palette]
+bg = "#ea3323"
+surface = "#a82519"
+elevated = "#ec4739"
+fg = "#0a0a0a"
+fg_muted = "#581813"
+accent = "#000000"
+accent_fg = "#ffffff"
+selection_bg = "#ffff54"
+selection_fg = "#000000"
+match_fg = "#ffff54"
+border = "#bd2b1e"
+separator = "#ec473980"
+danger = "#ffff54"
+warning = "#ffff54"
+success = "#ffff54"
+info = "#000000"
+badge_bg = "#ec4739"
+badge_fg = "#0a0a0a"
+
+[states.selected]
+bg = "#ffff54"
+fg = "#000000"
+[states.hover]
+bg = "#ec4739"
+[states.disabled]
+fg = "#581813"
+
+[footer]
+hint_color = "#581813"

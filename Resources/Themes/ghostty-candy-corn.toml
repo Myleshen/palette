@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Candy Corn" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Candy Corn"
+appearance = "light"
+
+[palette]
+bg = "#fff0d2"
+surface = "#f2e4c8"
+elevated = "#fff8eb"
+fg = "#51463b"
+fg_muted = "#8e8270"
+accent = "#24150e"
+accent_fg = "#ffffff"
+selection_bg = "#f6c89b"
+selection_fg = "#24150e"
+match_fg = "#56355a"
+border = "#dcceb4"
+separator = "#fff8eb80"
+danger = "#9b2f12"
+warning = "#785711"
+success = "#46612d"
+info = "#36516b"
+badge_bg = "#fff8eb"
+badge_fg = "#51463b"
+
+[states.selected]
+bg = "#f6c89b"
+fg = "#24150e"
+[states.hover]
+bg = "#fff8eb"
+[states.disabled]
+fg = "#8e8270"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#8e8270"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ubuntu" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ubuntu"
+appearance = "dark"
+
+[palette]
+bg = "#300a24"
+surface = "#23071a"
+elevated = "#45233a"
+fg = "#eeeeec"
+fg_muted = "#ac9ea6"
+accent = "#729fcf"
+accent_fg = "#000000"
+selection_bg = "#b5d5ff"
+selection_fg = "#000000"
+match_fg = "#ad7fa8"
+border = "#56384c"
+separator = "#45233a80"
+danger = "#cc0000"
+warning = "#c4a000"
+success = "#4e9a06"
+info = "#3465a4"
+badge_bg = "#45233a"
+badge_fg = "#eeeeec"
+
+[states.selected]
+bg = "#b5d5ff"
+fg = "#000000"
+[states.hover]
+bg = "#45233a"
+[states.disabled]
+fg = "#ac9ea6"
+
+[footer]
+hint_color = "#ac9ea6"

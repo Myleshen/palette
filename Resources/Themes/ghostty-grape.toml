@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Grape" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Grape"
+appearance = "dark"
+
+[palette]
+bg = "#171423"
+surface = "#110e19"
+elevated = "#2e2c39"
+fg = "#9f9fa1"
+fg_muted = "#6f6e75"
+accent = "#a9bcec"
+accent_fg = "#000000"
+selection_bg = "#493d70"
+selection_fg = "#b5b4b8"
+match_fg = "#ad81c2"
+border = "#32303c"
+separator = "#2e2c3980"
+danger = "#ed2261"
+warning = "#8ddc20"
+success = "#1fa91b"
+info = "#487df4"
+badge_bg = "#2e2c39"
+badge_fg = "#9f9fa1"
+
+[states.selected]
+bg = "#493d70"
+fg = "#b5b4b8"
+[states.hover]
+bg = "#2e2c39"
+[states.disabled]
+fg = "#6f6e75"
+
+[footer]
+hint_color = "#6f6e75"

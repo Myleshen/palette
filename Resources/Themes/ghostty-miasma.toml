@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Miasma" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Miasma"
+appearance = "dark"
+
+[palette]
+bg = "#222222"
+surface = "#181818"
+elevated = "#383838"
+fg = "#c2c2b0"
+fg_muted = "#8a8a7e"
+accent = "#78824b"
+accent_fg = "#000000"
+selection_bg = "#e5c47b"
+selection_fg = "#000000"
+match_fg = "#bb7744"
+border = "#42423e"
+separator = "#38383880"
+danger = "#685742"
+warning = "#b36d43"
+success = "#5f875f"
+info = "#78824b"
+badge_bg = "#383838"
+badge_fg = "#c2c2b0"
+
+[states.selected]
+bg = "#e5c47b"
+fg = "#000000"
+[states.hover]
+bg = "#383838"
+[states.disabled]
+fg = "#8a8a7e"
+
+[footer]
+hint_color = "#8a8a7e"

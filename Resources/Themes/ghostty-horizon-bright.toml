@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Horizon Bright" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Horizon Bright"
+appearance = "light"
+
+[palette]
+bg = "#fdf0ed"
+surface = "#f0e4e1"
+elevated = "#fef8f7"
+fg = "#16161d"
+fg_muted = "#676266"
+accent = "#00bedd"
+accent_fg = "#000000"
+selection_bg = "#f9cec3"
+selection_fg = "#16161d"
+match_fg = "#ff58b1"
+border = "#cfc4c3"
+separator = "#fef8f780"
+danger = "#fc4777"
+warning = "#f2a682"
+success = "#00ca86"
+info = "#00bedd"
+badge_bg = "#fef8f7"
+badge_fg = "#16161d"
+
+[states.selected]
+bg = "#f9cec3"
+fg = "#16161d"
+[states.hover]
+bg = "#fef8f7"
+[states.disabled]
+fg = "#676266"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#676266"

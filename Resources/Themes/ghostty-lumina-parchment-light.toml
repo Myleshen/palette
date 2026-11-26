@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Lumina Parchment Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Lumina Parchment Light"
+appearance = "light"
+
+[palette]
+bg = "#f9efda"
+surface = "#ede3cf"
+elevated = "#fcf8ee"
+fg = "#352516"
+fg_muted = "#7a6c5b"
+accent = "#352516"
+accent_fg = "#ffffff"
+selection_bg = "#d4be95"
+selection_fg = "#352516"
+match_fg = "#6b3770"
+border = "#d2c7b3"
+separator = "#fcf8ee80"
+danger = "#912918"
+warning = "#654935"
+success = "#2d7341"
+info = "#2e5fb0"
+badge_bg = "#fcf8ee"
+badge_fg = "#352516"
+
+[states.selected]
+bg = "#d4be95"
+fg = "#352516"
+[states.hover]
+bg = "#fcf8ee"
+[states.disabled]
+fg = "#7a6c5b"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7a6c5b"

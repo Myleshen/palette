@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Liquid Carbon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Liquid Carbon"
+appearance = "dark"
+
+[palette]
+bg = "#303030"
+surface = "#232323"
+elevated = "#454545"
+fg = "#afc2c2"
+fg_muted = "#838f8f"
+accent = "#0099cc"
+accent_fg = "#000000"
+selection_bg = "#7dbeff"
+selection_fg = "#000000"
+match_fg = "#cc69c8"
+border = "#494d4d"
+separator = "#45454580"
+danger = "#ff3030"
+warning = "#ccac00"
+success = "#559a70"
+info = "#0099cc"
+badge_bg = "#454545"
+badge_fg = "#afc2c2"
+
+[states.selected]
+bg = "#7dbeff"
+fg = "#000000"
+[states.hover]
+bg = "#454545"
+[states.disabled]
+fg = "#838f8f"
+
+[footer]
+hint_color = "#838f8f"

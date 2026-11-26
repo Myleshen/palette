@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Material Design Colors" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Material Design Colors"
+appearance = "dark"
+
+[palette]
+bg = "#1d262a"
+surface = "#151b1e"
+elevated = "#343c3f"
+fg = "#e7ebed"
+fg_muted = "#a0a6a9"
+accent = "#70cfff"
+accent_fg = "#000000"
+selection_bg = "#4e6a78"
+selection_fg = "#e7ebed"
+match_fg = "#fc669b"
+border = "#454d51"
+separator = "#343c3f80"
+danger = "#fc3841"
+warning = "#fed032"
+success = "#5cf19e"
+info = "#37b6ff"
+badge_bg = "#343c3f"
+badge_fg = "#e7ebed"
+
+[states.selected]
+bg = "#4e6a78"
+fg = "#e7ebed"
+[states.hover]
+bg = "#343c3f"
+[states.disabled]
+fg = "#a0a6a9"
+
+[footer]
+hint_color = "#a0a6a9"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Vercel" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Vercel"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#ededed"
+fg_muted = "#9a9a9a"
+accent = "#97c9fe"
+accent_fg = "#000000"
+selection_bg = "#2e2e2e"
+selection_fg = "#ededed"
+match_fg = "#d7a4ff"
+border = "#2f2f2f"
+separator = "#1a1a1a80"
+danger = "#e5484d"
+warning = "#f1a10d"
+success = "#63c174"
+info = "#52a9ff"
+badge_bg = "#1a1a1a"
+badge_fg = "#ededed"
+
+[states.selected]
+bg = "#2e2e2e"
+fg = "#ededed"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#9a9a9a"
+
+[footer]
+hint_color = "#9a9a9a"

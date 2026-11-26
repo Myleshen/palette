@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Galaxy" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Galaxy"
+appearance = "dark"
+
+[palette]
+bg = "#1d2837"
+surface = "#151d28"
+elevated = "#343e4b"
+fg = "#ffffff"
+fg_muted = "#b0b4b9"
+accent = "#589df6"
+accent_fg = "#000000"
+selection_bg = "#b5d5ff"
+selection_fg = "#000000"
+match_fg = "#e75699"
+border = "#4a535f"
+separator = "#343e4b80"
+danger = "#f9555f"
+warning = "#fef02a"
+success = "#21b089"
+info = "#589df6"
+badge_bg = "#343e4b"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#b5d5ff"
+fg = "#000000"
+[states.hover]
+bg = "#343e4b"
+[states.disabled]
+fg = "#b0b4b9"
+
+[footer]
+hint_color = "#b0b4b9"

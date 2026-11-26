@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Termius Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Termius Light"
+appearance = "light"
+
+[palette]
+bg = "#d5dde0"
+surface = "#cad2d5"
+elevated = "#ecf0f1"
+fg = "#32364a"
+fg_muted = "#6b707e"
+accent = "#004878"
+accent_fg = "#ffffff"
+selection_bg = "#838995"
+selection_fg = "#1e202c"
+match_fg = "#8f3c91"
+border = "#b4bcc2"
+separator = "#ecf0f180"
+danger = "#f24e50"
+warning = "#ab6918"
+success = "#198c51"
+info = "#004878"
+badge_bg = "#ecf0f1"
+badge_fg = "#32364a"
+
+[states.selected]
+bg = "#838995"
+fg = "#1e202c"
+[states.hover]
+bg = "#ecf0f1"
+[states.disabled]
+fg = "#6b707e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6b707e"

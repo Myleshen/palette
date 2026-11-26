@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Blazer" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Blazer"
+appearance = "dark"
+
+[palette]
+bg = "#0d1926"
+surface = "#09121b"
+elevated = "#25303c"
+fg = "#d9e6f2"
+fg_muted = "#929eab"
+accent = "#bdbddb"
+accent_fg = "#000000"
+selection_bg = "#c1ddff"
+selection_fg = "#000000"
+match_fg = "#dbbddb"
+border = "#36424f"
+separator = "#25303c80"
+danger = "#b87a7a"
+warning = "#b8b87a"
+success = "#7ab87a"
+info = "#7a7ab8"
+badge_bg = "#25303c"
+badge_fg = "#d9e6f2"
+
+[states.selected]
+bg = "#c1ddff"
+fg = "#000000"
+[states.hover]
+bg = "#25303c"
+[states.disabled]
+fg = "#929eab"
+
+[footer]
+hint_color = "#929eab"

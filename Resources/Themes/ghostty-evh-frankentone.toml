@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "EVH FrankenTone" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · EVH FrankenTone"
+appearance = "dark"
+
+[palette]
+bg = "#76231f"
+surface = "#551916"
+elevated = "#843935"
+fg = "#f7ede5"
+fg_muted = "#caa6a0"
+accent = "#c5ddf3"
+accent_fg = "#000000"
+selection_bg = "#201719"
+selection_fg = "#ffffff"
+match_fg = "#f0d8de"
+border = "#904b47"
+separator = "#84393580"
+danger = "#ffb4a5"
+warning = "#f4d45d"
+success = "#e6d27e"
+info = "#a9cbe7"
+badge_bg = "#843935"
+badge_fg = "#f7ede5"
+
+[states.selected]
+bg = "#201719"
+fg = "#ffffff"
+[states.hover]
+bg = "#843935"
+[states.disabled]
+fg = "#caa6a0"
+
+[footer]
+hint_color = "#caa6a0"

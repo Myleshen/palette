@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "This One Goes to 11" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · This One Goes to 11"
+appearance = "dark"
+
+[palette]
+bg = "#10100f"
+surface = "#0c0c0b"
+elevated = "#282827"
+fg = "#f0e6ce"
+fg_muted = "#a29b8b"
+accent = "#b4d7f2"
+accent_fg = "#000000"
+selection_bg = "#55431f"
+selection_fg = "#fff6e5"
+match_fg = "#dfc0ef"
+border = "#3d3b35"
+separator = "#28282780"
+danger = "#d96a58"
+warning = "#d6aa4a"
+success = "#89b67c"
+info = "#82a8c8"
+badge_bg = "#282827"
+badge_fg = "#f0e6ce"
+
+[states.selected]
+bg = "#55431f"
+fg = "#fff6e5"
+[states.hover]
+bg = "#282827"
+[states.disabled]
+fg = "#a29b8b"
+
+[footer]
+hint_color = "#a29b8b"

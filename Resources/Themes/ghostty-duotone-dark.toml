@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Duotone Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Duotone Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1f1d27"
+surface = "#16151c"
+elevated = "#35343d"
+fg = "#b7a1ff"
+fg_muted = "#8273b3"
+accent = "#ffc284"
+accent_fg = "#000000"
+selection_bg = "#353147"
+selection_fg = "#b7a2ff"
+match_fg = "#de8d40"
+border = "#3d3752"
+separator = "#35343d80"
+danger = "#d9393e"
+warning = "#d9b76e"
+success = "#2dcd73"
+info = "#ffc284"
+badge_bg = "#35343d"
+badge_fg = "#b7a1ff"
+
+[states.selected]
+bg = "#353147"
+fg = "#b7a2ff"
+[states.hover]
+bg = "#35343d"
+[states.disabled]
+fg = "#8273b3"
+
+[footer]
+hint_color = "#8273b3"

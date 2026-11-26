@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Spiderman" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Spiderman"
+appearance = "dark"
+
+[palette]
+bg = "#1b1d1e"
+surface = "#131516"
+elevated = "#323434"
+fg = "#e3e3e3"
+fg_muted = "#9d9e9e"
+accent = "#1d50ff"
+accent_fg = "#ffffff"
+selection_bg = "#323434"
+selection_fg = "#f57579"
+match_fg = "#747cff"
+border = "#434545"
+separator = "#32343480"
+danger = "#e60813"
+warning = "#e24756"
+success = "#e22928"
+info = "#2c3fff"
+badge_bg = "#323434"
+badge_fg = "#e3e3e3"
+
+[states.selected]
+bg = "#323434"
+fg = "#f57579"
+[states.hover]
+bg = "#323434"
+[states.disabled]
+fg = "#9d9e9e"
+
+[footer]
+hint_color = "#9d9e9e"

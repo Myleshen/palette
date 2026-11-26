@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Great Pumpkin" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Great Pumpkin"
+appearance = "dark"
+
+[palette]
+bg = "#f98128"
+surface = "#b35d1d"
+elevated = "#fa8e3e"
+fg = "#34251c"
+fg_muted = "#794520"
+accent = "#24150e"
+accent_fg = "#ffffff"
+selection_bg = "#f6c89b"
+selection_fg = "#24150e"
+match_fg = "#421d3e"
+border = "#d26f26"
+separator = "#fa8e3e80"
+danger = "#62190d"
+warning = "#443106"
+success = "#29391a"
+info = "#16374b"
+badge_bg = "#fa8e3e"
+badge_fg = "#34251c"
+
+[states.selected]
+bg = "#f6c89b"
+fg = "#24150e"
+[states.hover]
+bg = "#fa8e3e"
+[states.disabled]
+fg = "#794520"
+
+[footer]
+hint_color = "#794520"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Neon Raincheck: After Hours" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Neon Raincheck: After Hours"
+appearance = "dark"
+
+[palette]
+bg = "#0b1019"
+surface = "#080c12"
+elevated = "#232830"
+fg = "#b8c9d9"
+fg_muted = "#7b8896"
+accent = "#86a6dc"
+accent_fg = "#000000"
+selection_bg = "#202c42"
+selection_fg = "#93979d"
+match_fg = "#b69adb"
+border = "#2e353f"
+separator = "#23283080"
+danger = "#b95c7b"
+warning = "#b8a46b"
+success = "#609d8c"
+info = "#6586c0"
+badge_bg = "#232830"
+badge_fg = "#b8c9d9"
+
+[states.selected]
+bg = "#202c42"
+fg = "#93979d"
+[states.hover]
+bg = "#232830"
+[states.disabled]
+fg = "#7b8896"
+
+[footer]
+hint_color = "#7b8896"

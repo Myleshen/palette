@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "datum (light)" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · datum (light)"
+appearance = "light"
+
+[palette]
+bg = "#f1f6fd"
+surface = "#e5eaf0"
+elevated = "#f9fbfe"
+fg = "#292e35"
+fg_muted = "#6f747b"
+accent = "#2f516c"
+accent_fg = "#ffffff"
+selection_bg = "#ced3d9"
+selection_fg = "#292e35"
+match_fg = "#633750"
+border = "#c9ced5"
+separator = "#f9fbfe80"
+danger = "#a24500"
+warning = "#656023"
+success = "#007553"
+info = "#0176b8"
+badge_bg = "#f9fbfe"
+badge_fg = "#292e35"
+
+[states.selected]
+bg = "#ced3d9"
+fg = "#292e35"
+[states.hover]
+bg = "#f9fbfe"
+[states.disabled]
+fg = "#6f747b"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6f747b"

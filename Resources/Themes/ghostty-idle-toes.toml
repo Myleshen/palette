@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Idle Toes" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Idle Toes"
+appearance = "dark"
+
+[palette]
+bg = "#323232"
+surface = "#242424"
+elevated = "#464646"
+fg = "#ffffff"
+fg_muted = "#b7b7b7"
+accent = "#5eb7f7"
+accent_fg = "#000000"
+selection_bg = "#5b5b5b"
+selection_fg = "#d6d6d6"
+match_fg = "#ff9dff"
+border = "#5b5b5b"
+separator = "#46464680"
+danger = "#d25252"
+warning = "#ffc66d"
+success = "#7fe173"
+info = "#4099ff"
+badge_bg = "#464646"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#5b5b5b"
+fg = "#d6d6d6"
+[states.hover]
+bg = "#464646"
+[states.disabled]
+fg = "#b7b7b7"
+
+[footer]
+hint_color = "#b7b7b7"

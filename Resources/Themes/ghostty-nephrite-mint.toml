@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Nephrite Mint" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Nephrite Mint"
+appearance = "light"
+
+[palette]
+bg = "#edfbf3"
+surface = "#e1eee7"
+elevated = "#f7fdfa"
+fg = "#192e23"
+fg_muted = "#63766c"
+accent = "#2672b7"
+accent_fg = "#ffffff"
+selection_bg = "#bdd5c7"
+selection_fg = "#192e23"
+match_fg = "#a54a77"
+border = "#c3d2c9"
+separator = "#f7fdfa80"
+danger = "#ad4b4b"
+warning = "#866c02"
+success = "#048149"
+info = "#2672b7"
+badge_bg = "#f7fdfa"
+badge_fg = "#192e23"
+
+[states.selected]
+bg = "#bdd5c7"
+fg = "#192e23"
+[states.hover]
+bg = "#f7fdfa"
+[states.disabled]
+fg = "#63766c"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#63766c"

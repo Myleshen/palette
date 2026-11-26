@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "SeedFlip Abyss" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SeedFlip Abyss"
+appearance = "dark"
+
+[palette]
+bg = "#050510"
+surface = "#04040c"
+elevated = "#1e1e28"
+fg = "#e0e0f0"
+fg_muted = "#9393a2"
+accent = "#9cb9e3"
+accent_fg = "#000000"
+selection_bg = "#1e1e28"
+selection_fg = "#e0e0f0"
+match_fg = "#e39ce3"
+border = "#31313d"
+separator = "#1e1e2880"
+danger = "#d26060"
+warning = "#d2bf60"
+success = "#60d286"
+info = "#6090d2"
+badge_bg = "#1e1e28"
+badge_fg = "#e0e0f0"
+
+[states.selected]
+bg = "#1e1e28"
+fg = "#e0e0f0"
+[states.hover]
+bg = "#1e1e28"
+[states.disabled]
+fg = "#9393a2"
+
+[footer]
+hint_color = "#9393a2"

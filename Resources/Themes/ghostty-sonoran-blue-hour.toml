@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Sonoran Blue Hour" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Sonoran Blue Hour"
+appearance = "dark"
+
+[palette]
+bg = "#171d35"
+surface = "#111526"
+elevated = "#2e3449"
+fg = "#e9dcd8"
+fg_muted = "#a0999f"
+accent = "#a9bcf3"
+accent_fg = "#000000"
+selection_bg = "#353a61"
+selection_fg = "#a8acb9"
+match_fg = "#d2b7ed"
+border = "#414356"
+separator = "#2e344980"
+danger = "#cb777d"
+warning = "#d4ae85"
+success = "#83adab"
+info = "#799bd6"
+badge_bg = "#2e3449"
+badge_fg = "#e9dcd8"
+
+[states.selected]
+bg = "#353a61"
+fg = "#a8acb9"
+[states.hover]
+bg = "#2e3449"
+[states.disabled]
+fg = "#a0999f"
+
+[footer]
+hint_color = "#a0999f"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Bright Lights" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Bright Lights"
+appearance = "dark"
+
+[palette]
+bg = "#191919"
+surface = "#121212"
+elevated = "#303030"
+fg = "#b3c9d7"
+fg_muted = "#7d8b94"
+accent = "#76d5ff"
+accent_fg = "#000000"
+selection_bg = "#b3c9d7"
+selection_fg = "#191919"
+match_fg = "#ba76e7"
+border = "#383c3f"
+separator = "#30303080"
+danger = "#ff355b"
+warning = "#ffc251"
+success = "#b7e876"
+info = "#76d4ff"
+badge_bg = "#303030"
+badge_fg = "#b3c9d7"
+
+[states.selected]
+bg = "#b3c9d7"
+fg = "#191919"
+[states.hover]
+bg = "#303030"
+[states.disabled]
+fg = "#7d8b94"
+
+[footer]
+hint_color = "#7d8b94"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "X Lahabana" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · X Lahabana"
+appearance = "dark"
+
+[palette]
+bg = "#19191a"
+surface = "#121213"
+elevated = "#303031"
+fg = "#f7f1ff"
+fg_muted = "#a9a5af"
+accent = "#fd9353"
+accent_fg = "#000000"
+selection_bg = "#f7f1ff"
+selection_fg = "#19191a"
+match_fg = "#948ae3"
+border = "#454448"
+separator = "#30303180"
+danger = "#fc618d"
+warning = "#e5ff9d"
+success = "#7bd88f"
+info = "#fd9353"
+badge_bg = "#303031"
+badge_fg = "#f7f1ff"
+
+[states.selected]
+bg = "#f7f1ff"
+fg = "#19191a"
+[states.hover]
+bg = "#303031"
+[states.disabled]
+fg = "#a9a5af"
+
+[footer]
+hint_color = "#a9a5af"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lemon Graphite" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lemon Graphite"
+appearance = "dark"
+
+[palette]
+bg = "#0b0f14"
+surface = "#080b0e"
+elevated = "#23272c"
+fg = "#dce3ea"
+fg_muted = "#93999f"
+accent = "#8ad8ff"
+accent_fg = "#000000"
+selection_bg = "#dce3ea"
+selection_fg = "#0b0f14"
+match_fg = "#dab1f4"
+border = "#35393f"
+separator = "#23272c80"
+danger = "#ff6b6b"
+warning = "#f2c14e"
+success = "#7bd88f"
+info = "#5cc8ff"
+badge_bg = "#23272c"
+badge_fg = "#dce3ea"
+
+[states.selected]
+bg = "#dce3ea"
+fg = "#0b0f14"
+[states.hover]
+bg = "#23272c"
+[states.disabled]
+fg = "#93999f"
+
+[footer]
+hint_color = "#93999f"

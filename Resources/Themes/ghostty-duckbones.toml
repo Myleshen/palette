@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Duckbones" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Duckbones"
+appearance = "dark"
+
+[palette]
+bg = "#0e101a"
+surface = "#0a0c13"
+elevated = "#262831"
+fg = "#ebefc0"
+fg_muted = "#9ea186"
+accent = "#00b4e0"
+accent_fg = "#000000"
+selection_bg = "#37382d"
+selection_fg = "#ebefc0"
+match_fg = "#b3a1e6"
+border = "#3a3d3b"
+separator = "#26283180"
+danger = "#e03600"
+warning = "#e39500"
+success = "#5dcd97"
+info = "#00a3cb"
+badge_bg = "#262831"
+badge_fg = "#ebefc0"
+
+[states.selected]
+bg = "#37382d"
+fg = "#ebefc0"
+[states.hover]
+bg = "#262831"
+[states.disabled]
+fg = "#9ea186"
+
+[footer]
+hint_color = "#9ea186"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Teerb" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Teerb"
+appearance = "dark"
+
+[palette]
+bg = "#262626"
+surface = "#1b1b1b"
+elevated = "#3c3c3c"
+fg = "#d0d0d0"
+fg_muted = "#949494"
+accent = "#86aed6"
+accent_fg = "#000000"
+selection_bg = "#4d4d4d"
+selection_fg = "#ffffff"
+match_fg = "#d6aed6"
+border = "#484848"
+separator = "#3c3c3c80"
+danger = "#d68686"
+warning = "#d7af87"
+success = "#aed686"
+info = "#86aed6"
+badge_bg = "#3c3c3c"
+badge_fg = "#d0d0d0"
+
+[states.selected]
+bg = "#4d4d4d"
+fg = "#ffffff"
+[states.hover]
+bg = "#3c3c3c"
+[states.disabled]
+fg = "#949494"
+
+[footer]
+hint_color = "#949494"

@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Framer" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Framer"
+appearance = "dark"
+
+[palette]
+bg = "#111111"
+surface = "#0c0c0c"
+elevated = "#292929"
+fg = "#7c7c7c"
+fg_muted = "#606060"
+accent = "#fcdc08"
+accent_fg = "#000000"
+selection_bg = "#666666"
+selection_fg = "#ffffff"
+match_fg = "#cebbff"
+border = "#262626"
+separator = "#29292980"
+danger = "#ff5555"
+warning = "#ffcc33"
+success = "#98ec65"
+info = "#00aaff"
+badge_bg = "#292929"
+badge_fg = "#919191"
+
+[states.selected]
+bg = "#666666"
+fg = "#ffffff"
+[states.hover]
+bg = "#292929"
+[states.disabled]
+fg = "#606060"
+
+[footer]
+hint_color = "#606060"

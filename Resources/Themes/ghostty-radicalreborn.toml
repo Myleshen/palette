@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "RadicalReborn" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · RadicalReborn"
+appearance = "dark"
+
+[palette]
+bg = "#141322"
+surface = "#0e0e18"
+elevated = "#2c2b38"
+fg = "#defff7"
+fg_muted = "#97acac"
+accent = "#84f9fe"
+accent_fg = "#000000"
+selection_bg = "#3c2e61"
+selection_fg = "#eec1c1"
+match_fg = "#fa61b8"
+border = "#3c424d"
+separator = "#2c2b3880"
+danger = "#ff5395"
+warning = "#fffc7e"
+success = "#d8ff4e"
+info = "#7dd9e4"
+badge_bg = "#2c2b38"
+badge_fg = "#defff7"
+
+[states.selected]
+bg = "#3c2e61"
+fg = "#eec1c1"
+[states.hover]
+bg = "#2c2b38"
+[states.disabled]
+fg = "#97acac"
+
+[footer]
+hint_color = "#97acac"

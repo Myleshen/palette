@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Cursor Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Cursor Dark"
+appearance = "dark"
+
+[palette]
+bg = "#141414"
+surface = "#0e0e0e"
+elevated = "#2c2c2c"
+fg = "#d4d4d4"
+fg_muted = "#919191"
+accent = "#87a6c4"
+accent_fg = "#000000"
+selection_bg = "#2c2c2c"
+selection_fg = "#e4e4e4"
+match_fg = "#b48ead"
+border = "#3a3a3a"
+separator = "#2c2c2c80"
+danger = "#fc6b83"
+warning = "#d2943e"
+success = "#3fa266"
+info = "#81a1c1"
+badge_bg = "#2c2c2c"
+badge_fg = "#d4d4d4"
+
+[states.selected]
+bg = "#2c2c2c"
+fg = "#e4e4e4"
+[states.hover]
+bg = "#2c2c2c"
+[states.disabled]
+fg = "#919191"
+
+[footer]
+hint_color = "#919191"

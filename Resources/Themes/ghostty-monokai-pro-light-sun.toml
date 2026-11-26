@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Monokai Pro Light Sun" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Monokai Pro Light Sun"
+appearance = "light"
+
+[palette]
+bg = "#f8efe7"
+surface = "#ece3db"
+elevated = "#fcf8f4"
+fg = "#2c232e"
+fg_muted = "#736a6f"
+accent = "#d4572b"
+accent_fg = "#000000"
+selection_bg = "#beb5b3"
+selection_fg = "#2c232e"
+match_fg = "#6851a2"
+border = "#cfc6c2"
+separator = "#fcf8f480"
+danger = "#ce4770"
+warning = "#b16803"
+success = "#218871"
+info = "#d4572b"
+badge_bg = "#fcf8f4"
+badge_fg = "#2c232e"
+
+[states.selected]
+bg = "#beb5b3"
+fg = "#2c232e"
+[states.hover]
+bg = "#fcf8f4"
+[states.disabled]
+fg = "#736a6f"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#736a6f"

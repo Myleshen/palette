@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Sun Bleached" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Sun Bleached"
+appearance = "light"
+
+[palette]
+bg = "#f0dfc3"
+surface = "#e4d4b9"
+elevated = "#f8f1e4"
+fg = "#4a382f"
+fg_muted = "#847263"
+accent = "#3a6378"
+accent_fg = "#ffffff"
+selection_bg = "#dfcbaa"
+selection_fg = "#2e2825"
+match_fg = "#76546e"
+border = "#cfbea5"
+separator = "#f8f1e480"
+danger = "#9e4935"
+warning = "#725a1c"
+success = "#4b694d"
+info = "#3a6378"
+badge_bg = "#f8f1e4"
+badge_fg = "#4a382f"
+
+[states.selected]
+bg = "#dfcbaa"
+fg = "#2e2825"
+[states.hover]
+bg = "#f8f1e4"
+[states.disabled]
+fg = "#847263"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#847263"

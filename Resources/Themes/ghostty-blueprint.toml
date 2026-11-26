@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Blueprint" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Blueprint"
+appearance = "light"
+
+[palette]
+bg = "#f8fafc"
+surface = "#ecedef"
+elevated = "#fcfdfe"
+fg = "#0f172a"
+fg_muted = "#616674"
+accent = "#2563eb"
+accent_fg = "#ffffff"
+selection_bg = "#cbd5e1"
+selection_fg = "#0f172a"
+match_fg = "#7c3aed"
+border = "#c9cdd2"
+separator = "#fcfdfe80"
+danger = "#dc2626"
+warning = "#d97706"
+success = "#16a34a"
+info = "#2563eb"
+badge_bg = "#fcfdfe"
+badge_fg = "#0f172a"
+
+[states.selected]
+bg = "#cbd5e1"
+fg = "#0f172a"
+[states.hover]
+bg = "#fcfdfe"
+[states.disabled]
+fg = "#616674"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#616674"

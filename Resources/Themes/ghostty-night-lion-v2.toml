@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Night Lion V2" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Night Lion V2"
+appearance = "dark"
+
+[palette]
+bg = "#171717"
+surface = "#111111"
+elevated = "#2e2e2e"
+fg = "#bbbbbb"
+fg_muted = "#828282"
+accent = "#64d0f0"
+accent_fg = "#000000"
+selection_bg = "#b5d5ff"
+selection_fg = "#000000"
+match_fg = "#ff9bf5"
+border = "#383838"
+separator = "#2e2e2e80"
+danger = "#bb0000"
+warning = "#f3f167"
+success = "#04f623"
+info = "#64d0f0"
+badge_bg = "#2e2e2e"
+badge_fg = "#bbbbbb"
+
+[states.selected]
+bg = "#b5d5ff"
+fg = "#000000"
+[states.hover]
+bg = "#2e2e2e"
+[states.disabled]
+fg = "#828282"
+
+[footer]
+hint_color = "#828282"

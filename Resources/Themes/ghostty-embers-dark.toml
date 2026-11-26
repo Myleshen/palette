@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Embers Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Embers Dark"
+appearance = "dark"
+
+[palette]
+bg = "#16130f"
+surface = "#100e0b"
+elevated = "#2d2b27"
+fg = "#a39a90"
+fg_muted = "#726b63"
+accent = "#8a8075"
+accent_fg = "#000000"
+selection_bg = "#433b32"
+selection_fg = "#aea69d"
+match_fg = "#beb6ae"
+border = "#322e29"
+separator = "#2d2b2780"
+danger = "#826d57"
+warning = "#6d8257"
+success = "#57826d"
+info = "#6d5782"
+badge_bg = "#2d2b27"
+badge_fg = "#a39a90"
+
+[states.selected]
+bg = "#433b32"
+fg = "#aea69d"
+[states.hover]
+bg = "#2d2b27"
+[states.disabled]
+fg = "#726b63"
+
+[footer]
+hint_color = "#726b63"

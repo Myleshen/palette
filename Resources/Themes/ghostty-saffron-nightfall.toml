@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Saffron Nightfall" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Saffron Nightfall"
+appearance = "dark"
+
+[palette]
+bg = "#131320"
+surface = "#0e0e17"
+elevated = "#2b2b36"
+fg = "#d9d4c8"
+fg_muted = "#94908d"
+accent = "#ffc247"
+accent_fg = "#000000"
+selection_bg = "#33324e"
+selection_fg = "#f1ecdf"
+match_fg = "#d0a3d3"
+border = "#3b3a42"
+separator = "#2b2b3680"
+danger = "#e0705f"
+warning = "#ffc247"
+success = "#9cb56b"
+info = "#7d8fd0"
+badge_bg = "#2b2b36"
+badge_fg = "#d9d4c8"
+
+[states.selected]
+bg = "#33324e"
+fg = "#f1ecdf"
+[states.hover]
+bg = "#2b2b36"
+[states.disabled]
+fg = "#94908d"
+
+[footer]
+hint_color = "#94908d"

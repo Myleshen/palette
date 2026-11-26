@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Material Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Material Dark"
+appearance = "dark"
+
+[palette]
+bg = "#232322"
+surface = "#191918"
+elevated = "#393938"
+fg = "#e5e5e5"
+fg_muted = "#a1a1a1"
+accent = "#54a4f3"
+accent_fg = "#000000"
+selection_bg = "#dfdfdf"
+selection_fg = "#3d3d3d"
+match_fg = "#aa4dbc"
+border = "#4a4a49"
+separator = "#39393880"
+danger = "#b7141f"
+warning = "#f6981e"
+success = "#457b24"
+info = "#134eb2"
+badge_bg = "#393938"
+badge_fg = "#e5e5e5"
+
+[states.selected]
+bg = "#dfdfdf"
+fg = "#3d3d3d"
+[states.hover]
+bg = "#393938"
+[states.disabled]
+fg = "#a1a1a1"
+
+[footer]
+hint_color = "#a1a1a1"

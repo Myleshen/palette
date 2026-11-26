@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Nocturnal Winter" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Nocturnal Winter"
+appearance = "dark"
+
+[palette]
+bg = "#0d0d17"
+surface = "#090911"
+elevated = "#25252e"
+fg = "#e6e5e5"
+fg_muted = "#9a999d"
+accent = "#6096ff"
+accent_fg = "#000000"
+selection_bg = "#adbdd0"
+selection_fg = "#000000"
+match_fg = "#ff78a2"
+border = "#383840"
+separator = "#25252e80"
+danger = "#f12d52"
+warning = "#f5f17a"
+success = "#09cd7e"
+info = "#3182e0"
+badge_bg = "#25252e"
+badge_fg = "#e6e5e5"
+
+[states.selected]
+bg = "#adbdd0"
+fg = "#000000"
+[states.hover]
+bg = "#25252e"
+[states.disabled]
+fg = "#9a999d"
+
+[footer]
+hint_color = "#9a999d"

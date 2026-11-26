@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Firewatch" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Firewatch"
+appearance = "dark"
+
+[palette]
+bg = "#1e2027"
+surface = "#16171c"
+elevated = "#34363d"
+fg = "#9ba2b2"
+fg_muted = "#6f7481"
+accent = "#4c89c5"
+accent_fg = "#000000"
+selection_bg = "#2f363e"
+selection_fg = "#92a1b3"
+match_fg = "#d55119"
+border = "#373a43"
+separator = "#34363d80"
+danger = "#d95360"
+warning = "#dfb563"
+success = "#5ab977"
+info = "#4d89c4"
+badge_bg = "#34363d"
+badge_fg = "#9ba2b2"
+
+[states.selected]
+bg = "#2f363e"
+fg = "#92a1b3"
+[states.hover]
+bg = "#34363d"
+[states.disabled]
+fg = "#6f7481"
+
+[footer]
+hint_color = "#6f7481"

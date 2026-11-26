@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Snazzy Soft" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Snazzy Soft"
+appearance = "dark"
+
+[palette]
+bg = "#282a36"
+surface = "#1d1e27"
+elevated = "#3e3f4a"
+fg = "#eff0eb"
+fg_muted = "#a9abac"
+accent = "#57c7ff"
+accent_fg = "#000000"
+selection_bg = "#92bcd0"
+selection_fg = "#000000"
+match_fg = "#ff6ac1"
+border = "#50525a"
+separator = "#3e3f4a80"
+danger = "#ff5c57"
+warning = "#f3f99d"
+success = "#5af78e"
+info = "#57c7ff"
+badge_bg = "#3e3f4a"
+badge_fg = "#eff0eb"
+
+[states.selected]
+bg = "#92bcd0"
+fg = "#000000"
+[states.hover]
+bg = "#3e3f4a"
+[states.disabled]
+fg = "#a9abac"
+
+[footer]
+hint_color = "#a9abac"

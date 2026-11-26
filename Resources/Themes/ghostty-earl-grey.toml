@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Earl Grey" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+name = "Ghostty · Earl Grey"
+appearance = "light"
+
+[palette]
+bg = "#fcfbf9"
+surface = "#efeeed"
+elevated = "#fefdfc"
+fg = "#605a52"
+fg_muted = "#95908a"
+accent = "#3e5588"
+accent_fg = "#ffffff"
+selection_bg = "#e1ddd6"
+selection_fg = "#605a52"
+match_fg = "#77406f"
+border = "#dddbd8"
+separator = "#fefdfc80"
+danger = "#8f5652"
+warning = "#897d43"
+success = "#747b4d"
+info = "#556995"
+badge_bg = "#fefdfc"
+badge_fg = "#605a52"
+
+[states.selected]
+bg = "#e1ddd6"
+fg = "#605a52"
+[states.hover]
+bg = "#fefdfc"
+[states.disabled]
+fg = "#95908a"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#95908a"

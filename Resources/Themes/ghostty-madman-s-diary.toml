@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Madman's Diary" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Madman's Diary"
+appearance = "dark"
+
+[palette]
+bg = "#1a0e17"
+surface = "#130a11"
+elevated = "#31262e"
+fg = "#f4e7d7"
+fg_muted = "#a89b94"
+accent = "#fbbf24"
+accent_fg = "#000000"
+selection_bg = "#ff6633"
+selection_fg = "#332f1a"
+match_fg = "#c084fc"
+border = "#46393d"
+separator = "#31262e80"
+danger = "#8b1e3e"
+warning = "#59ae08"
+success = "#d25944"
+info = "#fbbf24"
+badge_bg = "#31262e"
+badge_fg = "#f4e7d7"
+
+[states.selected]
+bg = "#ff6633"
+fg = "#332f1a"
+[states.hover]
+bg = "#31262e"
+[states.disabled]
+fg = "#a89b94"
+
+[footer]
+hint_color = "#a89b94"
