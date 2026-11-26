@@ -331,6 +331,7 @@ public final class CaptureService {
     /// grant is missing, so ask for the permission and say what to do.
     private func requireScreenRecording() throws {
         if CGPreflightScreenCaptureAccess() { return }
+        // Native by necessity: macOS owns the TCC permission prompt.
         if requestsPermission, CGRequestScreenCaptureAccess() { return }
         throw CaptureError.failed(
             "Screen Recording is off for Palette. Enable it in System Settings → Privacy & Security → Screen Recording, then try again."

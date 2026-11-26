@@ -1651,11 +1651,12 @@ struct SettingsView: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    Menu("Add app…") {
-                        ForEach(ignorableApps, id: \.id) { app in
-                            Button(app.name) { addIgnoredApp(app.id) }
-                        }
-                    }
+                    PaletteMenuButton(
+                        title: "Add app…",
+                        items: ignorableApps.map { PaletteMenuItem(id: $0.id, title: $0.name) },
+                        theme: theme,
+                        onSelect: { addIgnoredApp($0) }
+                    )
                     .frame(maxWidth: 160)
                     .disabled(ignorableApps.isEmpty)
                     TextField("Bundle id, e.g. com.1password.1password", text: $ignoredAppDraft)
@@ -1949,20 +1950,26 @@ struct SettingsView: View {
                     .frame(maxWidth: 260)
                 }
                 pickerRow("App order") {
-                    Picker("App order", selection: $config.appSort) {
-                        Text("Alphabetical").tag(AppSort.alphabetical)
-                        Text("Most used").tag(AppSort.frequent)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.appSort,
+                        choices: [
+                            PaletteMenuChoice(value: .alphabetical, label: "Alphabetical"),
+                            PaletteMenuChoice(value: .frequent, label: "Most used"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 pickerRow("Preview") {
-                    Picker("Preview", selection: $config.window.previewLayout) {
-                        Text("Automatic (frame width)").tag(PreviewPlacement.auto)
-                        Text("Below the list").tag(PreviewPlacement.below)
-                        Text("Beside the list").tag(PreviewPlacement.beside)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.window.previewLayout,
+                        choices: [
+                            PaletteMenuChoice(value: .auto, label: "Automatic (frame width)"),
+                            PaletteMenuChoice(value: .below, label: "Below the list"),
+                            PaletteMenuChoice(value: .beside, label: "Beside the list"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 toggleRow("Site favicons", isOn: $config.window.favicons)
@@ -1978,13 +1985,16 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Terminal", anchor: "terminal-session") {
                 pickerRow("Session") {
-                    Picker("Session", selection: $config.terminalSession.multiplexer) {
-                        Text("Auto").tag(TerminalMultiplexer.auto)
-                        Text("Zellij").tag(TerminalMultiplexer.zellij)
-                        Text("tmux").tag(TerminalMultiplexer.tmux)
-                        Text("Plain shell").tag(TerminalMultiplexer.none)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.terminalSession.multiplexer,
+                        choices: [
+                            PaletteMenuChoice(value: .auto, label: "Auto"),
+                            PaletteMenuChoice(value: .zellij, label: "Zellij"),
+                            PaletteMenuChoice(value: .tmux, label: "tmux"),
+                            PaletteMenuChoice(value: .none, label: "Plain shell"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 fieldRow("Session name") {
@@ -1992,13 +2002,16 @@ struct SettingsView: View {
                         .settingsField()
                 }
                 pickerRow("Shell") {
-                    Picker("Shell", selection: $terminalShellChoice) {
-                        Text("Auto (fish, then zsh)").tag("auto")
-                        Text("Fish").tag("fish")
-                        Text("Zsh").tag("zsh")
-                        Text("Custom…").tag("custom")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $terminalShellChoice,
+                        choices: [
+                            PaletteMenuChoice(value: "auto", label: "Auto (fish, then zsh)"),
+                            PaletteMenuChoice(value: "fish", label: "Fish"),
+                            PaletteMenuChoice(value: "zsh", label: "Zsh"),
+                            PaletteMenuChoice(value: "custom", label: "Custom…"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 if terminalShellChoice == "custom" {
@@ -2156,13 +2169,17 @@ struct SettingsView: View {
                     }
                     if config.theming.source == .theme && !config.theming.theme.isEmpty {
                         pickerRow("Theme override", help: "Empty follows the Palette theme above.") {
-                            Picker("Theme override", selection: $config.theming.theme) {
-                                Text("Use the Palette theme").tag("")
-                                ForEach(otherAppsThemeChoices, id: \.name) { info in
-                                    Text("\(info.shortDisplayName) · \(info.section.title)").tag(info.name)
-                                }
-                            }
-                            .labelsHidden()
+                            PaletteMenuPicker(
+                                selection: $config.theming.theme,
+                                choices: [PaletteMenuChoice(value: "", label: "Use the Palette theme")]
+                                    + otherAppsThemeChoices.map { info in
+                                        PaletteMenuChoice(
+                                            value: info.name,
+                                            label: "\(info.shortDisplayName) · \(info.section.title)"
+                                        )
+                                    },
+                                theme: theme
+                            )
                             .frame(maxWidth: 360, alignment: .leading)
                         }
                     }
@@ -2589,6 +2606,30 @@ struct SettingsView: View {
         }).value
     }
 
+    private var captureDisplayChoices: [PaletteMenuChoice<Int>] {
+        var choices = captureDisplays.map { PaletteMenuChoice(value: $0.index, label: $0.label) }
+        if !captureDisplays.contains(where: { $0.index == config.capture.recordingDisplay }) {
+            choices.append(PaletteMenuChoice(
+                value: config.capture.recordingDisplay,
+                label: "Display \(config.capture.recordingDisplay) (missing)"
+            ))
+        }
+        return choices
+    }
+
+    private var recordingMicrophoneChoices: [PaletteMenuChoice<String>] {
+        var choices = [PaletteMenuChoice(value: "", label: "System default")]
+        choices += microphones.map { PaletteMenuChoice(value: $0.id, label: $0.name) }
+        if !config.capture.recordingMicrophone.isEmpty,
+           !microphones.contains(where: { $0.id == config.capture.recordingMicrophone }) {
+            choices.append(PaletteMenuChoice(
+                value: config.capture.recordingMicrophone,
+                label: "\(config.capture.recordingMicrophone) (missing)"
+            ))
+        }
+        return choices
+    }
+
     /// Installed fonts plus the configured family even when it is gone, so a
     /// stale value is shown as missing instead of silently reset to Inherit.
     private func fontChoices(_ selected: String, installed: [String]) -> [String] {
@@ -2599,15 +2640,15 @@ struct SettingsView: View {
 
     private func fontFamilyPicker(_ value: Binding<String>, inherited: String) -> some View {
         let installed = fontFamilies
-        return Picker("Font family", selection: value) {
-            Text("Inherit — \(inherited)").tag("")
-            ForEach(fontChoices(value.wrappedValue, installed: installed), id: \.self) { family in
-                Text(installed.contains(family) ? family : "\(family) (missing)")
-                    .tag(family)
-            }
+        var choices = [PaletteMenuChoice(value: "", label: "Inherit — \(inherited)")]
+        choices += fontChoices(value.wrappedValue, installed: installed).map { family in
+            PaletteMenuChoice(
+                value: family,
+                label: installed.contains(family) ? family : "\(family) (missing)"
+            )
         }
-        .labelsHidden()
-        .frame(maxWidth: 380, alignment: .leading)
+        return PaletteMenuPicker(selection: value, choices: choices, theme: theme)
+            .frame(maxWidth: 380, alignment: .leading)
     }
 
     // MARK: - Shortcuts
@@ -2702,12 +2743,13 @@ struct SettingsView: View {
                     }
                 )
                 .frame(width: 180, height: 26)
-                Picker("Action", selection: $config.bindings[index].action) {
-                    ForEach(HotkeyAction.allCases, id: \.self) { action in
-                        Text(action.title).tag(action)
-                    }
-                }
-                .labelsHidden()
+                PaletteMenuPicker(
+                    selection: $config.bindings[index].action,
+                    choices: HotkeyAction.allCases.map {
+                        PaletteMenuChoice(value: $0, label: $0.title)
+                    },
+                    theme: theme
+                )
                 .frame(width: 130)
                 TextField(
                     bindingPlaceholder(config.bindings[index].action),
@@ -3112,7 +3154,7 @@ struct SettingsView: View {
                                     .settingsField()
                             }
                             fieldRow("Browser", anchor: "row-bookmark-\(bookmark.id)-browser") {
-                                BrowserPicker(browser: $bookmark.browser)
+                                BrowserPicker(browser: $bookmark.browser, theme: theme)
                             }
                             fieldRow("Keywords", anchor: "row-bookmark-\(bookmark.id)-keywords") {
                                 TextField("Keywords (comma separated)", text: Binding(
@@ -3213,16 +3255,20 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Web Apps", anchor: "webapps-browser") {
                 fieldRow("Open web apps in", error: webAppBrowserIssue) {
-                    Picker("Open web apps in", selection: webAppBrowserBinding) {
-                        if webAppBrowserChoices.isEmpty {
-                            Text("No Chromium browser found").tag("")
-                        }
-                        ForEach(webAppBrowserChoices, id: \.self) { name in
-                            Text(installedChromium.contains(name) ? name : "\(name) (not installed)")
-                                .tag(name)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: webAppBrowserBinding,
+                        choices: webAppBrowserChoices.isEmpty
+                            ? [PaletteMenuChoice(value: "", label: "No Chromium browser found")]
+                            : webAppBrowserChoices.map { name in
+                                PaletteMenuChoice(
+                                    value: name,
+                                    label: installedChromium.contains(name)
+                                        ? name
+                                        : "\(name) (not installed)"
+                                )
+                            },
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
             } footer: {
@@ -3254,21 +3300,27 @@ struct SettingsView: View {
                     }
                 }
                 pickerRow("Action", anchor: "row-screenshot-action") {
-                    Picker("Action", selection: $config.capture.screenshotAction) {
-                        Text("Save").tag(CaptureAction.save)
-                        Text("Copy").tag(CaptureAction.copy)
-                        Text("Save and copy").tag(CaptureAction.saveCopy)
-                        Text("Save and preview").tag(CaptureAction.preview)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.screenshotAction,
+                        choices: [
+                            PaletteMenuChoice(value: .save, label: "Save"),
+                            PaletteMenuChoice(value: .copy, label: "Copy"),
+                            PaletteMenuChoice(value: .saveCopy, label: "Save and copy"),
+                            PaletteMenuChoice(value: .preview, label: "Save and preview"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
                 pickerRow("Format", anchor: "row-screenshot-format") {
-                    Picker("Format", selection: $config.capture.screenshotFormat) {
-                        Text("PNG").tag("png")
-                        Text("JPG").tag("jpg")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.screenshotFormat,
+                        choices: [
+                            PaletteMenuChoice(value: "png", label: "PNG"),
+                            PaletteMenuChoice(value: "jpg", label: "JPG"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 160, alignment: .leading)
                 }
                 numericRow("Delay before capture", value: $config.capture.delay,
@@ -3285,35 +3337,35 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Recordings", anchor: "recordings-action") {
                 pickerRow("Action", anchor: "row-recording-action") {
-                    Picker("Action", selection: $config.capture.recordingAction) {
-                        Text("Save").tag(CaptureAction.save)
-                        Text("Save and copy").tag(CaptureAction.saveCopy)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.recordingAction,
+                        choices: [
+                            PaletteMenuChoice(value: .save, label: "Save"),
+                            PaletteMenuChoice(value: .saveCopy, label: "Save and copy"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
                 pickerRow("What to record") {
-                    Picker("What to record", selection: $config.capture.recordingTarget) {
-                        Text("Whole screen").tag("screen")
-                        Text("A display").tag("display")
-                        Text("A region").tag("region")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.recordingTarget,
+                        choices: [
+                            PaletteMenuChoice(value: "screen", label: "Whole screen"),
+                            PaletteMenuChoice(value: "display", label: "A display"),
+                            PaletteMenuChoice(value: "region", label: "A region"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
                 if config.capture.recordingTarget == "display" {
                     pickerRow("Display") {
-                        Picker("Display", selection: $config.capture.recordingDisplay) {
-                            ForEach(captureDisplays) { display in
-                                Text(display.label).tag(display.index)
-                            }
-                            if !captureDisplays.isEmpty,
-                               !captureDisplays.contains(where: { $0.index == config.capture.recordingDisplay }) {
-                                Text("Display \(config.capture.recordingDisplay) (missing)")
-                                    .tag(config.capture.recordingDisplay)
-                            }
-                        }
-                        .labelsHidden()
+                        PaletteMenuPicker(
+                            selection: $config.capture.recordingDisplay,
+                            choices: captureDisplayChoices,
+                            theme: theme
+                        )
                         .frame(maxWidth: 280, alignment: .leading)
                     }
                 }
@@ -3324,28 +3376,23 @@ struct SettingsView: View {
                     }
                 }
                 pickerRow("Format", anchor: "row-recording-format") {
-                    Picker("Format", selection: $config.capture.recordingFormat) {
-                        Text("MOV").tag("mov")
-                        Text("MP4").tag("mp4")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.recordingFormat,
+                        choices: [
+                            PaletteMenuChoice(value: "mov", label: "MOV"),
+                            PaletteMenuChoice(value: "mp4", label: "MP4"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 160, alignment: .leading)
                 }
                 toggleRow("Record audio", isOn: $config.capture.recordingAudio)
                 pickerRow("Microphone") {
-                    Picker("Microphone", selection: $config.capture.recordingMicrophone) {
-                        Text("System default").tag("")
-                        ForEach(microphones, id: \.id) { microphone in
-                            Text(microphone.name).tag(microphone.id)
-                        }
-                        if !config.capture.recordingMicrophone.isEmpty,
-                           !microphones.isEmpty,
-                           !microphones.contains(where: { $0.id == config.capture.recordingMicrophone }) {
-                            Text("\(config.capture.recordingMicrophone) (missing)")
-                                .tag(config.capture.recordingMicrophone)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.recordingMicrophone,
+                        choices: recordingMicrophoneChoices,
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                     .disabled(!config.capture.recordingAudio)
                 }
@@ -3387,11 +3434,14 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Captures list", anchor: "search-captures") {
                 pickerRow("List") {
-                    Picker("List", selection: $config.capture.gallery) {
-                        Text("Everything in the folder").tag("all")
-                        Text("Only Palette's captures").tag("palette")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.gallery,
+                        choices: [
+                            PaletteMenuChoice(value: "all", label: "Everything in the folder"),
+                            PaletteMenuChoice(value: "palette", label: "Only Palette's captures"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
             } footer: {
@@ -3456,56 +3506,66 @@ struct SettingsView: View {
     }
 
     private func engineBrowserButton(_ engine: Binding<WebSearchEngine>) -> some View {
-        Menu {
-            Button("Default browser") { engine.wrappedValue.browser = "" }
-            Divider()
-            ForEach(BrowserCatalog.activeBrowsers(), id: \.self) { name in
-                Button {
-                    engine.wrappedValue.browser = name
-                } label: {
-                    if engine.wrappedValue.browser == name {
-                        Label(name, systemImage: "checkmark")
-                    } else {
-                        Text(name)
-                    }
-                }
-            }
-            if !engine.wrappedValue.browser.isEmpty,
-               !BrowserCatalog.activeBrowsers().contains(engine.wrappedValue.browser) {
-                Text("\(engine.wrappedValue.browser) (not installed)")
-                    .disabled(true)
-            }
-            Divider()
-            // A Toggle inside this Menu crashed: the menu dismisses while the
-            // array-element binding writes, and the reload invalidates the
-            // index. Two plain actions mutate the engine by identity instead.
-            Button {
-                setEngineAppMode(engine.wrappedValue, true)
-            } label: {
-                if engine.wrappedValue.appMode {
-                    Label("Open in web app", systemImage: "checkmark")
-                } else {
-                    Text("Open in web app")
-                }
-            }
-            Button {
-                setEngineAppMode(engine.wrappedValue, false)
-            } label: {
-                if !engine.wrappedValue.appMode {
-                    Label("Open in a browser tab", systemImage: "checkmark")
-                } else {
-                    Text("Open in a browser tab")
-                }
-            }
-        } label: {
-            Text(engine.wrappedValue.appMode
-                ? "Web app · \(engine.wrappedValue.browser.isEmpty ? "default" : engine.wrappedValue.browser)"
-                : (engine.wrappedValue.browser.isEmpty ? "Default" : engine.wrappedValue.browser))
-                .lineLimit(1)
-                .truncationMode(.tail)
+        let browsers = BrowserCatalog.activeBrowsers()
+        var items: [PaletteMenuItem] = [
+            PaletteMenuItem(
+                id: "default-browser",
+                title: "Default browser",
+                checked: engine.wrappedValue.browser.isEmpty
+            ),
+            .separator("browsers"),
+        ]
+        items += browsers.map { name in
+            PaletteMenuItem(
+                id: "browser:\(name)",
+                title: name,
+                checked: engine.wrappedValue.browser == name
+            )
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize(horizontal: false, vertical: true)
+        if !engine.wrappedValue.browser.isEmpty,
+           !browsers.contains(engine.wrappedValue.browser) {
+            items.append(PaletteMenuItem(
+                id: "missing-browser",
+                title: "\(engine.wrappedValue.browser) (not installed)",
+                enabled: false
+            ))
+        }
+        items.append(.separator("mode"))
+        // A Toggle inside the old native menu crashed: the menu dismissed while
+        // the array-element binding wrote, and the reload invalidated the
+        // index. Two plain actions mutate the engine by identity instead.
+        items.append(PaletteMenuItem(
+            id: "app-mode",
+            title: "Open in web app",
+            checked: engine.wrappedValue.appMode
+        ))
+        items.append(PaletteMenuItem(
+            id: "tab-mode",
+            title: "Open in a browser tab",
+            checked: !engine.wrappedValue.appMode
+        ))
+        return PaletteMenuButton(
+            title: engine.wrappedValue.appMode
+                ? "Web app · \(engine.wrappedValue.browser.isEmpty ? "default" : engine.wrappedValue.browser)"
+                : (engine.wrappedValue.browser.isEmpty ? "Default" : engine.wrappedValue.browser),
+            items: items,
+            theme: theme
+        ) { id in
+            if id.hasPrefix("browser:") {
+                engine.wrappedValue.browser = String(id.dropFirst("browser:".count))
+                return
+            }
+            switch id {
+            case "default-browser":
+                engine.wrappedValue.browser = ""
+            case "app-mode":
+                setEngineAppMode(engine.wrappedValue, true)
+            case "tab-mode":
+                setEngineAppMode(engine.wrappedValue, false)
+            default:
+                break
+            }
+        }
     }
 
     /// Mutates by identity so a menu dismissal cannot leave a stale index
@@ -3533,22 +3593,28 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Model", anchor: "ask-model") {
                 pickerRow("Provider") {
-                    Picker("Provider", selection: $config.ask.endpoint) {
-                        ForEach(AskEndpoint.allCases, id: \.self) { endpoint in
-                            Text(endpoint.displayName).tag(endpoint)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.ask.endpoint,
+                        choices: AskEndpoint.allCases.map {
+                            PaletteMenuChoice(value: $0, label: $0.displayName)
+                        },
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
                 pickerRow("Model") {
-                    Picker("Model", selection: $config.ask.model) {
-                        ForEach(AskModel.models(for: config.ask.endpoint)) { model in
-                            Text(model.free ? "FREE · \(model.name)" : "\(model.name) · \(model.note)")
-                                .tag(model.id)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.ask.model,
+                        choices: AskModel.models(for: config.ask.endpoint).map { model in
+                            PaletteMenuChoice(
+                                value: model.id,
+                                label: model.free
+                                    ? "FREE · \(model.name)"
+                                    : "\(model.name) · \(model.note)"
+                            )
+                        },
+                        theme: theme
+                    )
                     .frame(maxWidth: 360, alignment: .leading)
                 }
                 numericRow("Max answer tokens", value: $config.ask.maxTokens,
@@ -4320,6 +4386,7 @@ struct SettingsView: View {
     // MARK: - File helpers
 
     private func addCheatsheetFolder() {
+        // Native by necessity: the folder picker is macOS-owned.
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -4330,7 +4397,9 @@ struct SettingsView: View {
         }
     }
 
-    private func chooseDirectory(into binding: Binding<String>) {        let panel = NSOpenPanel()
+    private func chooseDirectory(into binding: Binding<String>) {
+        // Native by necessity: the folder picker is macOS-owned.
+        let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false

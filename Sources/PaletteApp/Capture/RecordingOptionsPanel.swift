@@ -136,6 +136,30 @@ private struct RecordingOptionsView: View {
 
     private var theme: Theme { themeManager.theme }
 
+    private var microphoneChoices: [PaletteMenuChoice<String>] {
+        var choices = [PaletteMenuChoice(value: "", label: "System default")]
+        choices += model.microphones.map { PaletteMenuChoice(value: $0.id, label: $0.name) }
+        if !model.options.microphone.isEmpty,
+           !model.microphones.contains(where: { $0.id == model.options.microphone }) {
+            choices.append(PaletteMenuChoice(
+                value: model.options.microphone,
+                label: "\(model.options.microphone) (missing)"
+            ))
+        }
+        return choices
+    }
+
+    private var displayChoices: [PaletteMenuChoice<Int>] {
+        var choices = model.displays.map { PaletteMenuChoice(value: $0.index, label: $0.label) }
+        if !model.displays.contains(where: { $0.index == model.options.display }) {
+            choices.append(PaletteMenuChoice(
+                value: model.options.display,
+                label: "Display \(model.options.display) (missing)"
+            ))
+        }
+        return choices
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
@@ -161,18 +185,11 @@ private struct RecordingOptionsView: View {
             HStack {
                 Text("Microphone")
                 Spacer()
-                Picker("Microphone", selection: $model.options.microphone) {
-                    Text("System default").tag("")
-                    ForEach(model.microphones, id: \.id) { microphone in
-                        Text(microphone.name).tag(microphone.id)
-                    }
-                    if !model.options.microphone.isEmpty,
-                       !model.microphones.isEmpty,
-                       !model.microphones.contains(where: { $0.id == model.options.microphone }) {
-                        Text("\(model.options.microphone) (missing)").tag(model.options.microphone)
-                    }
-                }
-                .labelsHidden()
+                PaletteMenuPicker(
+                    selection: $model.options.microphone,
+                    choices: microphoneChoices,
+                    theme: theme
+                )
                 .frame(width: 220)
                 .disabled(!model.options.audio)
             }
@@ -180,12 +197,15 @@ private struct RecordingOptionsView: View {
             HStack {
                 Text("Area")
                 Spacer()
-                Picker("Area", selection: $model.options.target) {
-                    Text("Full Screen").tag(RecordingOptions.Target.screen)
-                    Text("Display").tag(RecordingOptions.Target.display)
-                    Text("Selection").tag(RecordingOptions.Target.region)
-                }
-                .labelsHidden()
+                PaletteMenuPicker(
+                    selection: $model.options.target,
+                    choices: [
+                        PaletteMenuChoice(value: RecordingOptions.Target.screen, label: "Full Screen"),
+                        PaletteMenuChoice(value: RecordingOptions.Target.display, label: "Display"),
+                        PaletteMenuChoice(value: RecordingOptions.Target.region, label: "Selection"),
+                    ],
+                    theme: theme
+                )
                 .frame(width: 220)
             }
 
@@ -193,17 +213,11 @@ private struct RecordingOptionsView: View {
                 HStack {
                     Text("Display")
                     Spacer()
-                    Picker("Display", selection: $model.options.display) {
-                        ForEach(model.displays, id: \.index) { display in
-                            Text(display.label).tag(display.index)
-                        }
-                        if !model.displays.isEmpty,
-                           !model.displays.contains(where: { $0.index == model.options.display }) {
-                            Text("Display \(model.options.display) (missing)")
-                                .tag(model.options.display)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $model.options.display,
+                        choices: displayChoices,
+                        theme: theme
+                    )
                     .frame(width: 220)
                 }
             }

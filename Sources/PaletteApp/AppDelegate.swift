@@ -86,7 +86,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Every live manager, keyed by the row id Settings uses.
     private var hotkeyManagers: [String: HotKeyManager] = [:]
     private var currentHotKey: HotKeySpec?
-    private var statusMenuTracking = false
     private var hotKeyInstallTask: Task<Void, Never>?
     private var statusItem: NSStatusItem!
     private var statusPanel: StatusPanelController!
@@ -656,6 +655,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.statusPanel.hide()
                 } else if let value = step.dropPrefix("statuspanel_snapshot=") {
                     self.writeStatusPanelSnapshot(to: value)
+                } else if step == "palettemenu" {
+                    self.showPaletteMenuProbe()
+                } else if step == "palettemenu_long" {
+                    self.showPaletteMenuProbe(long: true)
+                } else if step == "palettemenuclose" {
+                    PaletteMenuController.shared.hide()
+                } else if step == "palettemenu_probe" {
+                    self.runPaletteMenuHotkeyProbe()
+                } else if let value = step.dropPrefix("palettemenu_snapshot=") {
+                    if let view = PaletteMenuController.shared.window?.contentView {
+                        self.write(view: view, to: value)
+                    }
                 } else if let value = step.dropPrefix("settings_snapshot=") {
                     self.writeSettingsSnapshot(to: value)
                 } else if let value = step.dropPrefix("onboarding_snapshot=") {
@@ -685,6 +696,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Script hook: fires a configured binding by its key, through the same
     /// `performBinding` path the Carbon hotkey uses.
+    /// Script-only: opens a menu panel with fixed rows so a run can prove it
+    /// does not activate the app and that work still happens while it is open.
+    private func showPaletteMenuProbe(long: Bool = false) {
+        var items: [PaletteMenuItem] = [
+            PaletteMenuItem(id: "one", title: "Probe One", shortcut: "⌘1", checked: true),
+            .separator("probe-separator"),
+            PaletteMenuItem(id: "two", title: "Probe Two"),
+            PaletteMenuItem(id: "off", title: "Disabled", enabled: false),
+        ]
+        if long {
+            items = (1...60).map {
+                PaletteMenuItem(id: "long-\($0)", title: "Font \($0)", checked: $0 == 50)
+            }
+        }
+        PaletteMenuController.shared.show(
+            items: items,
+            at: NSEvent.mouseLocation,
+            theme: themeManager.theme
+        ) { id in
+            Log.shared.info("Palette menu probe selected \(id)", source: "app")
+        }
+    }
+
+    /// Stands in for a global hotkey callback: a native menu's tracking loop
+    /// would hold this until the menu closed.
+    private func runPaletteMenuHotkeyProbe() {
+        let open = PaletteMenuController.shared.isOpen
+        paletteMenuProbeRuns += 1
+        Log.shared.info(
+            "Hotkey callback ran while palette menu open=\(open), appActive=\(NSApp.isActive)",
+            source: "app"
+        )
+    }
+
     private func fireBinding(keys: String) {
         let normalized = keys.trimmingCharacters(in: .whitespaces).lowercased()
         guard let binding = configuration.bindings.first(where: {
@@ -699,6 +744,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Script assertions
 
     private var scriptProbeResult = ""
+    private var paletteMenuProbeRuns = 0
 
     /// Script hook: run the same availability check a recorder uses against
     /// the configured keys, including the nine built-ins.
@@ -742,6 +788,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var promptTitle: String
         var promptError: String
         var probeResult: String
+        var paletteMenuOpen: Bool
+        var paletteMenuProbe: Int
         var panelHeight: CGFloat
         var panelWidth: CGFloat
         var panelFrame: CGRect
@@ -762,6 +810,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "askStreaming", "askTurns", "askChats", "askBadge",
         "firstTitle", "firstProvider", "statusMessage", "probeResult",
         "promptTitle", "promptError",
+        "paletteMenuOpen", "paletteMenuProbe",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
     ]
 
@@ -791,6 +840,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             promptTitle: searchController?.prompt?.title ?? "",
             promptError: searchController?.promptValidationMessage ?? "",
             probeResult: scriptProbeResult,
+            paletteMenuOpen: PaletteMenuController.shared.isOpen,
+            paletteMenuProbe: paletteMenuProbeRuns,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
             panelFrame: panel?.panel.frame ?? .zero,
@@ -826,6 +877,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "firstTitle": return observation.items.first?.title ?? ""
         case "firstProvider": return observation.items.first?.providerID ?? ""
         case "probeResult": return observation.probeResult
+        case "paletteMenuOpen": return String(observation.paletteMenuOpen)
+        case "paletteMenuProbe": return String(observation.paletteMenuProbe)
         case "promptTitle": return observation.promptTitle
         case "promptError": return observation.promptError
         case "panelHeight": return String(format: "%.2f", observation.panelHeight)
@@ -852,7 +905,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited":
+        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -862,7 +915,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "!=": return have != want ? nil : "\(key)=\(actual), expected != \(want)"
             default: return "'\(op)' is not supported for \(key)"
             }
-        case "selectionIndex", "itemCount":
+        case "selectionIndex", "itemCount", "paletteMenuProbe":
             guard let want = Int(expected), let have = Int(actual) else {
                 return "\(key) expects a number, got '\(expected)'"
             }
@@ -925,6 +978,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "promptTitle": observation.promptTitle,
             "promptError": observation.promptError,
             "probeResult": observation.probeResult,
+            "paletteMenuOpen": observation.paletteMenuOpen,
+            "paletteMenuProbe": observation.paletteMenuProbe,
             "panelHeight": observation.panelHeight,
             "panelWidth": observation.panelWidth,
             "panelFrame": [
@@ -1363,18 +1418,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             var isLauncher = false
         }
 
-        /// A status menu tracks its own event loop; a global hotkey fired while
-        /// it is open cannot show a panel until the menu closes. Close it first,
-        /// then run the action on the next runloop turn.
-        func dispatch(_ action: @escaping () -> Void) {
-            if statusMenuTracking, let menu = statusItem.menu {
-                menu.cancelTracking()
-                DispatchQueue.main.async { action() }
-            } else {
-                action()
-            }
-        }
-
         var desired: [Desired] = [
             Desired(id: "launcher", label: "Launcher shortcut", keys: configuration.hotkey,
                     press: { [weak self] in self?.togglePalette() }, isLauncher: true),
@@ -1445,7 +1488,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let manager = HotKeyManager(hotKeyID: nextID)
             nextID += 1
-            manager.onPressed = { dispatch(item.press) }
+            manager.onPressed = { item.press() }
             do {
                 let spec = try manager.register(item.keys)
                 hotkeyManagers[item.id] = manager
@@ -2568,6 +2611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return paths.indexesHomeFolder
         }
         guard usesHome, !isScriptMode, !shouldShowOnboarding else { return false }
+        // Native by necessity: a one-time first-run system-modal consent.
         let alert = NSAlert()
         alert.messageText = "Index your home folder for /edit?"
         alert.informativeText = """
@@ -2598,6 +2642,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         guard !pending.isEmpty else { return }
         let commands = pending.flatMap { $0.missing.map(\.install) }
+        // Native by necessity: a one-time first-run system-modal consent.
         let alert = NSAlert()
         alert.messageText = pending.count == 1
             ? "A source needs a tool that is not installed"
@@ -2696,6 +2741,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Native by necessity: the app menu bar (App/Edit/Window/Help) and the
+    /// Services submenu are macOS-owned. The system draws and drives those, and
+    /// they are not opened from Palette's own UI. Every menu Palette itself
+    /// opens uses `PaletteMenuController`, because an `NSMenu` tracking loop
+    /// would block Palette's global hotkeys.
     private func buildMainMenu() {
         let mainMenu = NSMenu()
 
@@ -3293,6 +3343,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func exportBackup() {
+        // Native by necessity: a system-modal confirmation before writing a zip.
         let confirm = NSAlert()
         confirm.messageText = "Export a backup without clipboard text?"
         confirm.informativeText = """
@@ -3304,6 +3355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         confirm.addButton(withTitle: "Cancel")
         guard confirm.runModal() == .alertFirstButtonReturn else { return }
 
+        // Native by necessity: the file browser is macOS-owned.
         let panel = NSSavePanel()
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         panel.nameFieldStringValue = "Palette-Backup-\(stamp).zip"
