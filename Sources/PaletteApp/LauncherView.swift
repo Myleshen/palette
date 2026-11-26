@@ -696,7 +696,9 @@ struct ActionRow: View {
             if let shortcut = action.shortcut {
                 Text(shortcut)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundColor(theme.color(theme.palette.fgMuted))
+                    .foregroundColor(selected
+                        ? theme.color(theme.palette.selectionFg).opacity(0.85)
+                        : theme.color(theme.palette.fgMuted))
             }
         }
         .padding(.horizontal, LauncherMetrics.innerPadding)

@@ -392,7 +392,7 @@ struct ThemeBrowserView: View {
             if selected {
                 Text("↩")
                     .font(preview.monoFont(size: 9))
-                    .foregroundStyle(preview.color(preview.palette.selectionFg).opacity(0.75))
+                    .foregroundStyle(preview.color(preview.palette.selectionFg))
             }
         }
         .padding(.horizontal, 8)
