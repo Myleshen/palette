@@ -21,6 +21,12 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
     /// Folded history, rebuilt when the store's clipboard revision moves.
     private let index = ClipboardSearchIndex()
 
+    /// Custom action ids `activate` routes. The item builders below may only
+    /// emit these plus `hostHandledCustomActions`; the routing test pins that.
+    static let handledCustomActions: Set<String> = ["delete", "pin", "unpin", "ocr-copy"]
+    /// Custom ids the host handles before the provider sees them.
+    static let hostHandledCustomActions: Set<String> = ["clip-transform", "scratch-entry", "term-here"]
+
     public init(store: PaletteStore, bridge: HostBridge) {
         self.store = store
         self.bridge = bridge
@@ -93,6 +99,7 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         // Route on the action id: OCR carries the entry id in `value`, so
         // switching on the value made the action fall through to `default`.
+        guard Self.handledCustomActions.contains(action.id) else { return }
         switch action.id {
         case "delete":
             try await store.deleteClipboard(id: item.id)

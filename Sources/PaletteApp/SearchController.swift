@@ -290,7 +290,7 @@ public final class SearchController: ObservableObject, HostBridge {
         if parsed.isBound {
             // Keep the previous rows visible while the next query runs: clearing
             // on each keystroke made the list (and its preview) blink empty.
-            if items.first?.providerID != parsed.providerID {
+            if !parsed.keepsPreviousRows(previousProviderID: items.first?.providerID) {
                 items = []
                 selectionIndex = 0
                 actionIndex = 0
@@ -1439,14 +1439,7 @@ public final class SearchController: ObservableObject, HostBridge {
     /// Setup rows point at files that may not exist yet; create an empty one so
     /// the editor opens instead of the panel silently closing.
     private func ensureFileExists(at path: String) {
-        let expanded = PathExpansion.expand(path)
-        guard !FileManager.default.fileExists(atPath: expanded) else { return }
-        let url = URL(fileURLWithPath: expanded)
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        FileManager.default.createFile(atPath: expanded, contents: Data())
+        PathExpansion.ensureFileExists(at: path)
     }
 
     public func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {

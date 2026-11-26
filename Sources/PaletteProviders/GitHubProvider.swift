@@ -169,6 +169,12 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     private let terminal: String
     private let cache = ResultCache()
 
+    /// Custom action ids `activate` routes; the host owns the embedded panel.
+    static let handledCustomActions: Set<String> = [
+        "auth", "clone", "copy-slug", "checkout", "rerun", "cancel", "mark-done", "open",
+    ]
+    static let hostHandledCustomActions: Set<String> = ["cmd-run-panel"]
+
     /// `gh` is spawned per keystroke otherwise. Results live for 20 s, and a
     /// cancelled search kills its child through `ProcessRunner`, so a newer
     /// query simply replaces the in-flight one.
@@ -244,6 +250,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
+        guard Self.handledCustomActions.contains(action.id) else { return }
         switch action.id {
         case "auth":
             try await openTerminal("gh auth login", app: terminalApp)

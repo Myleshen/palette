@@ -9,6 +9,19 @@ public enum PathExpansion {
         }
         return (value as NSString).standardizingPath
     }
+
+    /// Setup rows point at files that may not exist yet; create an empty one so
+    /// the editor opens instead of the panel silently closing.
+    public static func ensureFileExists(at path: String) {
+        let expanded = expand(path)
+        guard !FileManager.default.fileExists(atPath: expanded) else { return }
+        let url = URL(fileURLWithPath: expanded)
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: expanded, contents: Data())
+    }
 }
 
 public struct Scope: Equatable, Sendable {
