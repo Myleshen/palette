@@ -1349,11 +1349,12 @@ public final class SearchController: ObservableObject, HostBridge {
 
     private func keepsPanelOpen(item: PaletteItem, action: PaletteAction) -> Bool {
         switch item.providerID {
-        case "theme", "clip", "ocr", "timer":
+        case "theme", "clip", "ocr", "timer", "color":
             return true
-        case "shot":
-            // OCR results report a character count; capture rows still hide.
-            return action.id.hasPrefix("ocr-")
+        case "shots":
+            // Copy and OCR report their outcome in the status line; capture
+            // rows still hide.
+            return action.id == "copy" || action.id.hasPrefix("ocr-")
         case "awake":
             return true
         case "web":
