@@ -665,6 +665,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.showPaletteMenuProbe()
                 } else if step == "palettemenu_long" {
                     self.showPaletteMenuProbe(long: true)
+                } else if let value = step.dropPrefix("palette_menu=") {
+                    self.showScriptedPaletteMenu(value)
                 } else if step == "palettemenuclose" {
                     PaletteMenuController.shared.hide()
                 } else if step == "palettemenu_probe" {
@@ -690,7 +692,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 } else if let value = step.dropPrefix("key=") {
                     if let event = self.syntheticKey(value) {
-                        _ = self.searchController.handleKey(event)
+                        // A menu or the status panel owns the keyboard while it
+                        // is open, exactly as the real non-activating panels do.
+                        let handled = (PaletteMenuController.shared.isOpen
+                            && PaletteMenuController.shared.scriptKey(event))
+                            || (self.statusPanel?.isOpen == true
+                                && self.statusPanel.scriptKey(event))
+                        if !handled {
+                            _ = self.searchController.handleKey(event)
+                        }
                     }
                 } else {
                     Log.shared.warn("Unknown script step: \(step)", source: "app")
@@ -734,6 +744,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "Hotkey callback ran while palette menu open=\(open), appActive=\(NSApp.isActive)",
             source: "app"
         )
+    }
+
+    /// Script-only: opens the same rows a real control builds, so a flow can
+    /// count them and drive the arrows. Ids: `probe` (fixed rows with a
+    /// separator and a disabled row), `picker` (a PaletteMenuPicker menu) and
+    /// `engine_browser` (the web-search engine's browser picker).
+    private func showScriptedPaletteMenu(_ id: String) {
+        let items: [PaletteMenuItem]
+        switch id {
+        case "picker":
+            items = paletteMenuPickerItems(
+                choices: [
+                    PaletteMenuChoice(value: "png", label: "PNG", heading: "Images"),
+                    PaletteMenuChoice(value: "jpg", label: "JPG"),
+                    PaletteMenuChoice(value: "gif", label: "GIF"),
+                ],
+                selected: "png"
+            )
+        case "engine_browser":
+            items = EngineBrowserMenu.items(
+                browser: "",
+                browsers: BrowserCatalog.activeBrowsers(),
+                appMode: false
+            )
+        case "probe":
+            items = [
+                PaletteMenuItem(id: "probe-one", title: "Probe One", checked: true),
+                .separator("probe-gap"),
+                PaletteMenuItem(id: "probe-off", title: "Disabled", enabled: false),
+                PaletteMenuItem(id: "probe-two", title: "Probe Two"),
+                PaletteMenuItem(id: "probe-three", title: "Probe Three"),
+            ]
+        default:
+            recordScriptFailure("unknown palette menu '\(id)'")
+            return
+        }
+        PaletteMenuController.shared.show(
+            items: items,
+            at: NSEvent.mouseLocation,
+            theme: themeManager.theme
+        ) { selected in
+            Log.shared.info("Palette menu probe selected \(selected)", source: "app")
+        }
     }
 
     private func fireBinding(keys: String) {
@@ -796,6 +849,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var probeResult: String
         var paletteMenuOpen: Bool
         var paletteMenuProbe: Int
+        var paletteMenuRows: Int
+        var paletteMenuHighlight: String
+        var statusPanelOpen: Bool
+        var statusPanelRows: Int
+        var statusPanelHighlight: String
+        var themeMenuRows: Int
+        var themeMenuRendered: Int
         var panelHeight: CGFloat
         var panelWidth: CGFloat
         var panelFrame: CGRect
@@ -817,6 +877,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "firstTitle", "firstProvider", "statusMessage", "probeResult",
         "promptTitle", "promptError",
         "paletteMenuOpen", "paletteMenuProbe",
+        "paletteMenuRows", "paletteMenuHighlight",
+        "statusPanelOpen", "statusPanelRows", "statusPanelHighlight",
+        "themeMenuRows", "themeMenuRendered",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
     ]
 
@@ -848,6 +911,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             probeResult: scriptProbeResult,
             paletteMenuOpen: PaletteMenuController.shared.isOpen,
             paletteMenuProbe: paletteMenuProbeRuns,
+            paletteMenuRows: PaletteMenuController.shared.scriptRowCount,
+            paletteMenuHighlight: PaletteMenuController.shared.scriptHighlightedID ?? "",
+            statusPanelOpen: statusPanel?.isOpen ?? false,
+            statusPanelRows: statusPanel?.scriptRowCount ?? 0,
+            statusPanelHighlight: statusPanel?.scriptHighlightedTitle ?? "",
+            themeMenuRows: ThemeBrowserRenderProbe.catalogSize,
+            themeMenuRendered: ThemeBrowserRenderProbe.rows,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
             panelFrame: panel?.panel.frame ?? .zero,
@@ -885,6 +955,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "probeResult": return observation.probeResult
         case "paletteMenuOpen": return String(observation.paletteMenuOpen)
         case "paletteMenuProbe": return String(observation.paletteMenuProbe)
+        case "paletteMenuRows": return String(observation.paletteMenuRows)
+        case "paletteMenuHighlight": return observation.paletteMenuHighlight
+        case "statusPanelOpen": return String(observation.statusPanelOpen)
+        case "statusPanelRows": return String(observation.statusPanelRows)
+        case "statusPanelHighlight": return observation.statusPanelHighlight
+        case "themeMenuRows": return String(observation.themeMenuRows)
+        case "themeMenuRendered": return String(observation.themeMenuRendered)
         case "promptTitle": return observation.promptTitle
         case "promptError": return observation.promptError
         case "panelHeight": return String(format: "%.2f", observation.panelHeight)
@@ -911,7 +988,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen":
+        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen", "statusPanelOpen":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -921,7 +998,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "!=": return have != want ? nil : "\(key)=\(actual), expected != \(want)"
             default: return "'\(op)' is not supported for \(key)"
             }
-        case "selectionIndex", "itemCount", "paletteMenuProbe":
+        case "selectionIndex", "itemCount", "paletteMenuProbe", "paletteMenuRows", "statusPanelRows", "themeMenuRows", "themeMenuRendered":
             guard let want = Int(expected), let have = Int(actual) else {
                 return "\(key) expects a number, got '\(expected)'"
             }
@@ -1000,6 +1077,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "probeResult": observation.probeResult,
             "paletteMenuOpen": observation.paletteMenuOpen,
             "paletteMenuProbe": observation.paletteMenuProbe,
+            "paletteMenuRows": observation.paletteMenuRows,
+            "paletteMenuHighlight": observation.paletteMenuHighlight,
+            "statusPanelOpen": observation.statusPanelOpen,
+            "statusPanelRows": observation.statusPanelRows,
+            "statusPanelHighlight": observation.statusPanelHighlight,
+            "themeMenuRows": observation.themeMenuRows,
+            "themeMenuRendered": observation.themeMenuRendered,
             "panelHeight": observation.panelHeight,
             "panelWidth": observation.panelWidth,
             "panelFrame": [

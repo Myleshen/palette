@@ -127,13 +127,17 @@ public final class ThemingEngine: ObservableObject {
     private let chromiumProbe: ChromiumProbe
     private let kitty: KittyRemoteControl
     private let macOSMajorVersion: Int
+    /// Tests generate files in a sandbox HOME; asking the user's kitty to
+    /// reload colours from that sandbox would paint the live terminal.
+    private let reloadsEnabled: Bool
 
     public init(
         paths: PalettePaths,
         themesDirectory: URL,
         chromiumProbe: ChromiumProbe = .live,
         kitty: KittyRemoteControl = KittyRemoteControl(),
-        macOSMajorVersion: Int = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+        macOSMajorVersion: Int = ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+        reloadsEnabled: Bool = true
     ) {
         self.themeDir = paths.themeDir
         self.previousDir = paths.themeDir.appendingPathComponent("previous", isDirectory: true)
@@ -141,6 +145,7 @@ public final class ThemingEngine: ObservableObject {
         self.chromiumProbe = chromiumProbe
         self.kitty = kitty
         self.macOSMajorVersion = macOSMajorVersion
+        self.reloadsEnabled = reloadsEnabled
         self.includes = ThemingIncludes(home: paths.home, themeDir: paths.themeDir)
     }
 
@@ -340,6 +345,7 @@ public final class ThemingEngine: ObservableObject {
                 error: failures.isEmpty ? nil : "Some app configs could not be restored."
             )
             lastResult = result
+
             return result
         } catch {
             let message = "Could not revert: \(error.localizedDescription)"
@@ -526,6 +532,7 @@ public final class ThemingEngine: ObservableObject {
             )
             status = summary
             lastResult = result
+
             return result
         } catch {
             let message = "Could not write palette files: \(error.localizedDescription)"
