@@ -973,7 +973,7 @@ public actor PaletteStore {
         if !conditions.isEmpty {
             sql += " WHERE " + conditions.joined(separator: " AND ")
         }
-        sql += " ORDER BY c.pinned DESC, c.created DESC LIMIT ?;"
+        sql += " ORDER BY c.created DESC LIMIT ?;"
 
         let statement = try prepare(sql)
         defer { sqlite3_finalize(statement) }
@@ -1048,9 +1048,7 @@ public actor PaletteStore {
         let statement = try prepare("""
         SELECT id, substr(text, 1, 4096), kind, pinned, created, width, height
         FROM clipboard
-        ORDER BY pinned DESC,
-                 CASE kind WHEN 'text' THEN 0 WHEN 'image' THEN 1 ELSE 2 END,
-                 created DESC
+        ORDER BY created DESC
         LIMIT ?;
         """)
         defer { sqlite3_finalize(statement) }

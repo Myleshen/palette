@@ -73,7 +73,6 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
                 entry.thumbnailPNG = try? await store.clipboardThumbnail(id: entry.id)
             }
             var item = Self.item(for: entry, provider: descriptor)
-            item.group = nil
             item.score = match.score
             items.append(item)
         }
@@ -179,7 +178,6 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             subtitle: "\(relative(entry.createdAt)) · \(entry.text.count) \(entry.text.count == 1 ? "char" : "chars")",
             icon: .symbol(entry.pinned ? "pin.fill" : "doc.on.clipboard"),
             badge: entry.pinned ? "pinned" : nil,
-            group: entry.pinned ? "Pinned" : "Text",
             score: 0,
             actions: actions,
             preview: .text(entry.text),
@@ -211,7 +209,6 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             subtitle: "\(relative(entry.createdAt)) · PNG image",
             icon: icon,
             badge: entry.pinned ? "pinned" : "image",
-            group: entry.pinned ? "Pinned" : "Images",
             score: 0,
             actions: actions,
             preview: preview,
@@ -264,7 +261,6 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             subtitle: "\(relative(entry.createdAt)) · \(detail)",
             icon: icon,
             badge: entry.pinned ? "pinned" : "files",
-            group: entry.pinned ? "Pinned" : "Files",
             score: 0,
             actions: actions,
             preview: .files(paths: paths),
