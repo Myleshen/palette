@@ -730,6 +730,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var probeResult: String
         var panelHeight: CGFloat
         var panelWidth: CGFloat
+        var panelFrame: CGRect
         var derivedPanelHeight: CGFloat
         var providerCount: Int
         var providerBarMode: String
@@ -778,6 +779,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             probeResult: scriptProbeResult,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
+            panelFrame: panel?.panel.frame ?? .zero,
             derivedPanelHeight: panel?.panel.frame.height ?? 0,
             providerCount: searchController?.railEntries.count ?? 0,
             providerBarMode: searchController?.providerBar.rawValue ?? "",
@@ -911,6 +913,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "probeResult": observation.probeResult,
             "panelHeight": observation.panelHeight,
             "panelWidth": observation.panelWidth,
+            "panelFrame": [
+                "x": observation.panelFrame.origin.x,
+                "y": observation.panelFrame.origin.y,
+                "width": observation.panelFrame.width,
+                "height": observation.panelFrame.height,
+            ],
             "derivedPanelHeight": observation.derivedPanelHeight,
             "providerCount": observation.providerCount,
             "providerBarMode": observation.providerBarMode,
