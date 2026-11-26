@@ -64,7 +64,7 @@ let package = Package(
         .testTarget(
             name: "PaletteTests",
             dependencies: [
-                "PaletteCore", "PalettePlatform", "PaletteProviders", "PaletteRuntime",
+                "PaletteApp", "PaletteCore", "PalettePlatform", "PaletteProviders", "PaletteRuntime",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
             ]
         ),

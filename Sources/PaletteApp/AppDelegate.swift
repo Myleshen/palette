@@ -659,6 +659,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.showPaletteMenuProbe()
                 } else if step == "palettemenu_long" {
                     self.showPaletteMenuProbe(long: true)
+                } else if step == "palettemenu_stress" {
+                    self.showPaletteMenuProbe(rows: 942)
+                } else if let value = step.dropPrefix("palettemenu_rows="), let rows = Int(value) {
+                    self.showPaletteMenuProbe(rows: rows)
+                } else if step == "palettemenu_scroll" {
+                    await PaletteMenuController.shared.scriptScrollPage()
+                } else if step == "palettemenu_scroll_up" {
+                    await PaletteMenuController.shared.scriptScrollPage(up: true)
+                } else if let value = step.dropPrefix("palettemenu_key=") {
+                    PaletteMenuController.shared.scriptKey(value)
+                } else if let value = step.dropPrefix("palettemenu_filter=") {
+                    PaletteMenuController.shared.scriptFilter(value)
                 } else if step == "palettemenuclose" {
                     PaletteMenuController.shared.hide()
                 } else if step == "palettemenu_probe" {
@@ -698,7 +710,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `performBinding` path the Carbon hotkey uses.
     /// Script-only: opens a menu panel with fixed rows so a run can prove it
     /// does not activate the app and that work still happens while it is open.
-    private func showPaletteMenuProbe(long: Bool = false) {
+    /// `rows` builds a stress menu shaped like the 942-theme picker.
+    private func showPaletteMenuProbe(long: Bool = false, rows: Int = 0) {
         var items: [PaletteMenuItem] = [
             PaletteMenuItem(id: "one", title: "Probe One", shortcut: "⌘1", checked: true),
             .separator("probe-separator"),
@@ -708,6 +721,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if long {
             items = (1...60).map {
                 PaletteMenuItem(id: "long-\($0)", title: "Font \($0)", checked: $0 == 50)
+            }
+        } else if rows > 0 {
+            items = (1...rows).map {
+                PaletteMenuItem(id: "row-\($0)", title: "Theme \($0)", checked: $0 == rows / 2)
             }
         }
         PaletteMenuController.shared.show(
