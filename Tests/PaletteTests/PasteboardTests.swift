@@ -26,4 +26,40 @@ final class PasteboardTests: XCTestCase {
         try await Task.sleep(nanoseconds: 300_000_000)
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "later-value")
     }
+
+    func testAPasteWritesTheClipboardOnce() {
+        let service = PasteboardService()
+        service.requestsAccessibility = false
+        service.accessibilityTrustedOverride = true
+
+        let outcome = service.paste(text: "single-write", into: nil)
+
+        XCTAssertEqual(service.writes, 1)
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "single-write")
+        XCTAssertEqual(outcome, .noTarget)
+    }
+
+    func testACopyOnlyTargetWritesOnceAndPostsNoKeystroke() {
+        let service = PasteboardService()
+        service.requestsAccessibility = false
+        service.accessibilityTrustedOverride = true
+
+        let outcome = service.paste(text: "copy-only", into: NSRunningApplication.current, route: .copyOnly)
+
+        XCTAssertEqual(service.writes, 1)
+        XCTAssertEqual(outcome, .copiedOnly)
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "copy-only")
+    }
+
+    func testMissingAccessibilityIsReportedAfterTheWrite() {
+        let service = PasteboardService()
+        service.requestsAccessibility = false
+        service.accessibilityTrustedOverride = false
+
+        let outcome = service.paste(text: "untrusted", into: nil)
+
+        XCTAssertEqual(service.writes, 1)
+        XCTAssertEqual(outcome, .needsAccessibility)
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "untrusted")
+    }
 }
