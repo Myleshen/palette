@@ -42,6 +42,15 @@ let package = Package(
                 .product(name: "TOMLKit", package: "TOMLKit"),
             ]
         ),
+        // Rewrites Resources/Themes/*.toml with the same contrast repair the
+        // app applies at load time. Not shipped inside the app bundle.
+        .executableTarget(
+            name: "ThemeRepair",
+            dependencies: [
+                "PaletteCore",
+                .product(name: "TOMLKit", package: "TOMLKit"),
+            ]
+        ),
         .executableTarget(
             name: "PaletteApp",
             dependencies: [

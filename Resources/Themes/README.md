@@ -18,6 +18,10 @@ colour values were copied from each theme's `colors.toml`; the originals live at
 <https://github.com/basecamp/omarchy/tree/master/themes>. They use the same
 mapping as the Ghostty ports.
 
+After adding or importing a theme, repair its palette with
+`swift run ThemeRepair Resources/Themes`. The app applies the same contrast
+repair at load time, so the files, the picker swatches and the live theme agree.
+
 
 
 - `[palette]` — background, foreground, accent, selection, badge, and status colors

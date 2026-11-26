@@ -214,6 +214,10 @@ public struct Theme: Equatable, Sendable {
         theme.palette.separator = "#e4e4e780"
         theme.palette.badgeBg = "#e4e4e7"
         theme.palette.badgeFg = "#3f3f46"
+        theme.palette.danger = "#da7693"
+        theme.palette.warning = "#a79362"
+        theme.palette.success = "#68a264"
+        theme.palette.info = "#6c95d9"
         theme.states.selected = ThemeState(bg: "#e4e4e7", fg: "#18181b")
         theme.states.hover = ThemeState(bg: "#f4f4f5")
         theme.states.disabled = ThemeState(fg: "#a1a1aa")
@@ -289,7 +293,13 @@ public enum ThemeLoader {
         }
         var diagnostics: [Diagnostic] = []
         var theme = resolve(name: name, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, fallback: fallback, visited: [], diagnostics: &diagnostics)
-        correctContrast(&theme, diagnostics: &diagnostics)
+        for change in ThemeContrastRepair.repair(&theme).changes {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "Theme '\(theme.name)': \(change.field) \(change.original) had \(ratio(change.before)):1; using \(change.repaired) (\(ratio(change.after)):1).",
+                source: "theme"
+            ))
+        }
         validate(theme, diagnostics: &diagnostics)
         let result = ThemeLoadResult(theme: theme, diagnostics: diagnostics)
         store(result, for: key)
@@ -409,39 +419,8 @@ public enum ThemeLoader {
         return loadCache.count
     }
 
-    /// Authored foreground values are kept when they pass; otherwise the pair
-    /// is repaired instead of shipping text nobody can read. Black or white
-    /// always clears 4.5:1 on an opaque colour, so one correction is enough.
-    private static func correctContrast(_ theme: inout Theme, diagnostics: inout [Diagnostic]) {
-        ensureContrast(on: theme.palette.accent, &theme.palette.accentFg, label: "accent_fg", theme: theme.name, diagnostics: &diagnostics)
-        ensureContrast(on: theme.palette.selectionBg, &theme.palette.selectionFg, label: "selection_fg", theme: theme.name, diagnostics: &diagnostics)
-        ensureContrast(on: theme.palette.badgeBg, &theme.palette.badgeFg, label: "badge_fg", theme: theme.name, diagnostics: &diagnostics)
-        if let background = theme.states.selected.bg, var foreground = theme.states.selected.fg {
-            ensureContrast(on: background, &foreground, label: "states.selected.fg", theme: theme.name, diagnostics: &diagnostics)
-            theme.states.selected.fg = foreground
-        }
-    }
-
-    private static func ensureContrast(
-        on background: String,
-        _ foreground: inout String,
-        label: String,
-        theme name: String,
-        diagnostics: inout [Diagnostic]
-    ) {
-        guard let backdrop = RGBA(hex: background) else { return }
-        if let current = RGBA(hex: foreground), current.contrast(with: backdrop) >= 4.5 { return }
-        let dark = RGBA(red: 17.0 / 255, green: 17.0 / 255, blue: 17.0 / 255)
-        let light = RGBA(red: 1, green: 1, blue: 1)
-        let replacement = light.contrast(with: backdrop) > dark.contrast(with: backdrop)
-            ? "#ffffff"
-            : "#111111"
-        diagnostics.append(Diagnostic(
-            .info,
-            "Theme '\(name)': \(label) \(foreground) had low contrast on \(background); using \(replacement).",
-            source: "theme"
-        ))
-        foreground = replacement
+    private static func ratio(_ value: Double) -> String {
+        String(format: "%.2f", value)
     }
 
     public static func catalog(
@@ -729,34 +708,39 @@ public enum ThemeLoader {
     }
 
     private static func validate(_ theme: Theme, diagnostics: inout [Diagnostic]) {
-        guard let background = RGBA(hex: theme.palette.bg),
-              let foreground = RGBA(hex: theme.palette.fg) else { return }
-        if background.contrast(with: foreground) < 4.5 {
-            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low body text contrast.", source: "theme"))
+        func check(_ value: String, on backdrop: String, minimum: Double, _ label: String) {
+            guard let backdrop = RGBA(hex: backdrop), let color = RGBA(hex: value) else { return }
+            // A background mid-way between black and white cannot meet every
+            // bar; the bar is capped instead of warning forever.
+            let target = min(minimum, ThemeContrastRepair.maximumContrast(on: backdrop))
+            let actual = color.contrast(with: backdrop)
+            if actual < target - 0.000_001 {
+                diagnostics.append(Diagnostic(
+                    .warning,
+                    "Theme '\(theme.name)' has low \(label) contrast (\(ratio(actual)):1, needs \(ratio(target)):1).",
+                    source: "theme"
+                ))
+            }
         }
-        if let muted = RGBA(hex: theme.palette.fgMuted),
-           background.contrast(with: muted) < 3 {
-            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low muted text contrast.", source: "theme"))
+
+        let bg = theme.palette.bg
+        check(theme.palette.fg, on: bg, minimum: ThemeContrastThresholds.body, "body text")
+        check(theme.palette.fgMuted, on: bg, minimum: ThemeContrastThresholds.muted, "muted text")
+        // Accent is repaired against bg, surface and elevated where one colour
+        // can clear all three. The hard bar is the body background; a port with
+        // opposite-side surfaces cannot satisfy both and is left at its best.
+        check(theme.palette.accent, on: bg, minimum: ThemeContrastThresholds.accent, "accent")
+        check(theme.palette.accentFg, on: theme.palette.accent, minimum: ThemeContrastThresholds.accentFg, "accent text")
+        check(theme.palette.selectionFg, on: theme.palette.selectionBg, minimum: ThemeContrastThresholds.selection, "selection")
+        check(theme.palette.badgeFg, on: theme.palette.badgeBg, minimum: ThemeContrastThresholds.badge, "badge")
+        for (value, label) in [
+            (theme.palette.danger, "danger"), (theme.palette.warning, "warning"),
+            (theme.palette.success, "success"), (theme.palette.info, "info"),
+        ] {
+            check(value, on: bg, minimum: ThemeContrastThresholds.semantic, label)
         }
-        if let accent = RGBA(hex: theme.palette.accent),
-           let accentFg = RGBA(hex: theme.palette.accentFg),
-           accent.contrast(with: accentFg) < 4.5 {
-            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low accent contrast.", source: "theme"))
-        }
-        if let selectionBg = RGBA(hex: theme.palette.selectionBg),
-           let selectionFg = RGBA(hex: theme.palette.selectionFg),
-           selectionBg.contrast(with: selectionFg) < 4.5 {
-            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low selection contrast.", source: "theme"))
-        }
-        if let badgeBg = RGBA(hex: theme.palette.badgeBg),
-           let badgeFg = RGBA(hex: theme.palette.badgeFg),
-           badgeBg.contrast(with: badgeFg) < 4.5 {
-            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low badge contrast.", source: "theme"))
-        }
-        if let selectedBg = theme.states.selected.bg.flatMap(RGBA.init(hex:)),
-           let selectedFg = theme.states.selected.fg.flatMap(RGBA.init(hex:)),
-           selectedBg.contrast(with: selectedFg) < 4.5 {
-            diagnostics.append(Diagnostic(.warning, "Theme '\(theme.name)' has low selected-row contrast.", source: "theme"))
+        if let selectedBg = theme.states.selected.bg, let selectedFg = theme.states.selected.fg {
+            check(selectedFg, on: selectedBg, minimum: ThemeContrastThresholds.selectedRow, "selected-row")
         }
     }
 
@@ -809,8 +793,8 @@ public enum ThemeLoader {
             surface = "#e6e9ef"
             elevated = "#ffffff"
             fg = "#4c4f69"
-            fg_muted = "#6c6f85"
-            accent = "#8839ef"
+            fg_muted = "#6a6d82"
+            accent = "#8738ee"
             accent_fg = "#ffffff"
             selection_bg = "#ccd0da"
             selection_fg = "#4c4f69"
@@ -818,8 +802,8 @@ public enum ThemeLoader {
             border = "#bcc0cc"
             separator = "#ccd0da80"
             danger = "#d20f39"
-            warning = "#df8e1d"
-            success = "#40a02b"
+            warning = "#c67a00"
+            success = "#3e9e29"
             info = "#1e66f5"
             badge_bg = "#ccd0da"
             badge_fg = "#4c4f69"
@@ -879,8 +863,8 @@ public enum ThemeLoader {
             surface = "#f2e5bc"
             elevated = "#fff7d6"
             fg = "#3c3836"
-            fg_muted = "#7c6f64"
-            accent = "#b57614"
+            fg_muted = "#786b61"
+            accent = "#905b00"
             accent_fg = "#fbf1c7"
             selection_bg = "#d5c4a1"
             selection_fg = "#3c3836"
@@ -950,13 +934,17 @@ public enum ThemeLoader {
             elevated = "#ffffff"
             fg = "#1b1d23"
             fg_muted = "#5b6170"
-            accent = "#5b7cfa"
+            accent = "#435fdb"
             accent_fg = "#ffffff"
             selection_bg = "#d6dae3"
             selection_fg = "#14161b"
             match_fg = "#7a5cff"
             border = "#c3c8d2"
             separator = "#bfc4ce80"
+            danger = "#cb6885"
+            warning = "#9a8555"
+            success = "#5b9457"
+            info = "#5f88ca"
             badge_bg = "#d6dae3"
             badge_fg = "#2a2d34"
 

@@ -12,11 +12,11 @@ bg = "#282828"
 surface = "#1d1d1d"
 elevated = "#3e3e3e"
 fg = "#d4be98"
-fg_muted = "#988a71"
-accent = "#7daea3"
+fg_muted = "#9b8d73"
+accent = "#80b2a6"
 accent_fg = "#000000"
 selection_bg = "#d65d0e"
-selection_fg = "#1c1a15"
+selection_fg = "#1b1a15"
 match_fg = "#d3869b"
 border = "#4a463e"
 separator = "#3e3e3e80"
@@ -29,7 +29,7 @@ badge_fg = "#d4be98"
 
 [states.selected]
 bg = "#d65d0e"
-fg = "#1c1a15"
+fg = "#1b1a15"
 [states.hover]
 bg = "#3e3e3e"
 [states.disabled]
