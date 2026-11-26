@@ -2244,7 +2244,9 @@ struct TerminalSurface: NSViewRepresentable {
                     }
                     view.startProcess(
                         executable: zellij,
-                        args: ["attach", "--create", preparation.name],
+                        args: preparation.recreated
+                            ? ["--session", preparation.name]
+                            : ["attach", "--create", preparation.name],
                         environment: environment,
                         execName: "zellij",
                         currentDirectory: NSHomeDirectory()
