@@ -145,7 +145,7 @@ final class WiringTests: XCTestCase {
         let png = try imagePNG(text: nil)
 
         let first = try await fixture.store.insertPaletteCopy(
-            .image(png), maxImages: 10, maxFiles: 10
+            .image(PaletteClipboardImage(png: png, thumbnail: png, width: 120, height: 80)), maxImages: 10, maxFiles: 10
         )
         XCTAssertTrue(first)
         XCTAssertEqual(try count(fixture, "SELECT COUNT(*) FROM clipboard_images;"), 1)
@@ -153,7 +153,7 @@ final class WiringTests: XCTestCase {
         XCTAssertEqual(files(in: fixture.thumbsDir).count, 1)
 
         let second = try await fixture.store.insertPaletteCopy(
-            .image(png), maxImages: 10, maxFiles: 10
+            .image(PaletteClipboardImage(png: png, thumbnail: png, width: 120, height: 80)), maxImages: 10, maxFiles: 10
         )
         XCTAssertFalse(second, "an identical copy must not add a row")
         XCTAssertEqual(try count(fixture, "SELECT COUNT(*) FROM clipboard_images;"), 1)
