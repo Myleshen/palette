@@ -264,7 +264,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hostProxy = HostBridgeProxy()
 
         themeManager = ThemeManager(paths: paths, selection: configuration.theme, store: store)
-        themingEngine = ThemingEngine(paths: paths, themesDirectory: paths.themesDir)
+        themingEngine = ThemingEngine(
+            paths: paths,
+            themesDirectory: paths.themesDir,
+            kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty")
+        )
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
         themeManager.searchPlaceholder = configuration.searchPlaceholder
@@ -588,6 +592,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     NSApp.terminate(nil)
                 } else if step == "exit" {
                     self.finishScript()
+                } else if let value = step.dropPrefix("theming_apply=") {
+                    _ = await self.applyPaletteToAppsNow(value)
                 } else if let value = step.dropPrefix("dump=") {
                     self.writeScriptDump(to: value)
                 } else if let value = step.dropPrefix("assert=") {
@@ -954,6 +960,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func writeScriptDump(to destination: String) {
         let observation = scriptObservation()
+        let theming: [String: Any] = themingEngine.lastResult.map { result in
+            [
+                "status": result.status,
+                "error": result.error ?? "",
+                "targets": result.targets.map { target in
+                    [
+                        "id": target.id,
+                        "title": target.title,
+                        "state": target.state.rawValue,
+                        "note": target.note,
+                    ]
+                },
+            ]
+        } ?? [:]
         let dump: [String: Any] = [
             "panelVisible": observation.panelVisible,
             "appActive": observation.appActive,
@@ -1005,6 +1025,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ]
             },
             "firstTitle": observation.items.first?.title ?? "",
+            "theming": theming,
         ]
         do {
             let data = try JSONSerialization.data(
@@ -3039,6 +3060,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `/theme` → Apply Palette. It switches the engine to theme mode and
     /// remembers the pick so the next apply and the Settings pane agree.
     private func applyPaletteToApps(_ name: String) {
+        Task { @MainActor in
+            let result = await self.applyPaletteToAppsNow(name)
+            self.searchController?.setStatus(result.status, duration: 6)
+        }
+    }
+
+    @discardableResult
+    private func applyPaletteToAppsNow(_ name: String) async -> ThemingEngine.ApplyResult {
         configuration.theming.enabled = true
         configuration.theming.source = .theme
         configuration.theming.theme = name
@@ -3047,11 +3076,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             Log.shared.warn("Could not save the palette source: \(error.localizedDescription)", source: "theming")
         }
-        let config = configuration.theming
-        Task { @MainActor in
-            let result = await themingEngine.applyTheme(named: name, config: config)
-            searchController?.setStatus(result.status, duration: 6)
-        }
+        return await themingEngine.applyTheme(named: name, config: configuration.theming)
     }
 
     // MARK: - Wallpaper follow

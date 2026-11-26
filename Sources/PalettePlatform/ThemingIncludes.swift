@@ -261,23 +261,27 @@ public struct ThemingIncludes: Sendable {
         palette: PalettePalette,
         metadata: PaletteMetadata
     ) -> String? {
+        // Kitty documents `~` in its config, so it keeps the portable form.
+        // Every other app gets the absolute path: Ghostty's `config-file`,
+        // fish's `source` and git's `include.path` are not guaranteed to
+        // expand `~` on every version.
         switch plan.target {
         case .kitty:
             return "include \(shortPath(themeFile(.kitty).path))"
         case .ghostty:
-            return "config-file = \(shortPath(themeFile(.ghostty).path))"
+            return "config-file = \(themeFile(.ghostty).path)"
         case .zellij:
             guard let raw = ThemingRenderer.contents(for: .zellij, palette: palette, metadata: metadata) else {
                 return nil
             }
             return stripHeader(raw) + "\ntheme \"palette\""
         case .nvim:
-            let path = shortPath(themeFile(.nvim).path)
+            let path = themeFile(.nvim).path
             return plan.format == .vim
                 ? "source \(path)"
-                : "dofile(vim.fn.expand(\"\(path)\"))"
+                : "dofile(\"\(path)\")"
         case .fish:
-            return "source \(shortPath(themeFile(.fish).path))"
+            return "source \(themeFile(.fish).path)"
         case .starship:
             guard let raw = ThemingRenderer.contents(for: .starship, palette: palette, metadata: metadata) else {
                 return nil
@@ -288,7 +292,7 @@ public struct ThemingIncludes: Sendable {
         case .bat:
             return "--theme=palette"
         case .delta:
-            return "[include]\n    path = \(shortPath(themeFile(.delta).path))"
+            return "[include]\n    path = \(themeFile(.delta).path)"
         case .btop:
             return "color_theme = \"palette\""
         case .yazi:

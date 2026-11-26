@@ -603,9 +603,12 @@ public struct PalettePaths: Sendable {
 
     public static func resolve(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        home: String = NSHomeDirectory(),
+        home: String? = nil,
         bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) -> PalettePaths {
+        // `PALETTE_HOME` lets a scripted run point every managed config at a
+        // temp directory, so a verification apply never touches the real one.
+        let home = home ?? environment["PALETTE_HOME"] ?? NSHomeDirectory()
         func directory(_ value: String) -> URL {
             URL(fileURLWithPath: PathExpansion.expand(value, home: home), isDirectory: true)
         }
