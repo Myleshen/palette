@@ -123,6 +123,19 @@ final class StatusPanelMenuTests: XCTestCase {
         XCTAssertNotNil(row(.releaseNotes, in: sections))
     }
 
+    func testDefaultSnapshotProducesRowsToDraw() throws {
+        let built = StatusPanelMenu.sections(StatusPanelSnapshot())
+        XCTAssertFalse(built.isEmpty)
+        XCTAssertFalse(built.flatMap(\.rows).isEmpty)
+        XCTAssertTrue(built.allSatisfy { !$0.rows.isEmpty })
+        let titles = Set(built.flatMap(\.rows).map(\.title))
+        for title in [
+            "Open Palette", "Reload Configuration", "Settings…", "Quit Palette",
+        ] {
+            XCTAssertTrue(titles.contains(title), "missing row '\(title)'")
+        }
+    }
+
     // MARK: - Geometry
 
     func testFrameHangsRightAlignedUnderTheButton() {
@@ -176,5 +189,26 @@ final class StatusPanelMenuTests: XCTestCase {
         )
         XCTAssertGreaterThanOrEqual(frame.minY, screen.minY + StatusPanelLayout.margin)
         XCTAssertLessThanOrEqual(frame.maxY, screen.maxY - StatusPanelLayout.margin)
+    }
+
+    func testPanelHeightUsesTheContentWhenItFits() {
+        let screen = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+        XCTAssertEqual(
+            StatusPanelLayout.panelHeight(content: 420, screen: screen),
+            420
+        )
+    }
+
+    func testPanelHeightCapsTallContentToTheScreen() {
+        let screen = CGRect(x: 0, y: 0, width: 1000, height: 600)
+        XCTAssertEqual(
+            StatusPanelLayout.panelHeight(content: 900, screen: screen),
+            screen.height - StatusPanelLayout.margin * 2 - StatusPanelLayout.gap
+        )
+    }
+
+    func testPanelHeightNeverCollapsesBelowOnePoint() {
+        let screen = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+        XCTAssertEqual(StatusPanelLayout.panelHeight(content: 0, screen: screen), 1)
     }
 }

@@ -79,7 +79,6 @@ final class StatusPanelController: NSWindowController {
             activate: { [weak self] command in self?.activate(command) }
         )
         let hosting = NSHostingView(rootView: view)
-        hosting.sizingOptions = []
         hostingView = hosting
 
         backdrop.material = .menu
@@ -131,11 +130,26 @@ final class StatusPanelController: NSWindowController {
     func show() {
         guard let window else { return }
         refresh()
+        Log.shared.info(
+            "Status panel showing \(model.sections.count) sections, "
+                + "\(model.sections.flatMap(\.rows).count) rows",
+            source: "app"
+        )
         installClickMonitors()
         updateAppearance()
         startRefreshTimer()
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+        if WindowPresentation.isScripted {
+            // A scripted run must leave focus alone; the panel still renders.
+            window.orderFront(nil)
+            Log.shared.info(
+                "Script mode: status panel shown without activation "
+                    + "(appActive=\(NSApp.isActive))",
+                source: "app"
+            )
+        } else {
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+        }
         // Leave the window as first responder so keyDown reaches the panel
         // instead of SwiftUI's focus system.
         window.makeFirstResponder(nil)
@@ -208,11 +222,10 @@ final class StatusPanelController: NSWindowController {
         let contentHeight = max(1, hostingView.fittingSize.height)
         hostingView.frame = NSRect(x: 0, y: 0, width: width, height: contentHeight)
 
-        let maxHeight = max(
-            120,
-            screen.visibleFrame.height - StatusPanelLayout.margin * 2 - StatusPanelLayout.gap
+        let height = StatusPanelLayout.panelHeight(
+            content: contentHeight,
+            screen: screen.visibleFrame
         )
-        let height = min(contentHeight, maxHeight)
         let anchor = anchorRect() ?? CGRect(
             x: screen.visibleFrame.maxX - 24,
             y: screen.visibleFrame.maxY - 24,
@@ -232,6 +245,13 @@ final class StatusPanelController: NSWindowController {
         solid.frame = bounds
         scrollView.frame = bounds
         scrollView.hasVerticalScroller = contentHeight > height + 0.5
+        if scrollView.hasVerticalScroller {
+            // Rows start at the top, whether the hosting view is flipped or not.
+            let top = hostingView.isFlipped ? 0 : contentHeight - height
+            scrollView.contentView.scroll(to: NSPoint(x: 0, y: top))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
+        hostingView.layoutSubtreeIfNeeded()
     }
 
     private func updateAppearance() {
