@@ -1387,7 +1387,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let browser = configuration.webAppBrowser
             Log.shared.info("Web app hotkey target: \(app.name) → \(browser.isEmpty ? "system default" : browser)", source: "hotkey")
             desired.append(Desired(id: "web:\(app.id)", label: app.name, keys: raw,
-                                   press: { [weak self] in self?.launcher.openWebApp(app.url, browser: browser) }))
+                                   press: { [weak self] in
+                                       Task { await self?.launcher.openWebApp(app.url, browser: browser) }
+                                   }))
         }
 
         for (index, binding) in configuration.bindings.enumerated() {

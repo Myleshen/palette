@@ -74,49 +74,89 @@ public final class LauncherService {
             Log.shared.warn("Refusing to open URL: \(string)", source: "launcher")
             return false
         }
-        NSWorkspace.shared.open(url)
+        guard NSWorkspace.shared.open(url) else {
+            Log.shared.error("No application could open \(string)", source: "launcher")
+            return false
+        }
         return true
     }
 
+    /// Opens a link in `browser` (or the default when nil/empty). An uninstalled
+    /// browser or a failed launch falls back to the default and reports which one
+    /// ran, so the panel only closes once something actually opened.
     @discardableResult
-    public func openURL(_ string: String, with browser: String?) -> Bool {
-        guard let browser, !browser.isEmpty,
-              let url = URL(string: string), let scheme = url.scheme?.lowercased(),
+    public func openURL(_ string: String, with browser: String?) async -> URLOpenOutcome {
+        let name = browser?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !name.isEmpty else {
+            return openURL(string) ? .opened : .failed("no application accepted it")
+        }
+        guard let url = URL(string: string), let scheme = url.scheme?.lowercased(),
               ["http", "https"].contains(scheme) else {
-            openURL(string)
-            return false
+            // Mailto and settings panes have no browser to pick; let the system route them.
+            return openURL(string) ? .opened : .failed("the address is not valid")
         }
-        guard let appPath = ToolLocator.shared.appPath(named: browser) else {
-            Log.shared.warn("Browser \(browser) is not installed; opening the default browser", source: "launcher")
-            openURL(string)
-            return false
-        }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        configuration.environment = Self.toolPathEnvironment
-        NSWorkspace.shared.open([url], withApplicationAt: URL(fileURLWithPath: appPath), configuration: configuration) { _, error in
-            if let error {
-                Log.shared.error("open in \(browser) failed: \(error.localizedDescription)", source: "launcher")
+        let appPath = ToolLocator.shared.appPath(named: name)
+        switch BrowserOpenPlan.plan(browser: name, installed: appPath != nil) {
+        case .systemDefault:
+            return openURL(string) ? .opened : .failed("no application accepted it")
+        case .fallback(let missing):
+            return openInDefault(url, requested: missing)
+        case .browser(let resolved):
+            guard let appPath else {
+                return openInDefault(url, requested: resolved)
+            }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            configuration.environment = Self.toolPathEnvironment
+            do {
+                _ = try await NSWorkspace.shared.open(
+                    [url],
+                    withApplicationAt: URL(fileURLWithPath: appPath),
+                    configuration: configuration
+                )
+                Log.shared.info("Opened \(url.absoluteString) in \(resolved)", source: "launcher")
+                return .opened
+            } catch {
+                Log.shared.error("open in \(resolved) failed: \(error.localizedDescription)", source: "launcher")
+                return openInDefault(url, requested: resolved)
             }
         }
-        return true
+    }
+
+    /// The fallback warning is the log line that proves the default browser ran.
+    private func openInDefault(_ url: URL, requested: String) -> URLOpenOutcome {
+        Log.shared.warn("Browser \(requested) could not open the link; opening the default browser", source: "launcher")
+        guard NSWorkspace.shared.open(url) else {
+            Log.shared.error("No application could open \(url.absoluteString)", source: "launcher")
+            return .failed("no application accepted it")
+        }
+        return .openedInDefault(requested: requested)
     }
 
     /// Opens a saved web app in its own Chromium app window, not a browser tab.
+    /// A failed app window falls back to a normal tab and says which one ran.
     @discardableResult
-    public func openWebApp(_ string: String, browser: String) -> Bool {
-        guard let spec = WebAppLauncher.launchSpec(urlString: string, browser: browser) else {
+    public func openWebApp(_ string: String, browser: String) async -> URLOpenOutcome {
+        if let spec = WebAppLauncher.launchSpec(urlString: string, browser: browser) {
+            do {
+                try ProcessRunner.launch([spec.executable] + spec.arguments)
+                Log.shared.info("Opened \(string) as a web app in \(browser)", source: "launcher")
+                return .opened
+            } catch {
+                Log.shared.error("Web app launch failed: \(error.localizedDescription)", source: "launcher")
+            }
+        } else {
             Log.shared.warn("Could not build an app window for \(string) in \(browser)", source: "launcher")
-            openURL(string, with: browser)
-            return false
         }
-        do {
-            try ProcessRunner.launch([spec.executable] + spec.arguments)
-            return true
-        } catch {
-            Log.shared.error("Web app launch failed: \(error.localizedDescription)", source: "launcher")
-            openURL(string, with: browser)
-            return false
+        switch await openURL(string, with: browser) {
+        case .opened:
+            return .openedAsTab(browser: browser)
+        case .openedInDefault(let name):
+            return .openedInDefault(requested: name)
+        case .openedAsTab:
+            return .openedAsTab(browser: browser)
+        case .failed(let reason):
+            return .failed(reason)
         }
     }
 

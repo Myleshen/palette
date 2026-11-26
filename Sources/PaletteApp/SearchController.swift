@@ -1090,11 +1090,21 @@ public final class SearchController: ObservableObject, HostBridge {
                 let object = action.value.object
                 let url = object?["url"] ?? action.value.text
                 guard let url else { return }
-                panel?.hide(activatePrevious: false)
+                let outcome: URLOpenOutcome
                 if object?["mode"] == "app" {
-                    launcher.openWebApp(url, browser: object?["browser"] ?? configuration.webAppBrowser)
+                    outcome = await launcher.openWebApp(
+                        url,
+                        browser: object?["browser"] ?? configuration.webAppBrowser
+                    )
                 } else {
-                    launcher.openURL(url, with: object?["browser"])
+                    outcome = await launcher.openURL(url, with: object?["browser"])
+                }
+                // Hide only after something opened. A fallback keeps the panel up
+                // long enough to say which browser took the link instead.
+                if outcome.hidesPanel {
+                    panel?.hide(activatePrevious: false)
+                } else if let message = outcome.status {
+                    setStatus(message, duration: 8)
                 }
 
             case .reveal:
