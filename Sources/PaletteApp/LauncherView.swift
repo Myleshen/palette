@@ -1149,7 +1149,6 @@ struct LauncherRootView: View {
     private var listCard: some View {
         VStack(spacing: 0) {
             groupStrip
-            modeHeader
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -1210,35 +1209,6 @@ struct LauncherRootView: View {
             theme: theme,
             focused: controller.previewFocused
         )
-    }
-
-    /// Filters belong to the list, not the rail: one fixed-height row above
-    /// the results when the clipboard or Ask scope is active.
-    @ViewBuilder
-    private var modeHeader: some View {
-        if controller.activeTabID == "clip" {
-            modeRow {
-                filterChip("All", value: nil)
-                filterChip("Text", value: "text")
-                filterChip("Images", value: "image")
-                filterChip("Files", value: "files")
-            }
-        }
-    }
-
-    private func modeRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 4) {
-            content()
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, LauncherMetrics.innerPadding)
-        .frame(height: 40)
-    }
-
-    private func filterChip(_ title: String, value: String?) -> some View {
-        ChipButton(title: title, selected: controller.effectiveClipboardFilter == value, theme: theme) {
-            controller.setClipboardFilter(value)
-        }
     }
 
     private func modeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {

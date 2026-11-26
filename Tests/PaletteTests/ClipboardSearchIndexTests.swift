@@ -119,30 +119,29 @@ final class ClipboardSearchIndexTests: XCTestCase {
         XCTAssertNil(items[0].badge)
     }
 
-    /// The All/Text/Images/Files chips filter kinds without losing recency.
-    func testKindFiltersStayChronological() async throws {
+    /// A leading kind word is ordinary search text: `/clip images` searches
+    /// for "images" instead of switching to an image-only view.
+    func testKindWordsAreSearchText() async throws {
         let (store, url) = try makeStore()
         defer { try? FileManager.default.removeItem(at: url) }
         let base = Date(timeIntervalSince1970: 4_000)
 
-        _ = try await store.insertClipboard(text: "first text", maxEntries: 50, at: base)
-        _ = try await store.insertClipboard(text: "second text", maxEntries: 50, at: base.addingTimeInterval(3))
+        _ = try await store.insertClipboard(text: "images of cats", maxEntries: 50, at: base)
+        _ = try await store.insertClipboard(
+            text: "plain note", maxEntries: 50, at: base.addingTimeInterval(1)
+        )
         _ = try await store.insertClipboardImage(
             png: Data("filter-image".utf8), thumbnail: nil, width: 6, height: 5,
-            maxEntries: 50, at: base.addingTimeInterval(1)
+            maxEntries: 50, at: base.addingTimeInterval(2)
         )
         _ = try await store.insertClipboardFiles(
             paths: ["/tmp/filter.txt"], thumbnail: nil, maxEntries: 50,
-            at: base.addingTimeInterval(2)
+            at: base.addingTimeInterval(3)
         )
 
         let provider = ClipboardProvider(store: store, bridge: ClipboardSearchBridge())
-        let texts = try await provider.search(SearchRequest(text: "text", limit: 20, isBound: true))
-        XCTAssertEqual(texts.map(\.title), ["second text", "first text"])
-        let images = try await provider.search(SearchRequest(text: "image", limit: 20, isBound: true))
-        XCTAssertEqual(images.map(\.title), ["Image 6×5"])
-        let files = try await provider.search(SearchRequest(text: "files", limit: 20, isBound: true))
-        XCTAssertEqual(files.map(\.title), ["filter.txt"])
+        let images = try await provider.search(SearchRequest(text: "images", limit: 20, isBound: true))
+        XCTAssertEqual(images.map(\.title), ["images of cats"])
         let all = try await provider.search(SearchRequest(text: "", limit: 20, isBound: true))
         XCTAssertEqual(all.count, 4)
     }

@@ -2,10 +2,10 @@ import Foundation
 import PaletteCore
 import PalettePlatform
 
-/// Clipboard history with text, image, and Finder-file entries. A leading
-/// category token (`text`, `images`, `files`) filters the list; everything else
-/// is a normal search query. The clipboard window uses the same provider with
-/// the `clip` prefix and an empty query.
+/// Clipboard history with text, image, and Finder-file entries, newest first.
+/// The query is ordinary search text: a leading `images` or `files` is matched
+/// like any other word, not treated as a filter. The clipboard window uses the
+/// same provider with the `clip` prefix and an empty query.
 public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
     public let descriptor = ProviderDescriptor(
         id: "clip",
@@ -37,14 +37,12 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
             guard let entry = try await store.clipboardEntry(id: entryID), entry.kind == .text else { return [] }
             return Self.transformItems(entry: entry, provider: descriptor)
         }
-        let parsed = Self.parse(request.text)
-        let query = parsed.query
+        let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let limit = max(1, request.limit)
 
         // Fuzzy search sees the whole recent history, because a non-contiguous
         // match ("qbf" -> "quick brown fox") cannot be a SQL LIKE pattern.
-        let snapshot = await index.entries(for: store)
-        let candidates = parsed.kind.map { kind in snapshot.filter { $0.kind == kind } } ?? snapshot
+        let candidates = await index.entries(for: store)
 
         if query.isEmpty {
             // The snapshot is already in display order. The clipboard browser
@@ -316,20 +314,6 @@ public final class ClipboardProvider: PaletteProvider, @unchecked Sendable {
                 providerName: provider.name
             )
         }
-    }
-
-    static func parse(_ text: String) -> (kind: ClipboardKind?, query: String) {
-        let fields = text.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-        guard let first = fields.first?.lowercased() else { return (nil, "") }
-        let kind: ClipboardKind?
-        switch first {
-        case "text": kind = .text
-        case "image", "images": kind = .image
-        case "file", "files": kind = .files
-        default: return (nil, text.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        let rest = fields.count > 1 ? String(fields[1]) : ""
-        return (kind, rest.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     private static func relative(_ date: Date) -> String {

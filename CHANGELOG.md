@@ -38,8 +38,8 @@
 ### Changed
 
 - `/clip` is a flat chronological list across text, images and files — no
-  kind grouping, pins keep their badge without jumping the queue. Filter chips
-  still narrow by kind.
+  kind grouping or kind filter chips, pins keep their badge without jumping the
+  queue.
 - Provider speed: GitHub caches by repo instead of query (no `gh` per
   keystroke), `/zj` stops spawning `zellij` on plain keystrokes, emoji fields
   are pre-folded, `docker ps` and stats are cached, `/port` batches one `lsof`,
