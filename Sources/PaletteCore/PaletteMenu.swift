@@ -6,6 +6,97 @@ public enum PaletteMenuLayout {
     public static let width: CGFloat = 228
 }
 
+/// Fixed row geometry. A long menu (942 themes) must not measure every row
+/// before it can open, so the panel sizes itself from these constants and each
+/// row draws at exactly the height assumed here.
+public enum PaletteMenuMetrics {
+    public static let rowHeight: CGFloat = 26
+    public static let headingHeight: CGFloat = 22
+    public static let separatorHeight: CGFloat = 9
+    public static let verticalPadding: CGFloat = 10
+    public static let searchBarHeight: CGFloat = 34
+
+    public static func contentHeight(
+        of items: [PaletteMenuItem],
+        searchable: Bool = false
+    ) -> CGFloat {
+        rowsHeight(of: items) + verticalPadding + (searchable ? searchBarHeight : 0)
+    }
+
+    /// Height of every row before `index`: the leading spacer that keeps a
+    /// windowed list's scroll geometry identical to the whole list.
+    public static func offsetBefore(_ index: Int, in items: [PaletteMenuItem]) -> CGFloat {
+        height(of: items[..<min(max(index, 0), items.count)])
+    }
+
+    /// The row's y position (top, plus half a row) so a scroll can centre it.
+    /// All rows have fixed heights, so this needs no layout pass.
+    public static func anchorOffset(
+        of items: [PaletteMenuItem],
+        anchor: String?
+    ) -> CGFloat? {
+        guard let anchor,
+              let anchorIndex = items.firstIndex(where: { $0.id == anchor }) else {
+            return nil
+        }
+        return height(of: items[..<anchorIndex]) + rowHeight(of: items[anchorIndex]) / 2
+    }
+
+    public static func rowHeight(of item: PaletteMenuItem) -> CGFloat {
+        switch item.role {
+        case .action: return rowHeight
+        case .heading: return headingHeight
+        case .separator: return separatorHeight
+        }
+    }
+
+    private static func height(of items: ArraySlice<PaletteMenuItem>) -> CGFloat {
+        items.reduce(CGFloat.zero) { $0 + rowHeight(of: $1) }
+    }
+
+    private static func rowsHeight(of items: [PaletteMenuItem]) -> CGFloat {
+        items.reduce(CGFloat.zero) { $0 + rowHeight(of: $1) }
+    }
+}
+
+/// Type-to-filter rules for long menus (themes, fonts, Ask models, binding
+/// actions). Matching is a case-insensitive substring, and a heading or
+/// separator only survives when a match still belongs under it.
+public enum PaletteMenuSearch {
+    /// Short menus do not earn a filter field; long ones get one.
+    public static let threshold = 40
+
+    public static func isSearchable(_ items: [PaletteMenuItem]) -> Bool {
+        items.count > threshold
+    }
+
+    public static func filtered(
+        _ items: [PaletteMenuItem],
+        query: String
+    ) -> [PaletteMenuItem] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return items }
+        var result: [PaletteMenuItem] = []
+        var pendingHeading: PaletteMenuItem?
+        for item in items {
+            switch item.role {
+            case .separator:
+                continue
+            case .heading:
+                pendingHeading = item
+            case .action:
+                guard item.title.lowercased().contains(needle) else { continue }
+                if let heading = pendingHeading {
+                    result.append(heading)
+                    pendingHeading = nil
+                }
+                result.append(item)
+            }
+        }
+        return result
+    }
+}
+
 /// One row in a Palette-owned menu. The panel replaces SwiftUI's `Menu` and
 /// `.contextMenu`, whose native `NSMenu` runs a tracking loop that swallows
 /// Palette's global hotkeys until it closes.

@@ -1,7 +1,110 @@
 import AppKit
+import Observation
 import PaletteCore
 import PalettePlatform
 import SwiftUI
+
+/// One row's highlight flag. Rows observe their own box, so moving the
+/// keyboard highlight repaints two rows instead of re-evaluating all 942.
+@Observable
+final class PaletteMenuRowHighlight {
+    var isOn = false
+}
+
+@MainActor
+final class PaletteMenuHighlights {
+    private var boxes: [String: PaletteMenuRowHighlight] = [:]
+    private var current: String?
+
+    /// Created on demand, so only rows the list has actually built get a box.
+    func box(_ id: String) -> PaletteMenuRowHighlight {
+        if let box = boxes[id] { return box }
+        let box = PaletteMenuRowHighlight()
+        boxes[id] = box
+        return box
+    }
+
+    func apply(_ id: String?) {
+        guard id != current else { return }
+        if let current { boxes[current]?.isOn = false }
+        if let id { box(id).isOn = true }
+        current = id
+    }
+
+    func reset(_ id: String?) {
+        boxes.removeAll()
+        current = nil
+        apply(id)
+    }
+}
+
+@MainActor
+final class PaletteMenuModel: ObservableObject {
+    /// Rows the view draws. Filtering replaces this; highlighting never does.
+    @Published private(set) var items: [PaletteMenuItem] = []
+    private(set) var allItems: [PaletteMenuItem] = []
+    private(set) var selection = PaletteMenuSelection(items: [])
+    private(set) var query = ""
+    /// Long lists render from here down, with a same-height spacer above, so
+    /// the anchor can be reached without building the rows above it.
+    @Published private(set) var windowStart = 0
+    let highlights = PaletteMenuHighlights()
+
+    var searchable: Bool { PaletteMenuSearch.isSearchable(allItems) }
+    var activation: PaletteMenuItem? { selection.activation }
+    var highlightedID: String? { selection.highlightedID }
+
+    func present(items: [PaletteMenuItem], preferred: String?) {
+        allItems = items
+        query = ""
+        self.items = items
+        selection = PaletteMenuSelection(items: items, preferred: preferred)
+        windowStart = max(0, (items.firstIndex(where: { $0.id == selection.highlightedID }) ?? 0) - 30)
+        highlights.reset(selection.highlightedID)
+    }
+
+    /// Rows above the window are blank, so pull the window up before the blank
+    /// spacer can enter the viewport. Heights are fixed, so this is arithmetic.
+    func ensureRowsAbove(offset: CGFloat) {
+        guard windowStart > 0 else { return }
+        var start = windowStart
+        while start > 0, offset < PaletteMenuMetrics.offsetBefore(start, in: items) + 40 {
+            start = max(0, start - 40)
+        }
+        if start != windowStart { windowStart = start }
+    }
+
+    func setQuery(_ text: String) {
+        guard text != query else { return }
+        query = text
+        let filtered = PaletteMenuSearch.filtered(allItems, query: text)
+        // Keep the highlight on the same row when it survived the filter;
+        // otherwise the first match takes it.
+        selection = PaletteMenuSelection(items: filtered, preferred: selection.highlightedID)
+        // Reset the window before swapping the rows: a render can never see a
+        // window start past the end of the filtered list.
+        windowStart = 0
+        items = filtered
+        highlights.reset(selection.highlightedID)
+    }
+
+    func move(_ delta: Int) {
+        selection.move(delta)
+        highlights.apply(selection.highlightedID)
+    }
+
+    func highlight(_ id: String) {
+        let before = selection.highlightedID
+        selection.highlight(id)
+        guard selection.highlightedID != before else { return }
+        highlights.apply(selection.highlightedID)
+    }
+
+    func dismiss() {
+        selection.dismiss()
+        highlights.apply(nil)
+    }
+}
 
 /// Replaces SwiftUI's `Menu` / `.contextMenu` with a borderless floating panel.
 ///
@@ -13,11 +116,9 @@ import SwiftUI
 /// Native `NSMenu`s stay only where macOS owns the menu: the app menu bar and
 /// Services (`AppDelegate.buildMainMenu`). The system draws and drives those,
 /// and they are not opened from Palette's own UI.
-@MainActor
-final class PaletteMenuModel: ObservableObject {
-    @Published var selection = PaletteMenuSelection(items: [])
-}
-
+///
+/// Long lists are windowed and lazily laid out: opening a 942-theme picker
+/// builds a page's worth of rows, not the whole list.
 @MainActor
 final class PaletteMenuController: NSWindowController {
     static let shared = PaletteMenuController()
@@ -33,6 +134,10 @@ final class PaletteMenuController: NSWindowController {
     private var previousKeyWindow: NSWindow?
     private var theme = Theme()
     private var placement: Placement = .at(.zero)
+    /// Script mode reports how many rows a menu built; also keeps the open
+    /// timing honest by counting the first visible page.
+    private var rowBuilds = 0
+    private var builtRowIDs = Set<String>()
 
     private enum Placement {
         case anchored(NSRect)
@@ -75,8 +180,9 @@ final class PaletteMenuController: NSWindowController {
         let view = PaletteMenuView(
             model: model,
             theme: theme,
-            maxHeight: 400,
-            select: { [weak self] item in self?.activate(item) }
+            select: { [weak self] item in self?.activate(item) },
+            onCommand: { [weak self] command in self?.perform(command) ?? false },
+            onQuery: { [weak self] text in self?.applyQuery(text) }
         )
         hostingView = NSHostingView(rootView: view)
 
@@ -147,6 +253,7 @@ final class PaletteMenuController: NSWindowController {
         onSelect: @escaping (String) -> Void,
         onDismiss: (() -> Void)?
     ) {
+        let started = CFAbsoluteTimeGetCurrent()
         if isOpen { hide() }
         guard !items.isEmpty else { return }
 
@@ -154,20 +261,32 @@ final class PaletteMenuController: NSWindowController {
         self.placement = placement
         self.onSelect = onSelect
         self.onDismiss = onDismiss
-        model.selection = PaletteMenuSelection(
+        rowBuilds = 0
+        builtRowIDs.removeAll()
+        let visible = visibleFrame(for: placement)
+        model.present(
             items: items,
             preferred: items.first(where: { $0.checked && $0.isSelectable })?.id
         )
-        let visible = visibleFrame(for: placement)
         hostingView.rootView = PaletteMenuView(
             model: model,
             theme: theme,
-            maxHeight: max(1, visible.height - 12),
-            select: { [weak self] item in self?.activate(item) }
+            select: { [weak self] item in self?.activate(item) },
+            onCommand: { [weak self] command in self?.perform(command) ?? false },
+            onQuery: { [weak self] text in self?.applyQuery(text) },
+            onRowBuilt: { [weak self] id in
+                self?.rowBuilds += 1
+                self?.builtRowIDs.insert(id)
+            }
         )
         updateAppearance()
         installClickMonitors()
         layout(in: visible)
+        // One visible-page layout lets the scroll view exist; then the anchor
+        // is a plain offset over the windowed list, not a scroll-to-far-row
+        // walk that builds every row above it.
+        hostingView.layoutSubtreeIfNeeded()
+        scrollToHighlighted()
 
         guard let window else { return }
         previousKeyWindow = NSApp.keyWindow
@@ -183,14 +302,32 @@ final class PaletteMenuController: NSWindowController {
             window.orderFrontRegardless()
         }
         // Leave the panel as first responder so keyDown reaches it instead of
-        // SwiftUI's focus system.
+        // SwiftUI's focus system. The filter field claims it when present.
         window.makeFirstResponder(nil)
+        if model.searchable,
+           let field = hostingView.firstDescendant(of: PaletteSearchTextField.self) {
+            window.makeFirstResponder(field)
+        }
+
+        if WindowPresentation.isScripted {
+            // One visible-page layout, so the number covers what the user sees
+            // rather than only the frame arithmetic.
+            hostingView.layoutSubtreeIfNeeded()
+            let ms = (CFAbsoluteTimeGetCurrent() - started) * 1000
+            Log.shared.info(
+                "Palette menu open: \(items.count) items, \(rowBuilds) rows built "
+                    + "(\(builtRowIDs.count) unique), "
+                    + String(format: "%.2f ms", ms)
+                    + ", appActive=\(NSApp.isActive)",
+                source: "app"
+            )
+        }
     }
 
     func hide() {
         guard let window, window.isVisible else { return }
         removeClickMonitors()
-        model.selection.dismiss()
+        model.dismiss()
         window.orderOut(nil)
         if let previousKeyWindow,
            previousKeyWindow !== window,
@@ -223,9 +360,13 @@ final class PaletteMenuController: NSWindowController {
     private func layout(in visible: NSRect) {
         guard let window else { return }
 
-        hostingView.frame = NSRect(x: 0, y: 0, width: PaletteMenuLayout.width, height: 1)
-        hostingView.layoutSubtreeIfNeeded()
-        let height = max(1, min(hostingView.fittingSize.height, visible.height - 12))
+        // Arithmetic, not `fittingSize`: a 942-row menu must not measure every
+        // row before it can open. Fixed row heights make this exact.
+        let content = PaletteMenuMetrics.contentHeight(
+            of: model.items,
+            searchable: model.searchable
+        )
+        let height = max(1, min(content, visible.height - 12))
 
         var x: CGFloat
         var y: CGFloat
@@ -250,7 +391,6 @@ final class PaletteMenuController: NSWindowController {
         backdrop.frame = bounds
         solid.frame = bounds
         hostingView.frame = bounds
-        hostingView.layoutSubtreeIfNeeded()
     }
 
     private func updateAppearance() {
@@ -307,22 +447,142 @@ final class PaletteMenuController: NSWindowController {
     private func handleKey(_ event: NSEvent) -> Bool {
         switch event.keyCode {
         case 53: // Esc
-            hide()
-            return true
+            return perform(.cancel)
         case 36, 76: // Return, keypad Enter
-            if let item = model.selection.activation {
-                activate(item)
-            }
-            return true
+            return perform(.confirm)
         case 125: // Down
-            model.selection.move(1)
-            return true
+            return perform(.down)
         case 126: // Up
-            model.selection.move(-1)
-            return true
+            return perform(.up)
         default:
             return false
         }
+    }
+
+    /// Shared by the panel and the search field, so arrows, Return and Esc mean
+    /// the same thing whether or not the user is typing.
+    @discardableResult
+    func perform(_ command: PaletteMenuCommand) -> Bool {
+        switch command {
+        case .cancel:
+            hide()
+        case .confirm:
+            if let item = model.activation { activate(item) }
+        case .up:
+            model.move(-1)
+            scrollToHighlighted()
+        case .down:
+            model.move(1)
+            scrollToHighlighted()
+        }
+        return true
+    }
+
+    /// Filtering goes through the controller so the list can resize and reset
+    /// to the top of the matches.
+    func applyQuery(_ text: String) {
+        model.setQuery(text)
+        layout(in: visibleFrame(for: placement))
+        if let scroll = hostScrollView {
+            scroll.contentView.scroll(to: .zero)
+            scroll.reflectScrolledClipView(scroll.contentView)
+        }
+    }
+
+    private var hostScrollView: NSScrollView? {
+        hostingView.firstDescendant(of: NSScrollView.self)
+    }
+
+    /// Centres the highlighted row by its known height. Deliberately AppKit,
+    /// not `ScrollViewReader`: scrolling to a far row id builds every row
+    /// above it, which is exactly the open delay this menu had.
+    private func scrollToHighlighted() {
+        guard let anchor = model.highlightedID,
+              let offset = PaletteMenuMetrics.anchorOffset(of: model.items, anchor: anchor),
+              let scroll = hostScrollView else { return }
+        let viewport = scroll.contentView.bounds.height
+        let content = scroll.documentView?.bounds.height ?? 0
+        let topInset = PaletteMenuMetrics.verticalPadding / 2
+        let y = min(
+            max(0, offset + topInset - viewport / 2),
+            max(0, content - viewport)
+        )
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: y))
+        scroll.reflectScrolledClipView(scroll.contentView)
+    }
+
+    /// Script-only: jump one page and log what that cost, including any rows
+    /// the lazy stack had to build.
+    func scriptScrollPage(up: Bool = false) async {
+        guard let window, window.isVisible, let scroll = hostScrollView else {
+            Log.shared.warn("Palette menu page scroll: no scroll view", source: "app")
+            return
+        }
+        let before = rowBuilds
+        let started = CFAbsoluteTimeGetCurrent()
+        let page = scroll.contentView.bounds.height
+        let content = scroll.documentView?.bounds.height ?? page
+        var origin = scroll.contentView.bounds.origin
+        let delta = up ? -page : page
+        origin.y = min(max(0, origin.y + delta), max(0, content - page))
+        scroll.contentView.scroll(to: origin)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        scroll.layoutSubtreeIfNeeded()
+        hostingView.layoutSubtreeIfNeeded()
+        let ms = (CFAbsoluteTimeGetCurrent() - started) * 1000
+        // Let the lazy stack realise the rows the page exposed before counting.
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        Log.shared.info(
+            "Palette menu page scroll\(up ? " up" : ""): "
+                + String(format: "%.2f ms", ms)
+                + ", \(rowBuilds - before) rows built, \(rowBuilds) total "
+                + "(\(builtRowIDs.count) unique), windowStart=\(model.windowStart)",
+            source: "app"
+        )
+    }
+
+    /// Script-only: drive the same command path the keys use.
+    func scriptKey(_ name: String) {
+        let command: PaletteMenuCommand?
+        switch name.lowercased() {
+        case "down": command = .down
+        case "up": command = .up
+        case "enter": command = .confirm
+        case "esc": command = .cancel
+        default: command = nil
+        }
+        guard let command else {
+            Log.shared.warn("Palette menu key: unknown '\(name)'", source: "app")
+            return
+        }
+        _ = perform(command)
+        Log.shared.info(
+            "Palette menu key '\(name)': highlighted=\(model.highlightedID ?? "-"), "
+                + "\(rowBuilds) rows built (\(builtRowIDs.count) unique), "
+                + "appActive=\(NSApp.isActive)",
+            source: "app"
+        )
+    }
+
+    /// Script-only: type into the filter without a real keyboard and report
+    /// that the app stayed inactive.
+    func scriptFilter(_ text: String) {
+        applyQuery(text)
+        Log.shared.info(
+            "Palette menu filter '\(text)': \(model.items.count) rows, "
+                + "appActive=\(NSApp.isActive)",
+            source: "app"
+        )
+    }
+}
+
+private extension NSView {
+    func firstDescendant<T: NSView>(of type: T.Type) -> T? {
+        if let match = self as? T { return match }
+        for subview in subviews {
+            if let match = subview.firstDescendant(of: type) { return match }
+        }
+        return nil
     }
 }
 
@@ -340,113 +600,363 @@ private final class PaletteMenuPanel: NSPanel {
     }
 }
 
-private struct PaletteMenuView: View {
+/// A key the panel understands, from either the panel itself or the search
+/// field's field editor.
+enum PaletteMenuCommand {
+    case up, down, confirm, cancel
+}
+
+/// Watches the panel's own NSScrollView so the window can grow upward before
+/// its blank spacer would be visible.
+private struct PaletteMenuScrollObserver: NSViewRepresentable {
+    let onScroll: (NSScrollView) -> Void
+
+    func makeNSView(context: Context) -> ScrollWatcher {
+        let view = ScrollWatcher()
+        view.onScroll = onScroll
+        return view
+    }
+
+    func updateNSView(_ view: ScrollWatcher, context: Context) {
+        view.onScroll = onScroll
+        view.attach()
+    }
+}
+
+private final class ScrollWatcher: NSView {
+    var onScroll: ((NSScrollView) -> Void)?
+    private weak var scrollView: NSScrollView?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        attach()
+    }
+
+    func attach() {
+        guard let scroll = enclosingScrollView, scroll !== scrollView else { return }
+        if let scrollView {
+            NotificationCenter.default.removeObserver(
+                self,
+                name: NSView.boundsDidChangeNotification,
+                object: scrollView.contentView
+            )
+        }
+        scrollView = scroll
+        scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(boundsChanged),
+            name: NSView.boundsDidChangeNotification,
+            object: scroll.contentView
+        )
+        // Not during a SwiftUI update: the handler can grow the row window.
+        DispatchQueue.main.async { [weak self, weak scroll] in
+            guard let self, let scroll else { return }
+            self.onScroll?(scroll)
+        }
+    }
+
+    @objc private func boundsChanged() {
+        guard let scrollView else { return }
+        onScroll?(scrollView)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// The colours and font a row needs, resolved once per render instead of
+/// parsing theme hex strings in every row of a 942-row list.
+private struct PaletteMenuStyle {
+    let fg: Color
+    let muted: Color
+    let disabledFg: Color
+    let accent: Color
+    let selection: Color
+    let separator: Color
+    let font: Font
+
+    init(theme: Theme) {
+        fg = theme.color(theme.palette.fg)
+        muted = theme.color(theme.palette.fgMuted)
+        disabledFg = theme.color(theme.states.disabled.fg ?? theme.palette.fgMuted)
+        accent = theme.color(theme.palette.accent)
+        selection = theme.color(theme.palette.selectionBg)
+        separator = theme.color(theme.palette.separator)
+        font = theme.font(size: 13)
+    }
+}
+
+struct PaletteMenuView: View {
     @ObservedObject var model: PaletteMenuModel
     let theme: Theme
-    let maxHeight: CGFloat
     let select: (PaletteMenuItem) -> Void
+    let onCommand: (PaletteMenuCommand) -> Bool
+    let onQuery: (String) -> Void
+    /// Script mode uses this to report how many rows a menu really builds.
+    var onRowBuilt: ((String) -> Void)? = nil
 
     var body: some View {
-        ScrollViewReader { proxy in
+        let style = PaletteMenuStyle(theme: theme)
+        let start = min(model.windowStart, model.items.count)
+        VStack(spacing: 0) {
+            if model.searchable {
+                PaletteMenuSearchBar(
+                    text: model.query,
+                    theme: theme,
+                    onChange: onQuery,
+                    onCommand: onCommand
+                )
+            }
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(model.selection.items) { item in
-                        switch item.role {
-                        case .separator:
-                            Rectangle()
-                                .fill(theme.color(theme.palette.separator))
-                                .frame(height: 1)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .accessibilityHidden(true)
-                        case .heading:
-                            Text(item.title.uppercased())
-                                .font(.system(size: 9.5, weight: .semibold))
-                                .tracking(0.5)
-                                .foregroundStyle(theme.color(theme.palette.fgMuted))
-                                .padding(.horizontal, 10)
-                                .padding(.top, 5)
-                                .padding(.bottom, 2)
-                                .accessibilityHidden(true)
-                        case .action:
-                            row(item)
-                                .id(item.id)
-                        }
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    PaletteMenuScrollObserver { scroll in
+                        model.ensureRowsAbove(offset: scroll.contentView.bounds.minY)
+                    }
+                    .frame(height: 0)
+                    if start > 0 {
+                        // Same height as the rows it replaces: scroll offsets,
+                        // scrollbar and centring stay exact.
+                        Color.clear
+                            .frame(height: PaletteMenuMetrics.offsetBefore(
+                                start,
+                                in: model.items
+                            ))
+                    }
+                    ForEach(model.items[start...]) { item in
+                        row(item, style: style)
                     }
                 }
                 .padding(.vertical, 5)
                 .frame(width: PaletteMenuLayout.width, alignment: .leading)
             }
-            .scrollIndicators(.visible)
-            .frame(width: PaletteMenuLayout.width)
-            .frame(maxHeight: maxHeight)
-            .onChange(of: model.selection.highlightedID) { _, id in
-                guard let id else { return }
-                withAnimation(nil) { proxy.scrollTo(id, anchor: .center) }
-            }
-            .task {
-                if let id = model.selection.highlightedID {
-                    proxy.scrollTo(id, anchor: .center)
-                }
-            }
         }
+        .frame(width: PaletteMenuLayout.width)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Palette menu"))
     }
 
-    private func row(_ item: PaletteMenuItem) -> some View {
-        let highlighted = model.selection.highlightedID == item.id && item.enabled
-        return Button {
-            select(item)
-        } label: {
-            HStack(spacing: 8) {
-                Text(item.title)
-                    .font(theme.font(size: 13))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundStyle(
-                        item.enabled
-                            ? theme.color(theme.palette.fg)
-                            : theme.color(theme.states.disabled.fg ?? theme.palette.fgMuted)
-                    )
-                Spacer(minLength: 12)
-                if item.checked {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(theme.color(theme.palette.accent))
-                }
-                if let shortcut = item.shortcut {
-                    Text(shortcut)
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.color(theme.palette.fgMuted))
-                }
+    @ViewBuilder
+    private func row(_ item: PaletteMenuItem, style: PaletteMenuStyle) -> some View {
+        let _ = onRowBuilt?(item.id)
+        switch item.role {
+        case .separator:
+            Rectangle()
+                .fill(style.separator)
+                .frame(height: 1)
+                .padding(.horizontal, 10)
+                .frame(height: PaletteMenuMetrics.separatorHeight)
+                .accessibilityHidden(true)
+        case .heading:
+            Text(item.title.uppercased())
+                .font(.system(size: 9.5, weight: .semibold))
+                .tracking(0.5)
+                .foregroundStyle(style.muted)
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: PaletteMenuMetrics.headingHeight)
+                .accessibilityHidden(true)
+        case .action:
+            PaletteMenuRow(
+                item: item,
+                style: style,
+                highlight: model.highlights.box(item.id),
+                select: select,
+                hover: model.highlight
+            )
+        }
+    }
+}
+
+private struct PaletteMenuRow: View {
+    let item: PaletteMenuItem
+    let style: PaletteMenuStyle
+    let highlight: PaletteMenuRowHighlight
+    let select: (PaletteMenuItem) -> Void
+    let hover: (String) -> Void
+
+    var body: some View {
+        // Reading one row's own box is what keeps a highlight change local.
+        let highlighted = highlight.isOn && item.enabled
+        return HStack(spacing: 8) {
+            Text(item.title)
+                .font(style.font)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .foregroundStyle(item.enabled ? style.fg : style.disabledFg)
+            Spacer(minLength: 12)
+            if item.checked {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(style.accent)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .background {
-                if highlighted {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(theme.color(theme.palette.selectionBg).opacity(0.75))
-                        .padding(.horizontal, 4)
-                }
+            if let shortcut = item.shortcut {
+                Text(shortcut)
+                    .font(.system(size: 11))
+                    .foregroundStyle(style.muted)
             }
         }
-        .buttonStyle(.plain)
-        .disabled(!item.enabled)
-        .focusable(false)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: PaletteMenuMetrics.rowHeight)
+        .contentShape(Rectangle())
+        .background {
+            if highlighted {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(style.selection.opacity(0.75))
+                    .padding(.horizontal, 4)
+            }
+        }
+        .onTapGesture {
+            if item.enabled { select(item) }
+        }
         .onHover { inside in
             if inside, item.enabled {
-                model.selection.highlight(item.id)
+                hover(item.id)
             }
         }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(item.title))
         .accessibilityValue(Text(item.checked ? "Selected" : ""))
         .accessibilityHint(Text(item.shortcut ?? ""))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            if item.enabled { select(item) }
+        }
     }
 }
+
+/// Filter field for long menus. It lives in the panel, so it never activates
+/// the app: the panel is a nonactivating key window and the field editor takes
+/// first responder there.
+private struct PaletteMenuSearchBar: View {
+    let text: String
+    let theme: Theme
+    let onChange: (String) -> Void
+    let onCommand: (PaletteMenuCommand) -> Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(theme.color(theme.palette.fgMuted))
+            ZStack(alignment: .leading) {
+                if text.isEmpty {
+                    Text("Search…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.color(theme.palette.fgMuted))
+                        .allowsHitTesting(false)
+                }
+                PaletteMenuSearchField(
+                    text: text,
+                    theme: theme,
+                    onChange: onChange,
+                    onCommand: onCommand
+                )
+            }
+            if !text.isEmpty {
+                Button {
+                    onChange("")
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.color(theme.palette.fgMuted))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Clear search"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: PaletteMenuMetrics.searchBarHeight)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.color(theme.palette.separator))
+                .frame(height: 1)
+        }
+    }
+}
+
+private struct PaletteMenuSearchField: NSViewRepresentable {
+    let text: String
+    let theme: Theme
+    let onChange: (String) -> Void
+    let onCommand: (PaletteMenuCommand) -> Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onChange: onChange, onCommand: onCommand)
+    }
+
+    func makeNSView(context: Context) -> PaletteSearchTextField {
+        let field = PaletteSearchTextField()
+        field.delegate = context.coordinator
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: 12)
+        field.textColor = theme.nsColor(theme.palette.fg)
+        field.placeholderString = nil
+        field.usesSingleLineMode = true
+        field.cell?.isScrollable = true
+        field.cell?.wraps = false
+        field.stringValue = text
+        return field
+    }
+
+    func updateNSView(_ field: PaletteSearchTextField, context: Context) {
+        context.coordinator.onChange = onChange
+        context.coordinator.onCommand = onCommand
+        field.textColor = theme.nsColor(theme.palette.fg)
+        if field.stringValue != text {
+            field.stringValue = text
+            field.window?.makeFirstResponder(field)
+        }
+    }
+
+    static func dismantleNSView(_ field: PaletteSearchTextField, coordinator: Coordinator) {
+        field.delegate = nil
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var onChange: (String) -> Void
+        var onCommand: (PaletteMenuCommand) -> Bool
+
+        init(
+            onChange: @escaping (String) -> Void,
+            onCommand: @escaping (PaletteMenuCommand) -> Bool
+        ) {
+            self.onChange = onChange
+            self.onCommand = onCommand
+        }
+
+        func controlTextDidChange(_ note: Notification) {
+            guard let field = note.object as? NSTextField else { return }
+            onChange(field.stringValue)
+        }
+
+        /// Arrows and Return arrive as commands because the field editor, not
+        /// the panel, owns the keyboard while the user is typing.
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy commandSelector: Selector
+        ) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.moveUp(_:)): return onCommand(.up)
+            case #selector(NSResponder.moveDown(_:)): return onCommand(.down)
+            case #selector(NSResponder.insertNewline(_:)): return onCommand(.confirm)
+            case #selector(NSResponder.cancelOperation(_:)): return onCommand(.cancel)
+            default: return false
+            }
+        }
+    }
+}
+
+/// Marker type so the panel can find the filter field and focus it after the
+/// window is key; the field editor then owns arrows, Return and Esc.
+final class PaletteSearchTextField: NSTextField {}
 
 /// A compact dropdown button that opens `PaletteMenuController`. Its anchor is
 /// the real NSView frame, so the panel hangs under the control.
