@@ -645,7 +645,8 @@ public struct PalettePaths: Sendable {
     public var bookmarksFile: URL { configDir.appendingPathComponent("bookmarks.toml") }
     public var providersDir: URL { configDir.appendingPathComponent("providers", isDirectory: true) }
     public var themesDir: URL { configDir.appendingPathComponent("themes", isDirectory: true) }
-    /// Managed cross-app palette files. Nothing outside this directory is written.
+    /// Managed cross-app palette files. The app's own config only receives a
+    /// marked include block.
     public var themeDir: URL { configDir.appendingPathComponent("theme", isDirectory: true) }
     public var databaseFile: URL { stateDir.appendingPathComponent("palette.sqlite") }
     /// Content-addressed clipboard image files, beside the database.

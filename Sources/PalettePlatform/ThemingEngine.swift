@@ -3,8 +3,9 @@ import Combine
 import Foundation
 import PaletteCore
 
-/// One palette in, a managed directory of app include files out. It never
-/// edits an app's own config: dotfiles include these files instead.
+/// One palette in, a managed directory of app include files out. The app's
+/// own config gets only a marked include block, installed and removed by
+/// `ThemingIncludes`.
 @MainActor
 public final class ThemingEngine: ObservableObject {
     public struct TargetReport: Sendable, Equatable, Identifiable {
@@ -117,23 +118,45 @@ public final class ThemingEngine: ObservableObject {
     public let themeDir: URL
     public let previousDir: URL
     public let themesDirectory: URL
+    public let includes: ThemingIncludes
 
     private let fileManager = FileManager.default
     private let chromiumProbe: ChromiumProbe
+    private let macOSMajorVersion: Int
 
     public init(
         paths: PalettePaths,
         themesDirectory: URL,
-        chromiumProbe: ChromiumProbe = .live
+        chromiumProbe: ChromiumProbe = .live,
+        macOSMajorVersion: Int = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
     ) {
         self.themeDir = paths.themeDir
         self.previousDir = paths.themeDir.appendingPathComponent("previous", isDirectory: true)
         self.themesDirectory = themesDirectory
         self.chromiumProbe = chromiumProbe
+        self.macOSMajorVersion = macOSMajorVersion
+        self.includes = ThemingIncludes(home: paths.home, themeDir: paths.themeDir)
     }
 
     public var hasPrevious: Bool {
         managedFileNames.contains { fileManager.fileExists(atPath: previousDir.appendingPathComponent($0).path) }
+            || includes.hasBackups
+    }
+
+    /// Status for the Targets list. Reads the app config, so it is current
+    /// even when the user edits the include by hand.
+    public func includeStatus(for target: ThemingTarget) -> ThemingIncludes.Status {
+        includes.status(for: target)
+    }
+
+    public var supportsLegacyPolicyCLI: Bool {
+        ChromiumPolicy.installFlow(majorVersion: macOSMajorVersion) == .legacyProfiles
+    }
+
+    /// The master switch going off removes every marked block, leaving each
+    /// app's own config otherwise untouched.
+    public func removeAllIncludes() -> [ThemingIncludes.Outcome] {
+        includes.removeAll()
     }
 
     /// Helium is always offered; every other browser only when it is installed.
@@ -174,7 +197,11 @@ public final class ThemingEngine: ObservableObject {
     }
 
     private func disabledResult() -> ApplyResult {
-        let message = "Cross-app theming is off. Palette's own theme still comes from Theming."
+        let removed = includes.removeAll()
+        var message = "Cross-app theming is off. Palette's own theme still comes from Theming."
+        if !removed.isEmpty {
+            message += " Removed \(removed.count) managed include\(removed.count == 1 ? "" : "s")."
+        }
         status = message
         let result = ApplyResult(
             status: message, source: "", appearance: "",
@@ -274,8 +301,15 @@ public final class ThemingEngine: ObservableObject {
             )
         }
         do {
+            let includeOutcomes = includes.revert()
             let restored = try swapWithPrevious()
-            let message = "Restored the previous palette set (\(restored.count) file\(restored.count == 1 ? "" : "s"))."
+            let failures = includeOutcomes.filter { $0.action == .failed }
+            let includeCount = includeOutcomes.filter { $0.action != .failed }.count
+            var message = "Restored the previous palette set (\(restored.count) file\(restored.count == 1 ? "" : "s"))"
+            if includeCount > 0 {
+                message += " and \(includeCount) app config\(includeCount == 1 ? "" : "s")"
+            }
+            message += "."
             status = message
             let result = ApplyResult(
                 status: message,
@@ -284,10 +318,18 @@ public final class ThemingEngine: ObservableObject {
                 written: restored,
                 skipped: [],
                 includeLines: [],
-                notices: ["The apps' own configs were still untouched."],
-                changes: [],
+                notices: [],
+                changes: includeOutcomes.compactMap { outcome in
+                    guard let path = outcome.path else { return nil }
+                    switch outcome.action {
+                    case .restored: return "Restored \(includes.shortPath(path))"
+                    case .removed: return "Removed \(includes.shortPath(path))"
+                    case .failed: return "Could not restore \(includes.shortPath(path)): \(outcome.error ?? "unknown error")"
+                    case .installed, .unchanged: return nil
+                    }
+                },
                 targets: [],
-                error: nil
+                error: failures.isEmpty ? nil : "Some app configs could not be restored."
             )
             lastResult = result
             reloadAllBestEffort()
@@ -304,50 +346,46 @@ public final class ThemingEngine: ObservableObject {
 
     // MARK: - Managed policy install / remove
 
-    /// One osascript call installs every selected file, so macOS shows one
-    /// Touch ID / password sheet.
+    /// macOS 27 removed `profiles install`, so the profile is opened in System
+    /// Settings instead of being installed by the CLI. Opening works on older
+    /// macOS too, where double-clicking a .mobileconfig prompts the same way.
     public func installPolicies(_ config: ThemingConfig) async -> PolicyResult {
         let selected = selectedBrowsers(config)
         let files = selected.compactMap { browser -> String? in
             let url = policyURL(for: browser)
             return fileManager.fileExists(atPath: url.path) ? url.path : nil
         }
-        let command = ChromiumPolicy.installCommand(paths: files)
+        let legacyCommand = ChromiumPolicy.installFlow(majorVersion: macOSMajorVersion) == .legacyProfiles
+            ? ChromiumPolicy.installCommand(paths: files)
+            : nil
         guard !files.isEmpty else {
             let message = "Nothing to install. Apply Palette first to generate the policy files."
             policyStatus = message
             policyError = message
-            policyCommand = command
-            return PolicyResult(status: message, error: message, command: command, states: policyStates)
+            policyCommand = legacyCommand
+            return PolicyResult(status: message, error: message, command: legacyCommand ?? "", states: policyStates)
         }
         policyBusy = true
         defer { policyBusy = false }
-        let shell = files.map { "/usr/bin/profiles install -path \(ChromiumPolicy.token($0))" }
-            .joined(separator: " && ")
-        do {
-            let result = try await runWithAdministratorPrivileges(shell)
-            guard result.status == 0 else {
-                let message = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
-                policyError = message.isEmpty ? "Installation failed or was cancelled." : message
-                policyStatus = "Could not install the managed policies."
-                policyCommand = command
-                return PolicyResult(status: policyStatus ?? "", error: policyError, command: command, states: policyStates)
+        var opened = 0
+        for file in files {
+            if let result = try? await ProcessRunner.run(["open", file], timeout: 10), result.status == 0 {
+                opened += 1
             }
-            await refreshPolicyStates()
-            let refreshed = await refreshRunningBrowsers(selected)
-            policyStatus = "Installed — all profiles of \(files.count) browser\(files.count == 1 ? "" : "s")."
-            if !refreshed.isEmpty {
-                policyStatus = (policyStatus ?? "") + " Restart may still be needed."
-            }
-            policyError = nil
-            policyCommand = command
-            return PolicyResult(status: policyStatus ?? "", error: nil, command: command, states: policyStates)
-        } catch {
-            policyError = error.localizedDescription
-            policyStatus = "Could not install the managed policies."
-            policyCommand = command
-            return PolicyResult(status: policyStatus ?? "", error: policyError, command: command, states: policyStates)
         }
+        await refreshPolicyStates()
+        policyCommand = legacyCommand
+        guard opened == files.count else {
+            let message = opened == 0
+                ? "Could not open the profile file. Use Reveal file and double-click it."
+                : "Opened \(opened) of \(files.count) profile files."
+            policyError = message
+            policyStatus = "Could not open every managed policy."
+            return PolicyResult(status: policyStatus ?? "", error: message, command: legacyCommand ?? "", states: policyStates)
+        }
+        policyError = nil
+        policyStatus = ChromiumPolicy.installSteps(files: files)
+        return PolicyResult(status: policyStatus ?? "", error: nil, command: legacyCommand ?? "", states: policyStates)
     }
 
     public func removePolicies(_ config: ThemingConfig) async -> PolicyResult {
@@ -360,6 +398,13 @@ public final class ThemingEngine: ObservableObject {
             policyError = message
             policyCommand = command
             return PolicyResult(status: message, error: message, command: command, states: policyStates)
+        }
+        guard ChromiumPolicy.installFlow(majorVersion: macOSMajorVersion) == .legacyProfiles else {
+            let message = "Remove Palette under System Settings → General → Device Management, then Refresh."
+            policyStatus = message
+            policyError = nil
+            policyCommand = nil
+            return PolicyResult(status: message, error: nil, command: "", states: policyStates)
         }
         policyBusy = true
         defer { policyBusy = false }
@@ -448,7 +493,7 @@ public final class ThemingEngine: ObservableObject {
                 return "\(target.title): \(target.reloadNote)"
             }
             if outcome.policySelected {
-                notes.append("Managed policies: install or remove them in Targets. macOS asks for administrator approval once.")
+                notes.append("Managed policies: open the profile in System Settings and approve it under General → Device Management.")
             }
             let result = ApplyResult(
                 status: summary,
@@ -525,10 +570,11 @@ public final class ThemingEngine: ObservableObject {
             let selected = selectedIDs.contains(target.rawValue)
             guard selected else {
                 // A target turned off must stop affecting the app, so its
-                // generated file goes away; the previous snapshot can restore it.
+                // generated file and its managed include both go away.
                 if target.isImplemented {
                     try? fileManager.removeItem(at: themeDir.appendingPathComponent(target.fileName))
                 }
+                _ = includes.remove(target)
                 continue
             }
             if let browser = target.browser {
@@ -574,14 +620,34 @@ public final class ThemingEngine: ObservableObject {
                     options: .atomic
                 )
                 written.append(target.fileName)
-                reports.append(TargetReport(
-                    id: target.rawValue,
-                    title: target.title,
-                    fileName: target.fileName,
-                    includeHint: target.includeHint,
-                    note: target.reloadNote,
-                    state: .written
-                ))
+                let include = includes.install(target, palette: palette, metadata: metadata)
+                if let error = include.error {
+                    failed.append(target.fileName)
+                    Log.shared.warn(
+                        "Could not install the \(target.title) include: \(error)",
+                        source: "theming"
+                    )
+                    reports.append(TargetReport(
+                        id: target.rawValue,
+                        title: target.title,
+                        fileName: target.fileName,
+                        includeHint: target.includeHint,
+                        note: "Wrote \(target.fileName) but could not update \(target.title)'s config: \(error)",
+                        state: .failed
+                    ))
+                } else {
+                    if let path = include.path {
+                        changes.append("\(target.title) include: \(includes.shortPath(path))")
+                    }
+                    reports.append(TargetReport(
+                        id: target.rawValue,
+                        title: target.title,
+                        fileName: target.fileName,
+                        includeHint: target.includeHint,
+                        note: target.reloadNote,
+                        state: .written
+                    ))
+                }
             } catch {
                 failed.append(target.fileName)
                 Log.shared.warn("Could not write \(target.fileName): \(error.localizedDescription)", source: "theming")
@@ -664,7 +730,7 @@ public final class ThemingEngine: ObservableObject {
         }
         let note = installed
             ? "Installed — all \(browser.name) profiles."
-            : "Not installed — install the policy in Targets."
+            : "Not installed — open the profile in System Settings."
         let changes = [
             "\(browser.mobileConfigFileName): \(policyURL(for: browser).path)",
             "\(browser.policyIdentifier): BrowserThemeColor = \(palette.background)",
@@ -680,8 +746,13 @@ public final class ThemingEngine: ObservableObject {
         }
         guard !current.isEmpty else { return }
         do {
-            try? fileManager.removeItem(at: previousDir)
             try fileManager.createDirectory(at: previousDir, withIntermediateDirectories: true)
+            // Only the generated palette files are swapped. Include backups
+            // (`.orig` / `.created`) live in the same directory and must survive
+            // every apply, or Revert would restore an already-themed file.
+            for name in managedFileNames {
+                try? fileManager.removeItem(at: previousDir.appendingPathComponent(name))
+            }
             for name in current {
                 try fileManager.copyItem(
                     at: themeDir.appendingPathComponent(name),
@@ -709,8 +780,12 @@ public final class ThemingEngine: ObservableObject {
             )
         }
 
-        try? fileManager.removeItem(at: previousDir)
+        // Only the generated set is swapped; include backups stay so a failed
+        // restore can be retried.
         try fileManager.createDirectory(at: previousDir, withIntermediateDirectories: true)
+        for name in managedFileNames {
+            try? fileManager.removeItem(at: previousDir.appendingPathComponent(name))
+        }
         let currentFiles = managedFileNames.filter {
             fileManager.fileExists(atPath: themeDir.appendingPathComponent($0).path)
         }

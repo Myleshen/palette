@@ -262,7 +262,7 @@ final class ThemingTests: XCTestCase {
         XCTAssertTrue(vscode.note.contains("settings merge"))
     }
 
-    func testApplyWritesOnlyTheManagedDirectory() async throws {
+    func testApplyInstallsTheIncludeAndKeepsTheRestOfTheConfig() async throws {
         let paths = makePaths()
         let fakeKitty = URL(fileURLWithPath: paths.home, isDirectory: true)
             .appendingPathComponent(".config/kitty", isDirectory: true)
@@ -271,19 +271,94 @@ final class ThemingTests: XCTestCase {
             at: fakeKitty.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try "user-owned kitty config".write(to: fakeKitty, atomically: true, encoding: .utf8)
+        try "user-owned kitty config\nfont_size 13\n".write(to: fakeKitty, atomically: true, encoding: .utf8)
 
         let engine = makeEngine(paths)
         var config = ThemingConfig(enabled: true, targets: phaseOneIDs)
         config.theme = "default-dark"
         _ = await engine.apply(config)
 
-        XCTAssertEqual(try read(fakeKitty), "user-owned kitty config")
+        let kitty = try read(fakeKitty)
+        XCTAssertTrue(kitty.hasPrefix("user-owned kitty config\nfont_size 13\n"))
+        XCTAssertTrue(kitty.contains("# >>> palette theme >>>"))
+        XCTAssertTrue(kitty.contains("include \(engine.includes.shortPath(paths.themeDir.appendingPathComponent("kitty.conf").path))"))
+        XCTAssertEqual(kitty.components(separatedBy: "# >>> palette theme >>>").count, 2)
         let generated = try FileManager.default.contentsOfDirectory(atPath: paths.themeDir.path).sorted()
         XCTAssertEqual(
             generated,
-            ["fish.fish", "ghostty.conf", "kitty.conf", "nvim.lua", "palette.json", "starship.toml", "zellij.kdl"]
+            ["fish.fish", "ghostty.conf", "kitty.conf", "nvim.lua", "palette.json", "previous", "starship.toml", "zellij.kdl"]
         )
+    }
+
+    func testUncheckingATargetRemovesOnlyItsBlock() async throws {
+        let paths = makePaths()
+        let kittyPath = paths.home + "/.config/kitty/kitty.conf"
+        let fishPath = paths.home + "/.config/fish/config.fish"
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: kittyPath).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: fishPath).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "kitty user\n".write(toFile: kittyPath, atomically: true, encoding: .utf8)
+        try "fish user\n".write(toFile: fishPath, atomically: true, encoding: .utf8)
+
+        let engine = makeEngine(paths)
+        var config = ThemingConfig(enabled: true, theme: "default-dark", targets: ["kitty", "fish"])
+        _ = await engine.apply(config)
+        XCTAssertTrue(try read(URL(fileURLWithPath: fishPath)).contains("palette theme"))
+
+        config.targets = ["kitty"]
+        _ = await engine.apply(config)
+
+        XCTAssertEqual(try read(URL(fileURLWithPath: fishPath)), "fish user\n")
+        XCTAssertTrue(try read(URL(fileURLWithPath: kittyPath)).contains("palette theme"))
+        XCTAssertEqual(engine.includeStatus(for: .fish).installed, false)
+        XCTAssertEqual(engine.includeStatus(for: .kitty).installed, true)
+    }
+
+    func testDisablingTheMasterSwitchRemovesEveryBlock() async throws {
+        let paths = makePaths()
+        let kittyPath = paths.home + "/.config/kitty/kitty.conf"
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: kittyPath).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "kitty user\n".write(toFile: kittyPath, atomically: true, encoding: .utf8)
+
+        let engine = makeEngine(paths)
+        _ = await engine.apply(ThemingConfig(enabled: true, theme: "default-dark", targets: ["kitty", "fish"]))
+        XCTAssertTrue(try read(URL(fileURLWithPath: kittyPath)).contains("palette theme"))
+
+        let disabled = await engine.apply(ThemingConfig(enabled: false, targets: ["kitty", "fish"]))
+        XCTAssertTrue(disabled.status.contains("off"))
+        XCTAssertEqual(try read(URL(fileURLWithPath: kittyPath)), "kitty user\n")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: paths.home + "/.config/fish/config.fish"))
+    }
+
+    func testRevertRestoresTheOriginalConfig() async throws {
+        let paths = makePaths()
+        let kittyPath = paths.home + "/.config/kitty/kitty.conf"
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: kittyPath).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let original = "original kitty\n"
+        try original.write(toFile: kittyPath, atomically: true, encoding: .utf8)
+
+        let engine = makeEngine(paths)
+        _ = await engine.apply(ThemingConfig(enabled: true, theme: "default-dark", targets: ["kitty"]))
+        XCTAssertTrue(try read(URL(fileURLWithPath: kittyPath)).contains("palette theme"))
+        _ = await engine.apply(ThemingConfig(enabled: true, theme: "default-light", targets: ["kitty"]))
+
+        let reverted = await engine.revert()
+        XCTAssertNil(reverted.error)
+        XCTAssertEqual(try read(URL(fileURLWithPath: kittyPath)), original)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: paths.themeDir.appendingPathComponent("previous/kitty-kitty.conf.orig").path
+        ))
     }
 
     func testRevertRestoresThePreviousSet() async throws {
@@ -404,6 +479,36 @@ final class ThemingTests: XCTestCase {
             XCTAssertTrue(xml.contains(browser.policyIdentifier))
             XCTAssertFalse(xml.contains("Browser" + "ColorScheme"))
         }
+    }
+
+    func testPolicyInstallFlowOnMacOS27AndOlder() {
+        XCTAssertEqual(ChromiumPolicy.installFlow(majorVersion: 27), .systemSettings)
+        XCTAssertEqual(ChromiumPolicy.installFlow(majorVersion: 30), .systemSettings)
+        XCTAssertEqual(ChromiumPolicy.installFlow(majorVersion: 26), .legacyProfiles)
+
+        let paths = makePaths()
+        let modern = ThemingEngine(
+            paths: paths,
+            themesDirectory: paths.themesDir,
+            chromiumProbe: .init(
+                installed: { ["net.imput.helium"] },
+                policyInstalled: { _ in true },
+                isRunning: { _ in false }
+            ),
+            macOSMajorVersion: 27
+        )
+        XCTAssertFalse(modern.supportsLegacyPolicyCLI)
+        let legacy = ThemingEngine(
+            paths: paths,
+            themesDirectory: paths.themesDir,
+            chromiumProbe: .init(
+                installed: { ["net.imput.helium"] },
+                policyInstalled: { _ in true },
+                isRunning: { _ in false }
+            ),
+            macOSMajorVersion: 26
+        )
+        XCTAssertTrue(legacy.supportsLegacyPolicyCLI)
     }
 
     func testBatchedInstallAndRemoveCommands() {
