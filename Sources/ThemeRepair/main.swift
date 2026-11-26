@@ -50,6 +50,33 @@ func rewrite(_ text: String, values: [String: String]) -> String {
     return lines.joined(separator: "\n")
 }
 
+func contrast(_ foreground: String, _ background: String) -> Double? {
+    guard let first = RGBA(hex: foreground), let second = RGBA(hex: background) else { return nil }
+    return first.contrast(with: second)
+}
+
+/// Ratios as authored, before any field is repaired. `accent_fg` is measured
+/// against the authored accent, not the accent this run rewrites.
+func authoredRatios(_ palette: ThemePalette) -> [(String, Double)] {
+    let pairs: [(String, String, String)] = [
+        ("fg", palette.fg, palette.bg),
+        ("fg_muted", palette.fgMuted, palette.bg),
+        ("accent/bg", palette.accent, palette.bg),
+        ("accent/surface", palette.accent, palette.surface),
+        ("accent/elevated", palette.accent, palette.elevated),
+        ("accent_fg", palette.accentFg, palette.accent),
+        ("selection_fg", palette.selectionFg, palette.selectionBg),
+        ("badge_fg", palette.badgeFg, palette.badgeBg),
+        ("danger", palette.danger, palette.bg),
+        ("warning", palette.warning, palette.bg),
+        ("success", palette.success, palette.bg),
+        ("info", palette.info, palette.bg),
+    ]
+    return pairs.compactMap { label, foreground, background in
+        contrast(foreground, background).map { (label, $0) }
+    }
+}
+
 func printPalette(_ palette: ThemePalette) {
     print("""
     [palette]
@@ -120,8 +147,12 @@ for file in files {
         base: base,
         diagnostics: &diagnostics
     )
+    let authored = authoredRatios(theme.palette)
     let report = ThemeContrastRepair.repair(&theme)
     guard !report.changes.isEmpty else { continue }
+    for (label, value) in authored where value < worst.ratio {
+        worst = (value, "\(file.lastPathComponent) \(label)")
+    }
     let rewritten = rewrite(text, values: values(for: report))
     guard rewritten != text else { continue }
     do {
@@ -132,9 +163,6 @@ for file in files {
     changedFiles += 1
     for change in report.changes {
         counts[change.field, default: 0] += 1
-        if change.before < worst.ratio {
-            worst = (change.before, "\(file.lastPathComponent) \(change.field) \(change.original)")
-        }
         maxHue = max(maxHue, change.hueShift)
     }
 }
