@@ -44,6 +44,43 @@ public struct ParsedQuery: Equatable, Sendable {
     }
 }
 
+/// Browser-style display for a bound query. The provider pill already names the
+/// scope, so the text field hides the `"/trigger "` token once the user starts
+/// typing and shows it again when the text is empty, so the provider stays
+/// editable.
+public struct QueryDisplay: Sendable {
+    public var parser: QueryParser
+
+    public init(parser: QueryParser) {
+        self.parser = parser
+    }
+
+    /// What the text field shows for an internal query.
+    public func visible(for query: String) -> String {
+        let parsed = parser.parse(query)
+        guard parsed.isBound, let trigger = parsed.trigger else { return query }
+        return parsed.text.isEmpty ? parser.prefix + trigger + " " : parsed.text
+    }
+
+    /// Rebuilds the internal query after an edit in the visible field.
+    public func query(forVisible visible: String, previous: String) -> String {
+        let parsed = parser.parse(previous)
+        guard parsed.isBound, let trigger = parsed.trigger else { return visible }
+        let kept = parser.prefix + trigger + " "
+        if visible.isEmpty { return kept }
+        // Editing while the prefix is shown: strip the kept token instead of
+        // adding a second one.
+        if visible.hasPrefix(kept) {
+            let text = String(visible.dropFirst(kept.count))
+            return text.isEmpty ? kept : kept + text
+        }
+        // Deleting into the prefix hands the result to the parser, so it can
+        // unbind or finish a different trigger.
+        if kept.hasPrefix(visible) { return visible }
+        return kept + visible
+    }
+}
+
 /// Resolves Noctalia-style prefixes: a shared prefix character plus a bare
 /// trigger declared by each provider. Absolute paths such as `/Users/me` do not
 /// collide because triggers are words, not paths.

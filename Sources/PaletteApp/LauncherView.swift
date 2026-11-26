@@ -1258,7 +1258,10 @@ struct LauncherRootView: View {
                         .lineLimit(1)
                         .allowsHitTesting(false)
                 }
-                TextField("", text: $controller.query)
+                TextField("", text: Binding(
+                    get: { controller.visibleQuery },
+                    set: { controller.editVisibleQuery($0) }
+                ))
                     .textFieldStyle(.plain)
                     .font(theme.font(size: theme.typography.size + 3))
                     .foregroundColor(theme.color(theme.palette.fg))
