@@ -366,7 +366,7 @@ final class ClipboardImageStorageTests: XCTestCase {
         )
         XCTAssertTrue(kindBrowse.contains("clipboard_kind_created"), kindBrowse)
 
-        // Functional order is unchanged: pinned first, then newest.
+        // Functional order is chronological, pinned or not.
         let ordered = try await fixture.store.clipboardEntries(limit: 10)
         XCTAssertEqual(ordered.map(\.text), ["newer", "", "older"])
         let images = try await fixture.store.clipboardEntries(limit: 10, kind: .image)
