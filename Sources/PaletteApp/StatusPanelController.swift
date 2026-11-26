@@ -136,7 +136,9 @@ final class StatusPanelController: NSWindowController {
         startRefreshTimer()
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
-        window.makeFirstResponder(hostingView)
+        // Leave the window as first responder so keyDown reaches the panel
+        // instead of SwiftUI's focus system.
+        window.makeFirstResponder(nil)
     }
 
     func hide() {
