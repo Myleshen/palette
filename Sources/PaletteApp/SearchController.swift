@@ -152,6 +152,23 @@ public final class SearchController: ObservableObject, HostBridge {
         QueryDisplay(parser: registry.parser).visible(for: query)
     }
 
+    /// True while the field is showing a resolved provider without its prefix.
+    public var queryIsBound: Bool {
+        registry.parser.parse(query).isBound
+    }
+
+    /// Backspace on the empty visible field drops the provider binding.
+    public func clearBoundTrigger() {
+        guard queryIsBound else { return }
+        resetting = true
+        query = ""
+        resetting = false
+        previewEnabled = false
+        previewFocused = false
+        scopeProviderID = nil
+        scheduleSearch(debounce: false)
+    }
+
     /// Applies an edit made in the text field to the internal query.
     public func editVisibleQuery(_ visible: String) {
         let next = QueryDisplay(parser: registry.parser)

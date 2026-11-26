@@ -59,7 +59,7 @@ public struct QueryDisplay: Sendable {
     public func visible(for query: String) -> String {
         let parsed = parser.parse(query)
         guard parsed.isBound, let trigger = parsed.trigger else { return query }
-        return parsed.text.isEmpty ? parser.prefix + trigger + " " : parsed.text
+        return parsed.text
     }
 
     /// Rebuilds the internal query after an edit in the visible field.

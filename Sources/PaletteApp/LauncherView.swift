@@ -1273,6 +1273,11 @@ struct LauncherRootView: View {
                     .onSubmit {
                         if controller.actionsMode { controller.executeAction() } else { controller.executePrimary() }
                     }
+                    .onKeyPress(.delete) {
+                        guard controller.visibleQuery.isEmpty, controller.queryIsBound else { return .ignored }
+                        controller.clearBoundTrigger()
+                        return .handled
+                    }
             }
             if controller.isSearching {
                 PaletteSpinner(color: theme.color(theme.palette.accent))

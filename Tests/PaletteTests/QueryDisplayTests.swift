@@ -13,13 +13,13 @@ final class QueryDisplayTests: XCTestCase {
     func testBoundQueryWithTextHidesTheTrigger() {
         XCTAssertEqual(display.visible(for: "/gh foo"), "foo")
         XCTAssertEqual(display.visible(for: "/ghp src/App.swift"), "src/App.swift")
-        XCTAssertEqual(display.visible(for: "/ask"), "/ask ")
+        XCTAssertEqual(display.visible(for: "/ask"), "")
     }
 
-    func testEmptyTextKeepsTheTriggerVisible() {
-        XCTAssertEqual(display.visible(for: "/gh "), "/gh ")
-        XCTAssertEqual(display.visible(for: "/gh"), "/gh ")
-        XCTAssertEqual(display.visible(for: "/gh   "), "/gh ")
+    func testResolvedTriggerIsHiddenEvenWhenEmpty() {
+        XCTAssertEqual(display.visible(for: "/gh "), "")
+        XCTAssertEqual(display.visible(for: "/gh"), "")
+        XCTAssertEqual(display.visible(for: "/gh   "), "")
     }
 
     func testPlainUnboundAndUnknownQueriesAreUnchanged() {
@@ -52,15 +52,15 @@ final class QueryDisplayTests: XCTestCase {
 
     // MARK: - Field behaviour
 
-    func testDeletingToEmptyRestoresThePrefix() {
-        // Typed text shrinks to nothing; the prefix comes back so the provider
-        // can still be changed.
+    func testDeletingToEmptyKeepsTheProviderButHidesIt() {
+        // Backspace on the empty field clears the binding in the controller;
+        // the mapping itself keeps the provider while the field looks empty.
         var internalQuery = "/gh foo"
         for visible in ["fo", "f", ""] {
             internalQuery = display.query(forVisible: visible, previous: internalQuery)
         }
         XCTAssertEqual(internalQuery, "/gh ")
-        XCTAssertEqual(display.visible(for: internalQuery), "/gh ")
+        XCTAssertEqual(display.visible(for: internalQuery), "")
     }
 
     func testTypingWhileThePrefixIsShownStripsItOnce() {
