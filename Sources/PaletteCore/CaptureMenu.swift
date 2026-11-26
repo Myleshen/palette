@@ -44,7 +44,7 @@ public enum CaptureMenu {
                 command: .startRecording,
                 title: "Start Recording…",
                 enabled: !isRecording,
-                visible: true
+                visible: !isRecording
             ),
             CaptureMenuItemState(
                 command: .stopRecording,
@@ -52,7 +52,7 @@ public enum CaptureMenu {
                     ? "Stop Recording · \(TimerDuration.format(elapsed))"
                     : "Stop Recording",
                 enabled: isRecording,
-                visible: true
+                visible: isRecording
             ),
             CaptureMenuItemState(
                 command: .copyLastPath,

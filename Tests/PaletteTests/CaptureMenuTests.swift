@@ -25,7 +25,9 @@ final class CaptureMenuTests: XCTestCase {
     func testIdleWithoutCapturesOnlyStarts() throws {
         let items = state()
         XCTAssertEqual(items[.startRecording]?.enabled, true)
+        XCTAssertEqual(items[.startRecording]?.visible, true)
         XCTAssertEqual(items[.stopRecording]?.enabled, false)
+        XCTAssertEqual(items[.stopRecording]?.visible, false)
         XCTAssertEqual(items[.stopRecording]?.title, "Stop Recording")
         XCTAssertEqual(items[.copyLastPath]?.enabled, false)
         XCTAssertEqual(items[.revealLastCapture]?.enabled, false)
@@ -39,7 +41,9 @@ final class CaptureMenuTests: XCTestCase {
     func testRecordingDisablesStartAndShowsElapsed() throws {
         let items = state(recording: true, elapsed: 65)
         XCTAssertEqual(items[.startRecording]?.enabled, false)
+        XCTAssertEqual(items[.startRecording]?.visible, false)
         XCTAssertEqual(items[.stopRecording]?.enabled, true)
+        XCTAssertEqual(items[.stopRecording]?.visible, true)
         XCTAssertEqual(items[.stopRecording]?.title, "Stop Recording · 1:05")
     }
 

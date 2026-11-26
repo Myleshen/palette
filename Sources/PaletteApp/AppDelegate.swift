@@ -61,7 +61,7 @@ final class HostBridgeProxy: HostBridge, @unchecked Sendable {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var paths: PalettePaths!
     private var configuration: PaletteConfig!
     private var store: PaletteStore!
@@ -88,13 +88,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentHotKey: HotKeySpec?
     private var hotKeyInstallTask: Task<Void, Never>?
     private var statusItem: NSStatusItem!
+    private var statusPanel: StatusPanelController!
+    /// Cached so a panel render is synchronous; the countdown itself is
+    /// computed from `endsAt`, and every panel open re-reads the service.
+    private var keepAwakeStatus = KeepAwakeStatus()
     private var hostProxy: HostBridgeProxy!
     private var appIndex: AppIndex!
     /// Bindable catalogue, rebuilt with the registry so provider ids never lie.
     private var catalogCommands: [CatalogCommand] = []
-    private var recordingTicker: Timer?
     private var recordingOptionsPanel: RecordingOptionsPanelController?
-    private var captureMenuItems: [CaptureMenuCommand: NSMenuItem] = [:]
     private var lastCaptureURL: URL?
     private var lastRecordingURL: URL?
     private var lastScreenshotURL: URL?
@@ -125,14 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private var shouldShowOnboarding = false
-    private var positionMenu: NSMenu?
-    private var keepAwakeMenu: NSMenu?
-    private var keepAwakeToggleItem: NSMenuItem?
-    private var keepAwakeClamshellItem: NSMenuItem?
-    private var keepAwakeStopItem: NSMenuItem?
     private let updates = UpdateService()
-    private var updateMenuItem: NSMenuItem?
-    private var releaseNotesMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -325,9 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         captureService.onFailure = { [weak self] message in
             guard let self else { return }
             self.captureService.annotateNextCapture = false
-            self.recordingTicker?.invalidate()
-            self.recordingTicker = nil
-            self.updateCaptureMenu()
+            self.statusPanel?.refreshSoon()
             self.captureFeedback(message)
         }
         captureService.onCopiedToPasteboard = { [weak self] copy in
@@ -375,7 +368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return }
                 self.searchController.setStatus("Clamshell mode stopped; lid sleep is back on", duration: 6)
                 self.searchController.refreshResults()
-                await self.refreshKeepAwakeMenu()
+                await self.refreshKeepAwakeState()
             }
         }
         wireControllerCallbacks()
@@ -385,11 +378,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         checkDefaultProviderTools()
         configureClipboard()
         buildStatusItem()
-        updates.onAvailabilityChange = { [weak self] in self?.refreshUpdateMenu() }
+        updates.onAvailabilityChange = { [weak self] in self?.statusPanel?.refreshSoon() }
         updates.start(automatic: !isScriptMode && configuration.updates.automatic)
         if case .adopted = recordingAdoption {
-            updateCaptureMenu()
-            startRecordingTicker()
+            statusPanel?.refreshSoon()
             searchController?.setStatus("Recording in progress", duration: nil)
         }
 
@@ -411,10 +403,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             await self?.themeManager.restore()
         }
         // Adopt a caffeinate session and a clamshell guard that outlived the
-        // last run, so Settings and the menu show what is really on.
+        // last run, so Settings and the panel show what is really on.
         Task { [weak self] in
             await self?.keepAwake.restore()
-            await self?.refreshKeepAwakeMenu()
+            await self?.refreshKeepAwakeState()
             self?.searchController.refreshResults()
         }
 
@@ -963,12 +955,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         write(view: view, to: destination)
     }
 
-    /// The status menu's capture section as text, so a scripted run can prove
-    /// the enable/disable rules without opening the menu.
+    /// The status panel's capture section as text, so a scripted run can prove
+    /// the enable/disable rules without opening the panel.
     private func writeCaptureMenu(to destination: String) {
-        let lines = CaptureMenuCommand.allCases.compactMap { command -> String? in
-            guard let item = captureMenuItems[command] else { return nil }
-            return "\(item.title)|enabled=\(item.isEnabled)|hidden=\(item.isHidden)"
+        let states = CaptureMenu.items(
+            isRecording: captureService.isRecording,
+            elapsed: captureService.recordingElapsed,
+            lastCapturePath: lastCaptureURL?.path,
+            lastRecordingPath: lastRecordingURL?.path,
+            lastScreenshotPath: lastScreenshotURL?.path
+        )
+        let lines = states.map {
+            "\($0.title)|enabled=\($0.enabled)|hidden=\(!$0.visible)"
         }
         try? (lines.joined(separator: "\n") + "\n")
             .write(toFile: destination, atomically: true, encoding: .utf8)
@@ -1664,12 +1662,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try? await Task.sleep(nanoseconds: 200_000_000)
             do {
                 try self.captureService.startRecording()
-                self.startRecordingTicker()
             } catch {
                 Log.shared.error("Recording failed: \(error.localizedDescription)", source: "capture")
                 self.captureFeedback("Recording failed: \(error.localizedDescription)")
             }
-            self.updateCaptureMenu()
+            self.statusPanel?.refreshSoon()
         }
     }
 
@@ -1690,16 +1687,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 Log.shared.error("Recording failed: \(error.localizedDescription)", source: "capture")
                 self.captureFeedback("Recording failed: \(error.localizedDescription)")
             }
-            self.recordingTicker?.invalidate()
-            self.recordingTicker = nil
-            self.updateCaptureMenu()
-        }
-    }
-
-    private func startRecordingTicker() {
-        recordingTicker?.invalidate()
-        recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateCaptureMenu() }
+            self.statusPanel?.refreshSoon()
         }
     }
 
@@ -1712,7 +1700,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             lastScreenshotURL = url
         }
-        updateCaptureMenu()
+        statusPanel?.refreshSoon()
     }
 
     private func copyLastPath() {
@@ -2099,9 +2087,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         aboutWindow?.apply(theme: theme)
     }
 
-    @objc private func captureMenuAction(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let command = CaptureMenuCommand(rawValue: raw) else { return }
+    private func performCapture(_ command: CaptureMenuCommand) {
         switch command {
         case .startRecording:
             presentRecordingOptions()
@@ -2121,24 +2107,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             copyTextFromLastScreenshot()
         case .openLastScreenshotLink:
             openLastScreenshotLink()
-        }
-    }
-
-    /// Keeps the menu bar honest about a running recording and about the last
-    /// capture, using the same rules the tests pin.
-    private func updateCaptureMenu() {
-        let states = CaptureMenu.items(
-            isRecording: captureService.isRecording,
-            elapsed: captureService.recordingElapsed,
-            lastCapturePath: lastCaptureURL?.path,
-            lastRecordingPath: lastRecordingURL?.path,
-            lastScreenshotPath: lastScreenshotURL?.path
-        )
-        for state in states {
-            guard let item = captureMenuItems[state.command] else { continue }
-            item.title = state.title
-            item.isEnabled = state.enabled
-            item.isHidden = !state.visible
         }
     }
 
@@ -2735,132 +2703,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             button.image = Self.statusBarIcon()
             button.image?.isTemplate = true
             button.toolTip = statusToolTip
+            button.target = self
+            button.action = #selector(toggleStatusPanelFromButton)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-        let menu = NSMenu()
-        // Capture section first: starting or stopping a recording must never
-        // need a trip through the launcher.
-        for command in CaptureMenuCommand.allCases {
-            let item = NSMenuItem(title: "", action: #selector(captureMenuAction(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = command.rawValue
-            if command == .stopRecording {
-                item.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: nil)
+        statusPanel = StatusPanelController(
+            themeManager: themeManager,
+            snapshot: { [weak self] in self?.statusPanelSnapshot() ?? StatusPanelSnapshot() },
+            perform: { [weak self] command in self?.performStatusPanel(command) },
+            anchor: { [weak self] in
+                guard let button = self?.statusItem.button,
+                      let window = button.window else { return nil }
+                return window.convertToScreen(button.convert(button.bounds, to: nil))
+            },
+            isAnchorEvent: { [weak self] event in
+                guard let window = self?.statusItem.button?.window else { return false }
+                return event.window === window
             }
-            menu.addItem(item)
-            captureMenuItems[command] = item
-        }
-        menu.addItem(.separator())
-        updateCaptureMenu()
-
-        let open = NSMenuItem(title: "Open Palette", action: #selector(togglePalette), keyEquivalent: "")
-        open.target = self
-        menu.addItem(open)
-
-        // Hidden until a check finds something newer; both point at the
-        // release, never at a self-updater.
-        let update = NSMenuItem(
-            title: "Update Palette…",
-            action: #selector(updatePaletteFromMenu),
-            keyEquivalent: ""
         )
-        update.target = self
-        update.isHidden = true
-        menu.addItem(update)
-        updateMenuItem = update
-        let notes = NSMenuItem(
-            title: "Release notes",
-            action: #selector(openReleaseNotesFromMenu),
-            keyEquivalent: ""
+    }
+
+    @objc private func toggleStatusPanelFromButton() {
+        statusPanel?.toggle()
+        if statusPanel?.isOpen == true {
+            Task { @MainActor [weak self] in
+                await self?.refreshKeepAwakeState()
+            }
+        }
+    }
+
+    /// The live facts the panel renders. Built here so the panel itself holds no
+    /// capture, config or sleep logic.
+    private func statusPanelSnapshot() -> StatusPanelSnapshot {
+        StatusPanelSnapshot(
+            isRecording: captureService.isRecording,
+            recordingElapsed: captureService.recordingElapsed,
+            lastCapturePath: lastCaptureURL?.path,
+            lastRecordingPath: lastRecordingURL?.path,
+            lastScreenshotPath: lastScreenshotURL?.path,
+            launcherPosition: configuration.searchPosition,
+            keepAwakeActive: keepAwakeStatus.active,
+            keepAwakeRemaining: keepAwakeStatus.endsAt == nil
+                ? nil
+                : keepAwakeStatus.remainingLabel,
+            keepAwakeClamshell: keepAwakeStatus.clamshell,
+            keepAwakeClamshellRequiresPower: keepAwakeStatus.clamshellRequiresPower,
+            updateVersion: updates.available?.version
         )
-        notes.target = self
-        notes.isHidden = true
-        menu.addItem(notes)
-        releaseNotesMenuItem = notes
-        menu.addItem(.separator())
+    }
 
-        let reload = NSMenuItem(title: "Reload Configuration", action: #selector(reloadFromMenu), keyEquivalent: "r")
-        reload.target = self
-        menu.addItem(reload)
-
-        let positionItem = NSMenuItem(title: "Launcher Position", action: nil, keyEquivalent: "")
-        let positionMenu = NSMenu(title: "Launcher Position")
-        for position in SearchPosition.allCases {
-            let item = NSMenuItem(
-                title: position.rawValue.capitalized,
-                action: #selector(setPositionFromMenu(_:)),
-                keyEquivalent: ""
-            )
-            item.target = self
-            item.representedObject = position.rawValue
-            positionMenu.addItem(item)
+    /// One switch for every panel row. Each case is the same method the old
+    /// menu item called, so there is no second copy of the behaviour.
+    private func performStatusPanel(_ command: StatusPanelCommand) {
+        switch command {
+        case .capture(let capture):
+            performCapture(capture)
+        case .openPalette:
+            togglePalette()
+        case .updatePalette:
+            updatePalette()
+        case .releaseNotes:
+            openReleaseNotes()
+        case .reloadConfig:
+            reload(quiet: false)
+        case .setPosition(let position):
+            setLauncherPosition(position)
+        case .toggleClamshell:
+            toggleClamshell()
+        case .stopKeepAwake:
+            stopKeepAwake()
+        case .startKeepAwake(let seconds):
+            startKeepAwake(seconds)
+        case .refreshBitwarden:
+            refreshBitwarden()
+        case .settings:
+            showSettings()
+        case .openConfig:
+            openConfig()
+        case .openLog:
+            launcher.openPath(paths.logFile.path)
+        case .openProviders:
+            openProviders()
+        case .openThemes:
+            launcher.openPath(paths.themesDir.path)
+        case .exportBackup:
+            exportBackup()
+        case .quit:
+            NSApp.terminate(nil)
         }
-        positionItem.submenu = positionMenu
-        menu.addItem(positionItem)
-        self.positionMenu = positionMenu
-        updatePositionMenu()
-
-        let keepAwakeItem = NSMenuItem(title: "Keep Awake", action: nil, keyEquivalent: "")
-        let keepAwakeSubmenu = NSMenu(title: "Keep Awake")
-        let toggle = NSMenuItem(title: "Keep Mac Awake", action: #selector(toggleKeepAwakeFromMenu), keyEquivalent: "")
-        toggle.target = self
-        keepAwakeSubmenu.addItem(toggle)
-        keepAwakeToggleItem = toggle
-        let keepAwakeDurations: [(Double, String)] = [
-            (15.0 * 60, "For 15 Minutes"),
-            (30.0 * 60, "For 30 Minutes"),
-            (60.0 * 60, "For 1 Hour"),
-            (2.0 * 60 * 60, "For 2 Hours"),
-            (4.0 * 60 * 60, "For 4 Hours"),
-            (8.0 * 60 * 60, "For 8 Hours"),
-        ]
-        for (seconds, title) in keepAwakeDurations {
-            let item = NSMenuItem(title: title, action: #selector(startKeepAwakeFromMenu(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = NSNumber(value: seconds)
-            keepAwakeSubmenu.addItem(item)
-        }
-        keepAwakeSubmenu.addItem(.separator())
-        let clamshell = NSMenuItem(title: "Clamshell (Lid Closed)", action: #selector(toggleClamshellFromMenu), keyEquivalent: "")
-        clamshell.target = self
-        keepAwakeSubmenu.addItem(clamshell)
-        keepAwakeClamshellItem = clamshell
-        let stop = NSMenuItem(title: "Stop Keeping Awake", action: #selector(stopKeepAwakeFromMenu), keyEquivalent: "")
-        stop.target = self
-        keepAwakeSubmenu.addItem(stop)
-        keepAwakeStopItem = stop
-        keepAwakeItem.submenu = keepAwakeSubmenu
-        menu.addItem(keepAwakeItem)
-        self.keepAwakeMenu = keepAwakeSubmenu
-
-        let refresh = NSMenuItem(title: "Refresh Bitwarden Cache", action: #selector(refreshBitwardenFromMenu), keyEquivalent: "")
-        refresh.target = self
-        menu.addItem(refresh)
-
-        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettingsFromMenu), keyEquivalent: "")
-        settings.target = self
-        menu.addItem(settings)
-
-        let advancedItem = NSMenuItem(title: "Advanced", action: nil, keyEquivalent: "")
-        let advancedMenu = NSMenu(title: "Advanced")
-        for (title, action) in [
-            ("Open config.toml", #selector(openConfigFromMenu)),
-            ("Open Providers Folder", #selector(openProvidersFromMenu)),
-            ("Open Themes Folder", #selector(openThemesFromMenu)),
-            ("Open Log", #selector(openLogFromMenu)),
-        ] {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-            item.target = self
-            advancedMenu.addItem(item)
-        }
-        advancedItem.submenu = advancedMenu
-        menu.addItem(advancedItem)
-
-        menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Palette", action: #selector(quitFromMenu), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
-        menu.delegate = self
-        statusItem.menu = menu
     }
 
     private func installThemeObserver() {
@@ -3104,7 +3034,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.windowConfig = configuration.window
-        updatePositionMenu()
+        statusPanel?.refreshSoon()
         configureThemingPolling()
 
         let oldRegistry = registry
@@ -3162,13 +3092,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         searchController.openClipboard()
     }
 
-    @objc private func reloadFromMenu() {
-        reload(quiet: false)
-    }
-
-    @objc private func setPositionFromMenu(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let position = SearchPosition(rawValue: raw) else { return }
+    private func setLauncherPosition(_ position: SearchPosition) {
         configuration.searchPosition = position
         panel?.anchorOverride = position.rawValue
         do {
@@ -3176,17 +3100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             Log.shared.warn("Could not save launcher position: \(error.localizedDescription)", source: "app")
         }
-        updatePositionMenu()
-    }
-
-    private func updatePositionMenu() {
-        for item in positionMenu?.items ?? [] {
-            item.state = (item.representedObject as? String) == configuration.searchPosition.rawValue ? .on : .off
-        }
-    }
-
-    @objc private func openConfigFromMenu() {
-        openConfig()
+        statusPanel?.refreshSoon()
     }
 
     @objc private func openSettingsFromMenu() {
@@ -3204,30 +3118,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         searchController.setStatus("Update command copied", duration: 2)
     }
 
-    /// Shows the nudge only when a check found something newer.
-    private func refreshUpdateMenu() {
-        guard let release = updates.available else {
-            updateMenuItem?.isHidden = true
-            releaseNotesMenuItem?.isHidden = true
-            return
-        }
-        updateMenuItem?.title = "Palette \(release.version) available — Update…"
-        updateMenuItem?.isEnabled = true
-        updateMenuItem?.isHidden = false
-        releaseNotesMenuItem?.isHidden = false
-    }
-
     /// Homebrew does the install; the embedded terminal is where it runs.
-    @objc private func updatePaletteFromMenu() {
+    private func updatePalette() {
         guard let release = updates.available else { return }
         searchController.openTerminalPanel(command: UpdatePolicy.brewCommand)
         searchController.setStatus("Updating Palette to \(release.version)…", duration: 10)
-        updateMenuItem?.title = "Updating…"
-        updateMenuItem?.isEnabled = false
-        releaseNotesMenuItem?.isHidden = true
     }
 
-    @objc private func openReleaseNotesFromMenu() {
+    private func openReleaseNotes() {
         guard let release = updates.available else { return }
         NSWorkspace.shared.open(release.url)
     }
@@ -3405,19 +3303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
     }
 
-    @objc private func openProvidersFromMenu() {
-        openProviders()
-    }
-
-    @objc private func openThemesFromMenu() {
-        launcher.openPath(paths.themesDir.path)
-    }
-
-    @objc private func openLogFromMenu() {
-        launcher.openPath(paths.logFile.path)
-    }
-
-    @objc private func refreshBitwardenFromMenu() {
+    private func refreshBitwarden() {
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.bitwardenVault.refresh()
@@ -3426,34 +3312,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    @objc private func toggleKeepAwakeFromMenu() {
+    private func startKeepAwake(_ seconds: TimeInterval?) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let status = await self.keepAwake.snapshot()
-            if status.active {
-                await self.keepAwake.stop()
-                self.searchController.setStatus("Normal sleep restored", duration: 2)
-            } else {
-                try? await self.keepAwake.start(duration: nil)
-                self.searchController.setStatus("Keeping your Mac awake", duration: 2)
-            }
-            await self.refreshKeepAwakeMenu()
+            try? await self.keepAwake.start(duration: seconds)
+            let message = seconds.map { "Keeping your Mac awake for \(TimerDuration.label($0))" }
+                ?? "Keeping your Mac awake"
+            self.searchController.setStatus(message, duration: 2)
+            await self.refreshKeepAwakeState()
             self.searchController.refreshResults()
         }
     }
 
-    @objc private func startKeepAwakeFromMenu(_ sender: NSMenuItem) {
-        let seconds = (sender.representedObject as? NSNumber)?.doubleValue ?? 0
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            try? await self.keepAwake.start(duration: seconds > 0 ? seconds : nil)
-            self.searchController.setStatus("Keeping your Mac awake for \(sender.title.lowercased())", duration: 2)
-            await self.refreshKeepAwakeMenu()
-            self.searchController.refreshResults()
-        }
-    }
-
-    @objc private func toggleClamshellFromMenu() {
+    private func toggleClamshell() {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let status = await self.keepAwake.snapshot()
@@ -3467,42 +3338,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch {
                 self.searchController.setStatus(error.localizedDescription, duration: 5)
             }
-            await self.refreshKeepAwakeMenu()
+            await self.refreshKeepAwakeState()
             self.searchController.refreshResults()
         }
     }
 
-    @objc private func stopKeepAwakeFromMenu() {
+    private func stopKeepAwake() {
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.keepAwake.stop()
-            await self.refreshKeepAwakeMenu()
+            await self.refreshKeepAwakeState()
             self.searchController.setStatus("Normal sleep restored", duration: 2)
             self.searchController.refreshResults()
         }
     }
 
-    func menuWillOpen(_ menu: NSMenu) {
-        guard menu === statusItem.menu else { return }
-        updateCaptureMenu()
-        Task { @MainActor [weak self] in
-            await self?.refreshKeepAwakeMenu()
-        }
-    }
-
-    private func refreshKeepAwakeMenu() async {
-        let status = await keepAwake.snapshot()
-        keepAwakeToggleItem?.title = status.active ? "Stop Keeping Awake" : "Keep Mac Awake (Indefinitely)"
-        keepAwakeToggleItem?.state = status.active ? .on : .off
-        keepAwakeClamshellItem?.title = status.clamshell && status.clamshellRequiresPower
-            ? "Clamshell (Lid Closed) — armed, inactive"
-            : "Clamshell (Lid Closed)"
-        keepAwakeClamshellItem?.state = status.clamshell ? .on : .off
-        keepAwakeStopItem?.isEnabled = status.active
-    }
-
-    @objc private func quitFromMenu() {
-        NSApp.terminate(nil)
+    /// Caches the service snapshot so the panel renders without waiting on the
+    /// actor, then repaints a panel that is already open.
+    private func refreshKeepAwakeState() async {
+        keepAwakeStatus = await keepAwake.snapshot()
+        statusPanel?.refreshSoon()
     }
 
     private func openConfig() {
