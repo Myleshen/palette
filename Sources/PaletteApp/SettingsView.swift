@@ -466,14 +466,17 @@ struct SettingsView: View {
                 isPresented: $removePoliciesPending,
                 titleVisibility: .visible
             ) {
-                Button("Remove policies", role: .destructive) {
+                Button(theming.supportsLegacyPolicyCLI ? "Remove policies" : "Show removal steps",
+                       role: .destructive) {
                     Task { @MainActor in
                         await theming.removePolicies(config.theming)
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Each selected browser stops using Palette's theme. Running browsers may need a restart.")
+                Text(theming.supportsLegacyPolicyCLI
+                    ? "Each selected browser stops using Palette's theme. Running browsers may need a restart."
+                    : "macOS 27 removed profiles install; remove Palette under System Settings → General → Device Management → Profiles.")
             }
     }
 
@@ -2091,7 +2094,17 @@ struct SettingsView: View {
             card("Other apps", anchor: "theming-section") {
                 toggleRow(
                     "Use Palette's palette in other apps",
-                    isOn: $config.theming.enabled,
+                    isOn: Binding(
+                        get: { config.theming.enabled },
+                        set: { enabled in
+                            config.theming.enabled = enabled
+                            if !enabled {
+                                // Master off must stop the apps using Palette now,
+                                // not on the next Apply.
+                                Task { @MainActor in _ = theming.removeAllIncludes() }
+                            }
+                        }
+                    ),
                     help: "Off by default. Palette always themes itself; this also writes managed palette files for terminals and editors."
                 )
                 if !config.theming.enabled {
@@ -2238,11 +2251,15 @@ struct SettingsView: View {
                 card("Targets", anchor: "theming-targets") {
                     ForEach(ThemingTarget.allCases.filter { !$0.isBrowser }) { target in
                         if target.isImplemented {
-                            toggleRow(
-                                target.title,
-                                isOn: themingTargetBinding(target),
-                                help: target.fileName
-                            )
+                            VStack(alignment: .leading, spacing: 2) {
+                                Toggle(target.title, isOn: themingTargetBinding(target))
+                                    .toggleStyle(.checkbox)
+                                    .font(theme.font(size: 13))
+                                Text(includeStatusText(target))
+                                    .font(.caption)
+                                    .foregroundStyle(muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         } else {
                             HStack(spacing: 8) {
                                 Toggle(target.title, isOn: .constant(false))
@@ -2292,14 +2309,24 @@ struct SettingsView: View {
 
                     if !selectedBrowsers.isEmpty {
                         Divider().padding(.vertical, 4)
+                        Text("Profiles install: the generated .mobileconfig opens in System Settings, where you approve it under General → Device Management. No password prompt comes from Palette.")
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                            .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 8) {
-                            Button(theming.policyBusy ? "Installing…" : "Install Policies…") {
+                            Button(theming.policyBusy ? "Opening…" : "Open in System Settings…") {
                                 Task { @MainActor in
                                     await theming.installPolicies(config.theming)
                                 }
                             }
                             .disabled(theming.policyBusy || browserPolicyFiles.isEmpty)
-                            .help("Press Apply Palette to generate the policy files first.")
+                            .help("Press Apply Palette to generate the profile files first.")
+                            Button("Reveal file") { revealPolicyFiles() }
+                                .disabled(browserPolicyFiles.isEmpty)
+                            Button("Refresh") {
+                                Task { @MainActor in await theming.refreshPolicyStates() }
+                            }
+                            .disabled(theming.policyBusy)
                             Button("Remove Policies…") {
                                 removePoliciesPending = true
                             }
@@ -2312,6 +2339,7 @@ struct SettingsView: View {
                             Text(status)
                                 .font(.caption)
                                 .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         if let error = theming.policyError {
                             Text(error)
@@ -2319,28 +2347,23 @@ struct SettingsView: View {
                                 .foregroundStyle(danger)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        if !browserInstallCommand.isEmpty {
-                            HStack(alignment: .top, spacing: 8) {
-                                Text(browserInstallCommand)
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 8)
-                                Button(copiedInclude == browserInstallCommand ? "Copied" : "Copy") {
-                                    copyInclude(browserInstallCommand)
+                        if theming.supportsLegacyPolicyCLI, !browserInstallCommand.isEmpty {
+                            Text("Legacy CLI (still available on this macOS; macOS 27 removed it)")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(muted)
+                            ForEach([browserInstallCommand, browserRemoveCommand], id: \.self) { command in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(command)
+                                        .font(.caption.monospaced())
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: 8)
+                                    Button(copiedInclude == command ? "Copied" : "Copy") {
+                                        copyInclude(command)
+                                    }
+                                    .controlSize(.small)
                                 }
-                                .controlSize(.small)
-                            }
-                            HStack(alignment: .top, spacing: 8) {
-                                Text(browserRemoveCommand)
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 8)
-                                Button(copiedInclude == browserRemoveCommand ? "Copied" : "Copy") {
-                                    copyInclude(browserRemoveCommand)
-                                }
-                                .controlSize(.small)
                             }
                         }
                     }
@@ -2349,35 +2372,35 @@ struct SettingsView: View {
                     let selected = config.theming.targets
                         .compactMap(ThemingTarget.init(rawValue:))
                         .filter(\.isImplemented)
-                    Text("Include lines")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(muted)
-                    if selected.isEmpty {
-                        Text("Pick at least one app above.")
-                            .font(.caption)
-                            .foregroundStyle(muted)
-                    }
-                    ForEach(selected) { target in
-                        HStack(alignment: .top, spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(target.title)
-                                    .font(.caption)
-                                    .foregroundStyle(muted)
-                                Text(target.includeHint)
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                                    .fixedSize(horizontal: false, vertical: true)
+                    DisclosureGroup("Manual setup") {
+                        if selected.isEmpty {
+                            Text("Pick at least one app above.")
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                        ForEach(selected) { target in
+                            HStack(alignment: .top, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(target.title)
+                                        .font(.caption)
+                                        .foregroundStyle(muted)
+                                    Text(target.includeHint)
+                                        .font(.caption.monospaced())
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 8)
+                                Button(copiedInclude == target.includeHint ? "Copied" : "Copy") {
+                                    copyInclude(target.includeHint)
+                                }
+                                .controlSize(.small)
                             }
-                            Spacer(minLength: 8)
-                            Button(copiedInclude == target.includeHint ? "Copied" : "Copy") {
-                                copyInclude(target.includeHint)
-                            }
-                            .controlSize(.small)
                         }
                     }
+                    .font(.caption)
+                    .foregroundStyle(muted)
                 } footer: {
-                    Text("Only checked apps get a generated file and an include line. Palette never edits the app's own config; it writes only \(PalettePaths.resolve().themeDir.path).")
+                    Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path).")
                 }
                 .task { await theming.refreshPolicyStates() }
             }
@@ -2416,6 +2439,17 @@ struct SettingsView: View {
         case false?: return "Not installed"
         case nil: return "Not checked"
         }
+    }
+
+    private func includeStatusText(_ target: ThemingTarget) -> String {
+        let status = theming.includeStatus(for: target)
+        return status.available ? status.note : "Unavailable — \(target.unavailableReason ?? target.includeHint)"
+    }
+
+    private func revealPolicyFiles() {
+        let urls = browserPolicyFiles.map { URL(fileURLWithPath: $0) }
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
     private var otherAppsPaletteBinding: Binding<OtherAppsPalette> {

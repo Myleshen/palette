@@ -687,6 +687,26 @@ public enum ChromiumPolicy {
         identifiers.map { "sudo profiles remove -identifier \(token($0))" }.joined(separator: " && ")
     }
 
+    public enum InstallFlow: String, Sendable, Equatable {
+        /// macOS 27 removed `profiles install`; the profile is opened in
+        /// System Settings and approved there.
+        case systemSettings
+        /// Older macOS still advertises `profiles install`, so the sudo form
+        /// stays available as a legacy note and for removal.
+        case legacyProfiles
+    }
+
+    public static func installFlow(majorVersion: Int) -> InstallFlow {
+        majorVersion >= 27 ? .systemSettings : .legacyProfiles
+    }
+
+    /// The line shown after `open` handed the files to System Settings.
+    public static func installSteps(files: [String]) -> String {
+        "Opened \(files.count) profile file\(files.count == 1 ? "" : "s") in System Settings. " +
+            "Approve each under General → Device Management → Profiles, then Refresh. " +
+            "macOS 27 removed `profiles install`; no password prompt is needed here."
+    }
+
     /// One seed colour per browser; Chromium derives the rest.
     public static func mobileConfig(browser: ChromiumBrowser, palette: PalettePalette) -> String {
         let identifier = identifier(for: browser.bundleID)
