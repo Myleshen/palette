@@ -4,22 +4,54 @@
 
 ### Added
 
-- **Per-kind clipboard limits**: text, images and files are trimmed independently
-  (defaults 100 / 20 / 20) so a burst of screenshots cannot push out the text
-  history. Settings → General → Clipboard has a field for each; the old
-  `max_entries` is read as the text limit and rewritten on the next save.
-- **Preview text size**: previews now render at 13 pt instead of 11 and the size
-  is configurable (9–24 pt, Automatic) under Appearance → Typography. Applies to
-  the clipboard/path/atlas/snippet preview, the Ask answer body, capture
-  previews and the annotator.
+- **914 Ghostty themes** bundled as `ghostty-*` (MIT, contrast-checked; user
+  themes with the same name still win). Rex's palettes are proprietary and were
+  deliberately not ported.
+- **Theme browser** in Settings → Appearance: search across Built-in / Ghostty /
+  Custom, per-row colour swatches and a live preview of the launcher. Selecting
+  only previews; **Use Theme** applies and **Revert** restores.
+- **Per-kind clipboard limits**: text, images and files trim independently
+  (defaults 100 / 20 / 20); the old `max_entries` becomes the text limit and is
+  rewritten on the next save.
+- **Preview text size**: 13 pt by default (was hardcoded 11), configurable
+  9–24 under Appearance → Typography, applied to every preview surface.
+- **Action-routing contract** and store-level wiring tests, with mutation checks
+  (reverting the OCR fix or the setup-file creation now fails the suite).
+
+### Changed
+
+- `/clip` is a flat chronological list across text, images and files — no
+  kind grouping, pins keep their badge without jumping the queue. Filter chips
+  still narrow by kind.
+- Provider speed: GitHub caches by repo instead of query (no `gh` per
+  keystroke), `/zj` stops spawning `zellij` on plain keystrokes, emoji fields
+  are pre-folded, `docker ps` and stats are cached, `/port` batches one `lsof`,
+  `/shots` paints immediately with lazy thumbnails, favicon fetches are gated,
+  the theme catalogue is cached, and Bitwarden shows a progress row with a 15 s
+  cap.
+- Global searches race a **300 ms per-provider deadline**, so one slow source
+  cannot hold every result; late sources are reported once.
+- Paste prefers the target's **Edit ▸ Paste** menu via Accessibility; Neovide
+  falls back to "Copied — press ⌘V" instead of typing `<d+v>`. kitty and other
+  terminals keep synthetic ⌘V.
+- Opening files no longer happens after hiding the panel; only setup rows create
+  missing files, everything else reports that the file is gone.
+- Timers, bindings, Docker actions, theme saves, shot copies and eyedropper
+  cancels all report success/failure; a config reload with a parse error now
+  reports the error instead of "reloaded".
 
 ### Fixed
 
-- Screenshots taken with Palette now appear in clipboard history. Palette still
-  suppresses the monitor's duplicate poll, but the capture, recording and
-  annotator copy paths insert the bytes explicitly (deduped by hash), so
-  `/clip` shows them immediately.
-- Recording files copied from the preview are recorded as file entries.
+- Palette screenshots and recordings now appear in `/clip`: the capture,
+  recording and annotator copies record the bytes explicitly (deduped by hash)
+  while the monitor still ignores the duplicate pasteboard poll.
+- Capture storage reuses the already-captured bytes and thumbnail and does the
+  hash/write/insert off the main actor (store hold time 73 ms → 8 ms; pasteboard
+  write 41 ms → ~0 ms).
+- Atlas 1.8.0: tool resolution goes through `ToolLocator` (no dot-files
+  fallback), and missing/review paths report instead of failing silently.
+- Return on a row with no action says so; missing clipboard images say so; paste
+  failure keeps the panel and tells you to press ⌘V.
 
 ## 2.18.2 — 2026-11-24
 
