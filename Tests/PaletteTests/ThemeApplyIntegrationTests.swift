@@ -135,7 +135,9 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         XCTAssertTrue(generated.path.hasPrefix("/"), "generated path is not absolute")
 
         let suffix = "~/.config/palette/theme/\(file)"
-        if body.contains(suffix) {
+        if body.contains(suffix) || body.contains(generated.path) {
+            // kitty keeps the documented `~` form; Ghostty, Neovim and fish
+            // use the absolute path because their config syntax may not expand it.
             let resolved = home.path + suffix.dropFirst()
             XCTAssertEqual(
                 URL(fileURLWithPath: resolved).resolvingSymlinksInPath().path,
