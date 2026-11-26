@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Noctis Sereno" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Noctis Sereno"
+appearance = "dark"
+
+[palette]
+bg = "#062e32"
+surface = "#042124"
+elevated = "#1f4346"
+fg = "#b2cacd"
+fg_muted = "#769397"
+accent = "#60b6eb"
+accent_fg = "#000000"
+selection_bg = "#0f4045"
+selection_fg = "#b2cacd"
+match_fg = "#e798b3"
+border = "#284d51"
+separator = "#1f434680"
+danger = "#e66533"
+warning = "#e4b781"
+success = "#49e9a6"
+info = "#49ace9"
+badge_bg = "#1f4346"
+badge_fg = "#b2cacd"
+
+[states.selected]
+bg = "#0f4045"
+fg = "#b2cacd"
+[states.hover]
+bg = "#1f4346"
+[states.disabled]
+fg = "#769397"
+
+[footer]
+hint_color = "#769397"

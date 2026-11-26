@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Synthwave Alpha" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Synthwave Alpha"
+appearance = "dark"
+
+[palette]
+bg = "#241b30"
+surface = "#1a1323"
+elevated = "#3a3245"
+fg = "#f2f2e3"
+fg_muted = "#aaa7a4"
+accent = "#aa54f9"
+accent_fg = "#000000"
+selection_bg = "#6e29ad"
+selection_fg = "#f2f2e3"
+match_fg = "#ff00f6"
+border = "#4d4654"
+separator = "#3a324580"
+danger = "#e60a70"
+warning = "#adad3e"
+success = "#00986c"
+info = "#6e29ad"
+badge_bg = "#3a3245"
+badge_fg = "#f2f2e3"
+
+[states.selected]
+bg = "#6e29ad"
+fg = "#f2f2e3"
+[states.hover]
+bg = "#3a3245"
+[states.disabled]
+fg = "#aaa7a4"
+
+[footer]
+hint_color = "#aaa7a4"

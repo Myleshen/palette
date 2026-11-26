@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Wryan" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Wryan"
+appearance = "dark"
+
+[palette]
+bg = "#101010"
+surface = "#0c0c0c"
+elevated = "#282828"
+fg = "#999993"
+fg_muted = "#696965"
+accent = "#477ab3"
+accent_fg = "#000000"
+selection_bg = "#4d4d4d"
+selection_fg = "#ffffff"
+match_fg = "#7e62b3"
+border = "#2b2b2a"
+separator = "#28282880"
+danger = "#8c4665"
+warning = "#7c7c99"
+success = "#287373"
+info = "#395573"
+badge_bg = "#282828"
+badge_fg = "#999993"
+
+[states.selected]
+bg = "#4d4d4d"
+fg = "#ffffff"
+[states.hover]
+bg = "#282828"
+[states.disabled]
+fg = "#696965"
+
+[footer]
+hint_color = "#696965"

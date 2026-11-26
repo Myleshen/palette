@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Lumina Ember Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Lumina Ember Light"
+appearance = "light"
+
+[palette]
+bg = "#f9f4ea"
+surface = "#ede8de"
+elevated = "#fcfaf6"
+fg = "#372b1e"
+fg_muted = "#7b7165"
+accent = "#372b1e"
+accent_fg = "#ffffff"
+selection_bg = "#e6bba2"
+selection_fg = "#372b1e"
+match_fg = "#783763"
+border = "#d2ccc1"
+separator = "#fcfaf680"
+danger = "#811d1d"
+warning = "#a06116"
+success = "#437329"
+info = "#256b99"
+badge_bg = "#fcfaf6"
+badge_fg = "#372b1e"
+
+[states.selected]
+bg = "#e6bba2"
+fg = "#372b1e"
+[states.hover]
+bg = "#fcfaf6"
+[states.disabled]
+fg = "#7b7165"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7b7165"

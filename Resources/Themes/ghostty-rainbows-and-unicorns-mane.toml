@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Rainbows and Unicorns Mane" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Rainbows and Unicorns Mane"
+appearance = "dark"
+
+[palette]
+bg = "#14131a"
+surface = "#0e0e13"
+elevated = "#2c2b31"
+fg = "#e9e7f2"
+fg_muted = "#9e9da6"
+accent = "#ffd65a"
+accent_fg = "#000000"
+selection_bg = "#9230aa"
+selection_fg = "#ffffff"
+match_fg = "#f0a0be"
+border = "#3f3d45"
+separator = "#2c2b3180"
+danger = "#eb413a"
+warning = "#fede3c"
+success = "#68c44a"
+info = "#3092e2"
+badge_bg = "#2c2b31"
+badge_fg = "#e9e7f2"
+
+[states.selected]
+bg = "#9230aa"
+fg = "#ffffff"
+[states.hover]
+bg = "#2c2b31"
+[states.disabled]
+fg = "#9e9da6"
+
+[footer]
+hint_color = "#9e9da6"

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Token Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Token Light"
+appearance = "light"
+
+[palette]
+bg = "#faf9f5"
+surface = "#edede9"
+elevated = "#fdfcfb"
+fg = "#2a2920"
+fg_muted = "#73726b"
+accent = "#486a88"
+accent_fg = "#ffffff"
+selection_bg = "#dddcd6"
+selection_fg = "#2a2920"
+match_fg = "#6f578c"
+border = "#d0cfca"
+separator = "#fdfcfb80"
+danger = "#b05555"
+warning = "#6e5c20"
+success = "#3f643c"
+info = "#527594"
+badge_bg = "#fdfcfb"
+badge_fg = "#2a2920"
+
+[states.selected]
+bg = "#dddcd6"
+fg = "#2a2920"
+[states.hover]
+bg = "#fdfcfb"
+[states.disabled]
+fg = "#73726b"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#73726b"

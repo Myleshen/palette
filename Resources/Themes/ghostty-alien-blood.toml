@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Alien Blood" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Alien Blood"
+appearance = "dark"
+
+[palette]
+bg = "#0f1610"
+surface = "#0b100c"
+elevated = "#272d28"
+fg = "#6f8780"
+fg_muted = "#546761"
+accent = "#73fa91"
+accent_fg = "#000000"
+selection_bg = "#1d4125"
+selection_fg = "#73fa91"
+match_fg = "#0058e0"
+border = "#222d26"
+separator = "#272d2880"
+danger = "#7f2b27"
+warning = "#717f24"
+success = "#2f7e25"
+info = "#2f6a7f"
+badge_bg = "#272d28"
+badge_fg = "#869a94"
+
+[states.selected]
+bg = "#1d4125"
+fg = "#73fa91"
+[states.hover]
+bg = "#272d28"
+[states.disabled]
+fg = "#546761"
+
+[footer]
+hint_color = "#546761"

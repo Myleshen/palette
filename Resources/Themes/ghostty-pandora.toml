@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Pandora" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Pandora"
+appearance = "dark"
+
+[palette]
+bg = "#141e43"
+surface = "#0e1630"
+elevated = "#2c3456"
+fg = "#e1e1e1"
+fg_muted = "#999daa"
+accent = "#23d7d7"
+accent_fg = "#000000"
+selection_bg = "#2d37ff"
+selection_fg = "#82e0ff"
+match_fg = "#ff37ff"
+border = "#3d4563"
+separator = "#2c345680"
+danger = "#ff4242"
+warning = "#ffad29"
+success = "#74af68"
+info = "#338f86"
+badge_bg = "#2c3456"
+badge_fg = "#e1e1e1"
+
+[states.selected]
+bg = "#2d37ff"
+fg = "#82e0ff"
+[states.hover]
+bg = "#2c3456"
+[states.disabled]
+fg = "#999daa"
+
+[footer]
+hint_color = "#999daa"

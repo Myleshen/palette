@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ride the Current" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ride the Current"
+appearance = "dark"
+
+[palette]
+bg = "#041b30"
+surface = "#031323"
+elevated = "#1d3245"
+fg = "#e0f2fc"
+fg_muted = "#93a7b5"
+accent = "#a0ccff"
+accent_fg = "#000000"
+selection_bg = "#173e67"
+selection_fg = "#f1faff"
+match_fg = "#d0b3fa"
+border = "#304659"
+separator = "#1d324580"
+danger = "#e7787b"
+warning = "#e4c476"
+success = "#7dc5a6"
+info = "#79b4ff"
+badge_bg = "#1d3245"
+badge_fg = "#e0f2fc"
+
+[states.selected]
+bg = "#173e67"
+fg = "#f1faff"
+[states.hover]
+bg = "#1d3245"
+[states.disabled]
+fg = "#93a7b5"
+
+[footer]
+hint_color = "#93a7b5"

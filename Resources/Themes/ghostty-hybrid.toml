@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Hybrid" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Hybrid"
+appearance = "dark"
+
+[palette]
+bg = "#161719"
+surface = "#101112"
+elevated = "#2d2e30"
+fg = "#b7bcba"
+fg_muted = "#7f8282"
+accent = "#6e90b0"
+accent_fg = "#000000"
+selection_bg = "#2d2e30"
+selection_fg = "#b7bcba"
+match_fg = "#a17eac"
+border = "#363839"
+separator = "#2d2e3080"
+danger = "#b84d51"
+warning = "#e4b55e"
+success = "#b3bf5a"
+info = "#6e90b0"
+badge_bg = "#2d2e30"
+badge_fg = "#b7bcba"
+
+[states.selected]
+bg = "#2d2e30"
+fg = "#b7bcba"
+[states.hover]
+bg = "#2d2e30"
+[states.disabled]
+fg = "#7f8282"
+
+[footer]
+hint_color = "#7f8282"

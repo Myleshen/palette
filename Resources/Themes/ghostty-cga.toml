@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "CGA" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · CGA"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#aaaaaa"
+fg_muted = "#6e6e6e"
+accent = "#5555ff"
+accent_fg = "#ffffff"
+selection_bg = "#c1deff"
+selection_fg = "#000000"
+match_fg = "#ff55ff"
+border = "#222222"
+separator = "#1a1a1a80"
+danger = "#aa0000"
+warning = "#aa5500"
+success = "#00aa00"
+info = "#0d0db7"
+badge_bg = "#1a1a1a"
+badge_fg = "#aaaaaa"
+
+[states.selected]
+bg = "#c1deff"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#6e6e6e"
+
+[footer]
+hint_color = "#6e6e6e"

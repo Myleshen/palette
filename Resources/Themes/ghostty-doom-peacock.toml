@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Doom Peacock" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Doom Peacock"
+appearance = "dark"
+
+[palette]
+bg = "#2b2a27"
+surface = "#1f1e1c"
+elevated = "#403f3d"
+fg = "#ede0ce"
+fg_muted = "#a9a094"
+accent = "#51afef"
+accent_fg = "#000000"
+selection_bg = "#a60033"
+selection_fg = "#ffffff"
+match_fg = "#a9a1e1"
+border = "#524e48"
+separator = "#403f3d80"
+danger = "#cb4b16"
+warning = "#bcd42a"
+success = "#26a6a6"
+info = "#2a6cc6"
+badge_bg = "#403f3d"
+badge_fg = "#ede0ce"
+
+[states.selected]
+bg = "#a60033"
+fg = "#ffffff"
+[states.hover]
+bg = "#403f3d"
+[states.disabled]
+fg = "#a9a094"
+
+[footer]
+hint_color = "#a9a094"

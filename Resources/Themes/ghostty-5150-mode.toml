@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "5150 Mode" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · 5150 Mode"
+appearance = "dark"
+
+[palette]
+bg = "#082820"
+surface = "#061d17"
+elevated = "#213e36"
+fg = "#ecf4db"
+fg_muted = "#9cad9a"
+accent = "#d5e875"
+accent_fg = "#000000"
+selection_bg = "#245444"
+selection_fg = "#ffffff"
+match_fg = "#bec7a0"
+border = "#365145"
+separator = "#213e3680"
+danger = "#d59a71"
+warning = "#d2ca72"
+success = "#70bd83"
+info = "#80b3a0"
+badge_bg = "#213e36"
+badge_fg = "#ecf4db"
+
+[states.selected]
+bg = "#245444"
+fg = "#ffffff"
+[states.hover]
+bg = "#213e36"
+[states.disabled]
+fg = "#9cad9a"
+
+[footer]
+hint_color = "#9cad9a"

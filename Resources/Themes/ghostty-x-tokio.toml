@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "X Tokio" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · X Tokio"
+appearance = "dark"
+
+[palette]
+bg = "#1c1c1d"
+surface = "#141415"
+elevated = "#333334"
+fg = "#f7f1ff"
+fg_muted = "#aaa6b0"
+accent = "#fd9353"
+accent_fg = "#000000"
+selection_bg = "#f7f1ff"
+selection_fg = "#1c1c1d"
+match_fg = "#948ae3"
+border = "#48474a"
+separator = "#33333480"
+danger = "#fc618d"
+warning = "#fce566"
+success = "#7bd88f"
+info = "#fd9353"
+badge_bg = "#333334"
+badge_fg = "#f7f1ff"
+
+[states.selected]
+bg = "#f7f1ff"
+fg = "#1c1c1d"
+[states.hover]
+bg = "#333334"
+[states.disabled]
+fg = "#aaa6b0"
+
+[footer]
+hint_color = "#aaa6b0"

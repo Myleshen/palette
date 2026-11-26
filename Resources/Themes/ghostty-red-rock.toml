@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Red Rock" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Red Rock"
+appearance = "dark"
+
+[palette]
+bg = "#672a20"
+surface = "#4a1e17"
+elevated = "#763f36"
+fg = "#fff0dc"
+fg_muted = "#caab9a"
+accent = "#b0d8f3"
+accent_fg = "#000000"
+selection_bg = "#87483a"
+selection_fg = "#fff7eb"
+match_fg = "#efc0de"
+border = "#855246"
+separator = "#763f3680"
+danger = "#ffa18b"
+warning = "#f5d06f"
+success = "#91d7a7"
+info = "#94c9ee"
+badge_bg = "#763f36"
+badge_fg = "#fff0dc"
+
+[states.selected]
+bg = "#87483a"
+fg = "#fff7eb"
+[states.hover]
+bg = "#763f36"
+[states.disabled]
+fg = "#caab9a"
+
+[footer]
+hint_color = "#caab9a"

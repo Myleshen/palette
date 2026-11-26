@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Wild Cherry" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Wild Cherry"
+appearance = "dark"
+
+[palette]
+bg = "#1f1726"
+surface = "#16111b"
+elevated = "#352e3c"
+fg = "#dafaff"
+fg_muted = "#99abb3"
+accent = "#308cba"
+accent_fg = "#000000"
+selection_bg = "#352e3c"
+selection_fg = "#e4ffff"
+match_fg = "#ececec"
+border = "#444451"
+separator = "#352e3c80"
+danger = "#d94085"
+warning = "#ffd16f"
+success = "#2ab250"
+info = "#883cdc"
+badge_bg = "#352e3c"
+badge_fg = "#dafaff"
+
+[states.selected]
+bg = "#352e3c"
+fg = "#e4ffff"
+[states.hover]
+bg = "#352e3c"
+[states.disabled]
+fg = "#99abb3"
+
+[footer]
+hint_color = "#99abb3"

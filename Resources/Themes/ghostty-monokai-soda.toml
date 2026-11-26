@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Monokai Soda" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Monokai Soda"
+appearance = "dark"
+
+[palette]
+bg = "#1a1a1a"
+surface = "#131313"
+elevated = "#313131"
+fg = "#c4c5b5"
+fg_muted = "#89897f"
+accent = "#9d65ff"
+accent_fg = "#000000"
+selection_bg = "#343434"
+selection_fg = "#c4c5b5"
+match_fg = "#f4005f"
+border = "#3c3c39"
+separator = "#31313180"
+danger = "#f4005f"
+warning = "#fa8419"
+success = "#98e024"
+info = "#9d65ff"
+badge_bg = "#313131"
+badge_fg = "#c4c5b5"
+
+[states.selected]
+bg = "#343434"
+fg = "#c4c5b5"
+[states.hover]
+bg = "#313131"
+[states.disabled]
+fg = "#89897f"
+
+[footer]
+hint_color = "#89897f"

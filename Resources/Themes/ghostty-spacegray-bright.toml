@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Spacegray Bright" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Spacegray Bright"
+appearance = "dark"
+
+[palette]
+bg = "#2a2e3a"
+surface = "#1e212a"
+elevated = "#3f434e"
+fg = "#f3f3f3"
+fg_muted = "#adaeb2"
+accent = "#7baec1"
+accent_fg = "#000000"
+selection_bg = "#cacaca"
+selection_fg = "#000000"
+match_fg = "#b98aae"
+border = "#52555f"
+separator = "#3f434e80"
+danger = "#bc5553"
+warning = "#f6c987"
+success = "#a0b56c"
+info = "#7baec1"
+badge_bg = "#3f434e"
+badge_fg = "#f3f3f3"
+
+[states.selected]
+bg = "#cacaca"
+fg = "#000000"
+[states.hover]
+bg = "#3f434e"
+[states.disabled]
+fg = "#adaeb2"
+
+[footer]
+hint_color = "#adaeb2"

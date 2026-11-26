@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Sandstone Ink" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Sandstone Ink"
+appearance = "light"
+
+[palette]
+bg = "#fdf6e3"
+surface = "#f0ead8"
+elevated = "#fefbf2"
+fg = "#2b3d45"
+fg_muted = "#747e7c"
+accent = "#0d6fa8"
+accent_fg = "#ffffff"
+selection_bg = "#ddd8c0"
+selection_fg = "#625e53"
+match_fg = "#b5006e"
+border = "#d3d1c3"
+separator = "#fefbf280"
+danger = "#cf2522"
+warning = "#906800"
+success = "#4b7000"
+info = "#0d6fa8"
+badge_bg = "#fefbf2"
+badge_fg = "#2b3d45"
+
+[states.selected]
+bg = "#ddd8c0"
+fg = "#625e53"
+[states.hover]
+bg = "#fefbf2"
+[states.disabled]
+fg = "#747e7c"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#747e7c"

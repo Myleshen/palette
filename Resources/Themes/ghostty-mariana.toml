@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Mariana" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Mariana"
+appearance = "dark"
+
+[palette]
+bg = "#343d46"
+surface = "#252c32"
+elevated = "#485059"
+fg = "#d8dee9"
+fg_muted = "#9fa6b0"
+accent = "#fcbb6a"
+accent_fg = "#000000"
+selection_bg = "#4e5a65"
+selection_fg = "#d8dee9"
+match_fg = "#d8b6d8"
+border = "#555d67"
+separator = "#48505980"
+danger = "#ec5f66"
+warning = "#f9ae58"
+success = "#99c794"
+info = "#6699cc"
+badge_bg = "#485059"
+badge_fg = "#d8dee9"
+
+[states.selected]
+bg = "#4e5a65"
+fg = "#d8dee9"
+[states.hover]
+bg = "#485059"
+[states.disabled]
+fg = "#9fa6b0"
+
+[footer]
+hint_color = "#9fa6b0"

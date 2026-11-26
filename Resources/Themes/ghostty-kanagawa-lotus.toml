@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Kanagawa Lotus" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+name = "Ghostty · Kanagawa Lotus"
+appearance = "light"
+
+[palette]
+bg = "#f2ecbc"
+surface = "#e6e0b3"
+elevated = "#f9f6e1"
+fg = "#545464"
+fg_muted = "#878581"
+accent = "#4d699b"
+accent_fg = "#ffffff"
+selection_bg = "#545464"
+selection_fg = "#f2ecbc"
+match_fg = "#624c83"
+border = "#d2ceaa"
+separator = "#f9f6e180"
+danger = "#c84053"
+warning = "#77713f"
+success = "#6f894e"
+info = "#4d699b"
+badge_bg = "#f9f6e1"
+badge_fg = "#545464"
+
+[states.selected]
+bg = "#545464"
+fg = "#f2ecbc"
+[states.hover]
+bg = "#f9f6e1"
+[states.disabled]
+fg = "#878581"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#878581"

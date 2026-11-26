@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Mesila One" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Mesila One"
+appearance = "dark"
+
+[palette]
+bg = "#1b1f23"
+surface = "#131619"
+elevated = "#323539"
+fg = "#e9fae3"
+fg_muted = "#a1ada0"
+accent = "#dec1ff"
+accent_fg = "#000000"
+selection_bg = "#334155"
+selection_fg = "#aaacae"
+match_fg = "#7d70ba"
+border = "#444b49"
+separator = "#32353980"
+danger = "#93867f"
+warning = "#ebb3a9"
+success = "#5cc8ff"
+info = "#dec1ff"
+badge_bg = "#323539"
+badge_fg = "#e9fae3"
+
+[states.selected]
+bg = "#334155"
+fg = "#aaacae"
+[states.hover]
+bg = "#323539"
+[states.disabled]
+fg = "#a1ada0"
+
+[footer]
+hint_color = "#a1ada0"

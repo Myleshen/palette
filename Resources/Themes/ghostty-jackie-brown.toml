@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Jackie Brown" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Jackie Brown"
+appearance = "dark"
+
+[palette]
+bg = "#2c1d16"
+surface = "#201510"
+elevated = "#41342d"
+fg = "#ffcc2f"
+fg_muted = "#b58f26"
+accent = "#23ff18"
+accent_fg = "#000000"
+selection_bg = "#af8d21"
+selection_fg = "#292929"
+match_fg = "#d05ec1"
+border = "#56401b"
+separator = "#41342d80"
+danger = "#ef5734"
+warning = "#bebf00"
+success = "#2baf2b"
+info = "#246eb2"
+badge_bg = "#41342d"
+badge_fg = "#ffcc2f"
+
+[states.selected]
+bg = "#af8d21"
+fg = "#292929"
+[states.hover]
+bg = "#41342d"
+[states.disabled]
+fg = "#b58f26"
+
+[footer]
+hint_color = "#b58f26"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Peppermint" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Peppermint"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#c8c8c8"
+fg_muted = "#828282"
+accent = "#6fbce2"
+accent_fg = "#000000"
+selection_bg = "#e6e6e6"
+selection_fg = "#000000"
+match_fg = "#e586e7"
+border = "#282828"
+separator = "#1a1a1a80"
+danger = "#e74669"
+warning = "#dab853"
+success = "#89d287"
+info = "#449fd0"
+badge_bg = "#1a1a1a"
+badge_fg = "#c8c8c8"
+
+[states.selected]
+bg = "#e6e6e6"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#828282"
+
+[footer]
+hint_color = "#828282"

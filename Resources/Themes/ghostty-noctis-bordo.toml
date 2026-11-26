@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Noctis Bordo" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Noctis Bordo"
+appearance = "dark"
+
+[palette]
+bg = "#322a2d"
+surface = "#241e20"
+elevated = "#463f42"
+fg = "#cbbec2"
+fg_muted = "#958a8e"
+accent = "#60b6eb"
+accent_fg = "#000000"
+selection_bg = "#4a3339"
+selection_fg = "#cbbec2"
+match_fg = "#e798b3"
+border = "#51484b"
+separator = "#463f4280"
+danger = "#e66533"
+warning = "#e4b781"
+success = "#49e9a6"
+info = "#49ace9"
+badge_bg = "#463f42"
+badge_fg = "#cbbec2"
+
+[states.selected]
+bg = "#4a3339"
+fg = "#cbbec2"
+[states.hover]
+bg = "#463f42"
+[states.disabled]
+fg = "#958a8e"
+
+[footer]
+hint_color = "#958a8e"

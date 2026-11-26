@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "One Half Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · One Half Light"
+appearance = "light"
+
+[palette]
+bg = "#fafafa"
+surface = "#ededed"
+elevated = "#fdfdfd"
+fg = "#383a42"
+fg_muted = "#7c7d82"
+accent = "#0184bc"
+accent_fg = "#000000"
+selection_bg = "#bfceff"
+selection_fg = "#383a42"
+match_fg = "#a626a4"
+border = "#d3d4d5"
+separator = "#fdfdfd80"
+danger = "#e45649"
+warning = "#c18401"
+success = "#50a14f"
+info = "#0184bc"
+badge_bg = "#fdfdfd"
+badge_fg = "#383a42"
+
+[states.selected]
+bg = "#bfceff"
+fg = "#383a42"
+[states.hover]
+bg = "#fdfdfd"
+[states.disabled]
+fg = "#7c7d82"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7c7d82"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "X Praha" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · X Praha"
+appearance = "dark"
+
+[palette]
+bg = "#1a1a1a"
+surface = "#131313"
+elevated = "#313131"
+fg = "#ffffff"
+fg_muted = "#afafaf"
+accent = "#d6acff"
+accent_fg = "#000000"
+selection_bg = "#ffffff"
+selection_fg = "#1a1a1a"
+match_fg = "#ff9aa2"
+border = "#484848"
+separator = "#31313180"
+danger = "#ff5555"
+warning = "#ffe4a3"
+success = "#b8e6a0"
+info = "#bd93f9"
+badge_bg = "#313131"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#ffffff"
+fg = "#1a1a1a"
+[states.hover]
+bg = "#313131"
+[states.disabled]
+fg = "#afafaf"
+
+[footer]
+hint_color = "#afafaf"

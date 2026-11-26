@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Urple" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Urple"
+appearance = "dark"
+
+[palette]
+bg = "#1b1b23"
+surface = "#131319"
+elevated = "#323239"
+fg = "#8c7f9f"
+fg_muted = "#6c637d"
+accent = "#867aed"
+accent_fg = "#000000"
+selection_bg = "#a063eb"
+selection_fg = "#1a1a21"
+match_fg = "#a05eee"
+border = "#322f3c"
+separator = "#32323980"
+danger = "#b0425b"
+warning = "#ad5c42"
+success = "#37a415"
+info = "#564d9b"
+badge_bg = "#323239"
+badge_fg = "#a399b2"
+
+[states.selected]
+bg = "#a063eb"
+fg = "#1a1a21"
+[states.hover]
+bg = "#323239"
+[states.disabled]
+fg = "#6c637d"
+
+[footer]
+hint_color = "#6c637d"

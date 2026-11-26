@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "iTerm2 Default" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · iTerm2 Default"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#ffffff"
+fg_muted = "#a6a6a6"
+accent = "#6871ff"
+accent_fg = "#000000"
+selection_bg = "#c1deff"
+selection_fg = "#000000"
+match_fg = "#ff77ff"
+border = "#333333"
+separator = "#1a1a1a80"
+danger = "#c91b00"
+warning = "#c7c400"
+success = "#00c200"
+info = "#2225c4"
+badge_bg = "#1a1a1a"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#c1deff"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#a6a6a6"
+
+[footer]
+hint_color = "#a6a6a6"

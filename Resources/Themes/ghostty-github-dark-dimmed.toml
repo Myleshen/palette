@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "GitHub Dark Dimmed" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · GitHub Dark Dimmed"
+appearance = "dark"
+
+[palette]
+bg = "#22272e"
+surface = "#181c21"
+elevated = "#383d43"
+fg = "#adbac7"
+fg_muted = "#7c8791"
+accent = "#6cb6ff"
+accent_fg = "#000000"
+selection_bg = "#adbac7"
+selection_fg = "#22272e"
+match_fg = "#dcbdfb"
+border = "#3e444d"
+separator = "#383d4380"
+danger = "#f47067"
+warning = "#c69026"
+success = "#57ab5a"
+info = "#539bf5"
+badge_bg = "#383d43"
+badge_fg = "#adbac7"
+
+[states.selected]
+bg = "#adbac7"
+fg = "#22272e"
+[states.hover]
+bg = "#383d43"
+[states.disabled]
+fg = "#7c8791"
+
+[footer]
+hint_color = "#7c8791"

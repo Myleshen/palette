@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Canyon Shadow" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Canyon Shadow"
+appearance = "dark"
+
+[palette]
+bg = "#513554"
+surface = "#3a263c"
+elevated = "#624965"
+fg = "#fff0df"
+fg_muted = "#c2afae"
+accent = "#bbdaf2"
+accent_fg = "#000000"
+selection_bg = "#6e5270"
+selection_fg = "#fff8ed"
+match_fg = "#edc5e5"
+border = "#745a70"
+separator = "#62496580"
+danger = "#fba493"
+warning = "#f0d176"
+success = "#9bd7ad"
+info = "#a1cbed"
+badge_bg = "#624965"
+badge_fg = "#fff0df"
+
+[states.selected]
+bg = "#6e5270"
+fg = "#fff8ed"
+[states.hover]
+bg = "#624965"
+[states.disabled]
+fg = "#c2afae"
+
+[footer]
+hint_color = "#c2afae"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Nachtschicht" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Nachtschicht"
+appearance = "dark"
+
+[palette]
+bg = "#17191d"
+surface = "#111215"
+elevated = "#2e3034"
+fg = "#e8eaed"
+fg_muted = "#9fa1a4"
+accent = "#9eb8fe"
+accent_fg = "#000000"
+selection_bg = "#36393c"
+selection_fg = "#e8eaed"
+match_fg = "#e0abe9"
+border = "#414347"
+separator = "#2e303480"
+danger = "#e5484d"
+warning = "#e3b341"
+success = "#33d17a"
+info = "#4d7cfe"
+badge_bg = "#2e3034"
+badge_fg = "#e8eaed"
+
+[states.selected]
+bg = "#36393c"
+fg = "#e8eaed"
+[states.hover]
+bg = "#2e3034"
+[states.disabled]
+fg = "#9fa1a4"
+
+[footer]
+hint_color = "#9fa1a4"

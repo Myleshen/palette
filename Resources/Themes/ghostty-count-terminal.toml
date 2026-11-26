@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Count Terminal" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Count Terminal"
+appearance = "dark"
+
+[palette]
+bg = "#480814"
+surface = "#34060e"
+elevated = "#5a212c"
+fg = "#f7e6dc"
+fg_muted = "#ba9896"
+accent = "#96bedc"
+accent_fg = "#000000"
+selection_bg = "#c4b3b7"
+selection_fg = "#474542"
+match_fg = "#cc99c1"
+border = "#6b343c"
+separator = "#5a212c80"
+danger = "#ef7e88"
+warning = "#e1c467"
+success = "#99c58e"
+info = "#88b5d7"
+badge_bg = "#5a212c"
+badge_fg = "#f7e6dc"
+
+[states.selected]
+bg = "#c4b3b7"
+fg = "#474542"
+[states.hover]
+bg = "#5a212c"
+[states.disabled]
+fg = "#ba9896"
+
+[footer]
+hint_color = "#ba9896"

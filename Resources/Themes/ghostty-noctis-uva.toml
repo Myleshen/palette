@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Noctis Uva" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Noctis Uva"
+appearance = "dark"
+
+[palette]
+bg = "#292640"
+surface = "#1e1b2e"
+elevated = "#3e3c53"
+fg = "#c5c2d6"
+fg_muted = "#8e8ba2"
+accent = "#60b6eb"
+accent_fg = "#000000"
+selection_bg = "#35325a"
+selection_fg = "#c5c2d6"
+match_fg = "#e798b3"
+border = "#48455e"
+separator = "#3e3c5380"
+danger = "#e66533"
+warning = "#e4b781"
+success = "#49e9a6"
+info = "#49ace9"
+badge_bg = "#3e3c53"
+badge_fg = "#c5c2d6"
+
+[states.selected]
+bg = "#35325a"
+fg = "#c5c2d6"
+[states.hover]
+bg = "#3e3c53"
+[states.disabled]
+fg = "#8e8ba2"
+
+[footer]
+hint_color = "#8e8ba2"

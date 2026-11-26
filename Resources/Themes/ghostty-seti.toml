@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Seti" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Seti"
+appearance = "dark"
+
+[palette]
+bg = "#111213"
+surface = "#0c0d0e"
+elevated = "#292a2b"
+fg = "#cacecd"
+fg_muted = "#898c8c"
+accent = "#e3bf21"
+accent_fg = "#000000"
+selection_bg = "#303233"
+selection_fg = "#cacecd"
+match_fg = "#8b57b5"
+border = "#363838"
+separator = "#292a2b80"
+danger = "#c22832"
+warning = "#e0c64f"
+success = "#8ec43d"
+info = "#43a5d5"
+badge_bg = "#292a2b"
+badge_fg = "#cacecd"
+
+[states.selected]
+bg = "#303233"
+fg = "#cacecd"
+[states.hover]
+bg = "#292a2b"
+[states.disabled]
+fg = "#898c8c"
+
+[footer]
+hint_color = "#898c8c"

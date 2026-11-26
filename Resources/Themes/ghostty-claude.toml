@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Claude" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Claude"
+appearance = "light"
+
+[palette]
+bg = "#faf9f5"
+surface = "#edede9"
+elevated = "#fdfcfb"
+fg = "#141413"
+fg_muted = "#646462"
+accent = "#8b6cb0"
+accent_fg = "#000000"
+selection_bg = "#e8e6dc"
+selection_fg = "#141413"
+match_fg = "#2e8b8b"
+border = "#cccbc8"
+separator = "#fdfcfb80"
+danger = "#788c5d"
+warning = "#6a9bcc"
+success = "#b16803"
+info = "#8b6cb0"
+badge_bg = "#fdfcfb"
+badge_fg = "#141413"
+
+[states.selected]
+bg = "#e8e6dc"
+fg = "#141413"
+[states.hover]
+bg = "#fdfcfb"
+[states.disabled]
+fg = "#646462"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#646462"

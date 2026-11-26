@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Thayer Bright" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Thayer Bright"
+appearance = "dark"
+
+[palette]
+bg = "#1b1d1e"
+surface = "#131516"
+elevated = "#323434"
+fg = "#f8f8f8"
+fg_muted = "#ababac"
+accent = "#fc971f"
+accent_fg = "#000000"
+selection_bg = "#4d4d4d"
+selection_fg = "#ffffff"
+match_fg = "#9e6ffe"
+border = "#47494a"
+separator = "#32343480"
+danger = "#f92672"
+warning = "#f4fd22"
+success = "#4df840"
+info = "#2757d6"
+badge_bg = "#323434"
+badge_fg = "#f8f8f8"
+
+[states.selected]
+bg = "#4d4d4d"
+fg = "#ffffff"
+[states.hover]
+bg = "#323434"
+[states.disabled]
+fg = "#ababac"
+
+[footer]
+hint_color = "#ababac"

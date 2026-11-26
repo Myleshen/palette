@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Lit Cell" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Lit Cell"
+appearance = "dark"
+
+[palette]
+bg = "#0c110e"
+surface = "#090c0a"
+elevated = "#242926"
+fg = "#cfddd3"
+fg_muted = "#8b968e"
+accent = "#3df2a0"
+accent_fg = "#000000"
+selection_bg = "#1e4533"
+selection_fg = "#edefea"
+match_fg = "#ddbcff"
+border = "#333a35"
+separator = "#24292680"
+danger = "#ff6b6b"
+warning = "#ffb000"
+success = "#3df2a0"
+info = "#6fb3f2"
+badge_bg = "#242926"
+badge_fg = "#cfddd3"
+
+[states.selected]
+bg = "#1e4533"
+fg = "#edefea"
+[states.hover]
+bg = "#242926"
+[states.disabled]
+fg = "#8b968e"
+
+[footer]
+hint_color = "#8b968e"

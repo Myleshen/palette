@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Dimidium" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Dimidium"
+appearance = "dark"
+
+[palette]
+bg = "#141414"
+surface = "#0e0e0e"
+elevated = "#2c2c2c"
+fg = "#bab7b6"
+fg_muted = "#807e7d"
+accent = "#37e57b"
+accent_fg = "#000000"
+selection_bg = "#8db8e5"
+selection_fg = "#141414"
+match_fg = "#ed6fe9"
+border = "#353534"
+separator = "#2c2c2c80"
+danger = "#cf494c"
+warning = "#db9c11"
+success = "#60b442"
+info = "#0575d8"
+badge_bg = "#2c2c2c"
+badge_fg = "#bab7b6"
+
+[states.selected]
+bg = "#8db8e5"
+fg = "#141414"
+[states.hover]
+bg = "#2c2c2c"
+[states.disabled]
+fg = "#807e7d"
+
+[footer]
+hint_color = "#807e7d"

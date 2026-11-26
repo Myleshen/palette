@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Iceberg Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Iceberg Light"
+appearance = "light"
+
+[palette]
+bg = "#e8e9ec"
+surface = "#dcdde0"
+elevated = "#f5f5f6"
+fg = "#33374c"
+fg_muted = "#727584"
+accent = "#22478e"
+accent_fg = "#ffffff"
+selection_bg = "#33374c"
+selection_fg = "#e8e9ec"
+match_fg = "#6845ad"
+border = "#c4c5cc"
+separator = "#f5f5f680"
+danger = "#cc517a"
+warning = "#c57339"
+success = "#668e3d"
+info = "#2d539e"
+badge_bg = "#f5f5f6"
+badge_fg = "#33374c"
+
+[states.selected]
+bg = "#33374c"
+fg = "#e8e9ec"
+[states.hover]
+bg = "#f5f5f6"
+[states.disabled]
+fg = "#727584"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#727584"

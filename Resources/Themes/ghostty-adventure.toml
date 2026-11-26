@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Adventure" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Adventure"
+appearance = "dark"
+
+[palette]
+bg = "#040404"
+surface = "#030303"
+elevated = "#1d1d1d"
+fg = "#feffff"
+fg_muted = "#a6a7a7"
+accent = "#97d7ef"
+accent_fg = "#000000"
+selection_bg = "#606060"
+selection_fg = "#ffffff"
+match_fg = "#e5c499"
+border = "#363636"
+separator = "#1d1d1d80"
+danger = "#d84a33"
+warning = "#eebb6e"
+success = "#5da602"
+info = "#417ab3"
+badge_bg = "#1d1d1d"
+badge_fg = "#feffff"
+
+[states.selected]
+bg = "#606060"
+fg = "#ffffff"
+[states.hover]
+bg = "#1d1d1d"
+[states.disabled]
+fg = "#a6a7a7"
+
+[footer]
+hint_color = "#a6a7a7"

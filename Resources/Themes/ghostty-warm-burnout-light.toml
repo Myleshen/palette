@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Warm Burnout Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Warm Burnout Light"
+appearance = "light"
+
+[palette]
+bg = "#f5ede0"
+surface = "#e9e1d5"
+elevated = "#fbf7f1"
+fg = "#3a3630"
+fg_muted = "#7b766e"
+accent = "#2060a0"
+accent_fg = "#ffffff"
+selection_bg = "#fbf7f1"
+selection_fg = "#3a3630"
+match_fg = "#8a3090"
+border = "#d0c8bd"
+separator = "#fbf7f180"
+danger = "#b82820"
+warning = "#8a6000"
+success = "#2d6a14"
+info = "#2060a0"
+badge_bg = "#fbf7f1"
+badge_fg = "#3a3630"
+
+[states.selected]
+bg = "#fbf7f1"
+fg = "#3a3630"
+[states.hover]
+bg = "#fbf7f1"
+[states.disabled]
+fg = "#7b766e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7b766e"

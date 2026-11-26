@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Darkside" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Darkside"
+appearance = "dark"
+
+[palette]
+bg = "#222324"
+surface = "#18191a"
+elevated = "#38393a"
+fg = "#bababa"
+fg_muted = "#858586"
+accent = "#1c98e8"
+accent_fg = "#000000"
+selection_bg = "#303333"
+selection_fg = "#bababa"
+match_fg = "#957bbe"
+border = "#404142"
+separator = "#38393a80"
+danger = "#e8341c"
+warning = "#f2d42c"
+success = "#68c256"
+info = "#1c98e8"
+badge_bg = "#38393a"
+badge_fg = "#bababa"
+
+[states.selected]
+bg = "#303333"
+fg = "#bababa"
+[states.hover]
+bg = "#38393a"
+[states.disabled]
+fg = "#858586"
+
+[footer]
+hint_color = "#858586"

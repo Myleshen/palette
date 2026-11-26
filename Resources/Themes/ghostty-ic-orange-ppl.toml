@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "IC Orange PPL" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · IC Orange PPL"
+appearance = "dark"
+
+[palette]
+bg = "#262626"
+surface = "#1b1b1b"
+elevated = "#3c3c3c"
+fg = "#ffcb83"
+fg_muted = "#b39162"
+accent = "#ffbe55"
+accent_fg = "#000000"
+selection_bg = "#c14020"
+selection_fg = "#ffedda"
+match_fg = "#fc874f"
+border = "#514739"
+separator = "#3c3c3c80"
+danger = "#c13900"
+warning = "#caaf00"
+success = "#a4a900"
+info = "#bd6d00"
+badge_bg = "#3c3c3c"
+badge_fg = "#ffcb83"
+
+[states.selected]
+bg = "#c14020"
+fg = "#ffedda"
+[states.hover]
+bg = "#3c3c3c"
+[states.disabled]
+fg = "#b39162"
+
+[footer]
+hint_color = "#b39162"

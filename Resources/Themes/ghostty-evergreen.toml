@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Evergreen" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Evergreen"
+appearance = "dark"
+
+[palette]
+bg = "#032b1b"
+surface = "#021f13"
+elevated = "#1c4032"
+fg = "#e9f7ef"
+fg_muted = "#98b0a5"
+accent = "#7cf0ad"
+accent_fg = "#000000"
+selection_bg = "#18553a"
+selection_fg = "#f3fff7"
+match_fg = "#e5bfed"
+border = "#315445"
+separator = "#1c403280"
+danger = "#ff8a82"
+warning = "#f0d16e"
+success = "#82d6a5"
+info = "#8bb8ee"
+badge_bg = "#1c4032"
+badge_fg = "#e9f7ef"
+
+[states.selected]
+bg = "#18553a"
+fg = "#f3fff7"
+[states.hover]
+bg = "#1c4032"
+[states.disabled]
+fg = "#98b0a5"
+
+[footer]
+hint_color = "#98b0a5"

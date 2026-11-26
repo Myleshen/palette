@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Monospace Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Monospace Dark"
+appearance = "dark"
+
+[palette]
+bg = "#10151d"
+surface = "#0c0f15"
+elevated = "#282c34"
+fg = "#a4afbd"
+fg_muted = "#707985"
+accent = "#a2b6ff"
+accent_fg = "#000000"
+selection_bg = "#264dcb"
+selection_fg = "#d9dfe7"
+match_fg = "#c8aaff"
+border = "#2e343d"
+separator = "#282c3480"
+danger = "#f76769"
+warning = "#ffa23e"
+success = "#17b877"
+info = "#708fff"
+badge_bg = "#282c34"
+badge_fg = "#a4afbd"
+
+[states.selected]
+bg = "#264dcb"
+fg = "#d9dfe7"
+[states.hover]
+bg = "#282c34"
+[states.disabled]
+fg = "#707985"
+
+[footer]
+hint_color = "#707985"

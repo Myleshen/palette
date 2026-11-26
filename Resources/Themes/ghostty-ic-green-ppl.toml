@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "IC Green PPL" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · IC Green PPL"
+appearance = "dark"
+
+[palette]
+bg = "#2c2c2c"
+surface = "#202020"
+elevated = "#414141"
+fg = "#e0f1dc"
+fg_muted = "#a1ac9e"
+accent = "#2efaeb"
+accent_fg = "#000000"
+selection_bg = "#116b41"
+selection_fg = "#e0f1dc"
+match_fg = "#50fafa"
+border = "#50534f"
+separator = "#41414180"
+danger = "#ff2736"
+warning = "#76a831"
+success = "#41a638"
+info = "#2ec3b9"
+badge_bg = "#414141"
+badge_fg = "#e0f1dc"
+
+[states.selected]
+bg = "#116b41"
+fg = "#e0f1dc"
+[states.hover]
+bg = "#414141"
+[states.disabled]
+fg = "#a1ac9e"
+
+[footer]
+hint_color = "#a1ac9e"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Dalton Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Dalton Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1b1b1b"
+surface = "#131313"
+elevated = "#323232"
+fg = "#c8c9cc"
+fg_muted = "#8b8c8e"
+accent = "#97b1f1"
+accent_fg = "#000000"
+selection_bg = "#c8c9cc"
+selection_fg = "#1b1b1b"
+match_fg = "#c070f0"
+border = "#3e3e3e"
+separator = "#32323280"
+danger = "#d85050"
+warning = "#c4c40c"
+success = "#5b914e"
+info = "#7aa2f7"
+badge_bg = "#323232"
+badge_fg = "#c8c9cc"
+
+[states.selected]
+bg = "#c8c9cc"
+fg = "#1b1b1b"
+[states.hover]
+bg = "#323232"
+[states.disabled]
+fg = "#8b8c8e"
+
+[footer]
+hint_color = "#8b8c8e"

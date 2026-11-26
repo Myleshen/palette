@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Desert Thunder" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Desert Thunder"
+appearance = "dark"
+
+[palette]
+bg = "#31485a"
+surface = "#233441"
+elevated = "#465a6a"
+fg = "#f5f1df"
+fg_muted = "#b0b6b0"
+accent = "#c1dff4"
+accent_fg = "#000000"
+selection_bg = "#4d6475"
+selection_fg = "#fffbed"
+match_fg = "#e7cae8"
+border = "#586a75"
+separator = "#465a6a80"
+danger = "#f5a08c"
+warning = "#eed47d"
+success = "#98d9ad"
+info = "#a8d2f0"
+badge_bg = "#465a6a"
+badge_fg = "#f5f1df"
+
+[states.selected]
+bg = "#4d6475"
+fg = "#fffbed"
+[states.hover]
+bg = "#465a6a"
+[states.disabled]
+fg = "#b0b6b0"
+
+[footer]
+hint_color = "#b0b6b0"

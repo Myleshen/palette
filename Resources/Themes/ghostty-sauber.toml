@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Sauber" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Sauber"
+appearance = "light"
+
+[palette]
+bg = "#ecffe5"
+surface = "#e0f2da"
+elevated = "#f6fff3"
+fg = "#1345f6"
+fg_muted = "#5f86f0"
+accent = "#2744c7"
+accent_fg = "#ffffff"
+selection_bg = "#b3d7ff"
+selection_fg = "#000000"
+match_fg = "#c040be"
+border = "#c1dae8"
+separator = "#f6fff380"
+danger = "#b43c2a"
+warning = "#c7c400"
+success = "#00c200"
+info = "#2744c7"
+badge_bg = "#f6fff3"
+badge_fg = "#1345f6"
+
+[states.selected]
+bg = "#b3d7ff"
+fg = "#000000"
+[states.hover]
+bg = "#f6fff3"
+[states.disabled]
+fg = "#5f86f0"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#5f86f0"

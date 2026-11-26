@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Hellfire" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Hellfire"
+appearance = "dark"
+
+[palette]
+bg = "#5b0e05"
+surface = "#420a04"
+elevated = "#6b261e"
+fg = "#f8e2c7"
+fg_muted = "#c19883"
+accent = "#92b3c9"
+accent_fg = "#000000"
+selection_bg = "#ccb9b2"
+selection_fg = "#52473a"
+match_fg = "#c795ab"
+border = "#7a382c"
+separator = "#6b261e80"
+danger = "#f2815f"
+warning = "#e8bd4e"
+success = "#a9bd72"
+info = "#83a9c2"
+badge_bg = "#6b261e"
+badge_fg = "#f8e2c7"
+
+[states.selected]
+bg = "#ccb9b2"
+fg = "#52473a"
+[states.hover]
+bg = "#6b261e"
+[states.disabled]
+fg = "#c19883"
+
+[footer]
+hint_color = "#c19883"

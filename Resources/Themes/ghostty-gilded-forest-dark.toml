@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Gilded-Forest-Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Gilded-Forest-Dark"
+appearance = "dark"
+
+[palette]
+bg = "#0d1505"
+surface = "#090f04"
+elevated = "#252c1e"
+fg = "#f7d27d"
+fg_muted = "#a59053"
+accent = "#f7d27d"
+accent_fg = "#000000"
+selection_bg = "#282a73"
+selection_fg = "#f7d27d"
+match_fg = "#ae7bff"
+border = "#3c3b1d"
+separator = "#252c1e80"
+danger = "#ec6c8b"
+warning = "#f3b46d"
+success = "#a5fcaf"
+info = "#658cf7"
+badge_bg = "#252c1e"
+badge_fg = "#f7d27d"
+
+[states.selected]
+bg = "#282a73"
+fg = "#f7d27d"
+[states.hover]
+bg = "#252c1e"
+[states.disabled]
+fg = "#a59053"
+
+[footer]
+hint_color = "#a59053"

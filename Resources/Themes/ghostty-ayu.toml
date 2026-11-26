@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ayu" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ayu"
+appearance = "dark"
+
+[palette]
+bg = "#0b0e14"
+surface = "#080a0e"
+elevated = "#23262c"
+fg = "#bfbdb6"
+fg_muted = "#80807d"
+accent = "#59c2ff"
+accent_fg = "#000000"
+selection_bg = "#409fff"
+selection_fg = "#0b0e14"
+match_fg = "#d2a6ff"
+border = "#2f3134"
+separator = "#23262c80"
+danger = "#ea6c73"
+warning = "#f9af4f"
+success = "#7fd962"
+info = "#53bdfa"
+badge_bg = "#23262c"
+badge_fg = "#bfbdb6"
+
+[states.selected]
+bg = "#409fff"
+fg = "#0b0e14"
+[states.hover]
+bg = "#23262c"
+[states.disabled]
+fg = "#80807d"
+
+[footer]
+hint_color = "#80807d"

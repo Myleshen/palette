@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Graveyard Shift" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Graveyard Shift"
+appearance = "dark"
+
+[palette]
+bg = "#2e4240"
+surface = "#21302e"
+elevated = "#435553"
+fg = "#eef2e8"
+fg_muted = "#abb4ad"
+accent = "#9ec4cf"
+accent_fg = "#000000"
+selection_bg = "#c8d1cc"
+selection_fg = "#555752"
+match_fg = "#bfb0c8"
+border = "#546562"
+separator = "#43555380"
+danger = "#ed9b86"
+warning = "#dfc977"
+success = "#9fc79a"
+info = "#91bcc8"
+badge_bg = "#435553"
+badge_fg = "#eef2e8"
+
+[states.selected]
+bg = "#c8d1cc"
+fg = "#555752"
+[states.hover]
+bg = "#435553"
+[states.disabled]
+fg = "#abb4ad"
+
+[footer]
+hint_color = "#abb4ad"

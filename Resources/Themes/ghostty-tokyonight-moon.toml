@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "TokyoNight Moon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · TokyoNight Moon"
+appearance = "dark"
+
+[palette]
+bg = "#222436"
+surface = "#181a27"
+elevated = "#383a4a"
+fg = "#c8d3f5"
+fg_muted = "#8e96b2"
+accent = "#82aaff"
+accent_fg = "#000000"
+selection_bg = "#2d3f76"
+selection_fg = "#c8d3f5"
+match_fg = "#c099ff"
+border = "#43475c"
+separator = "#383a4a80"
+danger = "#ff757f"
+warning = "#ffc777"
+success = "#c3e88d"
+info = "#82aaff"
+badge_bg = "#383a4a"
+badge_fg = "#c8d3f5"
+
+[states.selected]
+bg = "#2d3f76"
+fg = "#c8d3f5"
+[states.hover]
+bg = "#383a4a"
+[states.disabled]
+fg = "#8e96b2"
+
+[footer]
+hint_color = "#8e96b2"

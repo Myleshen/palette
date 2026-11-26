@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Paraiso Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Paraiso Dark"
+appearance = "dark"
+
+[palette]
+bg = "#2f1e2e"
+surface = "#221621"
+elevated = "#443443"
+fg = "#a39e9b"
+fg_muted = "#7a7175"
+accent = "#06b6ef"
+accent_fg = "#000000"
+selection_bg = "#4f424c"
+selection_fg = "#b9b5b3"
+match_fg = "#815ba4"
+border = "#463844"
+separator = "#44344380"
+danger = "#ef6155"
+warning = "#fec418"
+success = "#48b685"
+info = "#06b6ef"
+badge_bg = "#443443"
+badge_fg = "#a7a29f"
+
+[states.selected]
+bg = "#4f424c"
+fg = "#b9b5b3"
+[states.hover]
+bg = "#443443"
+[states.disabled]
+fg = "#7a7175"
+
+[footer]
+hint_color = "#7a7175"

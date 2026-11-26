@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Rose Pine" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Rose Pine"
+appearance = "dark"
+
+[palette]
+bg = "#191724"
+surface = "#12111a"
+elevated = "#302e3a"
+fg = "#e0def4"
+fg_muted = "#9a98ab"
+accent = "#9ccfd8"
+accent_fg = "#000000"
+selection_bg = "#403d52"
+selection_fg = "#e0def4"
+match_fg = "#c4a7e7"
+border = "#413f4e"
+separator = "#302e3a80"
+danger = "#eb6f92"
+warning = "#f6c177"
+success = "#31748f"
+info = "#9ccfd8"
+badge_bg = "#302e3a"
+badge_fg = "#e0def4"
+
+[states.selected]
+bg = "#403d52"
+fg = "#e0def4"
+[states.hover]
+bg = "#302e3a"
+[states.disabled]
+fg = "#9a98ab"
+
+[footer]
+hint_color = "#9a98ab"

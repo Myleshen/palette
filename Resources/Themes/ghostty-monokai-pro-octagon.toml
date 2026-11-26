@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Monokai Pro Octagon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Monokai Pro Octagon"
+appearance = "dark"
+
+[palette]
+bg = "#282a3a"
+surface = "#1d1e2a"
+elevated = "#3e3f4e"
+fg = "#eaf2f1"
+fg_muted = "#a6acb1"
+accent = "#ff9b5e"
+accent_fg = "#000000"
+selection_bg = "#535763"
+selection_fg = "#eaf2f1"
+match_fg = "#c39ac9"
+border = "#4f525f"
+separator = "#3e3f4e80"
+danger = "#ff657a"
+warning = "#ffd76d"
+success = "#bad761"
+info = "#ff9b5e"
+badge_bg = "#3e3f4e"
+badge_fg = "#eaf2f1"
+
+[states.selected]
+bg = "#535763"
+fg = "#eaf2f1"
+[states.hover]
+bg = "#3e3f4e"
+[states.disabled]
+fg = "#a6acb1"
+
+[footer]
+hint_color = "#a6acb1"

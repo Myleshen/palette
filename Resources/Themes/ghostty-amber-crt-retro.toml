@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Amber CRT Retro" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Amber CRT Retro"
+appearance = "dark"
+
+[palette]
+bg = "#1a1200"
+surface = "#130d00"
+elevated = "#312a1a"
+fg = "#ffb000"
+fg_muted = "#af7900"
+accent = "#ffab3d"
+accent_fg = "#000000"
+selection_bg = "#3a2a00"
+selection_fg = "#9c978c"
+match_fg = "#ffc266"
+border = "#483200"
+separator = "#312a1a80"
+danger = "#ff6a00"
+warning = "#ffc742"
+success = "#ffb000"
+info = "#ff8c00"
+badge_bg = "#312a1a"
+badge_fg = "#ffb000"
+
+[states.selected]
+bg = "#3a2a00"
+fg = "#9c978c"
+[states.hover]
+bg = "#312a1a"
+[states.disabled]
+fg = "#af7900"
+
+[footer]
+hint_color = "#af7900"

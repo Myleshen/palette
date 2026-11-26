@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Paper Crane: Midnight Ink" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Paper Crane: Midnight Ink"
+appearance = "dark"
+
+[palette]
+bg = "#20272a"
+surface = "#171c1e"
+elevated = "#363d3f"
+fg = "#e6e2d6"
+fg_muted = "#a1a19a"
+accent = "#a5bbdb"
+accent_fg = "#000000"
+selection_bg = "#3c4b49"
+selection_fg = "#b8bcbd"
+match_fg = "#c7a9c4"
+border = "#484c4c"
+separator = "#363d3f80"
+danger = "#b9685c"
+warning = "#c1a06b"
+success = "#7d9e85"
+info = "#819cbd"
+badge_bg = "#363d3f"
+badge_fg = "#e6e2d6"
+
+[states.selected]
+bg = "#3c4b49"
+fg = "#b8bcbd"
+[states.hover]
+bg = "#363d3f"
+[states.disabled]
+fg = "#a1a19a"
+
+[footer]
+hint_color = "#a1a19a"

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Moonwalk" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Moonwalk"
+appearance = "light"
+
+[palette]
+bg = "#e4e2e0"
+surface = "#d9d7d5"
+elevated = "#f3f2f1"
+fg = "#061f4a"
+fg_muted = "#54637e"
+accent = "#002fa7"
+accent_fg = "#ffffff"
+selection_bg = "#b8d2e5"
+selection_fg = "#061f4a"
+match_fg = "#5400a8"
+border = "#b8bbc2"
+separator = "#f3f2f180"
+danger = "#7a0047"
+warning = "#733a11"
+success = "#145b0e"
+info = "#002fa7"
+badge_bg = "#f3f2f1"
+badge_fg = "#061f4a"
+
+[states.selected]
+bg = "#b8d2e5"
+fg = "#061f4a"
+[states.hover]
+bg = "#f3f2f1"
+[states.disabled]
+fg = "#54637e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#54637e"

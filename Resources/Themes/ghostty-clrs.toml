@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "CLRS" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · CLRS"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#262626"
+fg_muted = "#727272"
+accent = "#135cd0"
+accent_fg = "#ffffff"
+selection_bg = "#6fd3fc"
+selection_fg = "#041730"
+match_fg = "#9f00bd"
+border = "#d4d4d4"
+separator = "#ffffff80"
+danger = "#f8282a"
+warning = "#fa701d"
+success = "#328a5d"
+info = "#135cd0"
+badge_bg = "#ffffff"
+badge_fg = "#262626"
+
+[states.selected]
+bg = "#6fd3fc"
+fg = "#041730"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#727272"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#727272"

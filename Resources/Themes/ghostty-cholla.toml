@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Cholla" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Cholla"
+appearance = "dark"
+
+[palette]
+bg = "#394122"
+surface = "#292f18"
+elevated = "#4d5438"
+fg = "#fff0d4"
+fg_muted = "#bab396"
+accent = "#9dcee3"
+accent_fg = "#000000"
+selection_bg = "#59603d"
+selection_fg = "#fff8e9"
+match_fg = "#e3b3ca"
+border = "#616446"
+separator = "#4d543880"
+danger = "#ee9a74"
+warning = "#e9c65c"
+success = "#83cb8f"
+info = "#82bdd8"
+badge_bg = "#4d5438"
+badge_fg = "#fff0d4"
+
+[states.selected]
+bg = "#59603d"
+fg = "#fff8e9"
+[states.hover]
+bg = "#4d5438"
+[states.disabled]
+fg = "#bab396"
+
+[footer]
+hint_color = "#bab396"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Citrus Ink" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Citrus Ink"
+appearance = "dark"
+
+[palette]
+bg = "#0b1413"
+surface = "#080e0e"
+elevated = "#232c2b"
+fg = "#eaf0e2"
+fg_muted = "#9ca39a"
+accent = "#c2ef45"
+accent_fg = "#000000"
+selection_bg = "#1f302d"
+selection_fg = "#939898"
+match_fg = "#b8e62e"
+border = "#38403c"
+separator = "#232c2b80"
+danger = "#ff6b5b"
+warning = "#e6c84a"
+success = "#5fd3a0"
+info = "#c2ef45"
+badge_bg = "#232c2b"
+badge_fg = "#eaf0e2"
+
+[states.selected]
+bg = "#1f302d"
+fg = "#939898"
+[states.hover]
+bg = "#232c2b"
+[states.disabled]
+fg = "#9ca39a"
+
+[footer]
+hint_color = "#9ca39a"

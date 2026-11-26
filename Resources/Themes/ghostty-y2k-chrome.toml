@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Y2K Chrome" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Y2K Chrome"
+appearance = "light"
+
+[palette]
+bg = "#f1f5f9"
+surface = "#e5e9ed"
+elevated = "#f9fbfc"
+fg = "#0f172a"
+fg_muted = "#5e6572"
+accent = "#0f172a"
+accent_fg = "#ffffff"
+selection_bg = "#0f172a"
+selection_fg = "#f1f5f9"
+match_fg = "#632ebe"
+border = "#c4c9d0"
+separator = "#f9fbfc80"
+danger = "#dc2626"
+warning = "#0891b2"
+success = "#15803d"
+info = "#f97316"
+badge_bg = "#f9fbfc"
+badge_fg = "#0f172a"
+
+[states.selected]
+bg = "#0f172a"
+fg = "#f1f5f9"
+[states.hover]
+bg = "#f9fbfc"
+[states.disabled]
+fg = "#5e6572"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#5e6572"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Farmhouse Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Farmhouse Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1d2027"
+surface = "#15171c"
+elevated = "#34363d"
+fg = "#e8e4e1"
+fg_muted = "#a19fa0"
+accent = "#006efe"
+accent_fg = "#000000"
+selection_bg = "#4d5658"
+selection_fg = "#cbcac5"
+match_fg = "#bf3b7f"
+border = "#46474c"
+separator = "#34363d80"
+danger = "#ba0004"
+warning = "#c87300"
+success = "#549d00"
+info = "#0049e6"
+badge_bg = "#34363d"
+badge_fg = "#e8e4e1"
+
+[states.selected]
+bg = "#4d5658"
+fg = "#cbcac5"
+[states.hover]
+bg = "#34363d"
+[states.disabled]
+fg = "#a19fa0"
+
+[footer]
+hint_color = "#a19fa0"

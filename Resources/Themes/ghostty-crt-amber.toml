@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "CRT Amber" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · CRT Amber"
+appearance = "dark"
+
+[palette]
+bg = "#1a1005"
+surface = "#130c04"
+elevated = "#31281e"
+fg = "#fff3c4"
+fg_muted = "#afa481"
+accent = "#cd9dfd"
+accent_fg = "#000000"
+selection_bg = "#fff3c4"
+selection_fg = "#1a1005"
+match_fg = "#fa8f45"
+border = "#483d2b"
+separator = "#31281e80"
+danger = "#ef4444"
+warning = "#fde68a"
+success = "#84cc16"
+info = "#c084fc"
+badge_bg = "#31281e"
+badge_fg = "#fff3c4"
+
+[states.selected]
+bg = "#fff3c4"
+fg = "#1a1005"
+[states.hover]
+bg = "#31281e"
+[states.disabled]
+fg = "#afa481"
+
+[footer]
+hint_color = "#afa481"

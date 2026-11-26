@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Pencil Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Pencil Dark"
+appearance = "dark"
+
+[palette]
+bg = "#212121"
+surface = "#181818"
+elevated = "#373737"
+fg = "#f1f1f1"
+fg_muted = "#a8a8a8"
+accent = "#20bbfc"
+accent_fg = "#000000"
+selection_bg = "#b6d6fd"
+selection_fg = "#5b5b5b"
+match_fg = "#6855de"
+border = "#4b4b4b"
+separator = "#37373780"
+danger = "#c30771"
+warning = "#a89c14"
+success = "#10a778"
+info = "#008ec4"
+badge_bg = "#373737"
+badge_fg = "#f1f1f1"
+
+[states.selected]
+bg = "#b6d6fd"
+fg = "#5b5b5b"
+[states.hover]
+bg = "#373737"
+[states.disabled]
+fg = "#a8a8a8"
+
+[footer]
+hint_color = "#a8a8a8"

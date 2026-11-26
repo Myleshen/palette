@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Rippedcasts" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Rippedcasts"
+appearance = "dark"
+
+[palette]
+bg = "#2b2b2b"
+surface = "#1f1f1f"
+elevated = "#404040"
+fg = "#ffffff"
+fg_muted = "#b5b5b5"
+accent = "#86bdc9"
+accent_fg = "#000000"
+selection_bg = "#5a647e"
+selection_fg = "#f2f2f2"
+match_fg = "#ff73fd"
+border = "#555555"
+separator = "#40404080"
+danger = "#cdaf95"
+warning = "#bfbb1f"
+success = "#a8ff60"
+info = "#75a5b0"
+badge_bg = "#404040"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#5a647e"
+fg = "#f2f2f2"
+[states.hover]
+bg = "#404040"
+[states.disabled]
+fg = "#b5b5b5"
+
+[footer]
+hint_color = "#b5b5b5"

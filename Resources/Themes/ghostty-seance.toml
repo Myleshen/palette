@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Seance" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Seance"
+appearance = "dark"
+
+[palette]
+bg = "#3b2035"
+surface = "#2a1726"
+elevated = "#4f3649"
+fg = "#f9eddf"
+fg_muted = "#b6a5a4"
+accent = "#b8d1e5"
+accent_fg = "#000000"
+selection_bg = "#5b3b52"
+selection_fg = "#fff8ed"
+match_fg = "#e0bfd5"
+border = "#614957"
+separator = "#4f364980"
+danger = "#e99b8e"
+warning = "#e5c779"
+success = "#a8cf8f"
+info = "#9fc2dc"
+badge_bg = "#4f3649"
+badge_fg = "#f9eddf"
+
+[states.selected]
+bg = "#5b3b52"
+fg = "#fff8ed"
+[states.hover]
+bg = "#4f3649"
+[states.disabled]
+fg = "#b6a5a4"
+
+[footer]
+hint_color = "#b6a5a4"

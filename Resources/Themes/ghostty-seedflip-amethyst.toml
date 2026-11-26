@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "SeedFlip Amethyst" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SeedFlip Amethyst"
+appearance = "light"
+
+[palette]
+bg = "#f8f7f6"
+surface = "#ecebea"
+elevated = "#fcfbfb"
+fg = "#1a0a2e"
+fg_muted = "#685d74"
+accent = "#0f58bd"
+accent_fg = "#ffffff"
+selection_bg = "#fcfbfb"
+selection_fg = "#1a0a2e"
+match_fg = "#bd0fbd"
+border = "#ccc8ce"
+separator = "#fcfbfb80"
+danger = "#bd0f0f"
+warning = "#bda00f"
+success = "#0fbd49"
+info = "#0f58bd"
+badge_bg = "#fcfbfb"
+badge_fg = "#1a0a2e"
+
+[states.selected]
+bg = "#fcfbfb"
+fg = "#1a0a2e"
+[states.hover]
+bg = "#fcfbfb"
+[states.disabled]
+fg = "#685d74"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#685d74"

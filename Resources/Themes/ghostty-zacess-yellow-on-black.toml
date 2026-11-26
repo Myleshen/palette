@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Zacess Yellow on Black" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Zacess Yellow on Black"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#ffeb3b"
+fg_muted = "#a69926"
+accent = "#ffeb3b"
+accent_fg = "#000000"
+selection_bg = "#09bcc4"
+selection_fg = "#000000"
+match_fg = "#ffd0fa"
+border = "#332f0c"
+separator = "#1a1a1a80"
+danger = "#ffa79b"
+warning = "#edb618"
+success = "#01dc3f"
+info = "#90c1ff"
+badge_bg = "#1a1a1a"
+badge_fg = "#ffeb3b"
+
+[states.selected]
+bg = "#09bcc4"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#a69926"
+
+[footer]
+hint_color = "#a69926"

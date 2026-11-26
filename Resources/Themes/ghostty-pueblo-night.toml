@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Pueblo Night" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Pueblo Night"
+appearance = "dark"
+
+[palette]
+bg = "#52361f"
+surface = "#3b2716"
+elevated = "#634a35"
+fg = "#fff0d5"
+fg_muted = "#c2af95"
+accent = "#b0d7f2"
+accent_fg = "#000000"
+selection_bg = "#715039"
+selection_fg = "#fff8e8"
+match_fg = "#edc0dd"
+border = "#755b43"
+separator = "#634a3580"
+danger = "#fba183"
+warning = "#f3cf6d"
+success = "#94d7a5"
+info = "#94c9ec"
+badge_bg = "#634a35"
+badge_fg = "#fff0d5"
+
+[states.selected]
+bg = "#715039"
+fg = "#fff8e8"
+[states.hover]
+bg = "#634a35"
+[states.disabled]
+fg = "#c2af95"
+
+[footer]
+hint_color = "#c2af95"

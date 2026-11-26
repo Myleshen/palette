@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Subliminal" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Subliminal"
+appearance = "dark"
+
+[palette]
+bg = "#282c35"
+surface = "#1d2026"
+elevated = "#3e4149"
+fg = "#d4d4d4"
+fg_muted = "#98999c"
+accent = "#6699cc"
+accent_fg = "#000000"
+selection_bg = "#484e5b"
+selection_fg = "#ffffff"
+match_fg = "#f1a5ab"
+border = "#4a4e55"
+separator = "#3e414980"
+danger = "#e15a60"
+warning = "#ffe2a9"
+success = "#a9cfa4"
+info = "#6699cc"
+badge_bg = "#3e4149"
+badge_fg = "#d4d4d4"
+
+[states.selected]
+bg = "#484e5b"
+fg = "#ffffff"
+[states.hover]
+bg = "#3e4149"
+[states.disabled]
+fg = "#98999c"
+
+[footer]
+hint_color = "#98999c"

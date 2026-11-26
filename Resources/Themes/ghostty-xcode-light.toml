@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Xcode Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Xcode Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#262626"
+fg_muted = "#727272"
+accent = "#0b4f79"
+accent_fg = "#ffffff"
+selection_bg = "#b4d8fd"
+selection_fg = "#262626"
+match_fg = "#ad3da4"
+border = "#d4d4d4"
+separator = "#ffffff80"
+danger = "#d12f1b"
+warning = "#78492a"
+success = "#3e8087"
+info = "#0f68a0"
+badge_bg = "#ffffff"
+badge_fg = "#262626"
+
+[states.selected]
+bg = "#b4d8fd"
+fg = "#262626"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#727272"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#727272"

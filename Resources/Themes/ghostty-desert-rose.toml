@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Desert Rose" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Desert Rose"
+appearance = "dark"
+
+[palette]
+bg = "#5a2032"
+surface = "#411724"
+elevated = "#6a3646"
+fg = "#fff0df"
+fg_muted = "#c5a7a2"
+accent = "#acd4ef"
+accent_fg = "#000000"
+selection_bg = "#7d4050"
+selection_fg = "#fff7ed"
+match_fg = "#e9bad7"
+border = "#7b4a55"
+separator = "#6a364680"
+danger = "#ff978b"
+warning = "#edc96d"
+success = "#94d1a1"
+info = "#8fc4e8"
+badge_bg = "#6a3646"
+badge_fg = "#fff0df"
+
+[states.selected]
+bg = "#7d4050"
+fg = "#fff7ed"
+[states.hover]
+bg = "#6a3646"
+[states.disabled]
+fg = "#c5a7a2"
+
+[footer]
+hint_color = "#c5a7a2"

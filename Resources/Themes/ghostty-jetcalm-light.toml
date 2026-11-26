@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "JetCalm Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · JetCalm Light"
+appearance = "light"
+
+[palette]
+bg = "#ededed"
+surface = "#e1e1e1"
+elevated = "#f7f7f7"
+fg = "#1c2410"
+fg_muted = "#656a5d"
+accent = "#082108"
+accent_fg = "#ffffff"
+selection_bg = "#3c444d"
+selection_fg = "#ededed"
+match_fg = "#a626a4"
+border = "#c3c5c1"
+separator = "#f7f7f780"
+danger = "#a52a2a"
+warning = "#5c3e00"
+success = "#556b2f"
+info = "#4682b4"
+badge_bg = "#f7f7f7"
+badge_fg = "#1c2410"
+
+[states.selected]
+bg = "#3c444d"
+fg = "#ededed"
+[states.hover]
+bg = "#f7f7f7"
+[states.disabled]
+fg = "#656a5d"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#656a5d"

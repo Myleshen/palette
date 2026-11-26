@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Andromeda" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Andromeda"
+appearance = "dark"
+
+[palette]
+bg = "#262a33"
+surface = "#1b1e25"
+elevated = "#3c3f47"
+fg = "#e5e5e5"
+fg_muted = "#a2a4a7"
+accent = "#2472c8"
+accent_fg = "#ffffff"
+selection_bg = "#5a5c62"
+selection_fg = "#ece7e7"
+match_fg = "#bc3fbc"
+border = "#4c4f57"
+separator = "#3c3f4780"
+danger = "#cd3131"
+warning = "#e5e512"
+success = "#05bc79"
+info = "#2472c8"
+badge_bg = "#3c3f47"
+badge_fg = "#e5e5e5"
+
+[states.selected]
+bg = "#5a5c62"
+fg = "#ece7e7"
+[states.hover]
+bg = "#3c3f47"
+[states.disabled]
+fg = "#a2a4a7"
+
+[footer]
+hint_color = "#a2a4a7"

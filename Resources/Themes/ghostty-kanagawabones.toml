@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Kanagawabones" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Kanagawabones"
+appearance = "dark"
+
+[palette]
+bg = "#1f1f28"
+surface = "#16161d"
+elevated = "#35353e"
+fg = "#ddd8bb"
+fg_muted = "#9b9788"
+accent = "#7bc2df"
+accent_fg = "#000000"
+selection_bg = "#49473e"
+selection_fg = "#ddd8bb"
+match_fg = "#a98fd2"
+border = "#454445"
+separator = "#35353e80"
+danger = "#e46a78"
+warning = "#e5c283"
+success = "#98bc6d"
+info = "#7eb3c9"
+badge_bg = "#35353e"
+badge_fg = "#ddd8bb"
+
+[states.selected]
+bg = "#49473e"
+fg = "#ddd8bb"
+[states.hover]
+bg = "#35353e"
+[states.disabled]
+fg = "#9b9788"
+
+[footer]
+hint_color = "#9b9788"

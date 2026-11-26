@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Nightfox" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Nightfox"
+appearance = "dark"
+
+[palette]
+bg = "#192330"
+surface = "#121923"
+elevated = "#303945"
+fg = "#cdcecf"
+fg_muted = "#8e9297"
+accent = "#86abdc"
+accent_fg = "#000000"
+selection_bg = "#2b3b51"
+selection_fg = "#cdcecf"
+match_fg = "#baa1e2"
+border = "#3d4550"
+separator = "#30394580"
+danger = "#c94f6d"
+warning = "#dbc074"
+success = "#81b29a"
+info = "#719cd6"
+badge_bg = "#303945"
+badge_fg = "#cdcecf"
+
+[states.selected]
+bg = "#2b3b51"
+fg = "#cdcecf"
+[states.hover]
+bg = "#303945"
+[states.disabled]
+fg = "#8e9297"
+
+[footer]
+hint_color = "#8e9297"

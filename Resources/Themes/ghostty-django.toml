@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Django" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Django"
+appearance = "dark"
+
+[palette]
+bg = "#0b2f20"
+surface = "#082217"
+elevated = "#234436"
+fg = "#f8f8f8"
+fg_muted = "#a5b2ac"
+accent = "#568264"
+accent_fg = "#000000"
+selection_bg = "#245032"
+selection_fg = "#f8f8f8"
+match_fg = "#ffffff"
+border = "#3a574b"
+separator = "#23443680"
+danger = "#fd6209"
+warning = "#ffe862"
+success = "#41a83e"
+info = "#315d3f"
+badge_bg = "#234436"
+badge_fg = "#f8f8f8"
+
+[states.selected]
+bg = "#245032"
+fg = "#f8f8f8"
+[states.hover]
+bg = "#234436"
+[states.disabled]
+fg = "#a5b2ac"
+
+[footer]
+hint_color = "#a5b2ac"

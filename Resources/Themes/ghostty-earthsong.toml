@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Earthsong" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Earthsong"
+appearance = "dark"
+
+[palette]
+bg = "#292520"
+surface = "#1e1b17"
+elevated = "#3e3b36"
+fg = "#e5c7a9"
+fg_muted = "#a38e79"
+accent = "#5fdaff"
+accent_fg = "#000000"
+selection_bg = "#121418"
+selection_fg = "#e5c7a9"
+match_fg = "#ff9269"
+border = "#4f453b"
+separator = "#3e3b3680"
+danger = "#c94234"
+warning = "#f5ae2e"
+success = "#85c54c"
+info = "#1398b9"
+badge_bg = "#3e3b36"
+badge_fg = "#e5c7a9"
+
+[states.selected]
+bg = "#121418"
+fg = "#e5c7a9"
+[states.hover]
+bg = "#3e3b36"
+[states.disabled]
+fg = "#a38e79"
+
+[footer]
+hint_color = "#a38e79"

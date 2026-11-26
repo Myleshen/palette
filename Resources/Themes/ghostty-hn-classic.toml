@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "HN Classic" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · HN Classic"
+appearance = "light"
+
+[palette]
+bg = "#f6f6ef"
+surface = "#eaeae3"
+elevated = "#fbfbf8"
+fg = "#242424"
+fg_muted = "#6e6e6b"
+accent = "#0759b8"
+accent_fg = "#ffffff"
+selection_bg = "#f9d5b5"
+selection_fg = "#242424"
+match_fg = "#8747a5"
+border = "#ccccc6"
+separator = "#fbfbf880"
+danger = "#c52e27"
+warning = "#956300"
+success = "#237a3d"
+info = "#0759b8"
+badge_bg = "#fbfbf8"
+badge_fg = "#242424"
+
+[states.selected]
+bg = "#f9d5b5"
+fg = "#242424"
+[states.hover]
+bg = "#fbfbf8"
+[states.disabled]
+fg = "#6e6e6b"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6e6e6b"

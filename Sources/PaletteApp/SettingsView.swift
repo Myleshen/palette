@@ -1969,22 +1969,10 @@ struct SettingsView: View {
                     .frame(maxWidth: 260)
                 }
                 pickerRow("Dark theme") {
-                    Picker("Dark theme", selection: $config.theme.dark) {
-                        ForEach(themeChoices(config.theme.dark), id: \.self) { name in
-                            Text(themeLabel(name)).tag(name)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 320, alignment: .leading)
+                    themePicker(selection: $config.theme.dark)
                 }
                 pickerRow("Light theme") {
-                    Picker("Light theme", selection: $config.theme.light) {
-                        ForEach(themeChoices(config.theme.light), id: \.self) { name in
-                            Text(themeLabel(name)).tag(name)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 320, alignment: .leading)
+                    themePicker(selection: $config.theme.light)
                 }
                 Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
             } footer: {
@@ -2048,8 +2036,29 @@ struct SettingsView: View {
         }
     }
 
-    private var themeNames: [String] {
-        ThemeLoader.catalog(themesDirectory: themesDirectory).map(\.name)
+    /// One catalogue read per render: hundreds of bundled themes make a
+    /// per-row lookup quadratic, and each read touches the filesystem.
+    private func themePicker(selection: Binding<String>) -> some View {
+        let catalog = ThemeLoader.catalog(themesDirectory: themesDirectory)
+        let names = catalog.map(\.name)
+        let selected = selection.wrappedValue
+        let choices = selected.isEmpty || names.contains(selected) ? names : [selected] + names
+        let labels = Dictionary(uniqueKeysWithValues: catalog.map { ($0.name, $0.displayName) })
+        return Picker("Theme", selection: selection) {
+            ForEach(choices, id: \.self) { name in
+                Text(themeLabel(name, labels: labels)).tag(name)
+            }
+        }
+        .labelsHidden()
+        .frame(maxWidth: 320, alignment: .leading)
+    }
+
+    private func themeLabel(_ name: String, labels: [String: String]) -> String {
+        guard let label = labels[name] else {
+            let fallback = name.split(separator: "-").map { $0.capitalized }.joined(separator: " ")
+            return "\(fallback) (missing)"
+        }
+        return label
     }
 
     private var microphones: [(id: String, name: String)] {
@@ -2058,19 +2067,6 @@ struct SettingsView: View {
 
     private var captureDisplays: [CaptureDisplay] {
         CaptureDisplays.active()
-    }
-
-    /// Installed themes plus the configured name even when its file is gone,
-    /// so a deleted theme stays visible as missing instead of blank.
-    private func themeChoices(_ selected: String) -> [String] {
-        let names = themeNames
-        guard !selected.isEmpty, !names.contains(selected) else { return names }
-        return [selected] + names
-    }
-
-    private func themeLabel(_ name: String) -> String {
-        let label = displayName(name)
-        return themeNames.contains(name) ? label : "\(label) (missing)"
     }
 
     private var fontFamilies: [String] {
@@ -2096,11 +2092,6 @@ struct SettingsView: View {
         }
         .labelsHidden()
         .frame(maxWidth: 380, alignment: .leading)
-    }
-
-    private func displayName(_ name: String) -> String {
-        ThemeLoader.catalog(themesDirectory: themesDirectory).first(where: { $0.name == name })?.displayName
-            ?? name.split(separator: "-").map { $0.capitalized }.joined(separator: " ")
     }
 
     // MARK: - Shortcuts

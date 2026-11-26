@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Cobalt Neon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Cobalt Neon"
+appearance = "dark"
+
+[palette]
+bg = "#142838"
+surface = "#0e1d28"
+elevated = "#2c3e4c"
+fg = "#8ff586"
+fg_muted = "#64ad6b"
+accent = "#8ff586"
+accent_fg = "#000000"
+selection_bg = "#094fb1"
+selection_fg = "#8ff586"
+match_fg = "#8230a7"
+border = "#2d5148"
+separator = "#2c3e4c80"
+danger = "#ff2320"
+warning = "#e9e75c"
+success = "#3ba5ff"
+info = "#8ff586"
+badge_bg = "#2c3e4c"
+badge_fg = "#8ff586"
+
+[states.selected]
+bg = "#094fb1"
+fg = "#8ff586"
+[states.hover]
+bg = "#2c3e4c"
+[states.disabled]
+fg = "#64ad6b"
+
+[footer]
+hint_color = "#64ad6b"

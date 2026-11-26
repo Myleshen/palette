@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Diary of a Lunatic" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Diary of a Lunatic"
+appearance = "dark"
+
+[palette]
+bg = "#042631"
+surface = "#031b23"
+elevated = "#1d3c46"
+fg = "#d8f5f7"
+fg_muted = "#8eadb2"
+accent = "#a0d1f0"
+accent_fg = "#000000"
+selection_bg = "#234c64"
+selection_fg = "#f1ffff"
+match_fg = "#ccb3f5"
+border = "#2e4f59"
+separator = "#1d3c4680"
+danger = "#e58c91"
+warning = "#e3bb69"
+success = "#94cfac"
+info = "#83bce7"
+badge_bg = "#1d3c46"
+badge_fg = "#d8f5f7"
+
+[states.selected]
+bg = "#234c64"
+fg = "#f1ffff"
+[states.hover]
+bg = "#1d3c46"
+[states.disabled]
+fg = "#8eadb2"
+
+[footer]
+hint_color = "#8eadb2"

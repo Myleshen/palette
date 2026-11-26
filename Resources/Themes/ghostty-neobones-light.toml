@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Neobones Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Neobones Light"
+appearance = "light"
+
+[palette]
+bg = "#e5ede6"
+surface = "#dae1db"
+elevated = "#f3f7f4"
+fg = "#202e18"
+fg_muted = "#657160"
+accent = "#202e18"
+accent_fg = "#ffffff"
+selection_bg = "#ade48c"
+selection_fg = "#202e18"
+match_fg = "#7b3b70"
+border = "#bec7bd"
+separator = "#f3f7f480"
+danger = "#a8334c"
+warning = "#944927"
+success = "#567a30"
+info = "#286486"
+badge_bg = "#f3f7f4"
+badge_fg = "#202e18"
+
+[states.selected]
+bg = "#ade48c"
+fg = "#202e18"
+[states.hover]
+bg = "#f3f7f4"
+[states.disabled]
+fg = "#657160"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#657160"

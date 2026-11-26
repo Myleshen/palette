@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Shokunin" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Shokunin"
+appearance = "light"
+
+[palette]
+bg = "#fcfaf2"
+surface = "#efede6"
+elevated = "#fefdf9"
+fg = "#303841"
+fg_muted = "#777c7f"
+accent = "#006fae"
+accent_fg = "#ffffff"
+selection_bg = "#d7eaf2"
+selection_fg = "#303841"
+match_fg = "#8f4155"
+border = "#d3d3cf"
+separator = "#fefdf980"
+danger = "#c84053"
+warning = "#9a6000"
+success = "#157a5b"
+info = "#006fae"
+badge_bg = "#fefdf9"
+badge_fg = "#303841"
+
+[states.selected]
+bg = "#d7eaf2"
+fg = "#303841"
+[states.hover]
+bg = "#fefdf9"
+[states.disabled]
+fg = "#777c7f"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#777c7f"

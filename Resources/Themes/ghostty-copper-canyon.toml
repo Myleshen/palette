@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Copper Canyon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Copper Canyon"
+appearance = "dark"
+
+[palette]
+bg = "#5a3018"
+surface = "#412311"
+elevated = "#6a452f"
+fg = "#fff0d5"
+fg_muted = "#c5ad93"
+accent = "#aed8f3"
+accent_fg = "#000000"
+selection_bg = "#7a4a2e"
+selection_fg = "#fff8e8"
+match_fg = "#eebedc"
+border = "#7b563e"
+separator = "#6a452f80"
+danger = "#ffa17e"
+warning = "#f5cf69"
+success = "#94d9a5"
+info = "#91c9ed"
+badge_bg = "#6a452f"
+badge_fg = "#fff0d5"
+
+[states.selected]
+bg = "#7a4a2e"
+fg = "#fff8e8"
+[states.hover]
+bg = "#6a452f"
+[states.disabled]
+fg = "#c5ad93"
+
+[footer]
+hint_color = "#c5ad93"

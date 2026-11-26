@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ultra Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ultra Dark"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#ffffff"
+fg_muted = "#a6a6a6"
+accent = "#b4ccff"
+accent_fg = "#000000"
+selection_bg = "#222222"
+selection_fg = "#cccccc"
+match_fg = "#ddbdf2"
+border = "#333333"
+separator = "#1a1a1a80"
+danger = "#f07178"
+warning = "#ffcb6b"
+success = "#c3e88d"
+info = "#82aaff"
+badge_bg = "#1a1a1a"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#222222"
+fg = "#cccccc"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#a6a6a6"
+
+[footer]
+hint_color = "#a6a6a6"

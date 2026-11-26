@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Karma Light HC" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Karma Light HC"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#000000"
+fg_muted = "#595959"
+accent = "#2f5e9e"
+accent_fg = "#ffffff"
+selection_bg = "#cfcad8"
+selection_fg = "#000000"
+match_fg = "#4d2d9a"
+border = "#cccccc"
+separator = "#ffffff80"
+danger = "#c01650"
+warning = "#9c6800"
+success = "#1a6e1c"
+info = "#2f5e9e"
+badge_bg = "#ffffff"
+badge_fg = "#000000"
+
+[states.selected]
+bg = "#cfcad8"
+fg = "#000000"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#595959"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#595959"

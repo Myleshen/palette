@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Iceberg Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Iceberg Dark"
+appearance = "dark"
+
+[palette]
+bg = "#161821"
+surface = "#101118"
+elevated = "#2d2f37"
+fg = "#c6c8d1"
+fg_muted = "#888a93"
+accent = "#91acd1"
+accent_fg = "#000000"
+selection_bg = "#c6c8d1"
+selection_fg = "#161821"
+match_fg = "#ada0d3"
+border = "#393b44"
+separator = "#2d2f3780"
+danger = "#e27878"
+warning = "#e2a478"
+success = "#b4be82"
+info = "#84a0c6"
+badge_bg = "#2d2f37"
+badge_fg = "#c6c8d1"
+
+[states.selected]
+bg = "#c6c8d1"
+fg = "#161821"
+[states.hover]
+bg = "#2d2f37"
+[states.disabled]
+fg = "#888a93"
+
+[footer]
+hint_color = "#888a93"

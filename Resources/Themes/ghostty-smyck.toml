@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Smyck" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Smyck"
+appearance = "dark"
+
+[palette]
+bg = "#1b1b1b"
+surface = "#131313"
+elevated = "#323232"
+fg = "#f7f7f7"
+fg_muted = "#aaaaaa"
+accent = "#8dcff0"
+accent_fg = "#000000"
+selection_bg = "#207483"
+selection_fg = "#f7f7f7"
+match_fg = "#f79aff"
+border = "#474747"
+separator = "#32323280"
+danger = "#b84131"
+warning = "#c4a500"
+success = "#7da900"
+info = "#62a3c4"
+badge_bg = "#323232"
+badge_fg = "#f7f7f7"
+
+[states.selected]
+bg = "#207483"
+fg = "#f7f7f7"
+[states.hover]
+bg = "#323232"
+[states.disabled]
+fg = "#aaaaaa"
+
+[footer]
+hint_color = "#aaaaaa"

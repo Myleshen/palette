@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "12-bit Rainbow" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · 12-bit Rainbow"
+appearance = "dark"
+
+[palette]
+bg = "#040404"
+surface = "#030303"
+elevated = "#1d1d1d"
+fg = "#feffff"
+fg_muted = "#a6a7a7"
+accent = "#e0d000"
+accent_fg = "#000000"
+selection_bg = "#606060"
+selection_fg = "#ffffff"
+match_fg = "#603090"
+border = "#363636"
+separator = "#1d1d1d80"
+danger = "#a03050"
+warning = "#e09040"
+success = "#40d080"
+info = "#3060b0"
+badge_bg = "#1d1d1d"
+badge_fg = "#feffff"
+
+[states.selected]
+bg = "#606060"
+fg = "#ffffff"
+[states.hover]
+bg = "#1d1d1d"
+[states.disabled]
+fg = "#a6a7a7"
+
+[footer]
+hint_color = "#a6a7a7"

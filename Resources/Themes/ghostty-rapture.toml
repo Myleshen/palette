@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Rapture" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Rapture"
+appearance = "dark"
+
+[palette]
+bg = "#111e2a"
+surface = "#0c161e"
+elevated = "#29343f"
+fg = "#c0c9e5"
+fg_muted = "#838da4"
+accent = "#6c9bf5"
+accent_fg = "#000000"
+selection_bg = "#304b66"
+selection_fg = "#ffffff"
+match_fg = "#ff4fa1"
+border = "#34404f"
+separator = "#29343f80"
+danger = "#fc644d"
+warning = "#fff09b"
+success = "#7afde1"
+info = "#6c9bf5"
+badge_bg = "#29343f"
+badge_fg = "#c0c9e5"
+
+[states.selected]
+bg = "#304b66"
+fg = "#ffffff"
+[states.hover]
+bg = "#29343f"
+[states.disabled]
+fg = "#838da4"
+
+[footer]
+hint_color = "#838da4"

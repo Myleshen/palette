@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Code 2026 Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Code 2026 Dark"
+appearance = "dark"
+
+[palette]
+bg = "#121314"
+surface = "#0d0e0e"
+elevated = "#2a2b2c"
+fg = "#bbbebf"
+fg_muted = "#808283"
+accent = "#a5d6ff"
+accent_fg = "#000000"
+selection_bg = "#276782"
+selection_fg = "#ffffff"
+match_fg = "#d2a8ff"
+border = "#343536"
+separator = "#2a2b2c80"
+danger = "#ff7b72"
+warning = "#cd9731"
+success = "#7ee787"
+info = "#79c0ff"
+badge_bg = "#2a2b2c"
+badge_fg = "#bbbebf"
+
+[states.selected]
+bg = "#276782"
+fg = "#ffffff"
+[states.hover]
+bg = "#2a2b2c"
+[states.disabled]
+fg = "#808283"
+
+[footer]
+hint_color = "#808283"

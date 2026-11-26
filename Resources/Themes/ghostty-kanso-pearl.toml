@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Kanso Pearl" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Kanso Pearl"
+appearance = "light"
+
+[palette]
+bg = "#f2f1ef"
+surface = "#e6e5e3"
+elevated = "#f9f9f8"
+fg = "#22262d"
+fg_muted = "#6b6d71"
+accent = "#4d699b"
+accent_fg = "#ffffff"
+selection_bg = "#e2e1df"
+selection_fg = "#22262d"
+match_fg = "#624c83"
+border = "#c8c8c8"
+separator = "#f9f9f880"
+danger = "#c84053"
+warning = "#77713f"
+success = "#6f894e"
+info = "#4d699b"
+badge_bg = "#f9f9f8"
+badge_fg = "#22262d"
+
+[states.selected]
+bg = "#e2e1df"
+fg = "#22262d"
+[states.hover]
+bg = "#f9f9f8"
+[states.disabled]
+fg = "#6b6d71"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6b6d71"

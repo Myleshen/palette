@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Kurokula" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Kurokula"
+appearance = "dark"
+
+[palette]
+bg = "#141515"
+surface = "#0e0f0f"
+elevated = "#2c2c2c"
+fg = "#e0cfc2"
+fg_muted = "#998e85"
+accent = "#90dbff"
+accent_fg = "#000000"
+selection_bg = "#515151"
+selection_fg = "#ffc34c"
+match_fg = "#ad93ff"
+border = "#3d3a38"
+separator = "#2c2c2c80"
+danger = "#c35a52"
+warning = "#e1b917"
+success = "#78b3a9"
+info = "#5c91dd"
+badge_bg = "#2c2c2c"
+badge_fg = "#e0cfc2"
+
+[states.selected]
+bg = "#515151"
+fg = "#ffc34c"
+[states.hover]
+bg = "#2c2c2c"
+[states.disabled]
+fg = "#998e85"
+
+[footer]
+hint_color = "#998e85"

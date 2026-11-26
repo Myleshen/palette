@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Django Reborn Again" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Django Reborn Again"
+appearance = "dark"
+
+[palette]
+bg = "#051f14"
+surface = "#04160e"
+elevated = "#1e352c"
+fg = "#dadedc"
+fg_muted = "#8f9b96"
+accent = "#ffcc00"
+accent_fg = "#000000"
+selection_bg = "#203727"
+selection_fg = "#dadedc"
+match_fg = "#ffffff"
+border = "#30453c"
+separator = "#1e352c80"
+danger = "#fd6209"
+warning = "#ffe862"
+success = "#41a83e"
+info = "#245032"
+badge_bg = "#1e352c"
+badge_fg = "#dadedc"
+
+[states.selected]
+bg = "#203727"
+fg = "#dadedc"
+[states.hover]
+bg = "#1e352c"
+[states.disabled]
+fg = "#8f9b96"
+
+[footer]
+hint_color = "#8f9b96"

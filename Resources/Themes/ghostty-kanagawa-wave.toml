@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Kanagawa Wave" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Kanagawa Wave"
+appearance = "dark"
+
+[palette]
+bg = "#1f1f28"
+surface = "#16161d"
+elevated = "#35353e"
+fg = "#dcd7ba"
+fg_muted = "#9a9787"
+accent = "#7fb4ca"
+accent_fg = "#000000"
+selection_bg = "#dcd7ba"
+selection_fg = "#1f1f28"
+match_fg = "#938aa9"
+border = "#454445"
+separator = "#35353e80"
+danger = "#c34043"
+warning = "#c0a36e"
+success = "#76946a"
+info = "#7e9cd8"
+badge_bg = "#35353e"
+badge_fg = "#dcd7ba"
+
+[states.selected]
+bg = "#dcd7ba"
+fg = "#1f1f28"
+[states.hover]
+bg = "#35353e"
+[states.disabled]
+fg = "#9a9787"
+
+[footer]
+hint_color = "#9a9787"

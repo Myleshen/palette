@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Monokai SublimeText" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Monokai SublimeText"
+appearance = "dark"
+
+[palette]
+bg = "#272822"
+surface = "#1c1d18"
+elevated = "#3d3e38"
+fg = "#f8f8f2"
+fg_muted = "#afafa9"
+accent = "#819aff"
+accent_fg = "#000000"
+selection_bg = "#49483e"
+selection_fg = "#f8f8f2"
+match_fg = "#ae81ff"
+border = "#51524c"
+separator = "#3d3e3880"
+danger = "#c4265e"
+warning = "#b3b42b"
+success = "#86b42b"
+info = "#6a7ec8"
+badge_bg = "#3d3e38"
+badge_fg = "#f8f8f2"
+
+[states.selected]
+bg = "#49483e"
+fg = "#f8f8f2"
+[states.hover]
+bg = "#3d3e38"
+[states.disabled]
+fg = "#afafa9"
+
+[footer]
+hint_color = "#afafa9"

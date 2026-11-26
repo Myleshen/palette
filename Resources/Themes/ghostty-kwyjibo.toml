@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Kwyjibo" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Kwyjibo"
+appearance = "dark"
+
+[palette]
+bg = "#07173b"
+surface = "#05112a"
+elevated = "#202e4f"
+fg = "#f5f1e8"
+fg_muted = "#a2a5ab"
+accent = "#ffd529"
+accent_fg = "#000000"
+selection_bg = "#236aa1"
+selection_fg = "#fff8e8"
+match_fg = "#efb3ec"
+border = "#37435e"
+separator = "#202e4f80"
+danger = "#ff6973"
+warning = "#ffd529"
+success = "#67d391"
+info = "#70afff"
+badge_bg = "#202e4f"
+badge_fg = "#f5f1e8"
+
+[states.selected]
+bg = "#236aa1"
+fg = "#fff8e8"
+[states.hover]
+bg = "#202e4f"
+[states.disabled]
+fg = "#a2a5ab"
+
+[footer]
+hint_color = "#a2a5ab"

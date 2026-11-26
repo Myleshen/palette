@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "SLOMP" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SLOMP"
+appearance = "dark"
+
+[palette]
+bg = "#1e1e1e"
+surface = "#161616"
+elevated = "#343434"
+fg = "#d4d4d4"
+fg_muted = "#949494"
+accent = "#6774af"
+accent_fg = "#000000"
+selection_bg = "#0c363f"
+selection_fg = "#d4d4d4"
+match_fg = "#c86ead"
+border = "#424242"
+separator = "#34343480"
+danger = "#d65a77"
+warning = "#ca9bbc"
+success = "#bd9a6e"
+info = "#6774af"
+badge_bg = "#343434"
+badge_fg = "#d4d4d4"
+
+[states.selected]
+bg = "#0c363f"
+fg = "#d4d4d4"
+[states.hover]
+bg = "#343434"
+[states.disabled]
+fg = "#949494"
+
+[footer]
+hint_color = "#949494"

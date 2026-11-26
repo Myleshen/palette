@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Barbenheimer Bunker" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Barbenheimer Bunker"
+appearance = "dark"
+
+[palette]
+bg = "#14140b"
+surface = "#0e0e08"
+elevated = "#2c2c23"
+fg = "#f2c0d7"
+fg_muted = "#a48490"
+accent = "#a0c0f0"
+accent_fg = "#000000"
+selection_bg = "#f2c0d7"
+selection_fg = "#14140b"
+match_fg = "#d4a8f9"
+border = "#403634"
+separator = "#2c2c2380"
+danger = "#f672ac"
+warning = "#f0e0b0"
+success = "#a0e0c0"
+info = "#a0c0f0"
+badge_bg = "#2c2c23"
+badge_fg = "#f2c0d7"
+
+[states.selected]
+bg = "#f2c0d7"
+fg = "#14140b"
+[states.hover]
+bg = "#2c2c23"
+[states.disabled]
+fg = "#a48490"
+
+[footer]
+hint_color = "#a48490"

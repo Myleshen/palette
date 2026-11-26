@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "OpenCode Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · OpenCode Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#1a1a1a"
+fg_muted = "#6a6a6a"
+accent = "#226bcc"
+accent_fg = "#ffffff"
+selection_bg = "#d4e5fd"
+selection_fg = "#1a1a1a"
+match_fg = "#6b47a7"
+border = "#d1d1d1"
+separator = "#ffffff80"
+danger = "#c20f26"
+warning = "#c7811e"
+success = "#1f8c44"
+info = "#226bcc"
+badge_bg = "#ffffff"
+badge_fg = "#1a1a1a"
+
+[states.selected]
+bg = "#d4e5fd"
+fg = "#1a1a1a"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#6a6a6a"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6a6a6a"

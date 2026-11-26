@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "GitHub" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · GitHub"
+appearance = "light"
+
+[palette]
+bg = "#f4f4f4"
+surface = "#e8e8e8"
+elevated = "#fafafa"
+fg = "#3e3e3e"
+fg_muted = "#7e7e7e"
+accent = "#003e8a"
+accent_fg = "#ffffff"
+selection_bg = "#a9c1e2"
+selection_fg = "#4c4c4c"
+match_fg = "#e94691"
+border = "#d0d0d0"
+separator = "#fafafa80"
+danger = "#970b16"
+warning = "#c5bb94"
+success = "#07962a"
+info = "#003e8a"
+badge_bg = "#fafafa"
+badge_fg = "#3e3e3e"
+
+[states.selected]
+bg = "#a9c1e2"
+fg = "#4c4c4c"
+[states.hover]
+bg = "#fafafa"
+[states.disabled]
+fg = "#7e7e7e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7e7e7e"

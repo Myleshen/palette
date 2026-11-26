@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Dream Onward" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Dream Onward"
+appearance = "dark"
+
+[palette]
+bg = "#19120f"
+surface = "#120d0b"
+elevated = "#302a27"
+fg = "#f7e7ce"
+fg_muted = "#a99c8b"
+accent = "#e3b65b"
+accent_fg = "#000000"
+selection_bg = "#4a3830"
+selection_fg = "#fff8ee"
+match_fg = "#c4aadb"
+border = "#453d35"
+separator = "#302a2780"
+danger = "#dc7862"
+warning = "#e3b65b"
+success = "#91b88c"
+info = "#7fa9c8"
+badge_bg = "#302a27"
+badge_fg = "#f7e7ce"
+
+[states.selected]
+bg = "#4a3830"
+fg = "#fff8ee"
+[states.hover]
+bg = "#302a27"
+[states.disabled]
+fg = "#a99c8b"
+
+[footer]
+hint_color = "#a99c8b"

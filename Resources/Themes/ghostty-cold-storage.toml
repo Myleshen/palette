@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Cold Storage" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Cold Storage"
+appearance = "light"
+
+[palette]
+bg = "#f4f9ff"
+surface = "#e8edf2"
+elevated = "#fafcff"
+fg = "#102235"
+fg_muted = "#606d7c"
+accent = "#123a78"
+accent_fg = "#ffffff"
+selection_bg = "#dce9f5"
+selection_fg = "#102235"
+match_fg = "#5e3188"
+border = "#c6ced7"
+separator = "#fafcff80"
+danger = "#842121"
+warning = "#644b00"
+success = "#0c5935"
+info = "#17468f"
+badge_bg = "#fafcff"
+badge_fg = "#102235"
+
+[states.selected]
+bg = "#dce9f5"
+fg = "#102235"
+[states.hover]
+bg = "#fafcff"
+[states.disabled]
+fg = "#606d7c"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#606d7c"

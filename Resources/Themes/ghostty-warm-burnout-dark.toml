@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Warm Burnout Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Warm Burnout Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1a1510"
+surface = "#130f0c"
+elevated = "#312c28"
+fg = "#bfbdb6"
+fg_muted = "#85827c"
+accent = "#f5c56e"
+accent_fg = "#000000"
+selection_bg = "#33393a"
+selection_fg = "#bfbdb6"
+match_fg = "#d2a6ff"
+border = "#3b3731"
+separator = "#312c2880"
+danger = "#f06b73"
+warning = "#fdb04c"
+success = "#70bf56"
+info = "#4fbfff"
+badge_bg = "#312c28"
+badge_fg = "#bfbdb6"
+
+[states.selected]
+bg = "#33393a"
+fg = "#bfbdb6"
+[states.hover]
+bg = "#312c28"
+[states.disabled]
+fg = "#85827c"
+
+[footer]
+hint_color = "#85827c"

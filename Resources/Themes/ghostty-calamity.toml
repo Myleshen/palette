@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Calamity" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Calamity"
+appearance = "dark"
+
+[palette]
+bg = "#2f2833"
+surface = "#221d25"
+elevated = "#443e47"
+fg = "#d5ced9"
+fg_muted = "#9b949f"
+accent = "#3b79c7"
+accent_fg = "#000000"
+selection_bg = "#7e6c88"
+selection_fg = "#faf9fa"
+match_fg = "#f92672"
+border = "#504954"
+separator = "#443e4780"
+danger = "#fc644d"
+warning = "#e9d7a5"
+success = "#a5f69c"
+info = "#3b79c7"
+badge_bg = "#443e47"
+badge_fg = "#d5ced9"
+
+[states.selected]
+bg = "#7e6c88"
+fg = "#faf9fa"
+[states.hover]
+bg = "#443e47"
+[states.disabled]
+fg = "#9b949f"
+
+[footer]
+hint_color = "#9b949f"

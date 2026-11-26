@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Vibrant Ink" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Vibrant Ink"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#ffffff"
+fg_muted = "#a6a6a6"
+accent = "#44b4cc"
+accent_fg = "#000000"
+selection_bg = "#b5d5ff"
+selection_fg = "#000000"
+match_fg = "#ff00ff"
+border = "#333333"
+separator = "#1a1a1a80"
+danger = "#ff6600"
+warning = "#ffcc00"
+success = "#ccff04"
+info = "#44b4cc"
+badge_bg = "#1a1a1a"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#b5d5ff"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#a6a6a6"
+
+[footer]
+hint_color = "#a6a6a6"

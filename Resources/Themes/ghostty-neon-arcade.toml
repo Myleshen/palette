@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Neon Arcade" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Neon Arcade"
+appearance = "dark"
+
+[palette]
+bg = "#0d0d15"
+surface = "#09090f"
+elevated = "#25252c"
+fg = "#d8dcf0"
+fg_muted = "#9194a3"
+accent = "#7cb6ff"
+accent_fg = "#000000"
+selection_bg = "#2c2c4a"
+selection_fg = "#f0f2ff"
+match_fg = "#da9bff"
+border = "#363641"
+separator = "#25252c80"
+danger = "#ff5370"
+warning = "#ffd166"
+success = "#3ddc97"
+info = "#4f9cff"
+badge_bg = "#25252c"
+badge_fg = "#d8dcf0"
+
+[states.selected]
+bg = "#2c2c4a"
+fg = "#f0f2ff"
+[states.hover]
+bg = "#25252c"
+[states.disabled]
+fg = "#9194a3"
+
+[footer]
+hint_color = "#9194a3"

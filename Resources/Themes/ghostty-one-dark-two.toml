@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "One Dark Two" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · One Dark Two"
+appearance = "dark"
+
+[palette]
+bg = "#21252b"
+surface = "#181b1f"
+elevated = "#373b40"
+fg = "#e6e6e6"
+fg_muted = "#a1a2a5"
+accent = "#8dc7f6"
+accent_fg = "#000000"
+selection_bg = "#393e47"
+selection_fg = "#e6e6e6"
+match_fg = "#d3a2e2"
+border = "#484c50"
+separator = "#373b4080"
+danger = "#e27881"
+warning = "#eac786"
+success = "#98c379"
+info = "#71b9f4"
+badge_bg = "#373b40"
+badge_fg = "#e6e6e6"
+
+[states.selected]
+bg = "#393e47"
+fg = "#e6e6e6"
+[states.hover]
+bg = "#373b40"
+[states.disabled]
+fg = "#a1a2a5"
+
+[footer]
+hint_color = "#a1a2a5"

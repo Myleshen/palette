@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Isocon Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Isocon Dark"
+appearance = "dark"
+
+[palette]
+bg = "#062329"
+surface = "#04191e"
+elevated = "#1f393e"
+fg = "#868686"
+fg_muted = "#646b6d"
+accent = "#0f8dcd"
+accent_fg = "#000000"
+selection_bg = "#868686"
+selection_fg = "#062329"
+match_fg = "#976fe3"
+border = "#20373c"
+separator = "#1f393e80"
+danger = "#e34b87"
+warning = "#ba783e"
+success = "#419658"
+info = "#408cbd"
+badge_bg = "#1f393e"
+badge_fg = "#9e9e9e"
+
+[states.selected]
+bg = "#868686"
+fg = "#062329"
+[states.hover]
+bg = "#1f393e"
+[states.disabled]
+fg = "#646b6d"
+
+[footer]
+hint_color = "#646b6d"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Solarized Darcula" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Solarized Darcula"
+appearance = "dark"
+
+[palette]
+bg = "#3d3f41"
+surface = "#2c2d2f"
+elevated = "#505254"
+fg = "#d2d8d9"
+fg_muted = "#9ea2a4"
+accent = "#2075c7"
+accent_fg = "#ffffff"
+selection_bg = "#505254"
+selection_fg = "#d2d8d9"
+match_fg = "#797fd4"
+border = "#5b5e5f"
+separator = "#50525480"
+danger = "#f24840"
+warning = "#b68800"
+success = "#629655"
+info = "#2075c7"
+badge_bg = "#505254"
+badge_fg = "#d2d8d9"
+
+[states.selected]
+bg = "#505254"
+fg = "#d2d8d9"
+[states.hover]
+bg = "#505254"
+[states.disabled]
+fg = "#9ea2a4"
+
+[footer]
+hint_color = "#9ea2a4"

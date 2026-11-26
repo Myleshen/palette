@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Firefox Dev" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Firefox Dev"
+appearance = "dark"
+
+[palette]
+bg = "#0e1011"
+surface = "#0a0c0c"
+elevated = "#262829"
+fg = "#7c8fa4"
+fg_muted = "#566371"
+accent = "#359ddf"
+accent_fg = "#000000"
+selection_bg = "#163c61"
+selection_fg = "#f2f5f9"
+match_fg = "#d75cff"
+border = "#24292e"
+separator = "#26282980"
+danger = "#e63853"
+warning = "#a57706"
+success = "#5eb83c"
+info = "#359ddf"
+badge_bg = "#262829"
+badge_fg = "#8193a8"
+
+[states.selected]
+bg = "#163c61"
+fg = "#f2f5f9"
+[states.hover]
+bg = "#262829"
+[states.disabled]
+fg = "#566371"
+
+[footer]
+hint_color = "#566371"

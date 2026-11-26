@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Fun Forrest" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Fun Forrest"
+appearance = "dark"
+
+[palette]
+bg = "#251200"
+surface = "#1b0d00"
+elevated = "#3b2a1a"
+fg = "#dec165"
+fg_muted = "#9d8442"
+accent = "#7cc9cf"
+accent_fg = "#000000"
+selection_bg = "#e5591c"
+selection_fg = "#000000"
+match_fg = "#d26349"
+border = "#4a3514"
+separator = "#3b2a1a80"
+danger = "#d6262b"
+warning = "#be8a13"
+success = "#919c00"
+info = "#4699a3"
+badge_bg = "#3b2a1a"
+badge_fg = "#dec165"
+
+[states.selected]
+bg = "#e5591c"
+fg = "#000000"
+[states.hover]
+bg = "#3b2a1a"
+[states.disabled]
+fg = "#9d8442"
+
+[footer]
+hint_color = "#9d8442"

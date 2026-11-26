@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Melange Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Melange Light"
+appearance = "light"
+
+[palette]
+bg = "#f1f1f1"
+surface = "#e5e5e5"
+elevated = "#f9f9f9"
+fg = "#54433a"
+fg_muted = "#8b807a"
+accent = "#465aa4"
+accent_fg = "#ffffff"
+selection_bg = "#54433a"
+selection_fg = "#d9d3ce"
+match_fg = "#904180"
+border = "#d2cecc"
+separator = "#f9f9f980"
+danger = "#c77b8b"
+warning = "#bc5c00"
+success = "#6e9b72"
+info = "#7892bd"
+badge_bg = "#f9f9f9"
+badge_fg = "#54433a"
+
+[states.selected]
+bg = "#54433a"
+fg = "#d9d3ce"
+[states.hover]
+bg = "#f9f9f9"
+[states.disabled]
+fg = "#8b807a"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#8b807a"

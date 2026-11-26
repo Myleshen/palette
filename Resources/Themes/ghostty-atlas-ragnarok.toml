@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Atlas Ragnarok" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Atlas Ragnarok"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#ffffff"
+fg_muted = "#a6a6a6"
+accent = "#b0b0b0"
+accent_fg = "#000000"
+selection_bg = "#1e3a5f"
+selection_fg = "#ffffff"
+match_fg = "#93c5fd"
+border = "#333333"
+separator = "#1a1a1a80"
+danger = "#ff8080"
+warning = "#2563eb"
+success = "#99ffe4"
+info = "#a0a0a0"
+badge_bg = "#1a1a1a"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#1e3a5f"
+fg = "#ffffff"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#a6a6a6"
+
+[footer]
+hint_color = "#a6a6a6"

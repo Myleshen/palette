@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Electron Highlighter Day" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Electron Highlighter Day"
+appearance = "light"
+
+[palette]
+bg = "#eef0f5"
+surface = "#e2e4e9"
+elevated = "#f7f8fb"
+fg = "#2f3b54"
+fg_muted = "#727a8c"
+accent = "#366ff0"
+accent_fg = "#000000"
+selection_bg = "#d6def5"
+selection_fg = "#2f3b54"
+match_fg = "#8b4fe0"
+border = "#c8ccd5"
+separator = "#f7f8fb80"
+danger = "#f52a65"
+warning = "#df8e1d"
+success = "#10a877"
+info = "#366ff0"
+badge_bg = "#f7f8fb"
+badge_fg = "#2f3b54"
+
+[states.selected]
+bg = "#d6def5"
+fg = "#2f3b54"
+[states.hover]
+bg = "#f7f8fb"
+[states.disabled]
+fg = "#727a8c"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#727a8c"

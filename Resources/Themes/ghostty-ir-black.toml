@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "IR Black" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · IR Black"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#f1f1f1"
+fg_muted = "#9d9d9d"
+accent = "#b5dcff"
+accent_fg = "#000000"
+selection_bg = "#b5d5ff"
+selection_fg = "#000000"
+match_fg = "#fb9cfe"
+border = "#303030"
+separator = "#1a1a1a80"
+danger = "#fa6c60"
+warning = "#fffeb7"
+success = "#a8ff60"
+info = "#96cafe"
+badge_bg = "#1a1a1a"
+badge_fg = "#f1f1f1"
+
+[states.selected]
+bg = "#b5d5ff"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#9d9d9d"
+
+[footer]
+hint_color = "#9d9d9d"

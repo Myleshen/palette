@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Flatland" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Flatland"
+appearance = "dark"
+
+[palette]
+bg = "#1d1f21"
+surface = "#151618"
+elevated = "#343537"
+fg = "#b8dbef"
+fg_muted = "#8299a7"
+accent = "#61b9d0"
+accent_fg = "#000000"
+selection_bg = "#343537"
+selection_fg = "#ffffff"
+match_fg = "#695abc"
+border = "#3c454a"
+separator = "#34353780"
+danger = "#f18339"
+warning = "#f4ef6d"
+success = "#9fd364"
+info = "#5096be"
+badge_bg = "#343537"
+badge_fg = "#b8dbef"
+
+[states.selected]
+bg = "#343537"
+fg = "#ffffff"
+[states.hover]
+bg = "#343537"
+[states.disabled]
+fg = "#8299a7"
+
+[footer]
+hint_color = "#8299a7"

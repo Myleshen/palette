@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "IRIX Terminal" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · IRIX Terminal"
+appearance = "dark"
+
+[palette]
+bg = "#000043"
+surface = "#000030"
+elevated = "#1a1a56"
+fg = "#f2f2f2"
+fg_muted = "#9d9db5"
+accent = "#ffff44"
+accent_fg = "#000000"
+selection_bg = "#c2deff"
+selection_fg = "#000000"
+match_fg = "#ffff44"
+border = "#303066"
+separator = "#1a1a5680"
+danger = "#ff2b1e"
+warning = "#ffff44"
+success = "#57ff3d"
+info = "#0004ff"
+badge_bg = "#1a1a56"
+badge_fg = "#f2f2f2"
+
+[states.selected]
+bg = "#c2deff"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a56"
+[states.disabled]
+fg = "#9d9db5"
+
+[footer]
+hint_color = "#9d9db5"

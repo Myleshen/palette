@@ -45,10 +45,11 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
         // preview both mark the theme that is actually on screen.
         var items: [PaletteItem] = catalog.compactMap { info in
             let isCurrent = info.name == current || info.displayName == current
+            let port = info.name.hasPrefix("ghostty-") ? "Ghostty port" : ""
             let score: Double
             if request.text.isEmpty {
                 score = isCurrent ? 100 : 0
-            } else if let value = Ranking.score(query: request.text, candidate: "\(info.displayName) \(info.name) \(info.appearance)") {
+            } else if let value = Ranking.score(query: request.text, candidate: "\(info.displayName) \(info.name) \(info.appearance) \(port)") {
                 score = value + (isCurrent ? 50 : 0)
             } else {
                 return nil
@@ -56,7 +57,7 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
             return PaletteItem(
                 id: info.name,
                 title: info.displayName,
-                subtitle: "\(info.isBuiltin ? "Built-in" : "User theme") · \(info.appearance)\(isCurrent ? " · current" : "")",
+                subtitle: "\(info.isBuiltin ? "Built-in" : "User theme")\(port.isEmpty ? "" : " · \(port)") · \(info.appearance)\(isCurrent ? " · current" : "")",
                 icon: .symbol(info.appearance == "light" ? "sun.max" : "moon"),
                 badge: isCurrent ? "ACTIVE" : nil,
                 score: score,

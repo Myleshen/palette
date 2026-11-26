@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Japanesque" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Japanesque"
+appearance = "dark"
+
+[palette]
+bg = "#1e1e1e"
+surface = "#161616"
+elevated = "#343434"
+fg = "#f7f6ec"
+fg_muted = "#abaaa4"
+accent = "#edcf4f"
+accent_fg = "#000000"
+selection_bg = "#175877"
+selection_fg = "#f7f6ec"
+match_fg = "#a57fc4"
+border = "#494947"
+separator = "#34343480"
+danger = "#cf3f61"
+warning = "#e9b32a"
+success = "#7bb75b"
+info = "#4c9ad4"
+badge_bg = "#343434"
+badge_fg = "#f7f6ec"
+
+[states.selected]
+bg = "#175877"
+fg = "#f7f6ec"
+[states.hover]
+bg = "#343434"
+[states.disabled]
+fg = "#abaaa4"
+
+[footer]
+hint_color = "#abaaa4"

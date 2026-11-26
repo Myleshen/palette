@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "OpenCode Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · OpenCode Dark"
+appearance = "dark"
+
+[palette]
+bg = "#0a0a0a"
+surface = "#070707"
+elevated = "#232323"
+fg = "#eeeeee"
+fg_muted = "#9e9e9e"
+accent = "#fab283"
+accent_fg = "#000000"
+selection_bg = "#3d1d06"
+selection_fg = "#eeeeee"
+match_fg = "#b38ff4"
+border = "#383838"
+separator = "#23232380"
+danger = "#e06c75"
+warning = "#f5a742"
+success = "#7fd88f"
+info = "#5c9cf5"
+badge_bg = "#232323"
+badge_fg = "#eeeeee"
+
+[states.selected]
+bg = "#3d1d06"
+fg = "#eeeeee"
+[states.hover]
+bg = "#232323"
+[states.disabled]
+fg = "#9e9e9e"
+
+[footer]
+hint_color = "#9e9e9e"

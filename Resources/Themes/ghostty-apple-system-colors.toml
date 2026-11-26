@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Apple System Colors" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Apple System Colors"
+appearance = "dark"
+
+[palette]
+bg = "#1e1e1e"
+surface = "#161616"
+elevated = "#343434"
+fg = "#ffffff"
+fg_muted = "#b0b0b0"
+accent = "#0a84ff"
+accent_fg = "#000000"
+selection_bg = "#3f638b"
+selection_fg = "#ffffff"
+match_fg = "#bf5af2"
+border = "#4b4b4b"
+separator = "#34343480"
+danger = "#cc372e"
+warning = "#cdac08"
+success = "#26a439"
+info = "#0869cb"
+badge_bg = "#343434"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#3f638b"
+fg = "#ffffff"
+[states.hover]
+bg = "#343434"
+[states.disabled]
+fg = "#b0b0b0"
+
+[footer]
+hint_color = "#b0b0b0"

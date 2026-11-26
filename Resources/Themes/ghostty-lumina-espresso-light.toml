@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Lumina Espresso Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Lumina Espresso Light"
+appearance = "light"
+
+[palette]
+bg = "#fcf0e3"
+surface = "#efe4d8"
+elevated = "#fef8f2"
+fg = "#39261b"
+fg_muted = "#7d6d61"
+accent = "#39261b"
+accent_fg = "#ffffff"
+selection_bg = "#d8bccc"
+selection_fg = "#39261b"
+match_fg = "#70386b"
+border = "#d5c8bb"
+separator = "#fef8f280"
+danger = "#842120"
+warning = "#6d4e36"
+success = "#15744d"
+info = "#2868a3"
+badge_bg = "#fef8f2"
+badge_fg = "#39261b"
+
+[states.selected]
+bg = "#d8bccc"
+fg = "#39261b"
+[states.hover]
+bg = "#fef8f2"
+[states.disabled]
+fg = "#7d6d61"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7d6d61"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Borland" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Borland"
+appearance = "dark"
+
+[palette]
+bg = "#0000a4"
+surface = "#000076"
+elevated = "#1a1aad"
+fg = "#ffff4e"
+fg_muted = "#a6a66c"
+accent = "#b5dcff"
+accent_fg = "#000000"
+selection_bg = "#a4a4a4"
+selection_fg = "#0000a4"
+match_fg = "#ff9cfe"
+border = "#333393"
+separator = "#1a1aad80"
+danger = "#ff6c60"
+warning = "#ffffb6"
+success = "#a8ff60"
+info = "#96cbfe"
+badge_bg = "#1a1aad"
+badge_fg = "#ffff4e"
+
+[states.selected]
+bg = "#a4a4a4"
+fg = "#0000a4"
+[states.hover]
+bg = "#1a1aad"
+[states.disabled]
+fg = "#a6a66c"
+
+[footer]
+hint_color = "#a6a66c"

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Daybreaker" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Daybreaker"
+appearance = "light"
+
+[palette]
+bg = "#fffaf6"
+surface = "#f2edea"
+elevated = "#fffdfb"
+fg = "#1e1e1e"
+fg_muted = "#6d6b6a"
+accent = "#16478f"
+accent_fg = "#ffffff"
+selection_bg = "#e5e1d8"
+selection_fg = "#1e1e1e"
+match_fg = "#6f2d9b"
+border = "#d2cecb"
+separator = "#fffdfb80"
+danger = "#9f1717"
+warning = "#594300"
+success = "#075523"
+info = "#1452ad"
+badge_bg = "#fffdfb"
+badge_fg = "#1e1e1e"
+
+[states.selected]
+bg = "#e5e1d8"
+fg = "#1e1e1e"
+[states.hover]
+bg = "#fffdfb"
+[states.disabled]
+fg = "#6d6b6a"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6d6b6a"

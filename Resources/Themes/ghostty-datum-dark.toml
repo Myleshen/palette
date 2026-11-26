@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "datum (dark)" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · datum (dark)"
+appearance = "dark"
+
+[palette]
+bg = "#0f1318"
+surface = "#0b0e11"
+elevated = "#272b2f"
+fg = "#dbe0e8"
+fg_muted = "#94989f"
+accent = "#b2dafb"
+accent_fg = "#000000"
+selection_bg = "#2b2f35"
+selection_fg = "#dbe0e8"
+match_fg = "#f5b9d9"
+border = "#383c42"
+separator = "#272b2f80"
+danger = "#fe9864"
+warning = "#e8df69"
+success = "#54dcaa"
+info = "#69b9f7"
+badge_bg = "#272b2f"
+badge_fg = "#dbe0e8"
+
+[states.selected]
+bg = "#2b2f35"
+fg = "#dbe0e8"
+[states.hover]
+bg = "#272b2f"
+[states.disabled]
+fg = "#94989f"
+
+[footer]
+hint_color = "#94989f"

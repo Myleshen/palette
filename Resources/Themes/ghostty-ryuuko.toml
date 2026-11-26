@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ryuuko" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ryuuko"
+appearance = "dark"
+
+[palette]
+bg = "#2c3941"
+surface = "#20292f"
+elevated = "#414d54"
+fg = "#ececec"
+fg_muted = "#a9adb0"
+accent = "#6a8e95"
+accent_fg = "#000000"
+selection_bg = "#002831"
+selection_fg = "#819090"
+match_fg = "#b18a73"
+border = "#525d63"
+separator = "#414d5480"
+danger = "#865f5b"
+warning = "#b1a990"
+success = "#66907d"
+info = "#6a8e95"
+badge_bg = "#414d54"
+badge_fg = "#ececec"
+
+[states.selected]
+bg = "#002831"
+fg = "#819090"
+[states.hover]
+bg = "#414d54"
+[states.disabled]
+fg = "#a9adb0"
+
+[footer]
+hint_color = "#a9adb0"

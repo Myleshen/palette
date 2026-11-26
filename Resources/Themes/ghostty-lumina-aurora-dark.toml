@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lumina Aurora Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Aurora Dark"
+appearance = "dark"
+
+[palette]
+bg = "#041212"
+surface = "#030d0d"
+elevated = "#1d2a2a"
+fg = "#d6e3e2"
+fg_muted = "#8c9a99"
+accent = "#d7eaff"
+accent_fg = "#000000"
+selection_bg = "#1a3e32"
+selection_fg = "#d6e3e2"
+match_fg = "#ffc9f9"
+border = "#2e3c3c"
+separator = "#1d2a2a80"
+danger = "#d86f66"
+warning = "#e9d487"
+success = "#6cd79d"
+info = "#c5d8ed"
+badge_bg = "#1d2a2a"
+badge_fg = "#d6e3e2"
+
+[states.selected]
+bg = "#1a3e32"
+fg = "#d6e3e2"
+[states.hover]
+bg = "#1d2a2a"
+[states.disabled]
+fg = "#8c9a99"
+
+[footer]
+hint_color = "#8c9a99"

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Sequoia Monochrome Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Sequoia Monochrome Dark"
+appearance = "dark"
+
+[palette]
+bg = "#0f1014"
+surface = "#0b0c0e"
+elevated = "#27282c"
+fg = "#868690"
+fg_muted = "#5f6068"
+accent = "#7c829d"
+accent_fg = "#000000"
+selection_bg = "#817c9c"
+selection_fg = "#151516"
+match_fg = "#e2e4ed"
+border = "#27282d"
+separator = "#27282c80"
+danger = "#999eb2"
+warning = "#d3d5de"
+success = "#626983"
+info = "#7c829d"
+badge_bg = "#27282c"
+badge_fg = "#909099"
+
+[states.selected]
+bg = "#817c9c"
+fg = "#151516"
+[states.hover]
+bg = "#27282c"
+[states.disabled]
+fg = "#5f6068"
+
+[footer]
+hint_color = "#5f6068"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Poltergeist" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Poltergeist"
+appearance = "dark"
+
+[palette]
+bg = "#06444b"
+surface = "#043136"
+elevated = "#1f575d"
+fg = "#f0ffff"
+fg_muted = "#9ebec0"
+accent = "#9cd9ef"
+accent_fg = "#000000"
+selection_bg = "#c8d7d7"
+selection_fg = "#545c5c"
+match_fg = "#ccb2eb"
+border = "#35696f"
+separator = "#1f575d80"
+danger = "#ff9c91"
+warning = "#e9d06c"
+success = "#8ce0b0"
+info = "#8ed4ed"
+badge_bg = "#1f575d"
+badge_fg = "#f0ffff"
+
+[states.selected]
+bg = "#c8d7d7"
+fg = "#545c5c"
+[states.hover]
+bg = "#1f575d"
+[states.disabled]
+fg = "#9ebec0"
+
+[footer]
+hint_color = "#9ebec0"

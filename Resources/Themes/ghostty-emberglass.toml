@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Emberglass" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Emberglass"
+appearance = "dark"
+
+[palette]
+bg = "#0b0e11"
+surface = "#080a0c"
+elevated = "#232629"
+fg = "#e6e7eb"
+fg_muted = "#999b9f"
+accent = "#7dd3fc"
+accent_fg = "#000000"
+selection_bg = "#4b5563"
+selection_fg = "#e8e7e3"
+match_fg = "#c084fc"
+border = "#37393d"
+separator = "#23262980"
+danger = "#f97316"
+warning = "#eab308"
+success = "#22c55e"
+info = "#38bdf8"
+badge_bg = "#232629"
+badge_fg = "#e6e7eb"
+
+[states.selected]
+bg = "#4b5563"
+fg = "#e8e7e3"
+[states.hover]
+bg = "#232629"
+[states.disabled]
+fg = "#999b9f"
+
+[footer]
+hint_color = "#999b9f"

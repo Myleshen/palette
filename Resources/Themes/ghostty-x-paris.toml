@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "X Paris" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · X Paris"
+appearance = "dark"
+
+[palette]
+bg = "#1a0a30"
+surface = "#130723"
+elevated = "#312345"
+fg = "#f7f1ff"
+fg_muted = "#aaa0b7"
+accent = "#a3f3ff"
+accent_fg = "#000000"
+selection_bg = "#f7f1ff"
+selection_fg = "#1a0a30"
+match_fg = "#c4bdff"
+border = "#463859"
+separator = "#31234580"
+danger = "#fc618d"
+warning = "#fce566"
+success = "#7bd88f"
+info = "#a3f3ff"
+badge_bg = "#312345"
+badge_fg = "#f7f1ff"
+
+[states.selected]
+bg = "#f7f1ff"
+fg = "#1a0a30"
+[states.hover]
+bg = "#312345"
+[states.disabled]
+fg = "#aaa0b7"
+
+[footer]
+hint_color = "#aaa0b7"

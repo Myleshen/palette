@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ember" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ember"
+appearance = "dark"
+
+[palette]
+bg = "#1b0f0b"
+surface = "#130b08"
+elevated = "#322723"
+fg = "#f3e3d1"
+fg_muted = "#a7998c"
+accent = "#8bb8f2"
+accent_fg = "#000000"
+selection_bg = "#4a2a1e"
+selection_fg = "#f3e3d1"
+match_fg = "#e59ad6"
+border = "#463933"
+separator = "#32272380"
+danger = "#e4573f"
+warning = "#d99a33"
+success = "#79ad58"
+info = "#6196e6"
+badge_bg = "#322723"
+badge_fg = "#f3e3d1"
+
+[states.selected]
+bg = "#4a2a1e"
+fg = "#f3e3d1"
+[states.hover]
+bg = "#322723"
+[states.disabled]
+fg = "#a7998c"
+
+[footer]
+hint_color = "#a7998c"

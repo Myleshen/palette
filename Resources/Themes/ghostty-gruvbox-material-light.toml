@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Gruvbox Material Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Gruvbox Material Light"
+appearance = "light"
+
+[palette]
+bg = "#fbf1c7"
+surface = "#eee5bd"
+elevated = "#fdf9e6"
+fg = "#654735"
+fg_muted = "#9a8268"
+accent = "#654735"
+accent_fg = "#ffffff"
+selection_bg = "#654735"
+selection_fg = "#fbf1c7"
+match_fg = "#945e80"
+border = "#ddcfaa"
+separator = "#fdf9e680"
+danger = "#c14a4a"
+warning = "#b47109"
+success = "#6c782e"
+info = "#45707a"
+badge_bg = "#fdf9e6"
+badge_fg = "#654735"
+
+[states.selected]
+bg = "#654735"
+fg = "#fbf1c7"
+[states.hover]
+bg = "#fdf9e6"
+[states.disabled]
+fg = "#9a8268"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#9a8268"

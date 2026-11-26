@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "GitHub Dark High Contrast" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · GitHub Dark High Contrast"
+appearance = "dark"
+
+[palette]
+bg = "#0a0c10"
+surface = "#07090c"
+elevated = "#232428"
+fg = "#f0f3f6"
+fg_muted = "#a0a2a6"
+accent = "#91cbff"
+accent_fg = "#000000"
+selection_bg = "#f0f3f6"
+selection_fg = "#0a0c10"
+match_fg = "#dbb7ff"
+border = "#383a3e"
+separator = "#23242880"
+danger = "#ff9492"
+warning = "#f0b72f"
+success = "#26cd4d"
+info = "#71b7ff"
+badge_bg = "#232428"
+badge_fg = "#f0f3f6"
+
+[states.selected]
+bg = "#f0f3f6"
+fg = "#0a0c10"
+[states.hover]
+bg = "#232428"
+[states.disabled]
+fg = "#a0a2a6"
+
+[footer]
+hint_color = "#a0a2a6"

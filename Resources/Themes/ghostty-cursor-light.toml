@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Cursor Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Cursor Light"
+appearance = "light"
+
+[palette]
+bg = "#f3f3f3"
+surface = "#e7e7e7"
+elevated = "#fafafa"
+fg = "#252525"
+fg_muted = "#6d6d6d"
+accent = "#3c7cab"
+accent_fg = "#000000"
+selection_bg = "#d9d9d9"
+selection_fg = "#252525"
+match_fg = "#b8448b"
+border = "#cacaca"
+separator = "#fafafa80"
+danger = "#cf2d56"
+warning = "#a16900"
+success = "#1f8a65"
+info = "#3c7cab"
+badge_bg = "#fafafa"
+badge_fg = "#252525"
+
+[states.selected]
+bg = "#d9d9d9"
+fg = "#252525"
+[states.hover]
+bg = "#fafafa"
+[states.disabled]
+fg = "#6d6d6d"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6d6d6d"

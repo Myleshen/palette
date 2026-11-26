@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Outrun Electric" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Outrun Electric"
+appearance = "dark"
+
+[palette]
+bg = "#0c0a20"
+surface = "#090717"
+elevated = "#242336"
+fg = "#f2f3f7"
+fg_muted = "#a2a1ac"
+accent = "#6dc6fd"
+accent_fg = "#000000"
+selection_bg = "#ba45a3"
+selection_fg = "#fafafc"
+match_fg = "#df85ff"
+border = "#3a394b"
+separator = "#24233680"
+danger = "#e61f44"
+warning = "#ffd400"
+success = "#a7da1e"
+info = "#1ea8fc"
+badge_bg = "#242336"
+badge_fg = "#f2f3f7"
+
+[states.selected]
+bg = "#ba45a3"
+fg = "#fafafc"
+[states.hover]
+bg = "#242336"
+[states.disabled]
+fg = "#a2a1ac"
+
+[footer]
+hint_color = "#a2a1ac"

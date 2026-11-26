@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Patina" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Patina"
+appearance = "dark"
+
+[palette]
+bg = "#0e1613"
+surface = "#0a100e"
+elevated = "#262d2b"
+fg = "#dce5de"
+fg_muted = "#949d97"
+accent = "#e0c36a"
+accent_fg = "#000000"
+selection_bg = "#23302b"
+selection_fg = "#959a98"
+match_fg = "#e0c36a"
+border = "#373f3c"
+separator = "#262d2b80"
+danger = "#d9603f"
+warning = "#c8a24a"
+success = "#9fc08c"
+info = "#5fc9b0"
+badge_bg = "#262d2b"
+badge_fg = "#dce5de"
+
+[states.selected]
+bg = "#23302b"
+fg = "#959a98"
+[states.hover]
+bg = "#262d2b"
+[states.disabled]
+fg = "#949d97"
+
+[footer]
+hint_color = "#949d97"

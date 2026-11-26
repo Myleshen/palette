@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Frostline" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Frostline"
+appearance = "light"
+
+[palette]
+bg = "#f7fbff"
+surface = "#ebeef2"
+elevated = "#fbfdff"
+fg = "#102a43"
+fg_muted = "#617385"
+accent = "#164891"
+accent_fg = "#ffffff"
+selection_bg = "#fbfdff"
+selection_fg = "#102a43"
+match_fg = "#5c3189"
+border = "#c9d1d9"
+separator = "#fbfdff80"
+danger = "#812121"
+warning = "#654a00"
+success = "#0b5934"
+info = "#164891"
+badge_bg = "#fbfdff"
+badge_fg = "#102a43"
+
+[states.selected]
+bg = "#fbfdff"
+fg = "#102a43"
+[states.hover]
+bg = "#fbfdff"
+[states.disabled]
+fg = "#617385"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#617385"

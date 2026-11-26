@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Blue Dolphin" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Blue Dolphin"
+appearance = "dark"
+
+[palette]
+bg = "#006984"
+surface = "#004c5f"
+elevated = "#1a7890"
+fg = "#c5f2ff"
+fg_muted = "#80c2d4"
+accent = "#ffcc00"
+accent_fg = "#000000"
+selection_bg = "#2baeca"
+selection_fg = "#2f3030"
+match_fg = "#e9c1ff"
+border = "#27849d"
+separator = "#1a789080"
+danger = "#ff8288"
+warning = "#f4d69f"
+success = "#b4e88d"
+info = "#82aaff"
+badge_bg = "#1a7890"
+badge_fg = "#daf7ff"
+
+[states.selected]
+bg = "#2baeca"
+fg = "#2f3030"
+[states.hover]
+bg = "#1a7890"
+[states.disabled]
+fg = "#80c2d4"
+
+[footer]
+hint_color = "#80c2d4"
