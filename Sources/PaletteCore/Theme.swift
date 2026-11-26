@@ -223,7 +223,7 @@ public struct Theme: Equatable, Sendable {
     }()
 }
 
-public struct ThemeLoadResult {
+public struct ThemeLoadResult: Sendable {
     public var theme: Theme
     public var diagnostics: [Diagnostic]
 
@@ -283,11 +283,130 @@ public enum ThemeLoader {
         bundledThemesDirectory: URL? = ThemeLoader.bundledThemesDirectory,
         fallback: Theme = .defaultDark
     ) -> ThemeLoadResult {
+        let key = cacheKey(name: name, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, fallback: fallback)
+        if let cached = cachedTheme(for: key) {
+            return cached
+        }
         var diagnostics: [Diagnostic] = []
         var theme = resolve(name: name, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory, fallback: fallback, visited: [], diagnostics: &diagnostics)
         correctContrast(&theme, diagnostics: &diagnostics)
         validate(theme, diagnostics: &diagnostics)
-        return ThemeLoadResult(theme: theme, diagnostics: diagnostics)
+        let result = ThemeLoadResult(theme: theme, diagnostics: diagnostics)
+        store(result, for: key)
+        return result
+    }
+
+    // MARK: - Full-parse cache
+
+    /// Parsing a theme allocates its whole palette, so the browser keeps only
+    /// what the visible rows and the preview asked for. The key carries file
+    /// stamps so editing or replacing a theme invalidates its entry.
+    private struct CacheKey: Hashable {
+        var name: String
+        var themesDirectory: String
+        var bundledThemesDirectory: String?
+        var fallback: String
+        var stamp: String
+    }
+
+    private static let cacheLock = NSLock()
+    private static var loadCache: [CacheKey: ThemeLoadResult] = [:]
+    private static var loadOrder: [CacheKey] = []
+    private static let loadCacheLimit = 48
+    private static var parseCount = 0
+    private static var catalogCount = 0
+
+    private static func cacheKey(
+        name: String,
+        themesDirectory: URL,
+        bundledThemesDirectory: URL?,
+        fallback: Theme
+    ) -> CacheKey {
+        CacheKey(
+            name: name,
+            themesDirectory: themesDirectory.standardizedFileURL.path,
+            bundledThemesDirectory: bundledThemesDirectory?.standardizedFileURL.path,
+            fallback: fallback.name,
+            stamp: fileStamp(name: name, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory)
+        )
+    }
+
+    private static func fileStamp(name: String, themesDirectory: URL, bundledThemesDirectory: URL?) -> String {
+        let directoryDate = modificationDate(themesDirectory)?.timeIntervalSince1970 ?? 0
+        let user = themesDirectory.appendingPathComponent(name).appendingPathExtension("toml")
+        if let date = modificationDate(user) {
+            return "user-\(date.timeIntervalSince1970)-\(directoryDate)"
+        }
+        if let bundledThemesDirectory {
+            let directoryDate = modificationDate(bundledThemesDirectory)?.timeIntervalSince1970 ?? 0
+            let bundled = bundledThemesDirectory.appendingPathComponent(name).appendingPathExtension("toml")
+            if let date = modificationDate(bundled) {
+                return "bundled-\(date.timeIntervalSince1970)-\(directoryDate)"
+            }
+        }
+        // Built-in sources are compiled into the app and cannot change.
+        return "builtin"
+    }
+
+    private static func modificationDate(_ url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
+    }
+
+    private static func cachedTheme(for key: CacheKey) -> ThemeLoadResult? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        guard let result = loadCache[key] else { return nil }
+        if let index = loadOrder.firstIndex(of: key) {
+            loadOrder.remove(at: index)
+            loadOrder.append(key)
+        }
+        return result
+    }
+
+    private static func store(_ result: ThemeLoadResult, for key: CacheKey) {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if loadCache[key] != nil {
+            loadCache[key] = result
+            return
+        }
+        if loadOrder.count >= loadCacheLimit, let oldest = loadOrder.first {
+            loadOrder.removeFirst()
+            loadCache.removeValue(forKey: oldest)
+        }
+        loadOrder.append(key)
+        loadCache[key] = result
+        parseCount += 1
+    }
+
+    internal static func resetCachesForTesting() {
+        cacheLock.lock()
+        loadCache.removeAll()
+        loadOrder.removeAll()
+        parseCount = 0
+        catalogCount = 0
+        cacheLock.unlock()
+        bundledCatalogLock.lock()
+        bundledCatalogCache.removeAll()
+        bundledCatalogLock.unlock()
+    }
+
+    internal static var fullParseCountForTesting: Int {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return parseCount
+    }
+
+    internal static var catalogCallCountForTesting: Int {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return catalogCount
+    }
+
+    internal static var cachedThemeCountForTesting: Int {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return loadCache.count
     }
 
     /// Authored foreground values are kept when they pass; otherwise the pair
@@ -329,6 +448,9 @@ public enum ThemeLoader {
         themesDirectory: URL,
         bundledThemesDirectory: URL? = ThemeLoader.bundledThemesDirectory
     ) -> [ThemeInfo] {
+        cacheLock.lock()
+        catalogCount += 1
+        cacheLock.unlock()
         var infos: [ThemeInfo] = []
         var index: [String: Int] = [:]
         // A user file with a bundled theme's name replaces its catalogue entry,

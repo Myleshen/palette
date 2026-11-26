@@ -1056,7 +1056,7 @@ struct SettingsView: View {
             .init(title: "Search placeholder", tab: .launcher, anchor: "row-Placeholder", keywords: "search hint placeholder text"),
             .init(title: "App order", tab: .launcher, anchor: "launcher-tabs", keywords: "alphabetical frequent sorting"),
             .init(title: "Preview layout", tab: .launcher, anchor: "row-Preview", keywords: "preview beside below layout"),
-            .init(title: "Themes", tab: .appearance, anchor: "appearance-theme", keywords: "theme dark light catppuccin gruvbox aetheria glass material"),
+            .init(title: "Themes", tab: .appearance, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
@@ -1968,15 +1968,14 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .frame(maxWidth: 260)
                 }
-                pickerRow("Dark theme") {
-                    themePicker(selection: $config.theme.dark)
-                }
-                pickerRow("Light theme") {
-                    themePicker(selection: $config.theme.light)
-                }
+                ThemeBrowserView(
+                    themeManager: themeManager,
+                    selection: $config.theme,
+                    themesDirectory: themesDirectory
+                )
                 Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
             } footer: {
-                Text("Theme files use TOML. The active theme reloads when you pick another.")
+                Text("Theme files use TOML. Browsing previews a theme without changing anything; Use Theme applies it and saves the choice for the current mode.")
             }
 
             card("Typography", anchor: "appearance-typography") {
@@ -2034,31 +2033,6 @@ struct SettingsView: View {
                 Text("Palette replaces glass with an opaque background when Reduce Transparency is on, and Settings follows the same rule.")
             }
         }
-    }
-
-    /// One catalogue read per render: hundreds of bundled themes make a
-    /// per-row lookup quadratic, and each read touches the filesystem.
-    private func themePicker(selection: Binding<String>) -> some View {
-        let catalog = ThemeLoader.catalog(themesDirectory: themesDirectory)
-        let names = catalog.map(\.name)
-        let selected = selection.wrappedValue
-        let choices = selected.isEmpty || names.contains(selected) ? names : [selected] + names
-        let labels = Dictionary(uniqueKeysWithValues: catalog.map { ($0.name, $0.displayName) })
-        return Picker("Theme", selection: selection) {
-            ForEach(choices, id: \.self) { name in
-                Text(themeLabel(name, labels: labels)).tag(name)
-            }
-        }
-        .labelsHidden()
-        .frame(maxWidth: 320, alignment: .leading)
-    }
-
-    private func themeLabel(_ name: String, labels: [String: String]) -> String {
-        guard let label = labels[name] else {
-            let fallback = name.split(separator: "-").map { $0.capitalized }.joined(separator: " ")
-            return "\(fallback) (missing)"
-        }
-        return label
     }
 
     private var microphones: [(id: String, name: String)] {
