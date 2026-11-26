@@ -3,7 +3,7 @@ import Foundation
 import PaletteCore
 import PalettePlatform
 
-/// Documents and artifacts tracked by `atlas` (`~/dot-files/scripts/macos/atlas`).
+/// Documents and artifacts tracked by `atlas` (`brew install Myleshen/tap/atlas`).
 ///
 /// Atlas keeps its index in `~/.config/atlas/state.json`; the marker, mtime and
 /// Markdown preview path are derived here exactly as atlas derives them, so the
@@ -85,15 +85,20 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
 
     private let config: Config
     private let bridge: HostBridge?
+    /// Resolves the atlas binary. A seam for tests: a machine that has atlas
+    /// installed cannot otherwise exercise the missing-tool path.
+    private let toolPath: () -> String?
     private let cache = Cache()
 
     public init(
         bridge: HostBridge? = nil,
         stateFile: URL = AtlasProvider.defaultStateFile,
         previewDirectory: URL = AtlasProvider.defaultPreviewDirectory,
-        home: String = NSHomeDirectory()
+        home: String = NSHomeDirectory(),
+        toolPath: @escaping () -> String? = { ToolLocator.shared.path(for: "atlas") }
     ) {
         self.bridge = bridge
+        self.toolPath = toolPath
         let home = PathExpansion.expand(home)
         self.config = Config(
             stateFile: stateFile,
@@ -154,7 +159,7 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
               let value = action.value.text,
               value.hasPrefix("review:") else { return }
         let path = String(value.dropFirst("review:".count))
-        guard let tool = ToolLocator.shared.path(for: "atlas") ?? Self.fallbackTool else {
+        guard let tool = toolPath() else {
             await bridge?.notify("atlas is not installed")
             throw ProviderError.toolMissing("atlas")
         }
@@ -229,7 +234,7 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
 
     private func setupItem() -> PaletteItem {
         // The folder exists but atlas itself may be the missing piece.
-        let atlasMissing = ToolLocator.shared.path(for: "atlas") == nil && Self.fallbackTool == nil
+        let atlasMissing = toolPath() == nil
         let requirement = ProviderRequirements.requirements(forProviderID: descriptor.id).first
         return PaletteItem(
             id: "atlas:setup",
@@ -326,11 +331,6 @@ public final class AtlasProvider: PaletteProvider, @unchecked Sendable {
         let candidate = config.previewDirectory
             .appendingPathComponent(previewDigest(path: entry.path, text: text) + ".html").path
         return FileManager.default.fileExists(atPath: candidate) ? candidate : nil
-    }
-
-    private static var fallbackTool: String? {
-        let path = PathExpansion.expand("~/dot-files/scripts/macos/atlas")
-        return FileManager.default.isExecutableFile(atPath: path) ? path : nil
     }
 
     private static func readText(_ path: String) -> String? {
