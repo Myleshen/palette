@@ -66,6 +66,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var configuration: PaletteConfig!
     private var store: PaletteStore!
     private var themeManager: ThemeManager!
+    private var themingEngine: ThemingEngine!
+    private var themingTimer: Timer?
+    private var lastWallpaperSignature = ""
     private var launcher: LauncherService!
     private var pasteboard: PasteboardService!
     private var clipboardMonitor: ClipboardMonitor?
@@ -255,6 +258,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hostProxy = HostBridgeProxy()
 
         themeManager = ThemeManager(paths: paths, selection: configuration.theme, store: store)
+        themingEngine = ThemingEngine(paths: paths, themesDirectory: paths.themesDir)
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
         themeManager.searchPlaceholder = configuration.searchPlaceholder
@@ -1182,7 +1186,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             themesDirectory: paths.themesDir,
             launcher: launcher,
             onSelect: { [weak self] name in self?.pickTheme(name) },
-            currentName: { [weak self] in self?.themeManager.currentThemeID ?? "" }
+            currentName: { [weak self] in self?.themeManager.currentThemeID ?? "" },
+            paletteAvailable: { [weak self] in self?.configuration.theming.enabled ?? false },
+            onApplyPalette: { [weak self] name in self?.applyPaletteToApps(name) }
         )
         providers.append(themes)
 
@@ -2941,6 +2947,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// `/theme` → Apply Palette. It switches the engine to theme mode and
+    /// remembers the pick so the next apply and the Settings pane agree.
+    private func applyPaletteToApps(_ name: String) {
+        configuration.theming.enabled = true
+        configuration.theming.source = .theme
+        configuration.theming.theme = name
+        do {
+            try writeConfig(configuration)
+        } catch {
+            Log.shared.warn("Could not save the palette source: \(error.localizedDescription)", source: "theming")
+        }
+        let config = configuration.theming
+        Task { @MainActor in
+            let result = await themingEngine.applyTheme(named: name, config: config)
+            searchController?.setStatus(result.status, duration: 6)
+        }
+    }
+
+    // MARK: - Wallpaper follow
+
+    /// A five-second URL check, and only while the engine is in wallpaper-follow
+    /// mode. No daemon, no filesystem watcher, no wake-ups otherwise.
+    private func configureThemingPolling() {
+        themingTimer?.invalidate()
+        themingTimer = nil
+        let config = configuration.theming
+        guard config.enabled, config.source == .wallpaper, config.followWallpaper else { return }
+        lastWallpaperSignature = wallpaperSignature()
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.themingWallpaperTick()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        themingTimer = timer
+    }
+
+    private func wallpaperSignature() -> String {
+        themingEngine.wallpaperURLs.map(\.path).joined(separator: "|")
+    }
+
+    private func themingWallpaperTick() {
+        guard ThemingEngine.shouldAutoApply(configuration.theming) else {
+            configureThemingPolling()
+            return
+        }
+        let signature = wallpaperSignature()
+        guard signature != lastWallpaperSignature else { return }
+        lastWallpaperSignature = signature
+        let config = configuration.theming
+        Task { @MainActor in
+            let result = await themingEngine.applyWallpaper(config)
+            searchController?.setStatus(result.status, duration: 5)
+        }
+    }
+
     private func configureWatchers() {
         lastConfigModification = modificationDate(paths.configFile)
         lastThemesSignature = themesSignature()
@@ -3043,6 +3105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.windowConfig = configuration.window
         updatePositionMenu()
+        configureThemingPolling()
 
         let oldRegistry = registry
         let newRegistry = buildRegistry()
@@ -3274,6 +3337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             config: configuration,
             keepAwake: keepAwake,
             themeManager: themeManager,
+            theming: themingEngine,
             themesDirectory: paths.themesDir,
             accessibilityTrusted: pasteboard.isAccessibilityTrusted,
             providers: allProviderInfo,

@@ -497,6 +497,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var capture: CaptureConfig
     public var cheatsheets: CheatsheetConfig
     public var updates: UpdateConfig
+    /// Cross-app palette generation, separate from Palette's own UI theme.
+    public var theming: ThemingConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -539,7 +541,8 @@ public struct PaletteConfig: Sendable, Equatable {
         timer: TimerConfig = TimerConfig(),
         capture: CaptureConfig = CaptureConfig(),
         cheatsheets: CheatsheetConfig = CheatsheetConfig(),
-        updates: UpdateConfig = UpdateConfig()
+        updates: UpdateConfig = UpdateConfig(),
+        theming: ThemingConfig = ThemingConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -581,6 +584,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.capture = capture
         self.cheatsheets = cheatsheets
         self.updates = updates
+        self.theming = theming
     }
 }
 
@@ -641,6 +645,8 @@ public struct PalettePaths: Sendable {
     public var bookmarksFile: URL { configDir.appendingPathComponent("bookmarks.toml") }
     public var providersDir: URL { configDir.appendingPathComponent("providers", isDirectory: true) }
     public var themesDir: URL { configDir.appendingPathComponent("themes", isDirectory: true) }
+    /// Managed cross-app palette files. Nothing outside this directory is written.
+    public var themeDir: URL { configDir.appendingPathComponent("theme", isDirectory: true) }
     public var databaseFile: URL { stateDir.appendingPathComponent("palette.sqlite") }
     /// Content-addressed clipboard image files, beside the database.
     public var clipboardImagesDir: URL { stateDir.appendingPathComponent("clipboard", isDirectory: true) }
@@ -649,7 +655,7 @@ public struct PalettePaths: Sendable {
 
     public func createDirectories() throws {
         let manager = FileManager.default
-        for url in [configDir, providersDir, themesDir, stateDir, logsDir, cacheDir] {
+        for url in [configDir, providersDir, themesDir, themeDir, stateDir, logsDir, cacheDir] {
             try manager.createDirectory(at: url, withIntermediateDirectories: true)
         }
     }
@@ -1074,6 +1080,10 @@ public enum ConfigLoader {
             config.theme = theme
         }
 
+        if let themingTable = table.table("theming") {
+            config.theming = ThemingConfig.parse(themingTable)
+        }
+
         if let scopesTable = table.table("scopes") {
             var scopes: [String: Scope] = [:]
             for (name, value) in scopesTable {
@@ -1316,6 +1326,15 @@ public enum ConfigLoader {
         dark = "siri-graphite"
         light = "siri-silver"
 
+        # Cross-app palette files written under ~/.config/palette/theme/.
+        [theming]
+        enabled = false
+        source = "theme"              # theme | wallpaper
+        theme = ""                    # empty uses the theme Palette is showing
+        follow_wallpaper = false
+        dark_mode = "auto"            # auto | dark | light
+        targets = ["kitty", "ghostty", "zellij", "nvim", "fish", "starship"]
+
         [scopes.projects]
         roots = ["~/dev", "~/dot-files"]
         exclude = [
@@ -1503,6 +1522,8 @@ public enum ConfigWriter {
         out.append("mode = \(quote(config.theme.mode.rawValue))")
         out.append("dark = \(quote(config.theme.dark))")
         out.append("light = \(quote(config.theme.light))")
+        out.append("")
+        out.append(config.theming.render())
         out.append("")
         out.append("[web_search]")
         out.append("enabled = \(config.webSearchEnabled)")
