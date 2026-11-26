@@ -429,7 +429,7 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
 
-        items = markingPasteTrouble(visible)
+        items = visible
         highlightTerms = result.parsed.text
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
@@ -474,26 +474,6 @@ public final class SearchController: ObservableObject, HostBridge {
             setStatus("Some sources are still loading — use a /trigger for the slow one", duration: 5)
         }
         fillPreview()
-    }
-
-    /// Providers build paste actions without knowing the permission state, so
-    /// the host adds the trouble here: Return then opens Settings → Permissions
-    /// instead of silently falling back to Copy.
-    private func markingPasteTrouble(_ items: [PaletteItem]) -> [PaletteItem] {
-        guard !pasteboard.isAccessibilityTrusted else { return items }
-        return items.map { item in
-            guard item.trouble == nil,
-                  let kind = item.primaryAction?.kind,
-                  kind == .pasteText || kind == .pasteImage || kind == .pasteFiles
-            else { return item }
-            var copy = item
-            copy.trouble = ItemTrouble(
-                title: "Enable Accessibility",
-                detail: "Allow Palette to paste into the previous app",
-                settingsAnchor: "general-permissions"
-            )
-            return copy
-        }
     }
 
     /// A preview that costs a process call (git status, a file digest) is
