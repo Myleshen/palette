@@ -924,7 +924,8 @@ public actor PaletteStore {
     /// writes, so the capture and annotator paths record their bytes here
     /// instead. Text and path copies are never routed through this; dedupe is
     /// by hash like any other copy, and the monitor's own write is still
-    /// suppressed.
+    /// suppressed. The caller hands over bytes, size and thumbnail it already
+    /// has — nothing here decodes an image or reads a file's contents.
     @discardableResult
     public func insertPaletteCopy(
         _ copy: PaletteClipboardCopy,
@@ -933,22 +934,19 @@ public actor PaletteStore {
         at date: Date = Date()
     ) throws -> Bool {
         switch copy {
-        case .image(let data):
-            guard data.count <= 20_000_000,
-                  let size = ClipboardMonitor.imageSize(of: data) else { return false }
+        case .image(let image):
             return try insertClipboardImage(
-                png: data,
-                thumbnail: ClipboardMonitor.thumbnailPNG(from: data),
-                width: size.width,
-                height: size.height,
+                png: image.png,
+                thumbnail: image.thumbnail,
+                width: image.width,
+                height: image.height,
                 maxEntries: maxImages,
                 at: date
             )
-        case .files(let paths):
-            guard let first = paths.first else { return false }
+        case .files(let paths, let thumbnail):
             return try insertClipboardFiles(
                 paths: paths,
-                thumbnail: ClipboardMonitor.fileThumbnail(first),
+                thumbnail: thumbnail,
                 maxEntries: maxFiles,
                 at: date
             )

@@ -2141,17 +2141,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Palette's own copies are skipped by the monitor, so screenshots,
     /// annotated images and recordings are recorded here instead. Path and
-    /// reveal copies never reach this.
+    /// reveal copies never reach this. The caller only hands over bytes: the
+    /// one decode or icon lookup and the file write happen at utility
+    /// priority, so the panel hide and the capture feedback never wait.
     private func recordPaletteCopy(_ copy: PaletteClipboardCopy) {
         guard let store else { return }
         let limits = configuration.clipboard
-        Task { [weak self] in
-            _ = try? await store.insertPaletteCopy(
-                copy,
+        let handedOver = Date()
+        let controller = searchController
+        Task.detached(priority: .utility) {
+            let prepared = copy.prepared()
+            let inserted = (try? await store.insertPaletteCopy(
+                prepared,
                 maxImages: limits.maxImages,
                 maxFiles: limits.maxFiles
-            )
-            await MainActor.run { self?.searchController?.clipboardDidChange() }
+            )) ?? false
+            let milliseconds = Int(Date().timeIntervalSince(handedOver) * 1000)
+            switch prepared {
+            case .image(let image):
+                Log.shared.info(
+                    "Palette screenshot stored in \(milliseconds) ms (new=\(inserted), \(image.png.count) bytes, \(image.width)x\(image.height), thumb=\(image.thumbnail?.count ?? 0) bytes)",
+                    source: "clipboard"
+                )
+            case .files(let paths, let thumbnail):
+                Log.shared.info(
+                    "Palette file copy stored in \(milliseconds) ms (new=\(inserted), \(paths.count) file(s), thumb=\(thumbnail?.count ?? 0) bytes)",
+                    source: "clipboard"
+                )
+            }
+            await MainActor.run { controller?.clipboardDidChange() }
         }
     }
 

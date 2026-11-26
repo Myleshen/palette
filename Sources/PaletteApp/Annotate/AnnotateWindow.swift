@@ -715,7 +715,7 @@ struct AnnotateView: View {
     }
 
     private func copyImage() {
-        if let data = editor.copy() { onCopiedToPasteboard?(.image(data)) }
+        if let data = editor.copy() { onCopiedToPasteboard?(.image(PaletteClipboardImage(png: data))) }
         draft.unsaved = false
         notify("Copied to the clipboard")
         closeAfterToast()
