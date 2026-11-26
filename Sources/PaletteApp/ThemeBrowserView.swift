@@ -13,6 +13,10 @@ struct ThemeBrowserView: View {
     @State private var browser: ThemeBrowserSession?
     @State private var previewTheme: Theme?
     @State private var status: String?
+    /// Parsed row palettes, kept small; parsing happens in a task, never in a
+    /// row body.
+    @State private var swatches = ThemeSwatchCache()
+    @State private var swatchLoads: Set<String> = []
     @FocusState private var listFocused: Bool
 
     private var theme: Theme { themeManager.theme }
@@ -194,8 +198,8 @@ struct ThemeBrowserView: View {
     private func row(_ info: ThemeInfo, section: ThemeSection) -> some View {
         let selected = selectedName == info.name
         let isCurrent = isCurrent(info)
-        let rowTheme = ThemeLoader.load(name: info.name, themesDirectory: themesDirectory).theme
-        let accent = rowTheme.color(rowTheme.palette.accent)
+        let rowTheme = swatches.theme(named: info.name)
+        let accent = (rowTheme ?? theme).color((rowTheme ?? theme).palette.accent)
         return HStack(spacing: 6) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(info.displayName)
@@ -206,7 +210,11 @@ struct ThemeBrowserView: View {
                     .foregroundStyle(muted.opacity(0.85))
             }
             Spacer(minLength: 4)
-            swatches(rowTheme)
+            if let rowTheme {
+                swatchStrip(rowTheme)
+            } else {
+                swatchPlaceholder
+            }
             if isCurrent {
                 Image(systemName: "pin.fill")
                     .font(.system(size: 9))
@@ -234,9 +242,21 @@ struct ThemeBrowserView: View {
         .accessibilityLabel(accessibilityLabel(info, section: section))
         .accessibilityValue(isCurrent ? "Current theme" : info.appearance)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .onAppear { requestSwatch(info.name) }
     }
 
-    private func swatches(_ theme: Theme) -> some View {
+    private var swatchPlaceholder: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<7, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(muted.opacity(0.2))
+                    .frame(width: 8, height: 8)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func swatchStrip(_ theme: Theme) -> some View {
         HStack(spacing: 2) {
             ForEach(Array([theme.palette.bg, theme.palette.fg, theme.palette.accent,
                            theme.palette.danger, theme.palette.warning,
@@ -286,7 +306,12 @@ struct ThemeBrowserView: View {
                     .keyboardShortcut(.return, modifiers: .command)
                 Button("Revert") { revert() }
                     .disabled(selectedName == nil)
-                if let status {
+                if themeManager.applyingTheme != nil {
+                    Label("Applying theme…", systemImage: "hourglass")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .transition(.opacity)
+                } else if let status {
                     Label(status, systemImage: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundStyle(theme.color(theme.palette.success))
@@ -449,9 +474,7 @@ struct ThemeBrowserView: View {
             session = ThemeBrowserSession(catalog: catalog, selected: catalog.allThemes.first?.name)
         }
         browser = session
-        if let name = session.selected {
-            previewTheme = ThemeLoader.load(name: name, themesDirectory: themesDirectory).theme
-        }
+        if let name = session.selected { requestSwatch(name) }
         listFocused = true
     }
 
@@ -464,17 +487,15 @@ struct ThemeBrowserView: View {
         guard var session = browser else { return }
         session.select(name)
         browser = session
-        previewTheme = ThemeLoader.load(name: name, themesDirectory: themesDirectory).theme
         status = nil
+        requestSwatch(name)
     }
 
     private func move(_ delta: Int) {
         guard var session = browser else { return }
         session.moveSelection(by: delta)
         browser = session
-        if let name = session.selected {
-            previewTheme = ThemeLoader.load(name: name, themesDirectory: themesDirectory).theme
-        }
+        if let name = session.selected { requestSwatch(name) }
         status = nil
     }
 
@@ -483,11 +504,14 @@ struct ThemeBrowserView: View {
         let updated = session.applying(to: selection, activeAppearance: theme.appearance)
         selection = updated
         themeManager.selection = updated
-        themeManager.select(name)
+        status = nil
+        requestSwatch(name)
         session.markApplied()
         browser = session
-        previewTheme = ThemeLoader.load(name: name, themesDirectory: themesDirectory).theme
-        status = "Theme applied"
+        themeManager.select(name) { [self] _ in
+            guard selectedName == name else { return }
+            status = "Theme applied"
+        }
     }
 
     private func revert() {
@@ -498,7 +522,27 @@ struct ThemeBrowserView: View {
         }
         browser = session
         let name = session.selected ?? currentSlotName
-        previewTheme = ThemeLoader.load(name: name, themesDirectory: themesDirectory).theme
+        requestSwatch(name)
         status = nil
+    }
+
+    /// Fills the row swatch cache and the preview from one background parse.
+    /// A row body only reads the cache, so scrolling never touches disk.
+    private func requestSwatch(_ name: String) {
+        if let cached = swatches.theme(named: name) {
+            if selectedName == name { previewTheme = cached }
+            return
+        }
+        guard !swatchLoads.contains(name) else { return }
+        swatchLoads.insert(name)
+        let directory = themesDirectory
+        Task { @MainActor in
+            let loaded = await Task.detached(priority: .userInitiated) {
+                ThemeLoader.load(name: name, themesDirectory: directory).theme
+            }.value
+            swatchLoads.remove(name)
+            swatches.store(loaded, named: name)
+            if selectedName == name { previewTheme = loaded }
+        }
     }
 }

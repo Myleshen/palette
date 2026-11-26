@@ -18,8 +18,8 @@ final class ScreenshotHUD {
         self.onOpen = onOpen
 
         let size = image.size
-        let maxWidth: CGFloat = 260
-        let maxHeight: CGFloat = 170
+        let maxWidth = ScreenshotThumbnail.maxPointSize.width
+        let maxHeight = ScreenshotThumbnail.maxPointSize.height
         let scale = min(1, min(maxWidth / max(1, size.width), maxHeight / max(1, size.height)))
         let width = max(120, size.width * scale)
         let height = size.height * scale

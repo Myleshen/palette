@@ -115,6 +115,32 @@ public struct ThemeBrowserCatalog: Equatable, Sendable {
     }
 }
 
+/// A small LRU of fully parsed themes for the browser's rows. Reading it never
+/// touches disk, so a row body can ask for swatches without a parse; misses are
+/// filled from a background load.
+public struct ThemeSwatchCache: Sendable {
+    public private(set) var themes: [String: Theme] = [:]
+    private var order: [String] = []
+    public let limit: Int
+
+    public init(limit: Int = 64) {
+        self.limit = max(1, limit)
+    }
+
+    public func theme(named name: String) -> Theme? {
+        themes[name]
+    }
+
+    public mutating func store(_ theme: Theme, named name: String) {
+        themes[name] = theme
+        order.removeAll { $0 == name }
+        order.append(name)
+        while order.count > limit {
+            themes[order.removeFirst()] = nil
+        }
+    }
+}
+
 /// Selection and preview state for the theme browser. It never touches the
 /// configured theme; `applying(to:)` returns a new selection for the caller to
 /// commit, which is what keeps clicking rows side-effect free.

@@ -8,8 +8,9 @@ import SwiftUI
 @MainActor
 final class RecordingOptionsModel: ObservableObject {
     @Published var options: RecordingOptions
-    let displays: [CaptureDisplay]
-    let microphones: [(id: String, name: String)]
+    /// Filled from a cache first, then from background discovery.
+    @Published var displays: [CaptureDisplay]
+    @Published var microphones: [(id: String, name: String)]
     let format: String
 
     init(
@@ -93,6 +94,11 @@ final class RecordingOptionsPanelController: NSWindowController, NSWindowDelegat
         WindowPresentation.present(window)
     }
 
+    func updateDevices(displays: [CaptureDisplay], microphones: [(id: String, name: String)]) {
+        model.displays = displays
+        model.microphones = microphones
+    }
+
     private func record() {
         guard !finished else { return }
         finished = true
@@ -161,6 +167,7 @@ private struct RecordingOptionsView: View {
                         Text(microphone.name).tag(microphone.id)
                     }
                     if !model.options.microphone.isEmpty,
+                       !model.microphones.isEmpty,
                        !model.microphones.contains(where: { $0.id == model.options.microphone }) {
                         Text("\(model.options.microphone) (missing)").tag(model.options.microphone)
                     }
@@ -190,7 +197,8 @@ private struct RecordingOptionsView: View {
                         ForEach(model.displays, id: \.index) { display in
                             Text(display.label).tag(display.index)
                         }
-                        if !model.displays.contains(where: { $0.index == model.options.display }) {
+                        if !model.displays.isEmpty,
+                           !model.displays.contains(where: { $0.index == model.options.display }) {
                             Text("Display \(model.options.display) (missing)")
                                 .tag(model.options.display)
                         }

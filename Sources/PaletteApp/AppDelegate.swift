@@ -98,10 +98,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Bindable catalogue, rebuilt with the registry so provider ids never lie.
     private var catalogCommands: [CatalogCommand] = []
     private var recordingOptionsPanel: RecordingOptionsPanelController?
+    /// Last device lists handed to the options panel. AVFoundation discovery is
+    /// what makes the first press slow, so a recent list is reused for a few
+    /// seconds and a stale one is filled in off-main.
+    private struct RecordingDeviceSnapshot {
+        var displays: [CaptureDisplay]
+        var microphones: [(id: String, name: String)]
+        var loadedAt: Date
+    }
+    private var recordingDevices: RecordingDeviceSnapshot?
+    private var recordingDevicesTask: Task<Void, Never>?
     private var lastCaptureURL: URL?
     private var lastRecordingURL: URL?
     private var lastScreenshotURL: URL?
     private var menuBarFlashTask: Task<Void, Never>?
+    private var thumbnailTask: Task<Void, Never>?
     private let screenshotHUD = ScreenshotHUD()
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
@@ -278,6 +289,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.panel?.apply(theme: theme)
             self.applyThemeToCaptureWindows(theme)
+        }
+        themeManager.onSlowApply = { [weak self] _ in
+            self?.searchController?.setStatus("Applying theme…")
         }
 
         let builtRegistry = buildRegistry()
@@ -521,7 +535,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         _ = self.applySettings(updated)
                     }
                 } else if let value = step.dropPrefix("export_backup=") {
-                    if !self.writeBackup(to: URL(fileURLWithPath: value)) {
+                    if !(await self.writeBackup(to: URL(fileURLWithPath: value))) {
                         self.recordScriptFailure("backup export failed")
                     }
                 } else if let value = step.dropPrefix("screen_override=") {
@@ -1657,10 +1671,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             existing.discard()
         }
         let capture = captureService.config
+        let cached = recordingDevices
         let controller = RecordingOptionsPanelController(
             options: RecordingOptions(capture: capture),
-            displays: CaptureDisplays.active(),
-            microphones: CaptureMicrophones.active(),
+            displays: cached?.displays ?? [],
+            microphones: cached?.microphones ?? [],
             format: capture.recordingFormat,
             themeManager: themeManager,
             onRecord: { [weak self] options in self?.beginRecording(options) },
@@ -1673,6 +1688,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The launcher shares the screen with whatever is about to be recorded.
         panel?.hide(activatePrevious: false)
         controller.show()
+        refreshRecordingDevices(cached: cached)
+    }
+
+    /// Shows the panel first, then fills the device pickers. Displays are cheap
+    /// to read on the main thread; microphone discovery starts AVFoundation and
+    /// is what used to stall the hotkey.
+    private func refreshRecordingDevices(cached: RecordingDeviceSnapshot?) {
+        if let cached, Date().timeIntervalSince(cached.loadedAt) < 5 { return }
+        let displays = CaptureDisplays.active()
+        recordingOptionsPanel?.updateDevices(
+            displays: displays,
+            microphones: cached?.microphones ?? []
+        )
+        recordingDevicesTask?.cancel()
+        recordingDevicesTask = Task { @MainActor [weak self] in
+            let microphones = await Task.detached(priority: .userInitiated, operation: {
+                CaptureMicrophones.active()
+            }).value
+            guard !Task.isCancelled, let self else { return }
+            self.recordingDevices = RecordingDeviceSnapshot(
+                displays: displays,
+                microphones: microphones,
+                loadedAt: Date()
+            )
+            self.recordingOptionsPanel?.updateDevices(displays: displays, microphones: microphones)
+        }
     }
 
     private func beginRecording(_ options: RecordingOptions) {
@@ -1825,7 +1866,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             captureFeedback("The last screenshot is no longer on disk")
             return nil
         }
-        guard let image = NSImage(contentsOf: url) else {
+        // Decode ImageIO's source off-main; Vision already runs there too.
+        guard let image = await Task.detached(priority: .userInitiated, operation: {
+            ScreenshotThumbnail.cgImage(at: url)
+        }).value else {
             captureFeedback("Could not read \(url.lastPathComponent)")
             return nil
         }
@@ -1861,26 +1905,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openAnnotator(_ url: URL) {
         Log.shared.info("Annotator: opening \(url.path)", source: "capture")
-        guard let image = NSImage(contentsOf: url) else {
-            Log.shared.error("Annotator: could not read \(url.path)", source: "capture")
-            Task { await searchController.notify("Could not open \(url.lastPathComponent) for editing") }
-            return
-        }
-        let controller = AnnotateWindowController(
-            image: image,
-            url: url,
-            themeManager: themeManager,
-            onCopiedToPasteboard: { [weak self] copy in self?.recordPaletteCopy(copy) }
-        )
-        controller.onClose = { [weak self, weak controller] in
-            guard let self, let controller else { return }
-            self.annotateWindows.removeAll { $0 === controller }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // A full-size screenshot decode belongs on a background thread.
+            let decoded = await Task.detached(priority: .userInitiated, operation: {
+                ScreenshotThumbnail.cgImage(at: url)
+            }).value
+            guard let decoded else {
+                Log.shared.error("Annotator: could not read \(url.path)", source: "capture")
+                await self.searchController.notify("Could not open \(url.lastPathComponent) for editing")
+                return
+            }
+            let image = NSImage(
+                cgImage: decoded,
+                size: NSSize(width: decoded.width, height: decoded.height)
+            )
+            let controller = AnnotateWindowController(
+                image: image,
+                url: url,
+                themeManager: self.themeManager,
+                onCopiedToPasteboard: { [weak self] copy in self?.recordPaletteCopy(copy) }
+            )
+            controller.onClose = { [weak self, weak controller] in
+                guard let self, let controller else { return }
+                self.annotateWindows.removeAll { $0 === controller }
+                self.updateActivationPolicy()
+            }
+            self.annotateWindows.append(controller)
             self.updateActivationPolicy()
+            Log.shared.info("Annotator: window \(self.annotateWindows.count) open", source: "capture")
+            controller.show()
         }
-        annotateWindows.append(controller)
-        updateActivationPolicy()
-        Log.shared.info("Annotator: window \(annotateWindows.count) open", source: "capture")
-        controller.show()
     }
 
     /// Headless check of the annotator: draws every shape, crops, and writes
@@ -1981,10 +2036,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if configuration.capture.captureSound {
             NSSound(named: NSSound.Name("Tink"))?.play()
         }
-        guard configuration.capture.captureThumbnail,
-              let image = NSImage(contentsOf: url) else { return }
-        screenshotHUD.show(image: image, title: url.lastPathComponent, theme: themeManager.theme) { [weak self] in
-            self?.openAnnotator(url)
+        guard configuration.capture.captureThumbnail else { return }
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        let scale = screen?.backingScaleFactor ?? 2
+        thumbnailTask?.cancel()
+        thumbnailTask = Task { @MainActor [weak self] in
+            // ImageIO downsamples while reading, so the HUD never decodes the
+            // full screenshot on the main thread.
+            let image = await Task.detached(priority: .userInitiated, operation: {
+                ScreenshotThumbnail.image(at: url, scale: scale)
+            }).value
+            guard !Task.isCancelled, let self, let image else { return }
+            self.screenshotHUD.show(
+                image: image,
+                title: url.lastPathComponent,
+                theme: self.themeManager.theme
+            ) { [weak self] in
+                self?.openAnnotator(url)
+            }
         }
     }
 
@@ -2436,6 +2505,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `lsregister -f` re-associates the bundle id with this copy, which is what
     /// the background-task record follows after a worktree build is deleted.
+    /// Launch-only: this waits for a fast local tool, but it is never on a
+    /// hotkey or Settings path.
     private func refreshLaunchServicesRecord(bundlePath: String) {
         let tool = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
         let process = Process()
@@ -2452,7 +2523,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Reads the path the system has on file. `SMAppService` does not expose it,
-    /// so ask the same tool support uses to diagnose login items.
+    /// so ask the same tool support uses to diagnose login items. Launch-only,
+    /// like `refreshLaunchServicesRecord`.
     private func recordedLoginItemPath() -> String? {
         guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
         let process = Process()
@@ -2888,24 +2960,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `/theme` is a real choice: store it in `[theme]` so a relaunch keeps it,
     /// instead of the old meta key that was written and deleted every launch.
     private func pickTheme(_ name: String) {
-        themeManager.select(name)
-        let appearance = themeManager.theme.appearance
-        if appearance == "light" {
-            configuration.theme.mode = .light
-            configuration.theme.light = name
-        } else {
-            configuration.theme.mode = .dark
-            configuration.theme.dark = name
-        }
-        themeManager.selection = configuration.theme
-        do {
-            try writeConfig(configuration)
-        } catch {
-            Log.shared.warn("Could not save the theme choice: \(error.localizedDescription)", source: "theme")
-            searchController?.setStatus(
-                "Could not save the theme: \(error.localizedDescription)",
-                duration: 6
-            )
+        // The load is off-main now, so the slot to write comes from the
+        // resolved theme rather than the previous one.
+        themeManager.select(name) { [weak self] theme in
+            guard let self else { return }
+            if theme.appearance == "light" {
+                self.configuration.theme.mode = .light
+                self.configuration.theme.light = name
+            } else {
+                self.configuration.theme.mode = .dark
+                self.configuration.theme.dark = name
+            }
+            self.themeManager.selection = self.configuration.theme
+            do {
+                try self.writeConfig(self.configuration)
+            } catch {
+                Log.shared.warn("Could not save the theme choice: \(error.localizedDescription)", source: "theme")
+                self.searchController?.setStatus(
+                    "Could not save the theme: \(error.localizedDescription)",
+                    duration: 6
+                )
+            }
         }
     }
 
@@ -3232,32 +3307,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.nameFieldStringValue = "Palette-Backup-\(stamp).zip"
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let destination = panel.url else { return }
-        writeBackup(to: destination)
+        // Staging copies the database and zipping shells out to ditto; both
+        // stay off the main thread so Settings never freezes.
+        Task { [weak self] in
+            _ = await self?.writeBackup(to: destination)
+        }
     }
 
     /// The full user state: config, themes, providers, database and the small
     /// TOML files that used to be left out. The ask key files are encrypted.
     @discardableResult
-    private func writeBackup(to destination: URL) -> Bool {
+    private func writeBackup(to destination: URL) async -> Bool {
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("Palette-Backup-\(UUID().uuidString)", isDirectory: true)
         let manager = FileManager.default
         defer { try? manager.removeItem(at: temp) }
+        let paths: PalettePaths = self.paths
+        searchController?.setStatus("Preparing backup…")
         do {
-            _ = try BackupExporter.stage(paths: paths, into: temp)
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", temp.path, destination.path]
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                throw NSError(domain: "PaletteBackup", code: Int(process.terminationStatus))
-            }
-            searchController.setStatus("Backup exported to \(destination.lastPathComponent)", duration: 4)
+            try await Task.detached(priority: .userInitiated) {
+                _ = try BackupExporter.stage(paths: paths, into: temp)
+            }.value
+            searchController?.setStatus("Zipping backup…")
+            try await Task.detached(priority: .userInitiated) {
+                try BackupExporter.zip(temp, to: destination)
+            }.value
+            showFeedback("Backup exported to \(destination.lastPathComponent)", logSource: "backup")
             return true
         } catch {
-            searchController.setStatus("Backup failed: \(error.localizedDescription)", duration: 5)
+            showFeedback("Backup failed: \(error.localizedDescription)", logSource: "backup")
             return false
         }
     }

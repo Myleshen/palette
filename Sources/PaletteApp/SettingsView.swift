@@ -1,6 +1,8 @@
 import AppKit
 import ApplicationServices
+import AVFoundation
 import CoreGraphics
+import CoreText
 import ServiceManagement
 import SwiftUI
 import PaletteCore
@@ -311,7 +313,16 @@ struct SettingsView: View {
     /// Bundle ids the clipboard ignores, with names resolved from installed and
     /// running apps only while this pane is open.
     @State private var ignoredAppChoices: [AppRecord] = []
+    /// Running apps are refreshed by workspace notifications instead of being
+    /// read from NSWorkspace on every body pass.
+    @State private var runningAppChoices: [(id: String, name: String)] = []
     @State private var ignoredAppDraft = ""
+    /// Device and font lists are read off-main once per pane appearance; the
+    /// old computed properties reran AVFoundation and font enumeration on
+    /// every re-render.
+    @State private var microphones: [(id: String, name: String)] = []
+    @State private var captureDisplays: [CaptureDisplay] = []
+    @State private var fontFamilies: [String] = []
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -1586,9 +1597,17 @@ struct SettingsView: View {
                 Text("Text, images and file selections are limited separately, so a run of screenshots never evicts text. Pinned entries are always kept. Copies an app marks concealed or transient are never recorded, even when that app is allowed below. Zero seconds keeps secrets until you clear the history.")
             }
             .task {
-                guard ignoredAppChoices.isEmpty else { return }
-                ignoredAppChoices = await AppIndex().applications()
+                if ignoredAppChoices.isEmpty {
+                    ignoredAppChoices = await AppIndex().applications()
+                }
+                refreshRunningAppChoices()
             }
+            .onReceive(NSWorkspace.shared.notificationCenter.publisher(
+                for: NSWorkspace.didLaunchApplicationNotification
+            ).receive(on: RunLoop.main)) { _ in refreshRunningAppChoices() }
+            .onReceive(NSWorkspace.shared.notificationCenter.publisher(
+                for: NSWorkspace.didTerminateApplicationNotification
+            ).receive(on: RunLoop.main)) { _ in refreshRunningAppChoices() }
 
             card("Commands", anchor: "general-commands") {
                 fieldRow("Command prefix", error: providerPrefixIssue) {
@@ -1649,6 +1668,18 @@ struct SettingsView: View {
         }
     }
 
+    /// Cached, so a body pass never walks NSWorkspace. Workspace notifications
+    /// keep the list current while the pane is open.
+    @MainActor
+    private func refreshRunningAppChoices() {
+        var seen = Set<String>()
+        runningAppChoices = NSWorkspace.shared.runningApplications.compactMap { app in
+            guard let bundleID = app.bundleIdentifier, !bundleID.isEmpty,
+                  seen.insert(bundleID).inserted else { return nil }
+            return (bundleID, app.localizedName ?? bundleID)
+        }
+    }
+
     private var ignorableApps: [(id: String, name: String)] {
         var seen = Set<String>()
         var rows: [(id: String, name: String)] = []
@@ -1656,10 +1687,8 @@ struct SettingsView: View {
             guard let bundleID = record.bundleID, seen.insert(bundleID).inserted else { continue }
             rows.append((bundleID, record.name))
         }
-        for app in NSWorkspace.shared.runningApplications {
-            guard let bundleID = app.bundleIdentifier, !bundleID.isEmpty,
-                  seen.insert(bundleID).inserted else { continue }
-            rows.append((bundleID, app.localizedName ?? bundleID))
+        for app in runningAppChoices where seen.insert(app.id).inserted {
+            rows.append(app)
         }
         return rows.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -1989,6 +2018,7 @@ struct SettingsView: View {
                 Text("Auto uses Zellij, then tmux, then a plain shell. Plain shells end when the panel closes. A size of 0 uses Kitty's font size, then the theme. Use a Nerd Font for icons.")
             }
         }
+        .task { await loadFontFamilies() }
     }
 
     // MARK: - Appearance
@@ -2050,6 +2080,7 @@ struct SettingsView: View {
                 Text("Palette replaces glass with an opaque background when Reduce Transparency is on, and Settings follows the same rule.")
             }
         }
+        .task { await loadFontFamilies() }
     }
 
     // MARK: - Theming
@@ -2535,16 +2566,27 @@ struct SettingsView: View {
         }
     }
 
-    private var microphones: [(id: String, name: String)] {
-        CaptureMicrophones.active()
+    /// AVFoundation cold start stays off the main thread; the pane shows
+    /// "System default" for a beat instead of freezing.
+    @MainActor
+    private func loadRecordingDevices(force: Bool = false) async {
+        if force || captureDisplays.isEmpty {
+            captureDisplays = CaptureDisplays.active()
+        }
+        if force || microphones.isEmpty {
+            microphones = await Task.detached(priority: .userInitiated, operation: {
+                CaptureMicrophones.active()
+            }).value
+        }
     }
 
-    private var captureDisplays: [CaptureDisplay] {
-        CaptureDisplays.active()
-    }
-
-    private var fontFamilies: [String] {
-        NSFontManager.shared.availableFontFamilies.sorted()
+    /// CoreText's list is safe off-main; NSFontManager's was not.
+    @MainActor
+    private func loadFontFamilies() async {
+        guard fontFamilies.isEmpty else { return }
+        fontFamilies = await Task.detached(priority: .userInitiated, operation: {
+            (CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []).sorted()
+        }).value
     }
 
     /// Installed fonts plus the configured family even when it is gone, so a
@@ -3265,7 +3307,8 @@ struct SettingsView: View {
                             ForEach(captureDisplays) { display in
                                 Text(display.label).tag(display.index)
                             }
-                            if !captureDisplays.contains(where: { $0.index == config.capture.recordingDisplay }) {
+                            if !captureDisplays.isEmpty,
+                               !captureDisplays.contains(where: { $0.index == config.capture.recordingDisplay }) {
                                 Text("Display \(config.capture.recordingDisplay) (missing)")
                                     .tag(config.capture.recordingDisplay)
                             }
@@ -3296,6 +3339,7 @@ struct SettingsView: View {
                             Text(microphone.name).tag(microphone.id)
                         }
                         if !config.capture.recordingMicrophone.isEmpty,
+                           !microphones.isEmpty,
                            !microphones.contains(where: { $0.id == config.capture.recordingMicrophone }) {
                             Text("\(config.capture.recordingMicrophone) (missing)")
                                 .tag(config.capture.recordingMicrophone)
@@ -3308,6 +3352,16 @@ struct SettingsView: View {
             } footer: {
                 Text("Use /rec to start or stop a recording. Recordings are saved with the system capture engine.")
             }
+        }
+        .task { await loadRecordingDevices() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            Task { await loadRecordingDevices(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
+            Task { await loadRecordingDevices(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
+            Task { await loadRecordingDevices(force: true) }
         }
     }
 
