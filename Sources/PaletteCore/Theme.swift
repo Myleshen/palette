@@ -130,6 +130,7 @@ public struct ThemeTypography: Equatable, Sendable {
     public var subtitleSize: Double = 12
     public var mono = "JetBrains Mono"
     public var monoSize: Double = 12
+    public var previewSize: Double = 13
     public var matchWeight = "semibold"
     public init() {}
 }
@@ -185,6 +186,12 @@ public struct Theme: Equatable, Sendable {
 
     public var effectiveIconSize: Double {
         list.density.lowercased() == "compact" ? max(14, list.iconSize * 0.86) : list.iconSize
+    }
+
+    /// Point size every preview surface reads: clipboard, paths, atlas,
+    /// snippets, media captions and the Ask transcript.
+    public var previewTextSize: Double {
+        min(24, max(9, typography.previewSize))
     }
 
     public static let defaultDark = Theme()
@@ -444,6 +451,9 @@ public enum ThemeLoader {
             theme.typography.subtitleSize = typography.number("subtitle_size") ?? theme.typography.subtitleSize
             theme.typography.mono = typography.str("mono") ?? theme.typography.mono
             theme.typography.monoSize = typography.number("mono_size") ?? theme.typography.monoSize
+            if let previewSize = typography.number("preview_size"), previewSize > 0 {
+                theme.typography.previewSize = min(24, max(9, previewSize))
+            }
             theme.typography.matchWeight = typography.str("match_weight") ?? theme.typography.matchWeight
         }
 

@@ -776,7 +776,7 @@ formats render directly in the preview pane.
 `[typography]` overrides the active theme. Empty strings and zero sizes inherit
 from the theme, which in turn falls back to the system font. Settings →
 Appearance has installed-font dropdowns for the UI and mono families, size
-controls, a live preview, and **Reset to Theme**. **Inherit** is the empty
+controls for UI, mono and preview text, a live preview, and **Reset to Theme**. **Inherit** is the empty
 value. A configured family that is no longer installed stays selected and is
 marked **(missing)** instead of being silently reset.
 
@@ -786,6 +786,7 @@ ui_family = "Avenir Next"
 mono_family = "Menlo"
 ui_size = 15
 mono_size = 13
+preview_size = 13
 ```
 
 ### Provider aliases, order, and visibility
@@ -859,6 +860,7 @@ ui_family = ""                 # empty inherits the theme
 mono_family = ""
 ui_size = 0
 mono_size = 0
+preview_size = 13               # 9…24; preview pane, snippets, Ask body
 
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]

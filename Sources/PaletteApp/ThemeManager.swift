@@ -118,6 +118,9 @@ public final class ThemeManager: ObservableObject {
         if typography.monoSize > 0 {
             resolved.typography.monoSize = typography.monoSize
         }
+        if typography.previewSize > 0 {
+            resolved.typography.previewSize = typography.previewSize
+        }
         theme = resolved
         self.diagnostics = diagnostics
         // The status-bar and main menus have no palette, so AppKit only gets the

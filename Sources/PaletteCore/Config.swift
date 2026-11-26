@@ -223,12 +223,20 @@ public struct TypographyConfig: Sendable, Equatable {
     public var monoFamily: String
     public var uiSize: Double
     public var monoSize: Double
+    public var previewSize: Double
 
-    public init(uiFamily: String = "", monoFamily: String = "", uiSize: Double = 0, monoSize: Double = 0) {
+    public init(
+        uiFamily: String = "",
+        monoFamily: String = "",
+        uiSize: Double = 0,
+        monoSize: Double = 0,
+        previewSize: Double = 13
+    ) {
         self.uiFamily = uiFamily
         self.monoFamily = monoFamily
         self.uiSize = uiSize
         self.monoSize = monoSize
+        self.previewSize = previewSize
     }
 }
 
@@ -818,6 +826,9 @@ public enum ConfigLoader {
             if let value = typography.number("mono_size"), value > 0 {
                 config.typography.monoSize = min(48, max(9, value))
             }
+            if let value = typography.number("preview_size"), value > 0 {
+                config.typography.previewSize = min(24, max(9, value))
+            }
         }
 
         if let capture = table.table("capture") {
@@ -1228,6 +1239,7 @@ public enum ConfigLoader {
         mono_family = ""
         ui_size = 0
         mono_size = 0
+        preview_size = 13
 
         # Provider tab order and optional trigger aliases.
         [providers]
@@ -1438,6 +1450,7 @@ public enum ConfigWriter {
         out.append("mono_family = \(quote(config.typography.monoFamily))")
         out.append("ui_size = \(config.typography.uiSize)")
         out.append("mono_size = \(config.typography.monoSize)")
+        out.append("preview_size = \(config.typography.previewSize)")
         out.append("")
         out.append("[providers]")
         out.append("order = [\(config.providerOrder.map(quote).joined(separator: ", "))]")

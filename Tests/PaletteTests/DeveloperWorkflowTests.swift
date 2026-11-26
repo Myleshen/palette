@@ -40,7 +40,13 @@ final class DeveloperWorkflowTests: XCTestCase {
 
     func testTypographyAndProviderConfigRoundTrip() throws {
         var config = PaletteConfig()
-        config.typography = TypographyConfig(uiFamily: "Avenir Next", monoFamily: "Menlo", uiSize: 15, monoSize: 13)
+        config.typography = TypographyConfig(
+            uiFamily: "Avenir Next",
+            monoFamily: "Menlo",
+            uiSize: 15,
+            monoSize: 13,
+            previewSize: 16
+        )
         config.providerAliases = ["apps": ["a", "launch"], "clip": ["cb"]]
         config.providerOrder = ["clip", "apps"]
         config.disabledProviders = ["port"]
@@ -56,6 +62,32 @@ final class DeveloperWorkflowTests: XCTestCase {
         XCTAssertEqual(parsed.globalProviders, ["timer"])
         XCTAssertEqual(parsed.terminalSession, config.terminalSession)
         XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testPreviewSizeDefaultsAndClamps() throws {
+        XCTAssertEqual(PaletteConfig().typography.previewSize, 13)
+
+        var diagnostics: [Diagnostic] = []
+        let high = try ConfigLoader.parse(
+            TOMLTable(string: "[typography]\npreview_size = 99\n"),
+            diagnostics: &diagnostics
+        )
+        XCTAssertEqual(high.typography.previewSize, 24)
+        let low = try ConfigLoader.parse(
+            TOMLTable(string: "[typography]\npreview_size = 3\n"),
+            diagnostics: &diagnostics
+        )
+        XCTAssertEqual(low.typography.previewSize, 9)
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testPreviewTextSizeFollowsThemeTypography() {
+        XCTAssertEqual(Theme().previewTextSize, 13)
+        var theme = Theme()
+        theme.typography.previewSize = 17
+        XCTAssertEqual(theme.previewTextSize, 17)
+        theme.typography.previewSize = 99
+        XCTAssertEqual(theme.previewTextSize, 24)
     }
 
     func testGlobalProviderConfigRoundTripAndMigration() throws {

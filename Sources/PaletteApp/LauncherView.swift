@@ -47,6 +47,14 @@ extension Theme {
         return .custom(family, size: pointSize).weight(weight)
     }
 
+    /// Monospaced preview body at the configured preview size.
+    func previewFont(size: Double? = nil) -> NSFont {
+        let pointSize = size ?? previewTextSize
+        let family = typography.mono.trimmingCharacters(in: .whitespaces)
+        return NSFont(name: family, size: pointSize)
+            ?? NSFont.monospacedSystemFont(ofSize: pointSize, weight: .regular)
+    }
+
     func nsFont(size: Double, weight: NSFont.Weight = .regular) -> NSFont {        let family = typography.family.trimmingCharacters(in: .whitespaces)
         guard !family.isEmpty, family != "SF Pro Text", family != "System",
               let base = NSFont(name: family, size: size) else {
@@ -1824,7 +1832,7 @@ struct ClipboardPreviewPane: View {
                             .fill(theme.color(theme.palette.separator))
                             .frame(height: 1)
                         Text(textPreview)
-                            .font(theme.monoFont(size: 10))
+                            .font(theme.monoFont(size: theme.previewTextSize))
                             .foregroundColor(theme.color(theme.palette.fg))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1980,6 +1988,7 @@ struct PreviewTextView: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]
+        textView.font = font ?? theme.previewFont()
         scroll.documentView = textView
         context.coordinator.scrollView = scroll
         context.coordinator.observer = NotificationCenter.default.addObserver(
@@ -2012,8 +2021,7 @@ struct PreviewTextView: NSViewRepresentable {
             textView.string = text
             textView.scrollToBeginningOfDocument(nil)
         }
-        let family = theme.typography.mono
-        textView.font = font ?? NSFont(name: family, size: 11) ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.font = font ?? theme.previewFont()
         textView.textColor = theme.nsColor(theme.palette.fg)
         if lineSpacing > 0 {
             let style = NSMutableParagraphStyle()
