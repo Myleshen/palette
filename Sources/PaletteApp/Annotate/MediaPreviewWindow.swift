@@ -106,7 +106,7 @@ private struct MediaPreviewView: View {
             Divider()
             HStack(spacing: 10) {
                 Text(url.lastPathComponent)
-                    .font(.system(size: 11))
+                    .font(theme.font(size: theme.previewTextSize))
                     .foregroundStyle(theme.color(theme.palette.fgMuted))
                     .lineLimit(1)
                 Spacer()

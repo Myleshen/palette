@@ -982,6 +982,15 @@ struct SettingsView: View {
         )
     }
 
+    private var previewSizeAutomatic: Binding<Bool> {
+        Binding(
+            get: { config.typography.previewSize == 0 },
+            set: { automatic in
+                config.typography.previewSize = automatic ? 0 : 13
+            }
+        )
+    }
+
     /// 0 is the loader's sentinel for "Kitty's size, then the theme".
     private var terminalFontSizeAutomatic: Binding<Bool> {
         Binding(
@@ -1052,6 +1061,7 @@ struct SettingsView: View {
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
             .init(title: "Mono size", tab: .appearance, anchor: "row-Mono size", keywords: "font size mono code typography"),
+            .init(title: "Preview text", tab: .appearance, anchor: "row-Preview text", keywords: "font size preview text typography"),
             .init(title: "Launcher shortcut", tab: .shortcuts, anchor: "row-Launcher shortcut", keywords: "hotkey shortcut launcher"),
             .init(title: "Global shortcuts", tab: .shortcuts, anchor: "shortcuts-global", keywords: "global hotkey shortcut launcher clipboard terminal ask"),
             .init(title: "Clipboard shortcut", tab: .shortcuts, anchor: "row-Clipboard shortcut", keywords: "hotkey shortcut clipboard"),
@@ -1992,6 +2002,10 @@ struct SettingsView: View {
                            in: 9...48, step: 1, unit: "pt",
                            automatic: monoSizeAutomatic,
                            automaticValue: "\(Int(theme.typography.monoSize)) pt")
+                numericRow("Preview text", value: $config.typography.previewSize,
+                           in: 9...24, step: 1, unit: "pt",
+                           automatic: previewSizeAutomatic,
+                           automaticValue: "\(Int(theme.previewTextSize)) pt")
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Preview").font(.caption).foregroundStyle(muted)
                     Text("Palette — quick, local, yours")
@@ -2003,6 +2017,12 @@ struct SettingsView: View {
                         .font(.custom(
                             config.typography.monoFamily.isEmpty ? "Menlo" : config.typography.monoFamily,
                             size: config.typography.monoSize == 0 ? 12 : config.typography.monoSize
+                        ))
+                        .foregroundStyle(muted)
+                    Text("preview: clipboard, paths, snippets")
+                        .font(.custom(
+                            config.typography.monoFamily.isEmpty ? "Menlo" : config.typography.monoFamily,
+                            size: config.typography.previewSize == 0 ? 13 : config.typography.previewSize
                         ))
                         .foregroundStyle(muted)
                 }

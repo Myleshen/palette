@@ -337,7 +337,7 @@ struct AnnotateView: View {
                     set: { textEntry?.value = $0 }
                 ))
                 .textFieldStyle(.roundedBorder)
-                .font(.system(size: 13))
+                .font(theme.font(size: theme.previewTextSize))
                 .frame(width: 180)
                 .focused($textFocused)
                 .onSubmit { commitText() }
