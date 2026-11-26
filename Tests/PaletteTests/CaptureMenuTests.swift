@@ -28,7 +28,7 @@ final class CaptureMenuTests: XCTestCase {
         XCTAssertEqual(items[.startRecording]?.visible, true)
         XCTAssertEqual(items[.stopRecording]?.enabled, false)
         XCTAssertEqual(items[.stopRecording]?.visible, false)
-        XCTAssertEqual(items[.stopRecording]?.title, "Stop Recording")
+        XCTAssertEqual(items[.stopRecording]?.title, "Stop Recording · 0:00")
         XCTAssertEqual(items[.copyLastPath]?.enabled, false)
         XCTAssertEqual(items[.revealLastCapture]?.enabled, false)
         XCTAssertEqual(items[.showLastRecording]?.visible, false)
