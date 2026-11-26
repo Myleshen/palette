@@ -136,7 +136,7 @@ public final class ClipboardMonitor: @unchecked Sendable {
         return paths.isEmpty ? nil : paths
     }
 
-    private static func fileThumbnail(_ path: String?) -> Data? {
+    static func fileThumbnail(_ path: String?) -> Data? {
         guard let path else { return nil }
         let icon = NSWorkspace.shared.icon(forFile: path)
         icon.size = NSSize(width: 128, height: 128)
@@ -148,15 +148,21 @@ public final class ClipboardMonitor: @unchecked Sendable {
     private static func imageData(from pasteboard: NSPasteboard) -> (data: Data, width: Int, height: Int)? {
         let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
         guard let data, !data.isEmpty, data.count <= 20_000_000,
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let size = imageSize(of: data) else { return nil }
+        return (data, size.width, size.height)
+    }
+
+    /// Pixel size of image bytes from the pasteboard or a file Palette saved.
+    static func imageSize(of data: Data) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
               width > 0, height > 0 else { return nil }
-        return (data, width, height)
+        return (width, height)
     }
 
-    private static func thumbnailPNG(from data: Data) -> Data? {
+    static func thumbnailPNG(from data: Data) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,

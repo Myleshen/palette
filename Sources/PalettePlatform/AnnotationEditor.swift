@@ -385,10 +385,16 @@ public final class AnnotationEditor: ObservableObject {
 
     public func renderedPNG() -> Data? { rendered().pngData() }
 
-    public func copy() {
+    /// Writes the rendered image and returns its PNG bytes, so the app can
+    /// also record Palette's own copy in clipboard history.
+    @discardableResult
+    public func copy() -> Data? {
+        let image = rendered()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([rendered()])
+        pasteboard.writeObjects([image])
+        ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+        return image.pngData()
     }
 
     public enum AnnotationError: LocalizedError {

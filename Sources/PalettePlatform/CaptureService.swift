@@ -33,6 +33,14 @@ public struct CaptureResult: Sendable {
     public var copied: Bool
 }
 
+/// Bytes Palette put on the pasteboard itself. The clipboard monitor skips
+/// Palette's own writes, so the app records these explicitly to keep `/clip`
+/// complete; path and reveal copies carry no bytes and are never recorded.
+public enum PaletteClipboardCopy: Sendable {
+    case image(Data)
+    case files([String])
+}
+
 /// What `startRecording` leaves on disk so a relaunch can adopt or clean up the
 /// recorder after a quit or a crash.
 struct RecordingState: Codable, Equatable, Sendable {
@@ -65,6 +73,9 @@ public final class CaptureService {
     /// stops, so the app can show the annotator or the player.
     public var onScreenshot: ((URL) -> Void)?
     public var onRecordingStopped: ((URL) -> Void)?
+    /// Palette's own copy, which the monitor deliberately skips. The app
+    /// records it in history; only bytes, never a path copy.
+    public var onCopiedToPasteboard: ((PaletteClipboardCopy) -> Void)?
     /// Set false for scripted runs: a TCC dialog steals focus from the panel
     /// the flow is checking, and CI cannot grant Screen Recording anyway.
     public var requestsPermission = true
@@ -496,7 +507,10 @@ public final class CaptureService {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         let copied = pasteboard.writeObjects([image])
-        if copied { ClipboardMonitor.notePaletteWrite(pasteboard.changeCount) }
+        if copied {
+            ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+            if let data = try? Data(contentsOf: url) { onCopiedToPasteboard?(.image(data)) }
+        }
         return copied
     }
 
@@ -505,6 +519,7 @@ public final class CaptureService {
         pasteboard.clearContents()
         pasteboard.writeObjects([url as NSURL])
         ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+        onCopiedToPasteboard?(.files([url.path]))
     }
 
     private static func message(_ result: ProcessResult, fallback: String) -> String {

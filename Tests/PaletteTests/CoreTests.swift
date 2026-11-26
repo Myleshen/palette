@@ -509,7 +509,9 @@ final class CoreTests: XCTestCase {
     func testParityDefaultsAndWebSearchConfigRoundTrip() throws {
         var config = PaletteConfig()
         config.searchPlaceholder = "Find anything"
-        XCTAssertEqual(config.clipboard.maxEntries, 5_000)
+        XCTAssertEqual(config.clipboard.maxText, 100)
+        XCTAssertEqual(config.clipboard.maxImages, 20)
+        XCTAssertEqual(config.clipboard.maxFiles, 20)
         XCTAssertEqual(config.webSearchEngines.count, 4)
         XCTAssertEqual(config.clipboardHotkey, "opt+v")
         XCTAssertEqual(config.terminalHotkey, "cmd+option+t")
@@ -521,7 +523,7 @@ final class CoreTests: XCTestCase {
         let table = try TOMLTable(string: ConfigWriter.render(config))
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(table, diagnostics: &diagnostics)
-        XCTAssertEqual(parsed.clipboard.maxEntries, 5_000)
+        XCTAssertEqual(parsed.clipboard.maxText, 100)
         XCTAssertEqual(parsed.webSearchEngines.map(\.name), config.webSearchEngines.map(\.name))
         XCTAssertEqual(parsed.clipboardHotkey, config.clipboardHotkey)
         XCTAssertEqual(parsed.terminalHotkey, config.terminalHotkey)

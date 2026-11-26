@@ -21,7 +21,14 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     var onClose: (() -> Void)?
     var shapeCount: Int { editor.shapes.count }
 
-    init(image: NSImage, url: URL?, themeManager: ThemeManager) {
+    init(
+        image: NSImage,
+        url: URL?,
+        themeManager: ThemeManager,
+        /// Copying the annotated image is Palette's own write, which the
+        /// monitor skips; the app records it in history through this.
+        onCopiedToPasteboard: ((PaletteClipboardCopy) -> Void)? = nil
+    ) {
         editor = AnnotationEditor(image: image, url: url)
         let theme = themeManager.theme
 
@@ -62,6 +69,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
             editor: editor,
             draft: draft,
             themeManager: themeManager,
+            onCopiedToPasteboard: onCopiedToPasteboard,
             close: { [weak self] in self?.close() }
         ))
         window.center()
@@ -233,6 +241,7 @@ struct AnnotateView: View {
     @ObservedObject var editor: AnnotationEditor
     @ObservedObject var draft: AnnotateDraftState
     @ObservedObject var themeManager: ThemeManager
+    var onCopiedToPasteboard: ((PaletteClipboardCopy) -> Void)?
     var close: () -> Void
 
     @State private var dragStart: CGPoint?
@@ -706,7 +715,7 @@ struct AnnotateView: View {
     }
 
     private func copyImage() {
-        editor.copy()
+        if let data = editor.copy() { onCopiedToPasteboard?(.image(data)) }
         draft.unsaved = false
         notify("Copied to the clipboard")
         closeAfterToast()
