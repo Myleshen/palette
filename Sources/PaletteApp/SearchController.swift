@@ -146,6 +146,20 @@ public final class SearchController: ObservableObject, HostBridge {
         scheduleSearch(debounce: false)
     }
 
+    /// The text field's contents: `query` minus the `"/trigger "` token when
+    /// the user is already typing inside a provider.
+    public var visibleQuery: String {
+        QueryDisplay(parser: registry.parser).visible(for: query)
+    }
+
+    /// Applies an edit made in the text field to the internal query.
+    public func editVisibleQuery(_ visible: String) {
+        let next = QueryDisplay(parser: registry.parser)
+            .query(forVisible: visible, previous: query)
+        guard next != query else { return }
+        query = next
+    }
+
     public var selectedItem: PaletteItem? {
         guard items.indices.contains(selectionIndex) else { return nil }
         return items[selectionIndex]
