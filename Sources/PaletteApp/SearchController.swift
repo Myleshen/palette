@@ -1082,24 +1082,15 @@ public final class SearchController: ObservableObject, HostBridge {
                 if let text = action.value.text {
                     let previous = panel?.previousApplication
                     let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
-                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
-                        pasteboard.write(text: text, concealed: action.concealed, clearAfterMs: clearAfterMs)
-                        setStatus("Copied — paste with ⌘V", duration: 5)
-                        return
+                    performPaste(into: previous) { route in
+                        pasteboard.paste(
+                            text: text,
+                            concealed: action.concealed,
+                            clearAfterMs: clearAfterMs,
+                            into: previous,
+                            route: route
+                        )
                     }
-                    if !pasteboard.isAccessibilityTrusted {
-                        pasteboard.write(text: text, concealed: action.concealed, clearAfterMs: clearAfterMs)
-                        pasteboard.requestAccessibility()
-                        setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
-                        return
-                    }
-                    panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(
-                        text: text,
-                        concealed: action.concealed,
-                        clearAfterMs: clearAfterMs,
-                        into: previous
-                    )
                 }
 
             case .copyImage:
@@ -1113,24 +1104,16 @@ public final class SearchController: ObservableObject, HostBridge {
                 if let id = action.value.text,
                    let image = try await store.clipboardImage(id: id) ?? NSImage(contentsOfFile: id)?.pngData() {
                     let previous = panel?.previousApplication
-                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
-                        pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
-                        setStatus("Copied — paste with ⌘V", duration: 5)
-                        return
+                    let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
+                    performPaste(into: previous, image: true) { route in
+                        pasteboard.paste(
+                            image: image,
+                            concealed: action.concealed,
+                            clearAfterMs: clearAfterMs,
+                            into: previous,
+                            route: route
+                        )
                     }
-                    if !pasteboard.isAccessibilityTrusted {
-                        pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
-                        pasteboard.requestAccessibility()
-                        setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
-                        return
-                    }
-                    panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(
-                        image: image,
-                        concealed: action.concealed,
-                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
-                        into: previous
-                    )
                 }
 
             case .copyFiles:
@@ -1142,23 +1125,15 @@ public final class SearchController: ObservableObject, HostBridge {
             case .pasteFiles:
                 if let paths = action.value.list, !paths.isEmpty {
                     let previous = panel?.previousApplication
-                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
-                        pasteboard.write(files: paths, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
-                        setStatus("Copied — paste with ⌘V", duration: 5)
-                        return
+                    let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
+                    performPaste(into: previous) { route in
+                        pasteboard.paste(
+                            files: paths,
+                            clearAfterMs: clearAfterMs,
+                            into: previous,
+                            route: route
+                        )
                     }
-                    if !pasteboard.isAccessibilityTrusted {
-                        pasteboard.write(files: paths, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
-                        pasteboard.requestAccessibility()
-                        setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
-                        return
-                    }
-                    panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(
-                        files: paths,
-                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
-                        into: previous
-                    )
                 }
 
             case .run:
@@ -1465,6 +1440,36 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     // MARK: - Presentation support
+
+    /// Picks the paste route, hides the panel only when the paste is
+    /// automatic, and reports what the user must do otherwise. The panel stays
+    /// up for a copy-only outcome so the status line is visible.
+    private func performPaste(
+        into app: NSRunningApplication?,
+        image: Bool = false,
+        deliver: (PasteTarget.Route?) -> PasteOutcome
+    ) {
+        let route = pasteboard.isAccessibilityTrusted
+            ? PasteTarget.route(
+                bundleID: app?.bundleIdentifier,
+                menuAvailable: pasteboard.canPasteViaMenu(into: app),
+                image: image
+            )
+            : nil
+        if route != .copyOnly, app != nil {
+            panel?.hide(activatePrevious: false)
+        }
+        switch deliver(route) {
+        case .pasted:
+            break
+        case .copiedOnly:
+            setStatus("Copied — press ⌘V", duration: 5)
+        case .needsAccessibility:
+            setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
+        case .noTarget:
+            setStatus("Copied", duration: 3)
+        }
+    }
 
     public func setStatus(_ message: String, duration: TimeInterval? = nil) {
         statusTask?.cancel()
