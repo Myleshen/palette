@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.19.0 — 2026-11-26
+## 2.19.0 — 2026-11-27
 
 ### Added
 
@@ -9,9 +9,13 @@
   default), and the target list. A palette is generated from the chosen theme or
   extracted from the wallpaper, written as managed includes under
   `~/.config/palette/theme/` (kitty, Ghostty, zellij, Neovim, fish, starship,
-  bat, delta, btop, yazi), with include lines to copy, Apply and one-step
-  Revert. Wallpaper palettes re-apply automatically when the wallpaper changes;
-  theme palettes apply on demand. Palette never edits the apps' own configs.
+  bat, delta, btop, yazi). Includes are installed and removed automatically per
+  target with marker blocks, one original backup and a one-step Revert; Palette
+  never rewrites an app's config beyond its marked block. Wallpaper palettes
+  re-apply automatically when the wallpaper changes; theme palettes apply on
+  demand. Apply reports the truth per app: kitty reloads through remote control
+  when available, and Ghostty/zellij/Neovim/fish/Starship say exactly what they
+  need (restart, new session, source, next prompt).
 - **Chromium browser theming via managed policy.** Installed Chromium browsers
   (Helium, Chrome, Edge, Brave, Vivaldi, Chromium) can inherit the palette
   background as `BrowserThemeColor` through a per-browser `.mobileconfig`,
@@ -20,13 +24,30 @@
 - **19 Omarchy themes** (`omarchy-*`), MIT, contrast-checked, alongside the 914
   Ghostty themes in the theme browser.
 - Action-routing contract and store-level wiring tests with mutation checks.
+- **Non-tracking menus.** Every Palette-owned menu and menu-style picker (28
+  surfaces: status panel, engine/browser picker, launcher and Ask context menus,
+  recording options, Ask model, theme override, all font pickers, every Settings
+  dropdown) is a custom panel now. Native menu tracking no longer swallows global
+  hotkeys, so screenshots, clipboard and launcher work while a Palette menu is
+  open. Long lists are lazy and searchable: the 942-row theme menu opens in
+  ~42 ms instead of ~1.4 s and renders ~50 rows.
+- **Annotator selection.** Marks can be selected, text resized from a corner
+  handle (Escape cancels, one undo step), and deleted with Delete or the
+  right-click menu; ⌘Z restores.
+- **Trigger prefix hiding.** Once a provider resolves, its `/trigger` disappears
+  from the field (even with no query) and the provider pill carries the name;
+  Backspace on the empty field drops the binding.
+- **Interaction test harness.** 13 e2e flows cover menus, pickers and the status
+  panel with hotkey probes, plus performance budgets (theme menu, catalog,
+  clipboard snapshot, cached `/neo`, theme apply) and sandbox-HOME theme apply
+  integration tests.
 
 - **914 Ghostty themes** bundled as `ghostty-*` (MIT, contrast-checked; user
   themes with the same name still win). Rex's palettes are proprietary and were
   deliberately not ported.
-- **Theme browser** in Settings → Appearance: search across Built-in / Ghostty /
-  Custom, per-row colour swatches and a live preview of the launcher. Selecting
-  only previews; **Use Theme** applies and **Revert** restores.
+- **Theme browser** in Settings → Theming: search across Built-in / Ghostty /
+  Omarchy / Custom, per-row colour swatches and a live preview of the launcher.
+  Selecting only previews; **Use Theme** applies and **Revert** restores.
 - **Per-kind clipboard limits**: text, images and files trim independently
   (defaults 100 / 20 / 20); the old `max_entries` becomes the text limit and is
   rewritten on the next save.
@@ -59,6 +80,21 @@
 
 ### Fixed
 
+- Theme application now changes the other apps: the include blocks are installed
+  with absolute paths where `~` is unreliable, unchecking removes only that
+  block, and a sandbox-HOME test asserts the bytes and markers.
+- Choosing web-app mode in the bang picker no longer crashes (the `Toggle` inside
+  the native menu wrote through a stale array index); the picker shows
+  `Web app · Helium` and explains that it opens a Palette-managed app window.
+- Browser-tab opens report failures instead of doing nothing; an unresolved
+  browser falls back to the default with a visible status.
+- Stale zellij sessions are dropped and recreated with `zellij --session <name>`.
+- The launcher centres on the full display rather than `visibleFrame` (a Dock on
+  either side no longer shifts it), and the status panel renders all its rows.
+- Main-thread freezes removed: recording options show instantly (AVFoundation
+  discovery moved off-main), theme parsing moved out of row bodies and off the
+  apply path, screenshot thumbnails decode at target size off-main, font/mic/
+  display lists are cached, and backup export runs in the background.
 - Palette screenshots and recordings now appear in `/clip`: the capture,
   recording and annotator copies record the bytes explicitly (deduped by hash)
   while the monitor still ignores the duplicate pasteboard poll.
