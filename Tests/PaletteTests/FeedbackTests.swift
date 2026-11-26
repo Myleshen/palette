@@ -55,6 +55,36 @@ final class FeedbackTests: XCTestCase {
         XCTAssertFalse(OpenAttempt.failed("Could not find app").hidesPanel)
     }
 
+    // MARK: - Opening links
+
+    func testBrowserOpenPlanUsesAnInstalledBrowser() {
+        XCTAssertEqual(BrowserOpenPlan.plan(browser: "Helium", installed: true), .browser("Helium"))
+        XCTAssertEqual(BrowserOpenPlan.plan(browser: " Helium ", installed: true), .browser("Helium"))
+    }
+
+    func testBrowserOpenPlanFallsBackWhenTheBrowserIsMissing() {
+        XCTAssertEqual(BrowserOpenPlan.plan(browser: "Helium", installed: false), .fallback("Helium"))
+        XCTAssertEqual(BrowserOpenPlan.plan(browser: nil, installed: false), .systemDefault)
+        XCTAssertEqual(BrowserOpenPlan.plan(browser: "  ", installed: true), .systemDefault)
+    }
+
+    func testURLOpenOutcomeStatusOnlyKeepsThePanelForAFallbackOrFailure() {
+        XCTAssertTrue(URLOpenOutcome.opened.hidesPanel)
+        XCTAssertNil(URLOpenOutcome.opened.status)
+
+        let fallback = URLOpenOutcome.openedInDefault(requested: "Helium")
+        XCTAssertFalse(fallback.hidesPanel)
+        XCTAssertEqual(fallback.status, "Could not open the link in Helium — opened in your default browser")
+
+        let tab = URLOpenOutcome.openedAsTab(browser: "Helium")
+        XCTAssertFalse(tab.hidesPanel)
+        XCTAssertEqual(tab.status, "Could not open a web-app window in Helium — opened a browser tab instead")
+
+        let failed = URLOpenOutcome.failed("no application accepted it")
+        XCTAssertFalse(failed.hidesPanel)
+        XCTAssertEqual(failed.status, "Could not open the link — no application accepted it")
+    }
+
     // MARK: - Timer
 
     func testTimerFeedbackText() {
