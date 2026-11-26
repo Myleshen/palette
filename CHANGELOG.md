@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.18.3 — 2026-11-26
+
+### Added
+
+- **Per-kind clipboard limits**: text, images and files are trimmed independently
+  (defaults 100 / 20 / 20) so a burst of screenshots cannot push out the text
+  history. Settings → General → Clipboard has a field for each; the old
+  `max_entries` is read as the text limit and rewritten on the next save.
+- **Preview text size**: previews now render at 13 pt instead of 11 and the size
+  is configurable (9–24 pt, Automatic) under Appearance → Typography. Applies to
+  the clipboard/path/atlas/snippet preview, the Ask answer body, capture
+  previews and the annotator.
+
+### Fixed
+
+- Screenshots taken with Palette now appear in clipboard history. Palette still
+  suppresses the monitor's duplicate poll, but the capture, recording and
+  annotator copy paths insert the bytes explicitly (deduped by hash), so
+  `/clip` shows them immediately.
+- Recording files copied from the preview are recorded as file entries.
+
 ## 2.18.2 — 2026-11-24
 
 ### Changed
