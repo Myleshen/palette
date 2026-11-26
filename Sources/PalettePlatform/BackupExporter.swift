@@ -5,7 +5,22 @@ import PaletteCore
 /// caller zips that directory. Kept out of the app target so the export
 /// contract can be tested: config, themes, providers, history, the database
 /// without clipboard text, and the clipboard image files that sit beside it.
+/// Both functions block on file IO and `sqlite3`, so the caller runs them off
+/// the main thread.
 public enum BackupExporter {
+    /// Zips a staged directory with the system `ditto`. Blocking; call from a
+    /// background task.
+    public static func zip(_ staged: URL, to destination: URL) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", staged.path, destination.path]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw NSError(domain: "PaletteBackup", code: Int(process.terminationStatus))
+        }
+    }
+
     /// Copies the user state into `temp` and returns the top-level names that
     /// made it. Creates `temp` if needed.
     public static func stage(paths: PalettePaths, into temp: URL) throws -> [String] {

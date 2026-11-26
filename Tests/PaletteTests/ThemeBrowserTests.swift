@@ -199,6 +199,34 @@ final class ThemeBrowserTests: XCTestCase {
         XCTAssertEqual(ThemeLoader.fullParseCountForTesting, before + 1, "the oldest entry was evicted")
     }
 
+    func testSwatchCacheReadsWithoutParsingAndEvictsTheOldest() {
+        var cache = ThemeSwatchCache(limit: 2)
+        XCTAssertNil(cache.theme(named: "first"), "an empty cache asks for a background load")
+
+        var first = Theme.defaultDark
+        first.name = "first"
+        cache.store(first, named: "first")
+        XCTAssertEqual(cache.theme(named: "first")?.name, "first")
+        XCTAssertNil(cache.theme(named: "second"))
+
+        var second = Theme.defaultLight
+        second.name = "second"
+        cache.store(second, named: "second")
+        var third = Theme.defaultDark
+        third.name = "third"
+        cache.store(third, named: "third")
+
+        XCTAssertNil(cache.theme(named: "first"), "the oldest row is evicted")
+        XCTAssertNotNil(cache.theme(named: "second"))
+        XCTAssertNotNil(cache.theme(named: "third"))
+
+        // Storing a hit only refreshes its recency.
+        cache.store(second, named: "second")
+        cache.store(third, named: "third")
+        cache.store(second, named: "second")
+        XCTAssertNotNil(cache.theme(named: "second"))
+    }
+
     func testCatalogueBuildMeasurement() {
         ThemeLoader.resetCachesForTesting()
         var catalog: [ThemeInfo] = []
