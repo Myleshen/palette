@@ -105,9 +105,11 @@ public actor WebAppProvider: PaletteProvider {
             ))
         }
 
-        let boosts = try await store.frecencyBoosts(for: items.map(\.stableID))
-        for index in items.indices {
-            items[index].score += boosts[items[index].stableID] ?? 0
+        if !searchText.isEmpty {
+            let boosts = try await store.frecencyBoosts(for: items.map(\.stableID))
+            for index in items.indices {
+                items[index].score += boosts[items[index].stableID] ?? 0
+            }
         }
 
         let urls = items.map { $0.subtitle?.components(separatedBy: " · ").first ?? "" }
@@ -121,6 +123,7 @@ public actor WebAppProvider: PaletteProvider {
         }
         if favicons {
             for url in urls where !url.isEmpty {
+                guard await FaviconStore.shared.needsFetch(for: url) else { continue }
                 Task.detached(priority: .utility) {
                     _ = await FaviconStore.shared.icon(for: url)
                 }

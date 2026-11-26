@@ -36,6 +36,14 @@ public actor FaviconStore {
         return base64
     }
 
+    /// Whether a host still needs a network fetch: nothing cached, no known
+    /// miss, and no request already in flight. Lets a search spawn one task per
+    /// new host instead of one per row per keystroke.
+    public func needsFetch(for urlString: String) -> Bool {
+        guard let host = Self.host(of: urlString) else { return false }
+        return icons[host] == nil && !misses.contains(host) && !inFlight.contains(host)
+    }
+
     /// Memory, disk, then Google. A miss is remembered for the session so the
     /// next search does not wait on the same dead host again.
     public func icon(for urlString: String) async -> String? {

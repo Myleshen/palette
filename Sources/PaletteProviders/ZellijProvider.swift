@@ -15,6 +15,7 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
     private let launcher: LauncherService
     private let bridge: HostBridge
     private let terminal: String
+    private let sessionsCache = ShortCache<[Session]>(ttl: 5)
 
     /// Custom action ids `activate` routes.
     static let handledCustomActions: Set<String> = ["install", "create", "attach"]
@@ -54,13 +55,15 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
             )]
         }
 
-        let sessions = await listSessions()
         let query = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Global results are for finding a running session. Creation belongs to
         // /zj; otherwise an empty palette or a lone "/" offers to create one.
+        if !request.isBound, query.isEmpty { return [] }
+
+        let sessions = await listSessions()
+
         if !request.isBound {
-            guard !query.isEmpty else { return [] }
             return sessions.compactMap { session in
                 guard Ranking.score(query: query, candidate: session.name) != nil else { return nil }
                 return sessionItem(session, query: query)
@@ -191,19 +194,21 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
         }
     }
 
-    private struct Session {
+    private struct Session: Sendable {
         var name: String
         var current: Bool
     }
 
     private func listSessions() async -> [Session] {
+        if let cached = await sessionsCache.get("sessions") { return cached }
+        let sessions: [Session]
         do {
             let result = try await ProcessRunner.run(
                 ["zellij", "list-sessions", "--no-formatting"],
                 timeout: 5
             )
             guard result.status == 0 else { return [] }
-            return result.stdoutString.split(separator: "\n").compactMap { line in
+            sessions = result.stdoutString.split(separator: "\n").compactMap { line in
                 let text = String(line)
                 guard !text.isEmpty, !text.hasPrefix("No active zellij sessions") else { return nil }
                 let current = text.contains("(current)")
@@ -220,5 +225,7 @@ public final class ZellijProvider: PaletteProvider, @unchecked Sendable {
         } catch {
             return []
         }
+        await sessionsCache.set(sessions, key: "sessions")
+        return sessions
     }
 }

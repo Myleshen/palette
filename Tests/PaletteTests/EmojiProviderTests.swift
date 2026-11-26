@@ -24,4 +24,16 @@ final class EmojiProviderTests: XCTestCase {
         let items = try await provider.search(SearchRequest(text: "", limit: 20, isBound: true))
         XCTAssertEqual(items.first?.actions.first?.kind, .pasteText)
     }
+
+    /// The catalog precomputes its folded search text; it must stay identical
+    /// to the combined lowercased fields the provider used to build per term.
+    func testPrecomputedSearchTextMatchesTheOldFold() {
+        for entry in EmojiCatalog.searchIndex {
+            XCTAssertEqual(
+                entry.searchText,
+                "\(entry.name) \(entry.appleName) \(entry.group)".lowercased(),
+                entry.glyph
+            )
+        }
+    }
 }

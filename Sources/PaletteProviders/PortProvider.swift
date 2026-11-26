@@ -134,7 +134,7 @@ public final class PortProvider: PaletteProvider, @unchecked Sendable {
             ["/usr/sbin/lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-FpcuLn"],
             timeout: 8
         )
-        var listeners: [Listener] = []
+        var found: [(port: Int, pid: Int, command: String, user: String)] = []
         var seen = Set<String>()
         var pid = 0
         var command = ""
@@ -151,22 +151,34 @@ public final class PortProvider: PaletteProvider, @unchecked Sendable {
                       let port = Int(value[value.index(after: colon)...]) else { continue }
                 let key = "\(pid):\(port)"
                 guard seen.insert(key).inserted else { continue }
-                let cwd = await workingDirectory(pid: pid)
-                listeners.append(Listener(port: port, pid: pid, command: command, user: user, cwd: cwd))
+                found.append((port: port, pid: pid, command: command, user: user))
             default: break
             }
         }
-        return listeners.sorted { $0.port < $1.port }
+        // One lsof call for every listener's cwd instead of one spawn per row.
+        let directories = await workingDirectories(pids: Array(Set(found.map(\.pid))))
+        return found
+            .map { Listener(port: $0.port, pid: $0.pid, command: $0.command, user: $0.user, cwd: directories[$0.pid]) }
+            .sorted { $0.port < $1.port }
     }
 
-    private static func workingDirectory(pid: Int) async -> String? {
-        guard let result = try? await ProcessRunner.run(
-            ["/usr/sbin/lsof", "-a", "-p", "\(pid)", "-d", "cwd", "-Fn"],
-            timeout: 3
-        ) else { return nil }
-        for line in result.stdoutString.split(separator: "\n") where line.hasPrefix("n") {
-            return String(line.dropFirst())
+    private static func workingDirectories(pids: [Int]) async -> [Int: String] {
+        guard !pids.isEmpty,
+              let result = try? await ProcessRunner.run(
+                ["/usr/sbin/lsof", "-a", "-p", pids.map(String.init).joined(separator: ","), "-d", "cwd", "-Fn"],
+                timeout: 5
+              ) else { return [:] }
+        var directories: [Int: String] = [:]
+        var current = 0
+        for line in result.stdoutString.split(separator: "\n") {
+            guard let first = line.first else { continue }
+            let value = String(line.dropFirst())
+            if first == "p" {
+                current = Int(value) ?? 0
+            } else if first == "n", current > 0, directories[current] == nil {
+                directories[current] = value
+            }
         }
-        return nil
+        return directories
     }
 }
