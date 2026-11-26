@@ -513,7 +513,7 @@ public actor BitwardenProvider: PaletteProvider {
 
         if command == "open-url" {
             if let url = Self.firstURL(from: entry) {
-                await MainActor.run { launcher.openURL(url) }
+                await MainActor.run { _ = launcher.openURL(url) }
             }
             return
         }

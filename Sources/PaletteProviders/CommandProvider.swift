@@ -55,7 +55,7 @@ public final class CommandProvider: PaletteProvider, @unchecked Sendable {
                 icon: .symbol("doc.badge.plus"),
                 badge: "SETUP",
                 score: 10_000,
-                actions: [PaletteAction(id: "open", title: "Open Commands File", kind: .openPathWith, value: .object(["path": fileURL.path]))],
+                actions: [PaletteAction(id: "open", title: "Open Commands File", kind: .openPathWith, value: .object(["path": fileURL.path, "create": "true"]))],
                 providerID: descriptor.id,
                 providerName: descriptor.name
             )]

@@ -205,6 +205,18 @@ public enum PasteOutcome: Equatable, Sendable {
     case noTarget
 }
 
+public extension PasteOutcome {
+    /// Text the host shows when the clipboard was written but no paste was
+    /// delivered. Nil means the panel may hide.
+    var fallbackStatus: String? {
+        switch self {
+        case .pasted: return nil
+        case .copiedOnly, .noTarget: return "Copied — paste with ⌘V"
+        case .needsAccessibility: return "Copied — enable Accessibility to paste automatically."
+        }
+    }
+}
+
 @MainActor
 public final class PasteboardService {
     private var clearWorkItem: DispatchWorkItem?

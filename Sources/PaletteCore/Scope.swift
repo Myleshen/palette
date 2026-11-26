@@ -11,6 +11,31 @@ public enum PathExpansion {
     }
 }
 
+/// What an open action does before it launches. Setup rows opt in with
+/// `"create": "true"`; every other missing file is reported, never fabricated.
+public enum OpenPathPlan: Equatable, Sendable {
+    case open
+    case createAndOpen
+    case missing(String)
+
+    public static func plan(path: String, exists: Bool, create: Bool) -> OpenPathPlan {
+        if exists { return .open }
+        if create { return .createAndOpen }
+        return .missing("No longer exists at \(path)")
+    }
+
+    public var createsFile: Bool { self == .createAndOpen }
+}
+
+/// Hiding the panel is only safe once the launch call returned, so a thrown
+/// error keeps the panel and its message on screen.
+public enum OpenAttempt: Equatable, Sendable {
+    case succeeded
+    case failed(String)
+
+    public var hidesPanel: Bool { self == .succeeded }
+}
+
 public struct Scope: Equatable, Sendable {
     public var roots: [String]
     public var exclude: [String]

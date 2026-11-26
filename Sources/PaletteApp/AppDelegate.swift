@@ -107,6 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var startupDiagnostics: [Diagnostic] = []
     /// Set when config.toml cannot be parsed; auto-apply must not overwrite it.
     private var configErrorMessage: String?
+    /// The last parse error surfaced by a reload, so a watcher burst says it once.
+    private var lastReportedConfigError: String?
     private var themeObserver: NSObjectProtocol?
     private var watcherTimer: Timer?
     private var maintenanceTimer: Timer?
@@ -1108,7 +1110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ScratchpadProvider(store: store, bridge: hostProxy))
         providers.append(TerminalProvider())
         providers.append(KeepAwakeProvider(service: keepAwake, bridge: hostProxy, launcher: launcher))
-        providers.append(TimerProvider(service: timerService, presetMinutes: configuration.timer.presets))
+        providers.append(TimerProvider(service: timerService, presetMinutes: configuration.timer.presets, bridge: hostProxy))
         providers.append(ColorProvider(bridge: hostProxy))
         providers.append(StatsProvider(bridge: hostProxy))
         providers.append(SSHProvider(launcher: launcher, terminalApp: configuration.terminalApp))
@@ -1443,8 +1445,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.show()
             searchController.query = trigger
         case .url:
-            launcher.openURL(binding.value)
+            if !launcher.openURL(binding.value) {
+                reportBindingFailure("Binding URL is not valid: \(binding.value)")
+            }
         }
+    }
+
+    /// A hotkey that could not run must not fail silently: the panel status is
+    /// shared with captures and also flashes the menu bar when hidden.
+    private func reportBindingFailure(_ message: String) {
+        Log.shared.warn(message, source: "binding")
+        showFeedback(message, logSource: "binding")
     }
 
     private func launchBindingTarget(_ target: String) {
@@ -1455,14 +1466,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if target.contains("/") {
             let expanded = PathExpansion.expand(target)
             guard FileManager.default.fileExists(atPath: expanded) else {
-                Log.shared.warn("Binding launch target not found: \(target)", source: "binding")
+                reportBindingFailure("Binding target no longer exists: \(target)")
                 return
             }
             launcher.activateApp(path: expanded)
             return
         }
         guard let path = ToolLocator.shared.appPath(named: target) else {
-            Log.shared.warn("Binding launch app not installed: \(target)", source: "binding")
+            reportBindingFailure("Binding app is not installed: \(target)")
             return
         }
         launcher.activateApp(path: path)
@@ -1476,7 +1487,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .appendingPathComponent("palette-binding-\(UUID().uuidString).log")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         guard let errorLog = try? FileHandle(forWritingTo: logURL) else {
-            Log.shared.warn("Binding command could not open its log: \(command)", source: "binding")
+            reportBindingFailure("Binding command could not open its log: \(command)")
             return
         }
         let process = Process()
@@ -1485,7 +1496,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = errorLog
-        process.terminationHandler = { finished in
+        process.terminationHandler = { [weak self] finished in
             try? errorLog.close()
             defer { try? FileManager.default.removeItem(at: logURL) }
             guard finished.terminationStatus != 0 else { return }
@@ -1496,13 +1507,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "Binding command failed (\(finished.terminationStatus)): \(detail)",
                 source: "binding"
             )
+            Task { @MainActor [weak self] in
+                self?.showFeedback(
+                    "Binding command failed (exit \(finished.terminationStatus))",
+                    logSource: "binding"
+                )
+            }
         }
         do {
             try process.run()
         } catch {
             try? errorLog.close()
             try? FileManager.default.removeItem(at: logURL)
-            Log.shared.error("Binding command could not start: \(error.localizedDescription)", source: "binding")
+            reportBindingFailure("Binding command could not start: \(error.localizedDescription)")
         }
     }
 
@@ -1559,6 +1576,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// One place every capture action reports through: the panel when it is
     /// open, a banner and the menu-bar item when it is not.
     private func captureFeedback(_ message: String) {
+        showFeedback(message, logSource: "capture")
+    }
+
+    /// Shared by captures and hotkey failures so nothing visible is log-only.
+    private func showFeedback(_ message: String, logSource: String) {
         guard !message.isEmpty else { return }
         if panel?.isVisible == true {
             searchController.setStatus(message, duration: 4)
@@ -1566,7 +1588,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             SystemNotification.post(title: "Palette", body: message)
             flashMenuBar(message)
         }
-        Log.shared.info("Capture feedback: \(message)", source: "capture")
+        Log.shared.info("Feedback: \(message)", source: logSource)
     }
 
     /// Keeps a short status visible in the menu bar while the panel is closed.
@@ -2912,6 +2934,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try writeConfig(configuration)
         } catch {
             Log.shared.warn("Could not save the theme choice: \(error.localizedDescription)", source: "theme")
+            searchController?.setStatus(
+                "Could not save the theme: \(error.localizedDescription)",
+                duration: 6
+            )
         }
     }
 
@@ -3038,8 +3064,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installHotKey()
         configureClipboard()
         if refreshSettings { refreshSettingsWindow() }
-        if !quiet {
-            searchController.setStatus("Configuration reloaded", duration: 2)
+        if let parseError = configErrorMessage {
+            // Never say "reloaded" when defaults were substituted for a file
+            // that did not parse. The watcher reports each new error once.
+            if parseError != lastReportedConfigError {
+                lastReportedConfigError = parseError
+                searchController.setStatus(parseError, duration: 8)
+            }
+        } else {
+            lastReportedConfigError = nil
+            if !quiet {
+                searchController.setStatus("Configuration reloaded", duration: 2)
+            }
         }
         if let oldRegistry {
             Task { await oldRegistry.shutdown() }

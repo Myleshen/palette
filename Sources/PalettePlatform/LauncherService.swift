@@ -67,13 +67,15 @@ public final class LauncherService {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: PathExpansion.expand(path))])
     }
 
-    public func openURL(_ string: String) {
+    @discardableResult
+    public func openURL(_ string: String) -> Bool {
         guard let url = URL(string: string), let scheme = url.scheme?.lowercased(),
               ["http", "https", "mailto", "x-apple.systempreferences"].contains(scheme) else {
             Log.shared.warn("Refusing to open URL: \(string)", source: "launcher")
-            return
+            return false
         }
         NSWorkspace.shared.open(url)
+        return true
     }
 
     @discardableResult
