@@ -114,6 +114,9 @@ public final class ThemingEngine: ObservableObject {
     @Published public private(set) var policyStatus: String?
     @Published public private(set) var policyError: String?
     @Published public private(set) var policyCommand: String?
+    /// Last reload answer per target, so the Targets rows and the Apply result
+    /// say what the app actually did rather than guessing.
+    @Published public private(set) var reloadStatuses: [String: ThemingReload.Status] = [:]
 
     public let themeDir: URL
     public let previousDir: URL
@@ -122,18 +125,21 @@ public final class ThemingEngine: ObservableObject {
 
     private let fileManager = FileManager.default
     private let chromiumProbe: ChromiumProbe
+    private let kitty: KittyRemoteControl
     private let macOSMajorVersion: Int
 
     public init(
         paths: PalettePaths,
         themesDirectory: URL,
         chromiumProbe: ChromiumProbe = .live,
+        kitty: KittyRemoteControl = KittyRemoteControl(),
         macOSMajorVersion: Int = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
     ) {
         self.themeDir = paths.themeDir
         self.previousDir = paths.themeDir.appendingPathComponent("previous", isDirectory: true)
         self.themesDirectory = themesDirectory
         self.chromiumProbe = chromiumProbe
+        self.kitty = kitty
         self.macOSMajorVersion = macOSMajorVersion
         self.includes = ThemingIncludes(home: paths.home, themeDir: paths.themeDir)
     }
@@ -198,6 +204,7 @@ public final class ThemingEngine: ObservableObject {
 
     private func disabledResult() -> ApplyResult {
         let removed = includes.removeAll()
+        reloadStatuses.removeAll()
         var message = "Cross-app theming is off. Palette's own theme still comes from Theming."
         if !removed.isEmpty {
             message += " Removed \(removed.count) managed include\(removed.count == 1 ? "" : "s")."
@@ -302,6 +309,7 @@ public final class ThemingEngine: ObservableObject {
         }
         do {
             let includeOutcomes = includes.revert()
+            reloadStatuses.removeAll()
             let restored = try swapWithPrevious()
             let failures = includeOutcomes.filter { $0.action == .failed }
             let includeCount = includeOutcomes.filter { $0.action != .failed }.count
@@ -332,7 +340,6 @@ public final class ThemingEngine: ObservableObject {
                 error: failures.isEmpty ? nil : "Some app configs could not be restored."
             )
             lastResult = result
-            reloadAllBestEffort()
             return result
         } catch {
             let message = "Could not revert: \(error.localizedDescription)"
@@ -479,6 +486,7 @@ public final class ThemingEngine: ObservableObject {
         do {
             let outcome = try await write(palette: palette, metadata: metadata, targets: config.targets)
             let succeeded = outcome.failed.isEmpty
+            let reloads = succeeded ? await reloadAll(config.targets) : [:]
             var summary: String
             if succeeded {
                 summary = "Applied \(outcome.written.count) file\(outcome.written.count == 1 ? "" : "s") to \(themeDir.path)."
@@ -488,12 +496,18 @@ public final class ThemingEngine: ObservableObject {
             if let suffix = outcome.statusSuffix {
                 summary += " · \(suffix)"
             }
-            var notes = config.targets.compactMap { raw -> String? in
-                guard let target = ThemingTarget(rawValue: raw), target.isImplemented else { return nil }
-                return "\(target.title): \(target.reloadNote)"
+            let reloadMessages = config.targets.compactMap { reloads[$0]?.message }
+            if !reloadMessages.isEmpty {
+                summary += " · " + reloadMessages.joined(separator: " · ")
             }
+            var notes: [String] = []
             if outcome.policySelected {
                 notes.append("Managed policies: open the profile in System Settings and approve it under General → Device Management.")
+            }
+            let reports = outcome.reports.map { report -> TargetReport in
+                var report = report
+                if let reload = reloads[report.id] { report.note = reload.message }
+                return report
             }
             let result = ApplyResult(
                 status: summary,
@@ -507,14 +521,11 @@ public final class ThemingEngine: ObservableObject {
                 },
                 notices: notes,
                 changes: outcome.changed,
-                targets: outcome.reports,
+                targets: reports,
                 error: succeeded ? nil : "Some files could not be written."
             )
             status = summary
             lastResult = result
-            if succeeded {
-                reloadBestEffort(config.targets, palette: palette)
-            }
             return result
         } catch {
             let message = "Could not write palette files: \(error.localizedDescription)"
@@ -644,7 +655,7 @@ public final class ThemingEngine: ObservableObject {
                         title: target.title,
                         fileName: target.fileName,
                         includeHint: target.includeHint,
-                        note: target.reloadNote,
+                        note: ThemingReload.status(for: target).message,
                         state: .written
                     ))
                 }
@@ -827,32 +838,34 @@ public final class ThemingEngine: ObservableObject {
 
     // MARK: - Reload
 
-    private func reloadBestEffort(_ targets: [String], palette: PalettePalette) {
-        let selected = Set(targets)
-        let kitty = themeDir.appendingPathComponent(ThemingTarget.kitty.fileName).path
-        Task.detached(priority: .utility) {
-            if selected.contains(ThemingTarget.kitty.rawValue), await Self.isRunning("kitty") {
-                _ = try? await ProcessRunner.run(
-                    ["kitty", "@", "set-colors", "-a", kitty],
-                    timeout: 3
-                )
-                Log.shared.info("Asked kitty to reload the Palette colours", source: "theming")
-            }
-            if selected.contains(ThemingTarget.ghostty.rawValue), await Self.isRunning("ghostty") {
-                _ = try? await ProcessRunner.run(["killall", "-SIGUSR1", "ghostty"], timeout: 3)
-                Log.shared.info("Sent Ghostty a palette reload signal", source: "theming")
-            }
-        }
+    /// Reload one target now and publish the answer. Only kitty has a reload
+    /// Palette can perform; every other target returns what the user must do.
+    @discardableResult
+    public func reload(_ target: ThemingTarget) async -> ThemingReload.Status {
+        let status = await liveReloadStatus(for: target)
+        reloadStatuses[target.rawValue] = status
+        return status
     }
 
-    private func reloadAllBestEffort() {
-        reloadBestEffort(ThemingTarget.phaseOne.map(\.rawValue), palette: previewPalette ?? PalettePalette(theme: .defaultDark))
+    public func reloadStatus(for target: ThemingTarget) -> ThemingReload.Status {
+        reloadStatuses[target.rawValue] ?? ThemingReload.status(for: target)
     }
 
-    private static func isRunning(_ name: String) async -> Bool {
-        guard let result = try? await ProcessRunner.run(["pgrep", "-x", name], timeout: 2) else {
-            return false
+    private func liveReloadStatus(for target: ThemingTarget) async -> ThemingReload.Status {
+        guard ThemingReload.canAttempt(target) else { return ThemingReload.status(for: target) }
+        return await kitty.reload(themeFile: themeDir.appendingPathComponent(target.fileName).path)
+    }
+
+    private func reloadAll(_ targets: [String]) async -> [String: ThemingReload.Status] {
+        var statuses: [String: ThemingReload.Status] = [:]
+        for raw in targets {
+            // Browsers report through the managed policy, not a file include.
+            guard let target = ThemingTarget(rawValue: raw), target.isImplemented, !target.isBrowser else {
+                continue
+            }
+            statuses[raw] = await liveReloadStatus(for: target)
         }
-        return result.status == 0
+        reloadStatuses = statuses
+        return statuses
     }
 }

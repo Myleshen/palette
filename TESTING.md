@@ -51,7 +51,8 @@ Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `scratchlist`, `snapshot=<path>`, `shot`,
 `settings_tab=<index>`,
 `settings_size=<w>x<h>`, `settings_edit=<field>=<value>`,
-`settings_clear_search`, `awake=<seconds>`, `settings_snapshot=<path>`,
+`settings_clear_search`, `theming_apply=<theme>`, `awake=<seconds>`,
+`settings_snapshot=<path>`,
 `window_snapshot=<path>`, `statuspanel`, `statuspanelclose`,
 `statuspanel_snapshot=<path>`, `askwindow=<question>`, `chatwindow`,
 `chatopen=<index>`, `ask_cancel`, `asktoggle`, `askclose`,
@@ -73,6 +74,21 @@ Other hooks: `PALETTE_QUERY`, `PALETTE_SHOW_ON_LAUNCH`,
 `PALETTE_SNAPSHOT`, `PALETTE_SNAPSHOT_DELAY`, `PALETTE_EXIT_AFTER_SNAPSHOT`,
 and `PALETTE_ACTIONS`. `dump` also exposes the Ask window as `askWindows`,
 `askStreaming`, `askTurns`, `askChats`, and `askBadge`.
+
+Cross-app theming needs a home of its own, or a scripted apply would edit the
+real kitty/Ghostty/fish configs. `PALETTE_HOME` moves every managed path into a
+temp directory, and `PALETTE_KITTY` points the reload step at a fake binary:
+
+```sh
+PALETTE_HOME="$TMP/home" PALETTE_KITTY="$TMP/bin/kitty" \
+PALETTE_STATE_DIR="$TMP/state" PALETTE_CACHE_DIR="$TMP/cache" \
+PALETTE_SCRIPT="theming_apply=default-dark; wait=1; dump=$TMP/dump.json; exit" \
+  build/Palette.app/Contents/MacOS/Palette
+```
+
+`dump` then carries a `theming` object with the apply status and one
+`{id, title, state, note}` row per target, so a shell check can assert the
+markers and the reload answers.
 
 The harness calls the same `SearchController` keyboard path as the panel, but
 it does not test Carbon hotkey delivery or real typing. Check those manually.

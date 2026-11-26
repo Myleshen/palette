@@ -2277,13 +2277,13 @@ struct SettingsView: View {
                                 .foregroundStyle(muted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        ForEach(result.targets.filter { $0.state == .skipped }, id: \.id) { target in
+                        ForEach(result.targets, id: \.id) { target in
                             Text("\(target.title): \(target.note)")
                                 .font(.caption)
                                 .foregroundStyle(muted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        ForEach(result.notices.prefix(6), id: \.self) { note in
+                        ForEach(result.notices, id: \.self) { note in
                             Text(note)
                                 .font(.caption)
                                 .foregroundStyle(muted)
@@ -2299,14 +2299,32 @@ struct SettingsView: View {
                 card("Targets", anchor: "theming-targets") {
                     ForEach(ThemingTarget.allCases.filter { !$0.isBrowser }) { target in
                         if target.isImplemented {
+                            let status = theming.includeStatus(for: target)
                             VStack(alignment: .leading, spacing: 2) {
                                 Toggle(target.title, isOn: themingTargetBinding(target))
                                     .toggleStyle(.checkbox)
                                     .font(theme.font(size: 13))
-                                Text(includeStatusText(target))
+                                Text(status.available
+                                    ? status.note
+                                    : "Unavailable — \(target.unavailableReason ?? target.includeHint)")
                                     .font(.caption)
                                     .foregroundStyle(muted)
                                     .fixedSize(horizontal: false, vertical: true)
+                                if status.installed {
+                                    HStack(spacing: 8) {
+                                        Text(theming.reloadStatus(for: target).message)
+                                            .font(.caption)
+                                            .foregroundStyle(muted)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        if ThemingReload.canAttempt(target) {
+                                            Button("Reload") {
+                                                Task { @MainActor in await theming.reload(target) }
+                                            }
+                                            .controlSize(.small)
+                                            .help("Ask the running app to re-read the Palette colours. Palette never restarts it.")
+                                        }
+                                    }
+                                }
                             }
                         } else {
                             HStack(spacing: 8) {
@@ -2487,11 +2505,6 @@ struct SettingsView: View {
         case false?: return "Not installed"
         case nil: return "Not checked"
         }
-    }
-
-    private func includeStatusText(_ target: ThemingTarget) -> String {
-        let status = theming.includeStatus(for: target)
-        return status.available ? status.note : "Unavailable — \(target.unavailableReason ?? target.includeHint)"
     }
 
     private func revealPolicyFiles() {

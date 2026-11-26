@@ -62,7 +62,7 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertNil(install(includes, .nvim).error)
         let lua = try read(home + "/.config/nvim/init.lua")
         XCTAssertTrue(lua.hasPrefix("-- >>> palette theme >>>"))
-        XCTAssertTrue(lua.contains("dofile(vim.fn.expand("))
+        XCTAssertTrue(lua.contains("dofile(\"\(home)/config/theme/nvim.lua\")"))
 
         XCTAssertNil(install(includes, .fish).error)
         XCTAssertTrue(try read(home + "/.config/fish/config.fish").contains("# >>> palette theme >>>"))
@@ -83,8 +83,41 @@ final class ThemingIncludesTests: XCTestCase {
 
         let vim = try read(home + "/.config/nvim/init.vim")
         XCTAssertTrue(vim.contains("\" >>> palette theme >>>"))
-        XCTAssertTrue(vim.contains("source ~/config/theme/nvim.lua"))
+        XCTAssertTrue(vim.contains("source \(home)/config/theme/nvim.lua"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: home + "/.config/nvim/init.lua"))
+    }
+
+    func testIncludeLinesUseAbsolutePathsExceptKitty() throws {
+        let home = makeHome()
+        let includes = includes(home)
+        let theme = home + "/config/theme"
+
+        XCTAssertNil(install(includes, .kitty).error)
+        XCTAssertTrue(try read(home + "/.config/kitty/kitty.conf").contains("include ~/config/theme/kitty.conf"))
+
+        XCTAssertNil(install(includes, .ghostty).error)
+        XCTAssertTrue(try read(home + "/.config/ghostty/config").contains("config-file = \(theme)/ghostty.conf"))
+
+        XCTAssertNil(install(includes, .fish).error)
+        XCTAssertTrue(try read(home + "/.config/fish/config.fish").contains("source \(theme)/fish.fish"))
+
+        XCTAssertNil(install(includes, .delta).error)
+        XCTAssertTrue(try read(home + "/.config/git/config").contains("path = \(theme)/gitconfig-delta"))
+    }
+
+    func testAnOldTildeBlockIsReplacedWithTheAbsoluteOne() throws {
+        let home = makeHome()
+        let path = home + "/.config/ghostty/config"
+        try write(
+            "font-size = 13\n# >>> palette theme >>>\nconfig-file = ~/config/theme/ghostty.conf\n# <<< palette theme <<<\n",
+            to: path
+        )
+        let includes = includes(home)
+
+        XCTAssertEqual(install(includes, .ghostty).action, .installed)
+        let updated = try read(path)
+        XCTAssertEqual(updated, "font-size = 13\n# >>> palette theme >>>\nconfig-file = \(home)/config/theme/ghostty.conf\n# <<< palette theme <<<\n")
+        XCTAssertEqual(updated.components(separatedBy: "# >>> palette theme >>>").count, 2)
     }
 
     // MARK: - Idempotence
@@ -165,7 +198,7 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertNil(install(includes, .ghostty).error)
         let created = try read(path)
         XCTAssertTrue(created.hasPrefix("# >>> palette theme >>>\n"))
-        XCTAssertTrue(created.contains("config-file = ~/config/theme/ghostty.conf"))
+        XCTAssertTrue(created.contains("config-file = \(home)/config/theme/ghostty.conf"))
 
         let outcomes = includes.revert()
         XCTAssertEqual(outcomes.first { $0.target == .ghostty }?.action, .removed)
@@ -335,7 +368,7 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertNil(install(includes, .delta).error)
         let git = try read(home + "/.config/git/config")
         XCTAssertTrue(git.contains("[include]"))
-        XCTAssertTrue(git.contains("path = ~/config/theme/gitconfig-delta"))
+        XCTAssertTrue(git.contains("path = \(home)/config/theme/gitconfig-delta"))
     }
 
     func testYaziStaysManualBecauseTheTOMLCannotBeMerged() throws {

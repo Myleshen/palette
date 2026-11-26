@@ -231,38 +231,6 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
             return unavailableReason ?? "Not configured yet."
         }
     }
-
-    public var reloadNote: String {
-        if isBrowser {
-            return "Install or remove the managed policy in Targets. A running browser refreshes with --refresh-platform-policy; a restart may still be needed."
-        }
-        switch self {
-        case .kitty:
-            return "kitty reloads open windows when it is running."
-        case .ghostty:
-            return "Ghostty picks it up on new windows; a running app gets a best-effort signal."
-        case .zellij:
-            return "New zellij sessions use the theme; existing sessions keep theirs."
-        case .nvim:
-            return "Neovim applies it on restart, or run :source ~/.config/palette/theme/nvim.lua."
-        case .fish:
-            return "New fish shells use it; existing shells need `source ~/.config/palette/theme/fish.fish`."
-        case .starship:
-            return "New prompts use it; starship reads the palette at prompt time."
-        case .bat:
-            return "New bat invocations use it once BAT_THEME points at the file."
-        case .delta:
-            return "New git/delta runs use it; git reads the include on each command."
-        case .btop:
-            return "Restart btop after the theme file is in its themes directory."
-        case .yazi:
-            return "Restart yazi after the theme file is in place."
-        case .vscode, .zed, .neovide:
-            return unavailableReason ?? "Not configured yet."
-        default:
-            return unavailableReason ?? "Not configured yet."
-        }
-    }
 }
 
 // MARK: - Palette
