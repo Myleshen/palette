@@ -86,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Every live manager, keyed by the row id Settings uses.
     private var hotkeyManagers: [String: HotKeyManager] = [:]
     private var currentHotKey: HotKeySpec?
+    private var statusMenuTracking = false
     private var hotKeyInstallTask: Task<Void, Never>?
     private var statusItem: NSStatusItem!
     private var hostProxy: HostBridgeProxy!
@@ -1331,6 +1332,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             var isLauncher = false
         }
 
+        /// A status menu tracks its own event loop; a global hotkey fired while
+        /// it is open cannot show a panel until the menu closes. Close it first,
+        /// then run the action on the next runloop turn.
+        func dispatch(_ action: @escaping () -> Void) {
+            if statusMenuTracking, let menu = statusItem.menu {
+                menu.cancelTracking()
+                DispatchQueue.main.async { action() }
+            } else {
+                action()
+            }
+        }
+
         var desired: [Desired] = [
             Desired(id: "launcher", label: "Launcher shortcut", keys: configuration.hotkey,
                     press: { [weak self] in self?.togglePalette() }, isLauncher: true),
@@ -1399,7 +1412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             let manager = HotKeyManager(hotKeyID: nextID)
             nextID += 1
-            manager.onPressed = item.press
+            manager.onPressed = { dispatch(item.press) }
             do {
                 let spec = try manager.register(item.keys)
                 hotkeyManagers[item.id] = manager
@@ -3484,10 +3497,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         guard menu === statusItem.menu else { return }
+        statusMenuTracking = true
         updateCaptureMenu()
         Task { @MainActor [weak self] in
             await self?.refreshKeepAwakeMenu()
         }
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        if menu === statusItem.menu { statusMenuTracking = false }
     }
 
     private func refreshKeepAwakeMenu() async {

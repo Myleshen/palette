@@ -1,8 +1,25 @@
 # Changelog
 
-## 2.18.3 — 2026-11-26
+## 2.19.0 — 2026-11-26
 
 ### Added
+
+- **Cross-app theming.** A new **Theming** section (its own sidebar group, above
+  Advanced) owns the Palette theme, optional theming of other apps (off by
+  default), and the target list. A palette is generated from the chosen theme or
+  extracted from the wallpaper, written as managed includes under
+  `~/.config/palette/theme/` (kitty, Ghostty, zellij, Neovim, fish, starship,
+  bat, delta, btop, yazi), with include lines to copy, Apply and one-step
+  Revert. Wallpaper palettes re-apply automatically when the wallpaper changes;
+  theme palettes apply on demand. Palette never edits the apps' own configs.
+- **Chromium browser theming via managed policy.** Installed Chromium browsers
+  (Helium, Chrome, Edge, Brave, Vivaldi, Chromium) can inherit the palette
+  background as `BrowserThemeColor` through a per-browser `.mobileconfig`,
+  installed with one native Touch ID/password prompt, removable the same way.
+  App-wide per browser and approximate by design; Arc is listed as unsupported.
+- **19 Omarchy themes** (`omarchy-*`), MIT, contrast-checked, alongside the 914
+  Ghostty themes in the theme browser.
+- Action-routing contract and store-level wiring tests with mutation checks.
 
 - **914 Ghostty themes** bundled as `ghostty-*` (MIT, contrast-checked; user
   themes with the same name still win). Rex's palettes are proprietary and were
