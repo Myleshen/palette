@@ -149,6 +149,8 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
                     .first
                     .map(String.init) ?? ""
                 await bridge?.notify(line.isEmpty ? "docker \(command) \(name) failed" : line)
+            } else {
+                await bridge?.notify("docker \(command) \(name) done")
             }
             await MainActor.run { onRefresh?() }
         }

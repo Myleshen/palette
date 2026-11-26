@@ -172,6 +172,9 @@ public struct PaletteItem: Identifiable, Equatable, Sendable, Codable {
         }
         return primaryAction.map(ItemReturnRoute.action)
     }
+
+    /// What Return reports when the row has no route to run.
+    public var noActionHint: String { "Nothing to run on this row" }
 }
 
 public struct SearchRequest: Sendable {

@@ -129,7 +129,10 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         }
         if raw.hasPrefix("copy:") {
             let path = String(raw.dropFirst("copy:".count))
-            guard let image = NSImage(contentsOfFile: path) else { return }
+            guard let image = NSImage(contentsOfFile: path) else {
+                await bridge.notify("Could not read that screenshot")
+                return
+            }
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.writeObjects([image])

@@ -60,7 +60,10 @@ public final class ColorProvider: PaletteProvider, @unchecked Sendable {
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         switch action.value.text {
         case "pick":
-            guard let picked = await Self.pick() else { return }
+            guard let picked = await Self.pick() else {
+                await bridge.notify("Colour pick cancelled")
+                return
+            }
             Self.recent.removeAll { $0.hex == picked.hex }
             Self.recent.insert(picked, at: 0)
             await copy(picked.hex)

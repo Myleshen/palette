@@ -71,7 +71,7 @@ public final class SnippetProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("doc.badge.plus"),
             badge: "SETUP",
             score: 10_000,
-            actions: [PaletteAction(id: "open", title: "Open Snippets File", kind: .openPathWith, value: .object(["path": fileURL.path]))],
+            actions: [PaletteAction(id: "open", title: "Open Snippets File", kind: .openPathWith, value: .object(["path": fileURL.path, "create": "true"]))],
             preview: .text(Self.example),
             providerID: descriptor.id,
             providerName: descriptor.name

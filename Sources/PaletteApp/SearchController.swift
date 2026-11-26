@@ -25,6 +25,8 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public private(set) var highlightTerms: [String] = []
     @Published public private(set) var isSearching = false
     @Published public private(set) var statusMessage: String?
+    /// The global deadline hint is shown once per session, not on every keystroke.
+    private var reportedSlowProviders = false
     @Published public private(set) var actionsMode = false
     @Published public private(set) var actionItems: [PaletteAction] = []
     private var actionsOwnerID: String?
@@ -466,6 +468,10 @@ public final class SearchController: ObservableObject, HostBridge {
 
         if let diagnostic = result.diagnostics.first(where: { $0.level != .info }) {
             setStatus(diagnostic.message, duration: 6)
+        }
+        if !result.timedOutProviders.isEmpty, !reportedSlowProviders {
+            reportedSlowProviders = true
+            setStatus("Some sources are still loading — use a /trigger for the slow one", duration: 5)
         }
         fillPreview()
     }
@@ -929,7 +935,7 @@ public final class SearchController: ObservableObject, HostBridge {
         case .action(let action):
             execute(item: item, action: action, learnQuery: learnableQuery)
         case nil:
-            return
+            setStatus(item.noActionHint, duration: 3)
         }
     }
 
@@ -1038,11 +1044,17 @@ public final class SearchController: ObservableObject, HostBridge {
             switch action.kind {
             case .openPath:
                 if let path = action.value.text {
-                    ensureFileExists(at: path)
-                    // Hide first so Enter feels instant; launching the app can
-                    // take longer than the animation.
-                    panel?.hide(activatePrevious: false)
+                    let expanded = PathExpansion.expand(path)
+                    if case let .missing(message) = OpenPathPlan.plan(
+                        path: path,
+                        exists: FileManager.default.fileExists(atPath: expanded),
+                        create: false
+                    ) {
+                        setStatus(message, duration: 5)
+                        return
+                    }
                     launcher.openPath(path)
+                    panel?.hide(activatePrevious: false)
                 }
 
             case .openPathWith:
@@ -1051,9 +1063,34 @@ public final class SearchController: ObservableObject, HostBridge {
                     return
                 }
                 let app = value["app"] ?? configuration.editorOpenWith
-                ensureFileExists(at: path)
-                panel?.hide(activatePrevious: false)
-                try launcher.openPath(path, with: app)
+                let plan = OpenPathPlan.plan(
+                    path: path,
+                    exists: FileManager.default.fileExists(
+                        atPath: PathExpansion.expand(path)
+                    ),
+                    create: value["create"] == "true"
+                )
+                switch plan {
+                case .missing(let message):
+                    setStatus(message, duration: 5)
+                    return
+                case .createAndOpen:
+                    ensureFileExists(at: path)
+                case .open:
+                    break
+                }
+                let attempt: OpenAttempt
+                do {
+                    try launcher.openPath(path, with: app)
+                    attempt = .succeeded
+                } catch {
+                    attempt = .failed(error.localizedDescription)
+                }
+                if attempt.hidesPanel {
+                    panel?.hide(activatePrevious: false)
+                } else if case let .failed(message) = attempt {
+                    setStatus(message, duration: 8)
+                }
 
             case .openURL:
                 let object = action.value.object
@@ -1097,6 +1134,8 @@ public final class SearchController: ObservableObject, HostBridge {
                 if let id = action.value.text, let image = try await store.clipboardImage(id: id) {
                     pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
                     panel?.hide()
+                } else {
+                    setStatus("That image is no longer stored", duration: 4)
                 }
 
             case .pasteImage:
@@ -1114,6 +1153,8 @@ public final class SearchController: ObservableObject, HostBridge {
                             route: route
                         )
                     }
+                } else {
+                    setStatus("That image is no longer stored", duration: 4)
                 }
 
             case .copyFiles:
@@ -1308,11 +1349,12 @@ public final class SearchController: ObservableObject, HostBridge {
 
     private func keepsPanelOpen(item: PaletteItem, action: PaletteAction) -> Bool {
         switch item.providerID {
-        case "theme", "clip", "ocr":
+        case "theme", "clip", "ocr", "timer", "color":
             return true
-        case "shot":
-            // OCR results report a character count; capture rows still hide.
-            return action.id.hasPrefix("ocr-")
+        case "shots":
+            // Copy and OCR report their outcome in the status line; capture
+            // rows still hide.
+            return action.id == "copy" || action.id.hasPrefix("ocr-")
         case "awake":
             return true
         case "web":
@@ -1411,8 +1453,8 @@ public final class SearchController: ObservableObject, HostBridge {
         setStatus(message, duration: nil)
     }
 
-    /// Setup rows point at files that may not exist yet; create an empty one so
-    /// the editor opens instead of the panel silently closing.
+    /// Setup rows opt in with `create: true`; create the empty file so the
+    /// editor opens instead of the panel closing on a missing path.
     private func ensureFileExists(at path: String) {
         PathExpansion.ensureFileExists(at: path)
     }
@@ -1449,18 +1491,13 @@ public final class SearchController: ObservableObject, HostBridge {
                 image: image
             )
             : nil
-        if route != .copyOnly, app != nil {
+        let outcome = deliver(route)
+        if let message = outcome.fallbackStatus {
+            // Nothing reached the target: keep the panel up so the user can
+            // see what to do with the copy.
+            setStatus(message, duration: 5)
+        } else {
             panel?.hide(activatePrevious: false)
-        }
-        switch deliver(route) {
-        case .pasted:
-            break
-        case .copiedOnly:
-            setStatus("Copied — press ⌘V", duration: 5)
-        case .needsAccessibility:
-            setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
-        case .noTarget:
-            setStatus("Copied", duration: 3)
         }
     }
 
