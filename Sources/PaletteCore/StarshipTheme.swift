@@ -77,6 +77,7 @@ public enum StarshipTheme {
             "# comments are dropped by the TOML round-trip",
             "",
             table.convert(),
+            "",
         ].joined(separator: "\n")
         return Result(text: text, notice: notice)
     }

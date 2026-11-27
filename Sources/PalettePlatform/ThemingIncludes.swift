@@ -106,8 +106,8 @@ public struct ThemingIncludes: Sendable {
             return Plan(target: target, path: path, format: .hash)
         case .yazi:
             // Not auto-merged: yazi's theme.toml is a table-per-section file,
-            // so appending a second [manager]/[status] block is invalid TOML.
-            // The generated file stays available as a manual full replacement.
+            // so appending a second [mgr]/[status] block is invalid TOML.
+            // The generated file stays available as a manual merge.
             return nil
         case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed, .neovide:
             return nil

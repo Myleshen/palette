@@ -208,8 +208,8 @@ final class ThemingTests: XCTestCase {
             case .btop:
                 XCTAssertTrue(output.contains("theme[main_bg]=\"\(palette.background)\""))
             case .yazi:
-                XCTAssertTrue(output.contains("[manager]"))
-                XCTAssertTrue(output.contains("preview_title"))
+                XCTAssertTrue(output.contains("[mgr]"))
+                XCTAssertTrue(output.contains("cwd = "))
             case .vscode, .zed, .helium, .neovide:
                 XCTFail("unimplemented target reported as implemented")
             default:

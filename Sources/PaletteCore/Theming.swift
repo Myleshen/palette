@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 import TOMLKit
 
@@ -242,7 +243,7 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .btop:
             return "Copy ~/.config/palette/theme/btop.theme to ~/.config/btop/themes/palette.theme and set color_theme = \"palette\""
         case .yazi:
-            return "Copy ~/.config/palette/theme/yazi.toml to ~/.config/yazi/theme.toml"
+            return "Merge ~/.config/palette/theme/yazi.toml into ~/.config/yazi/theme.toml (yazi overlays it; copy it if you have no theme.toml)"
         case .vscode, .zed, .neovide:
             return unavailableReason ?? "Not configured yet."
         default:
@@ -694,6 +695,23 @@ public enum ChromiumPolicy {
     }
 
     /// One seed colour per browser; Chromium derives the rest.
+    /// A stable UUID per browser and payload, or two profiles installed
+    /// together would share a UUID and macOS would treat them as one.
+    static func profileUUID(browser: ChromiumBrowser, salt: String) -> String {
+        let digest = SHA256.hash(data: Data("\(salt):\(browser.bundleID)".utf8))
+        var bytes = Array(digest.prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x40
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        let hex = bytes.map { String(format: "%02X", $0) }.joined()
+        return [
+            hex.prefix(8),
+            hex.dropFirst(8).prefix(4),
+            hex.dropFirst(12).prefix(4),
+            hex.dropFirst(16).prefix(4),
+            hex.dropFirst(20),
+        ].joined(separator: "-")
+    }
+
     public static func mobileConfig(browser: ChromiumBrowser, palette: PalettePalette) -> String {
         let identifier = identifier(for: browser.bundleID)
         let escaped = palette.background
@@ -713,7 +731,7 @@ public enum ChromiumPolicy {
               <key>PayloadIdentifier</key>
               <string>\(identifier)</string>
               <key>PayloadUUID</key>
-              <string>5E3C2F6A-9B7D-4C1E-8A2F-7D4B6C9E1A30</string>
+              <string>\(profileUUID(browser: browser, salt: "payload"))</string>
               <key>PayloadVersion</key>
               <integer>1</integer>
               <key>PayloadDisplayName</key>
@@ -741,7 +759,7 @@ public enum ChromiumPolicy {
           <key>PayloadIdentifier</key>
           <string>\(identifier)</string>
           <key>PayloadUUID</key>
-          <string>8B1D4E7C-3A62-4F90-B5C8-1E9A7D3F6C42</string>
+          <string>\(profileUUID(browser: browser, salt: "configuration"))</string>
           <key>PayloadVersion</key>
           <integer>1</integer>
           <key>PayloadDisplayName</key>
@@ -836,8 +854,8 @@ public enum ThemingRenderer {
                 return "<!-- \(text) -->"
             }
             .joined(separator: "\n")
-        var out = [xmlHeader]
-        out.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        // The XML declaration must come first; comments may only follow it.
+        var out = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", xmlHeader]
         out.append("<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">")
         out.append("<plist version=\"1.0\">")
         out.append("<dict>")
@@ -939,8 +957,22 @@ public enum ThemingRenderer {
             ("cached_start", palette.ansi[5]),
             ("cached_mid", palette.ansi[4]),
             ("cached_end", palette.ansi[6]),
-            ("download", palette.ansi[2]),
-            ("upload", palette.ansi[1]),
+            ("available_start", palette.ansi[4]),
+            ("available_mid", palette.ansi[6]),
+            ("available_end", palette.ansi[2]),
+            ("used_start", palette.ansi[1]),
+            ("used_mid", palette.ansi[3]),
+            ("used_end", palette.ansi[1]),
+            // btop 1.4 uses *_start/_mid/_end gradients; a bare
+            // download/upload key is silently ignored.
+            ("download_start", palette.ansi[4]),
+            ("download_mid", palette.ansi[6]),
+            ("download_end", palette.ansi[2]),
+            ("upload_start", palette.ansi[5]),
+            ("upload_mid", palette.ansi[4]),
+            ("upload_end", palette.ansi[1]),
+            ("graph_text", palette.muted),
+            ("meter_bg", palette.border),
         ]
         for (key, value) in entries {
             out.append("theme[\(key)]=\"\(value)\"")
@@ -949,18 +981,23 @@ public enum ThemingRenderer {
     }
 
     private static func yazi(_ palette: PalettePalette, header: String) -> String {
+        // yazi 26 schema: `[mgr]` (not `[manager]`), hover lives in
+        // `[indicator]`, modes in `[mode]`, and filetype mime globs need `**/`.
         var out = [header, ""]
-        out.append("[manager]")
+        out.append("[mgr]")
         out.append("cwd = { fg = \"\(palette.ansi[4])\" }")
-        out.append("hovered = { fg = \"\(palette.selectionForeground)\", bg = \"\(palette.selectionBackground)\" }")
-        out.append("preview_title = { fg = \"\(palette.ansi[5])\", bold = true }")
-        out.append("preview = { fg = \"\(palette.foreground)\", bg = \"\(palette.surface)\" }")
+        out.append("find_keyword = { fg = \"\(palette.ansi[3])\", bold = true }")
         out.append("border_style = { fg = \"\(palette.border)\" }")
         out.append("")
+        out.append("[indicator]")
+        out.append("current = { fg = \"\(palette.selectionForeground)\", bg = \"\(palette.selectionBackground)\" }")
+        out.append("")
+        out.append("[mode]")
+        out.append("normal_main = { fg = \"\(palette.background)\", bg = \"\(palette.ansi[4])\", bold = true }")
+        out.append("select_main = { fg = \"\(palette.background)\", bg = \"\(palette.ansi[3])\", bold = true }")
+        out.append("unset_main = { fg = \"\(palette.background)\", bg = \"\(palette.muted)\", bold = true }")
+        out.append("")
         out.append("[status]")
-        out.append("mode_normal = { fg = \"\(palette.background)\", bg = \"\(palette.ansi[4])\", bold = true }")
-        out.append("mode_select = { fg = \"\(palette.background)\", bg = \"\(palette.ansi[3])\", bold = true }")
-        out.append("mode_unset = { fg = \"\(palette.background)\", bg = \"\(palette.muted)\", bold = true }")
         out.append("progress_label = { fg = \"\(palette.foreground)\" }")
         out.append("")
         out.append("[which]")
@@ -969,9 +1006,9 @@ public enum ThemingRenderer {
         out.append("")
         out.append("[filetype]")
         out.append("rules = [")
-        out.append("  { mime = \"image/*\", fg = \"\(palette.ansi[5])\" },")
-        out.append("  { mime = \"video/*\", fg = \"\(palette.ansi[1])\" },")
-        out.append("  { mime = \"application/zip\", fg = \"\(palette.ansi[3])\" },")
+        out.append("  { mime = \"**/image/*\", fg = \"\(palette.ansi[5])\" },")
+        out.append("  { mime = \"**/{audio,video}/*\", fg = \"\(palette.ansi[1])\" },")
+        out.append("  { mime = \"**/application/{zip,rar,7z*,tar,gzip,xz,zstd}\", fg = \"\(palette.ansi[3])\" },")
         out.append("]")
         return out.joined(separator: "\n") + "\n"
     }
