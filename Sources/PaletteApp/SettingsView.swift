@@ -1103,6 +1103,7 @@ struct SettingsView: View {
             .init(title: "Palette", tab: .theming, anchor: "appearance-theme", keywords: "palette theme browser ghostty search preview dark light catppuccin gruvbox aetheria"),
             .init(title: "Themes", tab: .theming, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
             .init(title: "Theme Cards", tab: .theming, anchor: "appearance-theme", keywords: "cards gallery wallpaper desktop picture swatch flip apply shortcut"),
+            .init(title: "Wallpaper folder", tab: .theming, anchor: "row-Wallpaper folder", keywords: "wallpaper folder directory theme cards pictures wallpapers group"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
@@ -2281,6 +2282,15 @@ struct SettingsView: View {
                             .pickerStyle(.segmented)
                             .frame(maxWidth: 260)
                         }
+                    }
+
+                    pickerRow(
+                        "Wallpaper folder",
+                        help: "Theme Cards reads this folder for its Wallpapers group. Empty shows the desktop picture card only."
+                    ) {
+                        TextField("~/dot-files/wallpapers", text: $config.theming.wallpaperDirectory)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 380)
                     }
 
                     Divider().padding(.vertical, 4)

@@ -5,15 +5,25 @@ import PalettePlatform
 import SwiftUI
 
 /// One place for the gallery's frame numbers: the panel and the SwiftUI view
-/// must agree or the cards letterbox.
+/// must agree or the hand letterboxes or spills past the panel edge.
 enum ThemeGalleryLayout {
-    static let panelWidth: CGFloat = 900
-    static let panelHeight: CGFloat = 460
-    static let mainCardWidth: CGFloat = 380
-    static let mainCardHeight: CGFloat = 352
-    static let sideCardWidth: CGFloat = 168
-    static let sideCardHeight: CGFloat = 296
-    static let sideGap: CGFloat = 16
+    static let panelWidth: CGFloat = 1280
+    static let panelHeight: CGFloat = 720
+    static let cardWidth: CGFloat = 260
+    static let cardHeight: CGFloat = 368
+    /// How many cards each side of the selection the fan can show. Three keeps
+    /// the outermost card's rotated corner inside a 1280 pt panel.
+    static let reach = 3
+    static let geometry = ThemeCardFanGeometry()
+    /// A rotated card's bottom corner dips below its frame; reserve that much
+    /// so the hand never spills into the footer.
+    static let rotationAllowance = CGFloat(
+        sin(ThemeCardFanGeometry.standard.maxRotation * .pi / 180)
+    ) * cardWidth / 2 + 8
+    /// Card height + the selected card's lift + the deepest arc drop + the
+    /// rotation skirt + air.
+    static let handHeight = cardHeight + geometry.selectedLift + geometry.maxDrop
+        + rotationAllowance + 16
 }
 
 /// The gallery shows both halves of an apply: what happened, and whether it
@@ -23,17 +33,22 @@ struct ThemeGalleryApplyOutcome: Sendable {
     var failed: Bool
 }
 
-/// The gallery draws from this. Palettes arrive one card at a time from a
-/// background parse, so a flip only reads a dictionary.
+/// The gallery draws from this. Palettes and thumbnails arrive one card at a
+/// time from a background parse, so a flip only reads a dictionary.
 @MainActor
 final class ThemeGalleryModel: ObservableObject {
     @Published var deck: ThemeCardDeck
     @Published var palettes: [String: ThemeCardPalette] = [:]
+    @Published var thumbnails: [String: NSImage] = [:]
     @Published var wallpaperImage: NSImage?
     @Published var wallpaperUnavailable = false
     @Published var status: String?
     @Published var statusFailed = false
     @Published var applying = false
+    /// Bumped on every show so the view can re-deal the hand.
+    @Published var dealID = 0
+    /// Bumped on every apply so the chosen card can rise before the status.
+    @Published var celebration = 0
 
     init(deck: ThemeCardDeck = ThemeCardDeck()) {
         self.deck = deck
@@ -42,16 +57,29 @@ final class ThemeGalleryModel: ObservableObject {
     func palette(for card: ThemeCard) -> ThemeCardPalette? {
         palettes[card.cacheKey]
     }
+
+    func thumbnail(for card: ThemeCard) -> NSImage? {
+        guard let path = card.wallpaperPath else { return wallpaperImage }
+        return thumbnails[path]
+    }
+
+    func showAll() {
+        deck.query = ""
+        deck.favouritesOnly = false
+    }
 }
 
-/// The pywal-style theme gallery: one large card with its neighbours peeking,
-/// driven entirely from the keyboard. It is a non-tracking panel like the
-/// status menu, so the app never activates and global hotkeys keep working.
+/// The fanned hand of theme and wallpaper cards: one large card at the front,
+/// its neighbours angled behind it, driven entirely from the keyboard. It is a
+/// non-tracking panel like the status menu, so the app never activates and
+/// global hotkeys keep working.
 @MainActor
 final class ThemeGalleryWindowController: NSWindowController {
     private let model: ThemeGalleryModel
     private let themeManager: ThemeManager
     private let themesDirectory: URL
+    private let wallpaperDirectory: URL
+    private let favourites: ThemeCardFavourites
     private let applyTarget: (ThemeCardTarget) async -> ThemeGalleryApplyOutcome
     private let loadWallpaper: () async -> (NSImage?, ThemeCardPalette?)
 
@@ -63,19 +91,26 @@ final class ThemeGalleryWindowController: NSWindowController {
     private var themeCancellable: AnyCancellable?
     private var catalog: ThemeBrowserCatalog?
     private var catalogTask: Task<Void, Never>?
+    private var wallpapers: [WallpaperFile] = []
     private var loadingPalettes: Set<String> = []
+    private var loadingThumbnails: Set<String> = []
     private var wallpaperLoading = false
     private var wallpaperLoaded = false
+    private var lastScrollTime: TimeInterval = 0
 
     init(
         themeManager: ThemeManager,
         themesDirectory: URL,
+        wallpaperDirectory: URL,
+        favourites: ThemeCardFavourites = ThemeCardFavourites(),
         apply: @escaping (ThemeCardTarget) async -> ThemeGalleryApplyOutcome,
         wallpaper: @escaping () async -> (NSImage?, ThemeCardPalette?)
     ) {
         self.model = ThemeGalleryModel()
         self.themeManager = themeManager
         self.themesDirectory = themesDirectory
+        self.wallpaperDirectory = wallpaperDirectory
+        self.favourites = favourites
         self.applyTarget = apply
         self.loadWallpaper = wallpaper
 
@@ -106,6 +141,10 @@ final class ThemeGalleryWindowController: NSWindowController {
             model: model,
             themeManager: themeManager,
             applyCurrent: { [weak self] in self?.applyCurrent() },
+            selectRelative: { [weak self] in self?.select(relative: $0) },
+            toggleFavouritesView: { [weak self] in self?.toggleFavouritesView() },
+            toggleFavourite: { [weak self] in self?.toggleFavourite() },
+            showAll: { [weak self] in self?.showAll() },
             close: { [weak self] in self?.hide() }
         )
         let hosting = NSHostingView(rootView: view)
@@ -127,6 +166,7 @@ final class ThemeGalleryWindowController: NSWindowController {
         backdrop.addSubview(solid)
         backdrop.addSubview(hosting)
         panel.onKeyDown = { [weak self] event in self?.handleKey(event) ?? false }
+        panel.onScroll = { [weak self] delta in self?.scroll(delta) }
 
         appearanceObserver = NotificationCenter.default.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
@@ -138,6 +178,7 @@ final class ThemeGalleryWindowController: NSWindowController {
         themeCancellable = themeManager.$theme.sink { [weak self] _ in
             Task { @MainActor in self?.updateAppearance() }
         }
+        model.deck.favourites = favourites.keys
         updateAppearance()
     }
 
@@ -155,46 +196,93 @@ final class ThemeGalleryWindowController: NSWindowController {
 
     // MARK: - Catalogue
 
-    /// 942 headers, read once at launch so the first hotkey press is instant.
-    /// No TOML body is parsed here; palettes load for the visible card only.
+    /// 942 headers and the wallpaper folder, read once at launch so the first
+    /// hotkey press is instant. No TOML body is parsed here; palettes and
+    /// thumbnails load for the cards the fan shows.
     func preload() {
         guard catalog == nil, catalogTask == nil else { return }
         let directory = themesDirectory
+        let wallpaperPath = wallpaperDirectory
         catalogTask = Task { [weak self] in
             let built = await Task.detached(priority: .userInitiated) {
                 let clock = ContinuousClock()
                 var catalog: ThemeBrowserCatalog?
+                var wallpapers: [WallpaperFile] = []
                 let elapsed = clock.measure {
                     catalog = ThemeBrowserCatalog(themes: ThemeLoader.catalog(themesDirectory: directory))
+                    wallpapers = WallpaperLibrary.files(in: wallpaperPath)
                 }
-                return (catalog, elapsed)
+                return (catalog, wallpapers, elapsed)
             }.value
             guard let self, let catalog = built.0 else { return }
             self.catalog = catalog
+            self.wallpapers = built.1
             self.catalogTask = nil
-            self.model.deck = ThemeCardDeck(catalog: catalog, currentTheme: self.themeManager.currentThemeID)
+            self.rebuildDeck(keepSelection: false)
             Log.shared.info(
-                "Theme cards catalogue: \(catalog.count) cards in \(Self.milliseconds(built.1)) ms",
+                "Theme cards catalogue: \(catalog.count) cards + \(built.1.count) wallpapers "
+                    + "in \(Self.milliseconds(built.2)) ms",
                 source: "theme"
             )
             if self.isOpen {
-                self.loadVisiblePalettes()
+                self.loadVisibleCards()
             }
         }
+    }
+
+    /// A folder can gain files between opens; rescan and only rebuild when the
+    /// list actually changed, so an open hand does not jump for nothing.
+    private func refreshWallpapers() {
+        guard catalog != nil else { return }
+        let directory = wallpaperDirectory
+        Task { [weak self] in
+            let files = await Task.detached(priority: .utility) {
+                WallpaperLibrary.files(in: directory)
+            }.value
+            guard let self, files != self.wallpapers else { return }
+            self.wallpapers = files
+            self.rebuildDeck(keepSelection: true)
+            if self.isOpen { self.loadVisibleCards() }
+        }
+    }
+
+    private var currentDesktopURL: URL? {
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return nil }
+        return NSWorkspace.shared.desktopImageURL(for: screen)
+    }
+
+    private func rebuildDeck(keepSelection: Bool) {
+        guard let catalog else { return }
+        let desktop = currentDesktopURL
+        let selectedKey = keepSelection ? model.deck.current.cacheKey : nil
+        var deck = ThemeCardDeck(
+            catalog: catalog,
+            currentTheme: themeManager.currentThemeID,
+            wallpapers: wallpapers.map(\.url),
+            currentDesktop: desktop
+        )
+        deck.favourites = favourites.keys
+        deck.currentDesktopPath = desktop?.standardizedFileURL.path
+        if let selectedKey, let index = deck.visible.firstIndex(where: { $0.cacheKey == selectedKey }) {
+            deck.selected = index
+        }
+        model.deck = deck
     }
 
     // MARK: - Presentation
 
     func show() {
         preload()
-        if let catalog {
-            model.deck = ThemeCardDeck(catalog: catalog, currentTheme: themeManager.currentThemeID)
+        refreshWallpapers()
+        if catalog != nil {
+            rebuildDeck(keepSelection: false)
         }
+        model.dealID += 1
         model.status = nil
         model.statusFailed = false
         model.applying = false
         model.wallpaperUnavailable = false
-        loadVisiblePalettes()
+        loadVisibleCards()
         updateAppearance()
         installClickMonitors()
         guard let window else { return }
@@ -218,11 +306,12 @@ final class ThemeGalleryWindowController: NSWindowController {
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
         }
-        // Leave the window as first responder so arrow keys reach the panel
-        // instead of SwiftUI's focus system.
+        // Leave the window as first responder so arrow keys and typing reach
+        // the panel instead of SwiftUI's focus system.
         window.makeFirstResponder(nil)
         Log.shared.info(
-            "Theme cards showing \(model.deck.count) cards at \(model.deck.current.displayName)",
+            "Theme cards showing \(model.deck.count) cards at \(model.deck.current.displayName) "
+                + "(\(wallpapers.count) wallpapers)",
             source: "app"
         )
     }
@@ -237,6 +326,14 @@ final class ThemeGalleryWindowController: NSWindowController {
     }
 
     // MARK: - Movement
+
+    private func select(relative: Int) {
+        guard relative != 0 else {
+            applyCurrent()
+            return
+        }
+        move(relative)
+    }
 
     private func move(_ delta: Int) {
         let start = DispatchTime.now()
@@ -259,48 +356,111 @@ final class ThemeGalleryWindowController: NSWindowController {
     /// Deck movement and the palette lookup are synchronous; only a cache miss
     /// schedules a background parse. This is the number to keep small.
     private func finishMove(_ start: DispatchTime) {
-        loadVisiblePalettes()
+        loadVisibleCards()
         let elapsed = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
         let cached = model.palette(for: model.deck.current) != nil
+            || model.thumbnail(for: model.deck.current) != nil
         Log.shared.info(
             "Theme cards flip → \(model.deck.current.displayName) "
-                + "(\(elapsed / 1_000) µs, palette \(cached ? "cached" : "loading"))",
+                + "(\(elapsed / 1_000) µs, \(cached ? "cached" : "loading")), "
+                + "\(model.deck.count) visible",
             source: "theme"
         )
     }
 
-    // MARK: - Palettes
+    // MARK: - Filter and favourites
 
-    private func visibleCards() -> [ThemeCard] {
-        guard model.deck.count > 0 else { return [] }
-        return [model.deck.previous, model.deck.current, model.deck.next]
+    private func setQuery(_ text: String) {
+        let start = DispatchTime.now()
+        model.deck.query = text
+        finishMove(start)
     }
 
-    /// The visible card and its two neighbours: a flip lands on a card that is
-    /// already parsed, so the card body never waits on disk.
-    private func loadVisiblePalettes() {
+    private func appendFilter(_ text: String) {
+        setQuery(model.deck.query + text)
+    }
+
+    private func deleteFilterCharacter() {
+        guard !model.deck.query.isEmpty else { return }
+        setQuery(String(model.deck.query.dropLast()))
+    }
+
+    private func toggleFavouritesView() {
+        let start = DispatchTime.now()
+        model.deck.favouritesOnly.toggle()
+        finishMove(start)
+    }
+
+    private func showAll() {
+        let start = DispatchTime.now()
+        model.deck.query = ""
+        model.deck.favouritesOnly = false
+        finishMove(start)
+    }
+
+    private func toggleFavourite() {
+        guard model.deck.count > 0 else { return }
+        let key = model.deck.current.cacheKey
+        model.deck.favourites = favourites.toggle(key)
+        let on = model.deck.favourites.contains(key)
+        Log.shared.info(
+            "Theme cards \(on ? "favourited" : "unfavourited") \(model.deck.current.displayName)",
+            source: "theme"
+        )
+        if model.deck.favouritesOnly && !on {
+            // The card just left the favourites view; keep the deck coherent.
+            model.deck.selected = min(model.deck.selected, max(0, model.deck.count - 1))
+            loadVisibleCards()
+        }
+    }
+
+    // MARK: - Palettes and thumbnails
+
+    /// Only the fanned window is decoded: the selected card and at most
+    /// `reach` neighbours on each side.
+    private func visibleCards() -> [ThemeCard] {
+        model.deck.fanWindow(reach: ThemeGalleryLayout.reach).map(\.card)
+    }
+
+    private func loadVisibleCards() {
         for card in visibleCards() {
-            loadPalette(for: card)
+            switch card.kind {
+            case .wallpaper:
+                loadWallpaperIfNeeded()
+            case .wallpaperFile(let url):
+                loadThumbnail(for: url)
+            case .theme:
+                loadPalette(for: card)
+            }
         }
     }
 
     private func loadPalette(for card: ThemeCard) {
-        switch card.kind {
-        case .wallpaper:
-            loadWallpaperIfNeeded()
-        case .theme(let info):
-            guard model.palette(for: card) == nil,
-                  !loadingPalettes.contains(card.cacheKey) else { return }
-            loadingPalettes.insert(card.cacheKey)
-            let directory = themesDirectory
-            Task { @MainActor [weak self] in
-                let palette = await Task.detached(priority: .userInitiated) {
-                    ThemeCardPalette(theme: ThemeLoader.load(name: info.name, themesDirectory: directory).theme)
-                }.value
-                guard let self else { return }
-                self.loadingPalettes.remove(card.cacheKey)
-                self.model.palettes[card.cacheKey] = palette
-            }
+        guard case .theme(let info) = card.kind,
+              model.palette(for: card) == nil,
+              !loadingPalettes.contains(card.cacheKey) else { return }
+        loadingPalettes.insert(card.cacheKey)
+        let directory = themesDirectory
+        Task { @MainActor [weak self] in
+            let palette = await Task.detached(priority: .userInitiated) {
+                ThemeCardPalette(theme: ThemeLoader.load(name: info.name, themesDirectory: directory).theme)
+            }.value
+            guard let self else { return }
+            self.loadingPalettes.remove(card.cacheKey)
+            self.model.palettes[card.cacheKey] = palette
+        }
+    }
+
+    private func loadThumbnail(for url: URL) {
+        let path = url.standardizedFileURL.path
+        guard model.thumbnails[path] == nil, !loadingThumbnails.contains(path) else { return }
+        loadingThumbnails.insert(path)
+        Task { @MainActor [weak self] in
+            let thumbnail = await CardImageLoader.shared.thumbnail(for: url)
+            guard let self else { return }
+            self.loadingThumbnails.remove(path)
+            guard let thumbnail else { return }
+            self.model.thumbnails[path] = thumbnail.image
         }
     }
 
@@ -326,25 +486,27 @@ final class ThemeGalleryWindowController: NSWindowController {
     // MARK: - Apply
 
     private func applyCurrent() {
-        let card = model.deck.current
-        apply(card)
-    }
-
-    private func applyWallpaper() {
-        model.deck.jumpToFirst()
-        loadVisiblePalettes()
-        apply(.wallpaper)
+        guard model.deck.count > 0 else {
+            model.status = "Nothing matches “\(model.deck.query)”"
+            model.statusFailed = false
+            return
+        }
+        apply(model.deck.current)
     }
 
     private func apply(_ card: ThemeCard) {
         guard !model.applying else { return }
         let target = card.target
         model.applying = true
+        model.celebration += 1
         model.statusFailed = false
         model.status = "Applying…"
         Task { @MainActor [weak self] in
             guard let self else { return }
             let outcome = await self.applyTarget(target)
+            if !outcome.failed, case .wallpaperFile(let path) = target {
+                self.model.deck.currentDesktopPath = path
+            }
             self.model.applying = false
             self.model.status = outcome.message.isEmpty ? "Applied" : outcome.message
             self.model.statusFailed = outcome.failed
@@ -411,10 +573,23 @@ final class ThemeGalleryWindowController: NSWindowController {
     func scriptMove(_ delta: Int) { move(delta) }
     func scriptJumpToFirst() { moveToFirst() }
     func scriptJumpToLast() { moveToLast() }
+    func scriptFilter(_ text: String) { setQuery(text) }
+    func scriptToggleFavouritesView() { toggleFavouritesView() }
+    func scriptToggleFavourite() { toggleFavourite() }
+    func scriptApply() { applyCurrent() }
+
+    /// Wheel and trackpad flip one card per gesture direction. Momentum keeps
+    /// sending events after the fingers stop, so ignore the burst.
+    private func scroll(_ delta: CGFloat) {
+        guard abs(delta) > 0 else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastScrollTime > 0.12 else { return }
+        lastScrollTime = now
+        move(delta > 0 ? -1 : 1)
+    }
 
     private func handleKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let characters = event.charactersIgnoringModifiers?.lowercased()
 
         if flags.contains(.command) {
             switch event.keyCode {
@@ -429,27 +604,21 @@ final class ThemeGalleryWindowController: NSWindowController {
             }
         }
 
-        if !flags.contains(.command), !flags.contains(.control) {
-            if characters == "h" {
-                move(-1)
-                return true
-            }
-            if characters == "l" {
-                move(1)
-                return true
-            }
-            if characters == "w" {
-                applyWallpaper()
-                return true
-            }
+        if flags.contains(.control), !flags.contains(.command),
+           event.charactersIgnoringModifiers?.lowercased() == "f" {
+            toggleFavourite()
+            return true
         }
 
         switch event.keyCode {
-        case 53: // Esc
+        case 53: // Esc closes.
             hide()
             return true
-        case 36, 76: // Return, keypad Enter
+        case 36, 76, 49: // Return, keypad Enter, Space
             applyCurrent()
+            return true
+        case 48: // Tab / Shift-Tab toggles the favourites view.
+            toggleFavouritesView()
             return true
         case 123: // Left
             move(-1)
@@ -457,9 +626,26 @@ final class ThemeGalleryWindowController: NSWindowController {
         case 124: // Right
             move(1)
             return true
+        case 115: // Home
+            moveToFirst()
+            return true
+        case 119: // End
+            moveToLast()
+            return true
+        case 51: // Backspace edits the filter.
+            deleteFilterCharacter()
+            return true
         default:
-            return false
+            break
         }
+
+        guard !flags.contains(.command), !flags.contains(.control), !flags.contains(.option),
+              let text = event.charactersIgnoringModifiers,
+              !text.isEmpty,
+              text.unicodeScalars.allSatisfy({ $0.value >= 0x20 && $0.value < 0xF700 })
+        else { return false }
+        appendFilter(text)
+        return true
     }
 
     private static func milliseconds(_ duration: Duration) -> String {
@@ -469,9 +655,11 @@ final class ThemeGalleryWindowController: NSWindowController {
     }
 }
 
-/// A nonactivating panel that can still take arrow keys, like the status menu.
+/// A nonactivating panel that can still take arrow keys, typing and the wheel,
+/// like the status menu.
 private final class ThemeGalleryWindow: NSPanel {
     var onKeyDown: ((NSEvent) -> Bool)?
+    var onScroll: ((CGFloat) -> Void)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -479,6 +667,14 @@ private final class ThemeGalleryWindow: NSPanel {
     override func keyDown(with event: NSEvent) {
         if onKeyDown?(event) == true { return }
         super.keyDown(with: event)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let onScroll else {
+            super.scrollWheel(with: event)
+            return
+        }
+        onScroll(event.scrollingDeltaY)
     }
 }
 
@@ -488,180 +684,503 @@ private struct ThemeGalleryView: View {
     @ObservedObject var model: ThemeGalleryModel
     @ObservedObject var themeManager: ThemeManager
     var applyCurrent: () -> Void
+    var selectRelative: (Int) -> Void
+    var toggleFavouritesView: () -> Void
+    var toggleFavourite: () -> Void
+    var showAll: () -> Void
     var close: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var deal: Double = 0
+    @State private var pulse = false
 
     private var theme: Theme { themeManager.theme }
     private var muted: Color { theme.color(theme.palette.fgMuted) }
+    private var geometry: ThemeCardFanGeometry { ThemeGalleryLayout.geometry }
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .center, spacing: ThemeGalleryLayout.sideGap) {
-                sideCard(model.deck.previous, label: "Previous")
-                mainCard
-                sideCard(model.deck.next, label: "Next")
-            }
+        VStack(spacing: 0) {
+            header
+            Spacer(minLength: 0)
+            fan
             footer
         }
-        .padding(18)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .frame(
             width: ThemeGalleryLayout.panelWidth,
             height: ThemeGalleryLayout.panelHeight,
-            alignment: .center
+            alignment: .top
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Theme cards")
+        .onAppear { dealIn() }
+        .onChange(of: model.dealID) { _, _ in dealIn() }
+        .onChange(of: model.celebration) { _, _ in pulseApply() }
     }
 
-    private var mainCard: some View {
-        let card = model.deck.current
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Text("THEME CARDS")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.4)
+                .foregroundStyle(muted)
+                .accessibilityHidden(true)
+
+            filterField
+
+            chip(
+                model.deck.query.isEmpty && !model.deck.favouritesOnly ? "All" : "All themes",
+                lit: model.deck.query.isEmpty && !model.deck.favouritesOnly,
+                hint: "Show every card",
+                action: showAll
+            )
+            chip(
+                "♥ Favourites \(model.deck.favourites.count)",
+                lit: model.deck.favouritesOnly,
+                hint: "Show favourite cards only",
+                action: toggleFavouritesView
+            )
+
+            Spacer(minLength: 8)
+
+            Text(positionLabel)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(muted)
+                .monospacedDigit()
+                .accessibilityLabel("Card \(positionLabel)")
+        }
+    }
+
+    private var positionLabel: String {
+        let count = model.deck.count
+        guard count > 0 else { return "0 / 0" }
+        return "\(min(model.deck.selected + 1, count)) / \(count)"
+    }
+
+    /// Typing is handled by the panel, so this is a field the keyboard drives
+    /// rather than a focusable NSTextField that would steal the arrow keys.
+    private var filterField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(muted)
+            Text(model.deck.query.isEmpty ? "Type to filter" : model.deck.query)
+                .font(.system(size: 11))
+                .foregroundStyle(model.deck.query.isEmpty ? muted.opacity(0.75) : theme.color(theme.palette.fg))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .frame(height: 24)
+        .frame(minWidth: 150, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(theme.color(theme.palette.elevated).opacity(0.65))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(theme.color(theme.palette.border).opacity(0.8), lineWidth: 1)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Filter themes")
+        .accessibilityValue(model.deck.query.isEmpty ? "Empty" : model.deck.query)
+    }
+
+    private func chip(
+        _ label: String,
+        lit: Bool,
+        hint: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(lit ? theme.color(theme.palette.bg) : theme.color(theme.palette.fg))
+                .padding(.horizontal, 10)
+                .frame(height: 24)
+                .background(
+                    Capsule().fill(
+                        lit
+                            ? theme.color(theme.palette.accent)
+                            : theme.color(theme.palette.elevated).opacity(0.6)
+                    )
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        theme.color(theme.palette.border).opacity(lit ? 0 : 0.8),
+                        lineWidth: 1
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+        .help(hint)
+        .accessibilityLabel(label)
+    }
+
+    // MARK: - Fan
+
+    private var fan: some View {
+        let slots = model.deck.fanWindow(reach: ThemeGalleryLayout.reach)
+        return ZStack(alignment: .bottom) {
+            if slots.isEmpty {
+                Text(model.deck.favouritesOnly && model.deck.query.isEmpty
+                    ? "No favourites yet · Tab shows all · ⌃F marks the card in front"
+                    : "Nothing matches “\(model.deck.query)”")
+                    .font(.system(size: 12))
+                    .foregroundStyle(muted)
+                    .accessibilityLabel("No matching cards")
+            }
+            ForEach(slots, id: \.card.id) { slot in
+                cardView(slot)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: ThemeGalleryLayout.handHeight, alignment: .bottom)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.82),
+            value: model.deck.selected
+        )
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.82),
+            value: model.deck.query
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Fanned hand of cards")
+    }
+
+    private func cardView(_ slot: FanSlot) -> some View {
+        let card = slot.card
+        let selected = slot.relative == 0
+        let placement = geometry.placement(
+            relative: slot.relative,
+            reduceMotion: reduceMotion,
+            deal: deal
+        )
         let palette = model.palette(for: card)
         let background = color(palette?.background, fallback: theme.palette.surface)
         let foreground = color(palette?.foreground, fallback: theme.palette.fg)
-        return VStack(alignment: .leading, spacing: 10) {
+
+        return cardBody(card, palette: palette, foreground: foreground, selected: selected)
+            .frame(width: ThemeGalleryLayout.cardWidth, height: ThemeGalleryLayout.cardHeight)
+            .background(background)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        selected
+                            ? accentColor(palette, foreground: foreground).opacity(0.85)
+                            : foreground.opacity(0.14),
+                        lineWidth: selected ? 1.5 : 1
+                    )
+            )
+            .overlay(
+                // Side cards are shaded; the selected card stays at full light.
+                Color.black.opacity(placement.dim)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .allowsHitTesting(false)
+            )
+            .overlay(alignment: .topLeading) {
+                if isDesktopCard(card) { currentDot }
+            }
+            .overlay(alignment: .topTrailing) {
+                if model.deck.favourites.contains(card.cacheKey) { favouriteBadge }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if isVideoCard(card) { videoBadge }
+            }
+            .shadow(
+                color: .black.opacity(selected ? 0.4 : 0.2),
+                radius: selected ? 22 : 8,
+                y: selected ? 12 : 5
+            )
+            .scaleEffect(
+                placement.scale * (selected && pulse ? 1.06 : 1),
+                anchor: .bottom
+            )
+            .rotationEffect(.degrees(placement.rotation), anchor: .bottom)
+            .offset(x: placement.x, y: placement.y - geometry.maxDrop - ThemeGalleryLayout.rotationAllowance)
+            .zIndex(placement.zIndex)
+            .opacity(deal)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .onTapGesture { selectRelative(slot.relative) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(cardLabel(card, selected: selected))
+            .accessibilityValue(accessibilityValue(card, palette: palette))
+            .accessibilityAddTraits(selected ? [.isSelected] : [])
+            .accessibilityAction(named: "Apply") {
+                if selected { applyCurrent() }
+            }
+    }
+
+    @ViewBuilder
+    private func cardBody(
+        _ card: ThemeCard,
+        palette: ThemeCardPalette?,
+        foreground: Color,
+        selected: Bool
+    ) -> some View {
+        switch card.kind {
+        case .wallpaper, .wallpaperFile:
+            wallpaperBody(card, palette: palette, foreground: foreground, selected: selected)
+        case .theme:
+            themeBody(card, palette: palette, foreground: foreground, selected: selected)
+        }
+    }
+
+    private func themeBody(
+        _ card: ThemeCard,
+        palette: ThemeCardPalette?,
+        foreground: Color,
+        selected: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: selected ? 10 : 7) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(card.displayName)
-                    .font(theme.font(size: 19, weight: .semibold))
+                    .font(.system(size: selected ? 18 : 12, weight: .semibold))
                     .foregroundStyle(foreground)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                Text(card.sectionTitle.uppercased())
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(accentColor(palette, foreground: foreground))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .overlay(
-                        Capsule().strokeBorder(
-                            accentColor(palette, foreground: foreground).opacity(0.7),
-                            lineWidth: 1
+                    .lineLimit(selected ? 1 : 2)
+                if selected {
+                    Spacer(minLength: 6)
+                    Text(card.sectionTitle.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(accentColor(palette, foreground: foreground))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .overlay(
+                            Capsule().strokeBorder(
+                                accentColor(palette, foreground: foreground).opacity(0.7),
+                                lineWidth: 1
+                            )
                         )
-                    )
+                        // Leave the heart badge its corner.
+                        .padding(.trailing, model.deck.favourites.contains(card.cacheKey) ? 18 : 0)
+                }
             }
 
-            if case .wallpaper = card.kind, let image = model.wallpaperImage {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 92)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .strokeBorder(foreground.opacity(0.16), lineWidth: 1)
-                    )
-                    .accessibilityLabel("Current desktop picture")
+            HStack(spacing: selected ? 8 : 5) {
+                swatchBlock("BG", palette?.background, foreground: foreground, tall: selected)
+                swatchBlock("FG", palette?.foreground, foreground: foreground, tall: selected)
+                swatchBlock("ACCENT", palette?.accent, foreground: foreground, tall: selected)
+                if selected {
+                    swatchBlock("SELECT", palette?.selection, foreground: foreground, tall: true)
+                }
             }
 
-            HStack(spacing: 8) {
-                swatchBlock("BG", palette?.background, foreground: foreground)
-                swatchBlock("FG", palette?.foreground, foreground: foreground)
-                swatchBlock("ACCENT", palette?.accent, foreground: foreground)
-                swatchBlock("SELECT", palette?.selection, foreground: foreground)
-            }
-
-            HStack(spacing: 5) {
-                ForEach(Array((palette?.brightestANSI ?? []).enumerated()), id: \.offset) { _, hex in
+            HStack(spacing: selected ? 5 : 3) {
+                ForEach(Array((palette?.brightestANSI ?? []).prefix(selected ? 8 : 6).enumerated()), id: \.offset) { _, hex in
                     Circle()
                         .fill(color(hex, fallback: theme.palette.fgMuted))
-                        .frame(width: 13, height: 13)
+                        .frame(width: selected ? 12 : 6, height: selected ? 12 : 6)
                         .overlay(Circle().strokeBorder(foreground.opacity(0.18), lineWidth: 0.5))
                 }
                 Spacer(minLength: 4)
-                Text(displayAppearance(card, palette: palette))
-                    .font(.system(size: 10))
-                    .foregroundStyle(foreground.opacity(0.7))
+                if selected {
+                    Text(displayAppearance(card, palette: palette))
+                        .font(.system(size: 10))
+                        .foregroundStyle(foreground.opacity(0.7))
+                }
             }
 
-            HStack(spacing: 8) {
-                Text("Aa")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(foreground)
-                Text("The quick brown fox")
-                    .font(.system(size: 11))
-                    .foregroundStyle(foreground.opacity(0.8))
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                Text("#!/bin/sh")
+            if selected {
+                paletteBanner(palette, foreground: foreground)
+                    .frame(maxHeight: .infinity)
+            } else {
+                paletteBanner(palette, foreground: foreground, compact: true)
+                    .frame(maxHeight: .infinity)
+            }
+
+            Spacer(minLength: 0)
+
+            if selected {
+                Text(paletteSummary(card, palette: palette))
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(accentColor(palette, foreground: foreground))
+                    .foregroundStyle(foreground.opacity(0.65))
+                    .lineLimit(1)
+            } else {
+                Text(card.sectionTitle)
+                    .font(.system(size: 9))
+                    .foregroundStyle(foreground.opacity(0.55))
+                    .lineLimit(1)
             }
+        }
+        .padding(selected ? 15 : 11)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// A strip of the palette's own colours, so the card shows more than four
+    /// blocks and the empty middle earns its space.
+    private func paletteBanner(
+        _ palette: ThemeCardPalette?,
+        foreground: Color,
+        compact: Bool = false
+    ) -> some View {
+        let colors = (palette?.brightestANSI ?? []).compactMap { RGBA(hex: $0)?.color }
+        return RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: colors.isEmpty
+                        ? [foreground.opacity(0.06), foreground.opacity(0.14)]
+                        : colors,
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .overlay(alignment: .bottomLeading) {
+                if !compact {
+                    Text("The quick brown fox   #!/bin/sh")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(foreground.opacity(0.9))
+                        .lineLimit(1)
+                        .padding(8)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(foreground.opacity(0.12), lineWidth: 1)
+            )
             .accessibilityHidden(true)
-
-            Spacer(minLength: 0)
-            Text(paletteSummary(card, palette: palette))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(foreground.opacity(0.65))
-                .lineLimit(1)
-        }
-        .padding(15)
-        .frame(
-            width: ThemeGalleryLayout.mainCardWidth,
-            height: ThemeGalleryLayout.mainCardHeight,
-            alignment: .topLeading
-        )
-        .background(background)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(accentColor(palette, foreground: foreground).opacity(0.4), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(cardLabel(card, role: "Theme card"))
-        .accessibilityValue(accessibilityValue(card, palette: palette))
     }
 
-    private func sideCard(_ card: ThemeCard, label: String) -> some View {
-        let palette = model.palette(for: card)
-        let background = color(palette?.background, fallback: theme.palette.surface)
-        let foreground = color(palette?.foreground, fallback: theme.palette.fg)
-        return VStack(alignment: .leading, spacing: 8) {
+    private func wallpaperBody(
+        _ card: ThemeCard,
+        palette: ThemeCardPalette?,
+        foreground: Color,
+        selected: Bool
+    ) -> some View {
+        let image = model.thumbnail(for: card)
+        let video = isVideoCard(card)
+        return VStack(alignment: .leading, spacing: selected ? 7 : 4) {
+            Spacer(minLength: 0)
             Text(card.displayName)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(foreground.opacity(0.9))
-                .lineLimit(2)
-            HStack(spacing: 4) {
-                miniSwatch(palette?.background, fallback: theme.palette.bg)
-                miniSwatch(palette?.foreground, fallback: theme.palette.fg)
-                miniSwatch(palette?.accent, fallback: theme.palette.accent)
-                miniSwatch(palette?.selection, fallback: theme.palette.elevated)
+                .font(.system(size: selected ? 16 : 11, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .lineLimit(selected ? 1 : 2)
+            if selected {
+                HStack(spacing: 5) {
+                    Text(card.sectionTitle.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(Color.white.opacity(0.75))
+                    if video {
+                        Text("VIDEO")
+                            .font(.system(size: 9, weight: .semibold))
+                            .tracking(0.6)
+                            .foregroundStyle(Color.white.opacity(0.75))
+                    }
+                    Spacer(minLength: 4)
+                    ForEach(Array((palette?.brightestANSI ?? []).prefix(8).enumerated()), id: \.offset) { _, hex in
+                        Circle()
+                            .fill(color(hex, fallback: theme.palette.fgMuted))
+                            .frame(width: 9, height: 9)
+                    }
+                }
             }
-            Spacer(minLength: 0)
-            Text(card.sectionTitle)
-                .font(.system(size: 9))
-                .foregroundStyle(foreground.opacity(0.6))
         }
-        .padding(11)
-        .frame(
-            width: ThemeGalleryLayout.sideCardWidth,
-            height: ThemeGalleryLayout.sideCardHeight,
-            alignment: .topLeading
-        )
-        .background(background)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(foreground.opacity(0.12), lineWidth: 1)
-        )
-        .opacity(0.62)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(cardLabel(card, role: label))
-        .accessibilityValue(accessibilityValue(card, palette: palette))
+        .padding(selected ? 15 : 11)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        // The picture is a background so it cannot stretch the label layout.
+        .background(alignment: .bottom) {
+            ZStack(alignment: .bottom) {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                } else {
+                    LinearGradient(
+                        colors: [
+                            theme.color(theme.palette.elevated),
+                            theme.color(theme.palette.surface),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    Image(systemName: video ? "film" : "photo")
+                        .font(.system(size: selected ? 44 : 28, weight: .light))
+                        .foregroundStyle(foreground.opacity(0.35))
+                }
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.78)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                .frame(height: selected ? 200 : 150)
+            }
+        }
     }
+
+    // MARK: - Card pieces
+
+    private var currentDot: some View {
+        Circle()
+            .fill(theme.color(theme.palette.accent))
+            .frame(width: 10, height: 10)
+            .overlay(Circle().strokeBorder(.black.opacity(0.45), lineWidth: 1))
+            .padding(14)
+            .accessibilityHidden(true)
+    }
+
+    private var favouriteBadge: some View {
+        Image(systemName: "heart.fill")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Color(red: 1, green: 0.42, blue: 0.49))
+            .padding(6)
+            .background(Circle().fill(.black.opacity(0.55)))
+            .padding(12)
+            .accessibilityHidden(true)
+    }
+
+    private var videoBadge: some View {
+        Image(systemName: "play.fill")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(7)
+            .background(Circle().fill(.black.opacity(0.55)))
+            .padding(12)
+            .accessibilityHidden(true)
+    }
+
+    private func swatchBlock(
+        _ title: String,
+        _ hex: String?,
+        foreground: Color,
+        tall: Bool
+    ) -> some View {
+        VStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color(hex, fallback: theme.palette.elevated))
+                .frame(height: tall ? 56 : 34)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(foreground.opacity(0.14), lineWidth: 1)
+                )
+            if tall {
+                Text(title)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(foreground.opacity(0.6))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
+    }
+
+    // MARK: - Footer
 
     private var footer: some View {
         HStack(spacing: 10) {
             Button("Apply", action: applyCurrent)
                 .buttonStyle(.borderedProminent)
                 .tint(theme.color(theme.palette.accent))
-                .accessibilityLabel("Apply the shown theme")
-            Button("Close", action: close)
-                .accessibilityLabel("Close theme cards")
+                .accessibilityLabel("Apply the card in front")
 
             if model.applying {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityLabel("Applying theme")
+                    .accessibilityLabel("Applying")
             } else if let status = model.status {
                 Text(status)
                     .font(.caption)
@@ -671,51 +1190,69 @@ private struct ThemeGalleryView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(status)
+                    .accessibilityLabel(model.statusFailed ? "Apply failed: \(status)" : status)
             }
 
             Spacer(minLength: 8)
 
-            Text("\(model.deck.count) cards")
-                .font(.system(size: 10))
-                .foregroundStyle(muted)
-                .monospacedDigit()
-
-            Text("← → flip · ⌘← ⌘→ first / last · ↩ apply · W wallpaper · Esc close")
+            Text(model.deck.favouritesOnly
+                ? "Favourites view · Tab shows all"
+                : "← → choose · ↩ apply · type filter · Tab favourites · ⌃F ♥ · esc close")
                 .font(.system(size: 10))
                 .foregroundStyle(muted)
                 .lineLimit(1)
+                .accessibilityHidden(true)
+
+            Button("Close", action: close)
+                .accessibilityLabel("Close theme cards")
         }
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Card pieces
+    // MARK: - Animation
 
-    private func swatchBlock(
-        _ title: String,
-        _ hex: String?,
-        foreground: Color
-    ) -> some View {
-        VStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(color(hex, fallback: theme.palette.elevated))
-                .frame(height: 56)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(foreground.opacity(0.14), lineWidth: 1)
-                )
-            Text(title)
-                .font(.system(size: 8, weight: .medium))
-                .foregroundStyle(foreground.opacity(0.6))
+    private func dealIn() {
+        deal = 0
+        guard !reduceMotion else {
+            deal = 1
+            return
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityHidden(true)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+                deal = 1
+            }
+        }
     }
 
-    private func miniSwatch(_ hex: String?, fallback: String) -> some View {
-        RoundedRectangle(cornerRadius: 2, style: .continuous)
-            .fill(color(hex, fallback: fallback))
-            .frame(height: 14)
-            .frame(maxWidth: .infinity)
+    private func pulseApply() {
+        guard !reduceMotion else { return }
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.55)) {
+            pulse = true
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            withAnimation(.easeOut(duration: 0.24)) {
+                pulse = false
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func isDesktopCard(_ card: ThemeCard) -> Bool {
+        guard let path = card.wallpaperPath else {
+            if case .wallpaper = card.kind { return true }
+            return false
+        }
+        return path == model.deck.currentDesktopPath
+    }
+
+    private func isVideoCard(_ card: ThemeCard) -> Bool {
+        guard let path = card.wallpaperPath else { return false }
+        return WallpaperLibrary.videoExtensions.contains(
+            URL(fileURLWithPath: path).pathExtension.lowercased()
+        )
     }
 
     private func color(_ hex: String?, fallback: String) -> Color {
@@ -748,16 +1285,25 @@ private struct ThemeGalleryView: View {
         return "\(palette.background) · \(palette.foreground) · \(palette.accent)"
     }
 
-    private func cardLabel(_ card: ThemeCard, role: String) -> String {
-        "\(role) theme card: \(card.displayName), \(card.sectionTitle)"
+    private func cardLabel(_ card: ThemeCard, selected: Bool) -> String {
+        let kind = card.isWallpaper ? "Wallpaper card" : "Theme card"
+        let suffix = selected ? ", in front" : ""
+        return "\(kind): \(card.displayName), \(card.sectionTitle)\(suffix)"
     }
 
     private func accessibilityValue(_ card: ThemeCard, palette: ThemeCardPalette?) -> String {
-        let appearance = displayAppearance(card, palette: palette)
-        guard let palette else {
-            return "\(appearance.isEmpty ? "" : "\(appearance). ")Palette loading"
+        var parts: [String] = []
+        if isDesktopCard(card) { parts.append("On the desktop") }
+        if model.deck.favourites.contains(card.cacheKey) { parts.append("Favourite") }
+        if isVideoCard(card) { parts.append("Video") }
+        if let palette {
+            parts.append("Background \(palette.background), foreground \(palette.foreground), "
+                + "accent \(palette.accent), selection \(palette.selection)")
+        } else if card.wallpaperPath != nil {
+            parts.append("Preview loading")
+        } else {
+            parts.append("Palette loading")
         }
-        return "\(appearance). Background \(palette.background), foreground \(palette.foreground), "
-            + "accent \(palette.accent), selection \(palette.selection)"
+        return parts.joined(separator: ". ")
     }
 }
