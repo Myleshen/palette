@@ -22,27 +22,65 @@ public struct RegistrySearchResult: Sendable {
 }
 
 /// Runs one provider alongside a sleep and returns whichever finishes first,
-/// so a single slow source cannot hold the whole list.
+/// so a single slow source cannot hold the whole list. The provider runs in a
+/// detached task: a task group would still wait for it on scope exit, and
+/// cancellation does not interrupt synchronous work such as a file walk.
 enum ProviderDeadline {
     enum Outcome<Value: Sendable>: Sendable {
         case finished(Value)
         case timedOut
     }
 
+    /// Resolves once, so a provider that finishes after the deadline cannot
+    /// overwrite the result the search already returned.
+    private final class Gate<Value: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var outcome: Outcome<Value>?
+        private var waiter: CheckedContinuation<Outcome<Value>, Never>?
+
+        func wait() async -> Outcome<Value> {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                if let outcome {
+                    lock.unlock()
+                    continuation.resume(returning: outcome)
+                } else {
+                    waiter = continuation
+                    lock.unlock()
+                }
+            }
+        }
+
+        func finish(_ value: Outcome<Value>) {
+            lock.lock()
+            guard outcome == nil else {
+                lock.unlock()
+                return
+            }
+            outcome = value
+            let waiter = self.waiter
+            self.waiter = nil
+            lock.unlock()
+            waiter?.resume(returning: value)
+        }
+    }
+
     static func race<Value: Sendable>(
         timeout: Duration,
         operation: @escaping @Sendable () async -> Value
     ) async -> Outcome<Value> {
-        await withTaskGroup(of: Outcome<Value>.self) { group in
-            group.addTask { .finished(await operation()) }
-            group.addTask {
-                try? await Task.sleep(for: timeout)
-                return .timedOut
-            }
-            let first = await group.next() ?? .timedOut
-            group.cancelAll()
-            return first
+        let gate = Gate<Value>()
+        let work = Task.detached(priority: .userInitiated) {
+            gate.finish(.finished(await operation()))
         }
+        let timer = Task.detached {
+            try? await Task.sleep(for: timeout)
+            gate.finish(.timedOut)
+        }
+        let outcome = await gate.wait()
+        work.cancel()
+        timer.cancel()
+        return outcome
     }
 }
 

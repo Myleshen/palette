@@ -192,8 +192,9 @@ struct PendingClipboardClear: Codable, Equatable, Sendable {
     }
 }
 
-/// What happened after the clipboard was written. `.pasted` only schedules the
-/// delivery; focus polling finishes asynchronously.
+/// What happened after the clipboard was written. `.pasted` means the target
+/// took focus and the delivery was scheduled; it is only returned after the
+/// activation poll succeeds.
 public enum PasteOutcome: Equatable, Sendable {
     /// A menu press or keystroke was scheduled for the target.
     case pasted
@@ -203,6 +204,8 @@ public enum PasteOutcome: Equatable, Sendable {
     case needsAccessibility
     /// Clipboard written; there is no previous app to paste into.
     case noTarget
+    /// Clipboard written; the target never came forward, so nothing was typed.
+    case activationFailed
 }
 
 public extension PasteOutcome {
@@ -213,6 +216,7 @@ public extension PasteOutcome {
         case .pasted: return nil
         case .copiedOnly, .noTarget: return "Copied — paste with ⌘V"
         case .needsAccessibility: return "Copied — enable Accessibility to paste automatically."
+        case .activationFailed: return "Could not paste — the target app did not come forward; press ⌘V"
         }
     }
 }
@@ -227,6 +231,10 @@ public final class PasteboardService {
     var requestsAccessibility = true
     /// Tests pin the trust answer instead of depending on the runner's grant.
     var accessibilityTrustedOverride: Bool?
+    /// Tests pin the frontmost answer so activation can be driven headlessly.
+    var frontmostApplicationOverride: (() -> NSRunningApplication?)?
+    /// Tests poll faster than the real 50 ms.
+    var activationPollMilliseconds = 50
     /// Every clipboard write, so a test can prove a paste writes only once.
     private(set) var writes = 0
 
@@ -433,9 +441,9 @@ public final class PasteboardService {
         clearAfterMs: Int? = nil,
         into app: NSRunningApplication?,
         route: PasteTarget.Route? = nil
-    ) -> PasteOutcome {
+    ) async -> PasteOutcome {
         write(text: text, concealed: concealed, clearAfterMs: clearAfterMs)
-        return deliver(to: app, route: route)
+        return await deliver(to: app, route: route)
     }
 
     @discardableResult
@@ -445,11 +453,11 @@ public final class PasteboardService {
         clearAfterMs: Int? = nil,
         into app: NSRunningApplication?,
         route: PasteTarget.Route? = nil
-    ) -> PasteOutcome {
+    ) async -> PasteOutcome {
         write(image: image, concealed: concealed, clearAfterMs: clearAfterMs)
         // TUI editors such as OpenCode read images from the clipboard when
         // they receive Ctrl+V; Cmd+V only reaches the terminal's text paste.
-        return deliver(to: app, route: route, modifiers: Self.imagePasteModifiers(for: app), isImage: true)
+        return await deliver(to: app, route: route, modifiers: Self.imagePasteModifiers(for: app), isImage: true)
     }
 
     @discardableResult
@@ -458,9 +466,9 @@ public final class PasteboardService {
         clearAfterMs: Int? = nil,
         into app: NSRunningApplication?,
         route: PasteTarget.Route? = nil
-    ) -> PasteOutcome {
+    ) async -> PasteOutcome {
         write(files: paths, clearAfterMs: clearAfterMs)
-        return deliver(to: app, route: route)
+        return await deliver(to: app, route: route)
     }
 
     private func deliver(
@@ -468,7 +476,7 @@ public final class PasteboardService {
         route: PasteTarget.Route?,
         modifiers: CGEventFlags = .maskCommand,
         isImage: Bool = false
-    ) -> PasteOutcome {
+    ) async -> PasteOutcome {
         guard isAccessibilityTrusted else {
             Log.shared.warn("Paste skipped: Accessibility is not trusted", source: "clipboard")
             if requestsAccessibility { requestAccessibility() }
@@ -504,9 +512,11 @@ public final class PasteboardService {
         // Hand focus back explicitly. Without yielding, macOS may keep Palette
         // active and the synthetic paste goes to the launcher instead of the
         // terminal/editor behind it.
-        NSApp.yieldActivation(to: app)
+        NSApplication.shared.yieldActivation(to: app)
         activate(app)
-        waitForActivation(of: app, route: route, modifiers: modifiers, attempt: 0)
+        guard await waitForActivation(of: app, route: route, modifiers: modifiers, attempt: 0) else {
+            return .activationFailed
+        }
         return .pasted
     }
 
@@ -525,23 +535,22 @@ public final class PasteboardService {
     /// panel. Poll until the target is frontmost, then give the window a beat.
     /// Palette must never still be frontmost when the key or menu press goes
     /// out, so a target that never takes focus is abandoned rather than typed
-    /// into whatever is in front.
+    /// into whatever is in front. Returns false when the budget ran out.
     private func waitForActivation(
         of app: NSRunningApplication,
         route: PasteTarget.Route,
         modifiers: CGEventFlags,
         attempt: Int
-    ) {
-        let front = NSWorkspace.shared.frontmostApplication
+    ) async -> Bool {
+        let front = frontmostApplication()
         if front?.processIdentifier == app.processIdentifier {
             Log.shared.info(
                 "Paste delivering target=\(app.localizedName ?? "nil") route=\(route)",
                 source: "clipboard"
             )
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                Self.perform(route: route, in: app, modifiers: modifiers)
-            }
-            return
+            try? await Task.sleep(for: .milliseconds(120))
+            Self.perform(route: route, in: app, modifiers: modifiers)
+            return true
         }
 
         if attempt >= 20 {
@@ -549,16 +558,19 @@ public final class PasteboardService {
                 "Paste aborted: \(app.localizedName ?? "target") did not take focus (frontmost=\(front?.localizedName ?? "nil"))",
                 source: "clipboard"
             )
-            return
+            return false
         }
 
         if attempt % 4 == 0 {
-            NSApp.yieldActivation(to: app)
+            NSApplication.shared.yieldActivation(to: app)
             activate(app)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.waitForActivation(of: app, route: route, modifiers: modifiers, attempt: attempt + 1)
-        }
+        try? await Task.sleep(for: .milliseconds(activationPollMilliseconds))
+        return await waitForActivation(of: app, route: route, modifiers: modifiers, attempt: attempt + 1)
+    }
+
+    private func frontmostApplication() -> NSRunningApplication? {
+        frontmostApplicationOverride?() ?? NSWorkspace.shared.frontmostApplication
     }
 
     private static func perform(route: PasteTarget.Route, in app: NSRunningApplication, modifiers: CGEventFlags) {
