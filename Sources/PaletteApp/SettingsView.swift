@@ -268,6 +268,7 @@ struct SettingsView: View {
     @State private var launcherRecordToken = 0
     @State private var clipboardRecordToken = 0
     @State private var terminalRecordToken = 0
+    @State private var themeGalleryRecordToken = 0
     @State private var scratchpadRecordToken = 0
     @State private var askRecordToken = 0
     @State private var screenshotRecordToken = 0
@@ -335,6 +336,7 @@ struct SettingsView: View {
     private let initialWebAppBrowser: String
     private let onApply: (PaletteConfig) -> String?
     private let onOpen: (URL) -> Void
+    private let onThemeCards: () -> Void
     private let onExportBackup: () -> Void
     /// Clears the learned-ranking rows; returns an error message on failure.
     private let onForgetLearned: () async -> String?
@@ -359,6 +361,7 @@ struct SettingsView: View {
         updates: UpdateService,
         onApply: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
+        onThemeCards: @escaping () -> Void,
         onExportBackup: @escaping () -> Void,
         onForgetLearned: @escaping () async -> String?
     ) {
@@ -421,6 +424,7 @@ struct SettingsView: View {
         self.initialWebAppBrowser = config.webAppBrowser
         self.onApply = onApply
         self.onOpen = onOpen
+        self.onThemeCards = onThemeCards
         self.onExportBackup = onExportBackup
         self.onForgetLearned = onForgetLearned
         _theming = ObservedObject(wrappedValue: theming)
@@ -1098,6 +1102,7 @@ struct SettingsView: View {
             .init(title: "Preview layout", tab: .launcher, anchor: "row-Preview", keywords: "preview beside below layout"),
             .init(title: "Palette", tab: .theming, anchor: "appearance-theme", keywords: "palette theme browser ghostty search preview dark light catppuccin gruvbox aetheria"),
             .init(title: "Themes", tab: .theming, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
+            .init(title: "Theme Cards", tab: .theming, anchor: "appearance-theme", keywords: "cards gallery wallpaper desktop picture swatch flip apply shortcut"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
@@ -1261,6 +1266,9 @@ struct SettingsView: View {
         if hotkeyIssue(config.terminalHotkey, required: false, among: config.terminalHotkey) != nil {
             next.terminalHotkey = savedConfig.terminalHotkey
         }
+        if hotkeyIssue(config.themeGalleryHotkey, required: false, among: config.themeGalleryHotkey) != nil {
+            next.themeGalleryHotkey = savedConfig.themeGalleryHotkey
+        }
         if hotkeyIssue(config.scratchpadHotkey, required: false, among: config.scratchpadHotkey) != nil {
             next.scratchpadHotkey = savedConfig.scratchpadHotkey
         }
@@ -1391,6 +1399,7 @@ struct SettingsView: View {
     private var hotkeyValues: [String] {
         [
             config.hotkey, config.clipboardHotkey, config.terminalHotkey,
+            config.themeGalleryHotkey,
             config.scratchpadHotkey, config.askHotkey, config.screenshotHotkey,
             config.regionScreenshotHotkey, config.windowScreenshotHotkey,
             config.recordingHotkey,
@@ -1460,6 +1469,7 @@ struct SettingsView: View {
         if hotkeyIssue(config.hotkey, required: true, among: "") != nil { count += 1 }
         if hotkeyIssue(config.clipboardHotkey, required: true, among: "") != nil { count += 1 }
         if hotkeyIssue(config.terminalHotkey, required: false, among: "") != nil { count += 1 }
+        if hotkeyIssue(config.themeGalleryHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.scratchpadHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.askHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.screenshotHotkey, required: false, among: "") != nil { count += 1 }
@@ -2112,6 +2122,12 @@ struct SettingsView: View {
         }
     }
 
+    private var themeGalleryShortcutLabel: String {
+        let keys = config.themeGalleryHotkey.trimmingCharacters(in: .whitespaces)
+        guard !keys.isEmpty else { return "Not set" }
+        return HotKeySpec.parse(keys)?.prettyDisplay ?? keys
+    }
+
     private var themingPane: some View {
         VStack(alignment: .leading, spacing: 20) {
             card("Palette", anchor: "appearance-theme") {
@@ -2130,6 +2146,22 @@ struct SettingsView: View {
                     selection: $config.theme,
                     themesDirectory: themesDirectory
                 )
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Theme Cards").font(theme.font(size: 13))
+                        Text("Large card gallery with left and right neighbours peeking; the desktop picture palette comes first.")
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Text(themeGalleryShortcutLabel)
+                        .font(.system(size: 11))
+                        .foregroundStyle(muted)
+                    Button("Open") { onThemeCards() }
+                        .controlSize(.small)
+                        .accessibilityLabel("Open Theme Cards gallery")
+                }
                 Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
             } footer: {
                 Text("Theme files use TOML. Browsing previews a theme without changing anything; Use Theme applies it and saves the choice for the current mode. This is Palette's own palette.")
@@ -2675,6 +2707,8 @@ struct SettingsView: View {
                             token: $clipboardRecordToken, label: "Clipboard hotkey", required: true)
                 shortcutRow("Terminal shortcut", id: "terminal", value: $config.terminalHotkey,
                             token: $terminalRecordToken, label: "Terminal hotkey")
+                shortcutRow("Theme cards shortcut", id: "theme-gallery", value: $config.themeGalleryHotkey,
+                            token: $themeGalleryRecordToken, label: "Theme cards hotkey")
                 shortcutRow("Scratchpad list", id: "scratchpad", value: $config.scratchpadHotkey,
                             token: $scratchpadRecordToken, label: "Scratchpad list hotkey")
                 shortcutRow("Ask shortcut", id: "ask", value: $config.askHotkey,
@@ -2856,6 +2890,7 @@ struct SettingsView: View {
             ("Launcher", config.hotkey),
             ("Clipboard", config.clipboardHotkey),
             ("Terminal", config.terminalHotkey),
+            ("Theme cards", config.themeGalleryHotkey),
             ("Scratchpad list", config.scratchpadHotkey),
             ("Ask", config.askHotkey),
             ("Screen", config.screenshotHotkey),
@@ -2911,8 +2946,9 @@ struct SettingsView: View {
     private var ownShortcutKeys: [(id: String, keys: String)] {
         [
             ("launcher", config.hotkey), ("clipboard", config.clipboardHotkey),
-            ("terminal", config.terminalHotkey), ("scratchpad", config.scratchpadHotkey),
-            ("ask", config.askHotkey), ("screen", config.screenshotHotkey),
+            ("terminal", config.terminalHotkey), ("theme-gallery", config.themeGalleryHotkey),
+            ("scratchpad", config.scratchpadHotkey), ("ask", config.askHotkey),
+            ("screen", config.screenshotHotkey),
             ("region", config.regionScreenshotHotkey), ("window", config.windowScreenshotHotkey),
             ("recording", config.recordingHotkey),
         ] + config.shortcuts.map { ($0.command, $0.keys) }
@@ -4294,6 +4330,7 @@ struct SettingsView: View {
             config.hotkey = defaults.hotkey
             config.clipboardHotkey = defaults.clipboardHotkey
             config.terminalHotkey = defaults.terminalHotkey
+            config.themeGalleryHotkey = defaults.themeGalleryHotkey
             config.scratchpadHotkey = defaults.scratchpadHotkey
             config.askHotkey = defaults.askHotkey
             config.screenshotHotkey = defaults.screenshotHotkey

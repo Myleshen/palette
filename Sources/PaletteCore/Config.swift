@@ -443,6 +443,7 @@ public struct PaletteConfig: Sendable, Equatable {
     public var hotkey: String
     public var clipboardHotkey: String
     public var terminalHotkey: String
+    public var themeGalleryHotkey: String
     public var scratchpadHotkey: String
     public var askHotkey: String
     public var screenshotHotkey: String
@@ -504,6 +505,7 @@ public struct PaletteConfig: Sendable, Equatable {
         hotkey: String = "opt+space",
         clipboardHotkey: String = "opt+v",
         terminalHotkey: String = "cmd+option+t",
+        themeGalleryHotkey: String = "cmd+opt+g",
         scratchpadHotkey: String = "cmd+option+s",
         askHotkey: String = "cmd+option+a",
         // Same family as the system screenshot keys, which the app takes over.
@@ -547,6 +549,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
         self.terminalHotkey = terminalHotkey
+        self.themeGalleryHotkey = themeGalleryHotkey
         self.scratchpadHotkey = scratchpadHotkey
         self.askHotkey = askHotkey
         self.screenshotHotkey = screenshotHotkey
@@ -747,6 +750,9 @@ public enum ConfigLoader {
         }
         if let hotkey = table.str("terminal_hotkey") {
             config.terminalHotkey = hotkey
+        }
+        if let hotkey = table.str("theme_gallery_hotkey") {
+            config.themeGalleryHotkey = hotkey
         }
         if let hotkey = table.str("scratchpad_hotkey") {
             config.scratchpadHotkey = hotkey
@@ -1163,6 +1169,7 @@ public enum ConfigLoader {
 
         # Optional global shortcuts. Set either to "" to disable it.
         terminal_hotkey = "cmd+option+t"
+        theme_gallery_hotkey = "cmd+opt+g"
         scratchpad_hotkey = "cmd+option+s"
         ask_hotkey = "cmd+option+a"
 
@@ -1414,6 +1421,7 @@ public enum ConfigWriter {
         out.append("hotkey = \(quote(config.hotkey))")
         out.append("clipboard_hotkey = \(quote(config.clipboardHotkey))")
         out.append("terminal_hotkey = \(quote(config.terminalHotkey))")
+        out.append("theme_gallery_hotkey = \(quote(config.themeGalleryHotkey))")
         out.append("scratchpad_hotkey = \(quote(config.scratchpadHotkey))")
         out.append("ask_hotkey = \(quote(config.askHotkey))")
         out.append("screenshot_hotkey = \(quote(config.screenshotHotkey))")

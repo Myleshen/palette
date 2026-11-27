@@ -19,6 +19,7 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
     private var currentName: (@MainActor () -> String)?
     private var paletteAvailable: (@MainActor () -> Bool)?
     private var onApplyPalette: (@MainActor (String) -> Void)?
+    private var onShowCards: (@MainActor () -> Void)?
     /// Parsing hundreds of theme files per keystroke is the cost being avoided;
     /// the key is both directories' mtimes, and the TTL bounds content edits
     /// (which do not move a directory's mtime).
@@ -30,7 +31,8 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
         onSelect: (@MainActor (String) -> Void)? = nil,
         currentName: (@MainActor () -> String)? = nil,
         paletteAvailable: (@MainActor () -> Bool)? = nil,
-        onApplyPalette: (@MainActor (String) -> Void)? = nil
+        onApplyPalette: (@MainActor (String) -> Void)? = nil,
+        onShowCards: (@MainActor () -> Void)? = nil
     ) {
         self.themesDirectory = themesDirectory
         self.launcher = launcher
@@ -38,6 +40,7 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
         self.currentName = currentName
         self.paletteAvailable = paletteAvailable
         self.onApplyPalette = onApplyPalette
+        self.onShowCards = onShowCards
     }
 
     public func setCallbacks(
@@ -95,6 +98,12 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
             )
         }
 
+        if request.text.isEmpty {
+            items.append(cardsItem(score: 10))
+        } else if let score = Ranking.score(query: request.text, candidate: "theme cards gallery") {
+            items.append(cardsItem(score: score + 5))
+        }
+
         if !request.text.isEmpty,
            let score = Ranking.score(query: request.text, candidate: "themes folder custom create edit") {
             items.append(PaletteItem(
@@ -111,6 +120,21 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
             ))
         }
         return items
+    }
+
+    private func cardsItem(score: Double) -> PaletteItem {
+        PaletteItem(
+            id: "theme-cards",
+            title: "Theme Cards",
+            subtitle: "Large card gallery · wallpaper palette first",
+            icon: .symbol("rectangle.on.rectangle"),
+            score: score,
+            actions: [
+                PaletteAction(id: "cards", title: "Open Theme Cards", kind: .custom, value: .text("cards")),
+            ],
+            providerID: descriptor.id,
+            providerName: descriptor.name
+        )
     }
 
     private func catalog() async -> [ThemeInfo] {
@@ -133,6 +157,8 @@ public final class ThemeProvider: PaletteProvider, @unchecked Sendable {
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         switch action.value.text {
+        case "cards":
+            await MainActor.run { onShowCards?() }
         case "open-folder":
             await MainActor.run { launcher.openPath(themesDirectory.path) }
         case let name? where action.id == "apply-palette":
