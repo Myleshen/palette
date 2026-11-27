@@ -252,7 +252,8 @@ final class ThemeFanTests: XCTestCase {
     }
 
     func testWallpaperDirectoryConfigRoundTrip() throws {
-        XCTAssertEqual(ThemingConfig().wallpaperDirectory, "~/dot-files/wallpapers")
+        XCTAssertEqual(ThemingConfig().wallpaperDirectory, WallpaperLibrary.defaultDirectory)
+        XCTAssertEqual(WallpaperLibrary.defaultDirectory, "~/wallpapers")
 
         var config = ThemingConfig()
         config.wallpaperDirectory = "~/Pictures/Walls"
@@ -263,11 +264,11 @@ final class ThemeFanTests: XCTestCase {
 
         var blank = ThemingConfig()
         blank.wallpaperDirectory = "  "
-        XCTAssertEqual(blank.normalized().wallpaperDirectory, WallpaperLibrary.defaultDirectory)
+        XCTAssertEqual(blank.normalized().wallpaperDirectory, "", "an empty folder must stay empty")
 
         let defaults = try TOMLTable(string: ConfigLoader.defaultTOML())
         let theming = try XCTUnwrap(defaults.table("theming"))
-        XCTAssertEqual(theming.str("wallpaper_directory"), "~/dot-files/wallpapers")
+        XCTAssertEqual(theming.str("wallpaper_directory"), "~/wallpapers")
     }
 
     // MARK: - Lazy work

@@ -237,7 +237,7 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         XCTAssertFalse(engine.includeStatus(for: .kitty).installed)
     }
 
-    func testStarshipRegeneratesBothTOMLsOnThemeChangeWithoutTouchingTheUserFile() async throws {
+    func testStarshipRegeneratesTheRemappedCopyOnThemeChangeWithoutTouchingTheUserFile() async throws {
         guard FileManager.default.fileExists(atPath: bundledThemes.path) else {
             throw XCTSkip("bundled themes are missing")
         }
@@ -251,7 +251,10 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         )
         let mocha = try TOMLTable(string: text(".config/palette/theme/\(StarshipTheme.fileName)"))
         XCTAssertEqual(mocha.table("character")?.str("success_symbol"), "[>](bold \(mochaPalette.ansi[2]))")
-        XCTAssertTrue(text(".config/palette/theme/starship.toml").contains("[palettes.palette]"))
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: themeDir.appendingPathComponent("starship.toml").path),
+            "the unused palette-table copy must not be generated"
+        )
 
         config.theme = "default-light"
         _ = await engine.applyTheme(named: "default-light", config: config)
@@ -259,10 +262,6 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         let light = try TOMLTable(string: text(".config/palette/theme/\(StarshipTheme.fileName)"))
         XCTAssertEqual(light.table("character")?.str("success_symbol"), "[>](bold \(lightPalette.ansi[2]))")
         XCTAssertNotEqual(mochaPalette.ansi[2], lightPalette.ansi[2])
-
-        // The palette definition file follows the same theme change.
-        let paletteFile = try TOMLTable(string: text(".config/palette/theme/starship.toml"))
-        XCTAssertEqual(paletteFile.table("palettes")?.table("palette")?.str("green"), lightPalette.ansi[2])
 
         XCTAssertEqual(data(".config/starship.toml"), userBytes)
     }

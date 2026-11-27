@@ -44,9 +44,10 @@ final class ThemingReloadTests: XCTestCase {
             .zellij: "New zellij session",
             .nvim: "Run :source ~/.config/palette/theme/nvim.lua or restart Neovim",
             .fish: "Open a new shell (or `source ~/.config/palette/theme/fish.fish`)",
-            .starship: "New shell (or `source ~/.config/palette/theme/starship-palette.fish`)",
-            .bat: "Next bat invocation",
-            .btop: "Restart btop",
+            .starship: "New shell — fish sets STARSHIP_CONFIG; other shells: "
+                + "export STARSHIP_CONFIG=~/.config/palette/theme/starship-theme.toml",
+            .bat: "Next bat invocation (Palette runs bat cache --build)",
+            .btop: "Set color_theme = \"palette\" in btop.conf once, then restart btop",
             .delta: "Next git/delta command",
         ]
         for (target, message) in expected {

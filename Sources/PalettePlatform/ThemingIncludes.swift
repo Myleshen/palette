@@ -71,6 +71,16 @@ public struct ThemingIncludes: Sendable {
         themeDir.appendingPathComponent(StarshipTheme.snippetFileName)
     }
 
+    /// btop reads a named theme from its own themes directory. Palette links it
+    /// but never edits btop.conf: btop deletes a marker block on save.
+    public var btopThemeLink: String {
+        home + "/.config/btop/themes/palette.theme"
+    }
+
+    /// bat only sees a new theme after its cache is rebuilt. Public so the
+    /// engine and its tests name the same command.
+    public static let batCacheArguments = ["bat", "cache", "--build"]
+
     // MARK: - Per-target mappings
 
     public func plan(for target: ThemingTarget) -> Plan? {
@@ -109,12 +119,32 @@ public struct ThemingIncludes: Sendable {
             // so appending a second [mgr]/[status] block is invalid TOML.
             // The generated file stays available as a manual merge.
             return nil
-        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed, .neovide:
+        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed:
             return nil
         }
     }
 
     public func status(for target: ThemingTarget) -> Status {
+        if target.isManual {
+            if target == .btop {
+                let link = btopThemeLink
+                let linked = fileManager.fileExists(atPath: link)
+                return Status(
+                    available: true,
+                    installed: linked,
+                    path: link,
+                    note: linked
+                        ? "Manual — theme file linked; set color_theme = \"palette\" in btop.conf"
+                        : "Manual — apply to link the theme file, then set color_theme = \"palette\" in btop.conf"
+                )
+            }
+            return Status(
+                available: false,
+                installed: false,
+                path: nil,
+                note: "Manual — \(target.includeHint)"
+            )
+        }
         // Starship has no include directive and Palette never edits its config,
         // so installed means "the themed copy exists". Whether fish exports
         // STARSHIP_CONFIG changes the note, not the file itself.
@@ -164,6 +194,19 @@ public struct ThemingIncludes: Sendable {
         palette: PalettePalette,
         metadata: PaletteMetadata
     ) -> Outcome {
+        if target.isManual {
+            do {
+                try installAuxiliary(target)
+                // An older build injected a block into btop.conf; btop deletes
+                // markers when it saves, so strip any leftover on every apply.
+                if let plan = plan(for: target) {
+                    try removeLegacyBlock(plan)
+                }
+                return Outcome(target: target, path: nil, action: .unchanged, error: nil)
+            } catch {
+                return Outcome(target: target, path: nil, action: .failed, error: error.localizedDescription)
+            }
+        }
         guard let plan = plan(for: target) else {
             return Outcome(target: target, path: nil, action: .unchanged, error: nil)
         }
@@ -324,11 +367,13 @@ public struct ThemingIncludes: Sendable {
         case .delta:
             return "[include]\n    path = \(themeFile(.delta).path)"
         case .btop:
-            return "color_theme = \"palette\""
+            // Manual only: see `plan(for:)`. btop deletes a marker block the
+            // next time it saves btop.conf.
+            return nil
         case .yazi:
             // Manual only: see `plan(for:)`.
             return nil
-        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed, .neovide:
+        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed:
             return nil
         }
     }
@@ -365,10 +410,30 @@ public struct ThemingIncludes: Sendable {
         return lines.joined(separator: "\n")
     }
 
-    private func stripHeader(_ raw: String) -> String {
+    /// Applies the same block removal an older Palette wrote, without touching
+    /// anything else. Used when a target became manual.
+    private func removeLegacyBlock(_ plan: Plan) throws {
+        let resolved = resolve(plan.path)
+        guard let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
+              existing.contains(startMarker(plan.format)) else { return }
+        try write(removingBlock(from: existing, format: plan.format), to: resolved)
+    }
+
+    public func stripHeader(_ raw: String) -> String {
         var lines = raw.components(separatedBy: "\n")
-        while let first = lines.first, first.isEmpty || first.hasPrefix("# ") {
-            lines.removeFirst()
+        // Every comment marker the renderers use: `#` shell/conf, `//` KDL,
+        // `--` Lua. A leftover header would otherwise land inside the inlined
+        // block as app syntax.
+        while let first = lines.first {
+            let trimmed = first.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty
+                || trimmed.hasPrefix("# ")
+                || trimmed.hasPrefix("// ")
+                || trimmed.hasPrefix("-- ") {
+                lines.removeFirst()
+            } else {
+                break
+            }
         }
         return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -393,6 +458,7 @@ public struct ThemingIncludes: Sendable {
 
     private func removeStarship(_ plan: Plan) -> Outcome {
         var changed = false
+        try? fileManager.removeItem(at: themeDir.appendingPathComponent("starship.toml"))
         for url in [starshipThemeURL, starshipSnippetURL] where fileManager.fileExists(atPath: url.path) {
             try? fileManager.removeItem(at: url)
             changed = true
@@ -476,7 +542,7 @@ public struct ThemingIncludes: Sendable {
         case .bat:
             pair = (home + "/.config/bat/themes/palette.tmTheme", themeFile(.bat))
         case .btop:
-            pair = (home + "/.config/btop/themes/palette.theme", themeFile(.btop))
+            pair = (btopThemeLink, themeFile(.btop))
         default:
             pair = nil
         }
@@ -507,7 +573,7 @@ public struct ThemingIncludes: Sendable {
         case .bat:
             pair = (home + "/.config/bat/themes/palette.tmTheme", themeFile(.bat))
         case .btop:
-            pair = (home + "/.config/btop/themes/palette.theme", themeFile(.btop))
+            pair = (btopThemeLink, themeFile(.btop))
         default:
             pair = nil
         }

@@ -53,9 +53,10 @@ public struct ThemingConfig: Sendable, Equatable {
         if !["auto", "dark", "light"].contains(value.darkMode) {
             value.darkMode = "auto"
         }
-        if value.wallpaperDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            value.wallpaperDirectory = WallpaperLibrary.defaultDirectory
-        }
+        // An empty wallpaper folder is a valid answer: the theme cards show the
+        // desktop card only. Returning a missing default here silently hid the
+        // user's choice.
+        value.wallpaperDirectory = value.wallpaperDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         return value
     }
     public static func parse(_ table: TOMLTable) -> ThemingConfig {
@@ -86,7 +87,10 @@ public struct ThemingConfig: Sendable, Equatable {
         out.append("source = \"\(value.source.rawValue)\"")
         out.append("theme = \(ThemingConfig.quote(value.theme))")
         out.append("# Only with source = \"wallpaper\": re-apply when the desktop image changes.")
-        out.append("follow_wallpaper = \(value.followWallpaper)")
+        // A leftover true on a theme source would make the next load look like
+        // wallpaper following is on; the setting only means anything for
+        // source = "wallpaper".
+        out.append("follow_wallpaper = \(value.source == .wallpaper ? value.followWallpaper : false)")
         out.append("# auto | dark | light")
         out.append("dark_mode = \"\(value.darkMode)\"")
         out.append("# Pictures the theme cards' Wallpapers group is built from.")
@@ -101,6 +105,32 @@ public struct ThemingConfig: Sendable, Equatable {
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n")
         return "\"\(escaped)\""
+    }
+
+    /// Values a hand-edited file got wrong. `parse` has to keep going with
+    /// safe defaults, but silently dropping a typo made the config look like it
+    /// applied. Reported once at load.
+    public static func diagnostics(for table: TOMLTable) -> [Diagnostic] {
+        var diagnostics: [Diagnostic] = []
+        if let targets = table.strArray("targets") {
+            let known = Set(ThemingTarget.allCases.map(\.rawValue))
+            for id in targets where !known.contains(id) {
+                diagnostics.append(Diagnostic(
+                    .warning,
+                    "Unknown theming target '\(id)'; ignored.",
+                    source: "config"
+                ))
+            }
+        }
+        if let raw = table.str("dark_mode"),
+           !["auto", "dark", "light"].contains(raw.lowercased()) {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "Unknown theming dark_mode '\(raw)'; using auto.",
+                source: "config"
+            ))
+        }
+        return diagnostics
     }
 }
 
@@ -141,16 +171,14 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
     case arc
     case vscode
     case zed
-    case neovide
 
     public var id: String { rawValue }
 
     public static let phaseOne: [ThemingTarget] = [.kitty, .ghostty, .zellij, .nvim, .fish, .starship]
-    public static let phaseTwo: [ThemingTarget] = [.bat, .delta, .btop, .yazi]
-    /// First-class entries that have no safe renderer yet. They stay visible so
-    /// the gap is explicit instead of looking like the app is unsupported.
-    public static let notYet: [ThemingTarget] = [.arc, .vscode, .zed, .neovide]
-    public static let browsers: [ThemingTarget] = [.helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc]
+
+    /// Manual targets: Palette writes and links a theme file, but the app's own
+    /// config is never edited. The user points the app at the file once.
+    public var isManual: Bool { self == .btop || self == .yazi }
 
     public var browser: ChromiumBrowser? { ChromiumBrowser.browser(for: self) }
     public var isBrowser: Bool { browser != nil }
@@ -170,7 +198,6 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .yazi: return "yazi"
         case .vscode: return "VS Code"
         case .zed: return "Zed"
-        case .neovide: return "Neovide"
         default: return rawValue
         }
     }
@@ -183,14 +210,13 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .zellij: return "zellij.kdl"
         case .nvim: return "nvim.lua"
         case .fish: return "fish.fish"
-        case .starship: return "starship.toml"
+        case .starship: return StarshipTheme.fileName
         case .bat: return "bat.tmTheme"
         case .delta: return "gitconfig-delta"
         case .btop: return "btop.theme"
         case .yazi: return "yazi.toml"
         case .vscode: return "vscode.json"
         case .zed: return "zed.json"
-        case .neovide: return "neovide.toml"
         default: return "\(rawValue).txt"
         }
     }
@@ -200,7 +226,7 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         switch self {
         case .kitty, .ghostty, .zellij, .nvim, .fish, .starship, .bat, .delta, .btop, .yazi:
             return true
-        case .vscode, .zed, .neovide:
+        case .vscode, .zed:
             return false
         default:
             return false
@@ -213,7 +239,6 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         switch self {
         case .vscode: return "Not yet — VS Code needs a settings merge."
         case .zed: return "Not yet — Zed theme install is not wired."
-        case .neovide: return "Covered by Neovim — no separate file."
         default: return nil
         }
     }
@@ -238,7 +263,7 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .zellij:
             return "Paste the theme block from ~/.config/palette/theme/zellij.kdl into ~/.config/zellij/config.kdl"
         case .nvim:
-            return "dofile(vim.fn.expand(\"~/.config/palette/theme/nvim.lua\"))"
+            return "dofile(vim.fn.expand(\"~/.config/palette/theme/nvim.lua\")) — also covers Neovide"
         case .fish:
             return "source ~/.config/palette/theme/fish.fish"
         case .starship:
@@ -247,17 +272,35 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
             // edited. Fish gets this automatically; other shells set it.
             return "export STARSHIP_CONFIG=~/.config/palette/theme/starship-theme.toml (Palette does this in fish)"
         case .bat:
-            return "Symlink ~/.config/palette/theme/bat.tmTheme into $(bat --config-dir)/themes/ and set BAT_THEME=\"palette\""
+            return "Symlink ~/.config/palette/theme/bat.tmTheme into $(bat --config-dir)/themes/, set BAT_THEME=\"palette\" (Palette links it and runs bat cache --build)"
         case .delta:
             return "[include]\n    path = ~/.config/palette/theme/gitconfig-delta"
         case .btop:
-            return "Copy ~/.config/palette/theme/btop.theme to ~/.config/btop/themes/palette.theme and set color_theme = \"palette\""
+            return "Palette links ~/.config/palette/theme/btop.theme into ~/.config/btop/themes/palette.theme; set color_theme = \"palette\" in ~/.config/btop/btop.conf once"
         case .yazi:
-            return "Merge ~/.config/palette/theme/yazi.toml into ~/.config/yazi/theme.toml (yazi overlays it; copy it if you have no theme.toml)"
-        case .vscode, .zed, .neovide:
+            return "Merge ~/.config/palette/theme/yazi.toml into ~/.config/yazi/theme.toml (copy it only if you have no theme.toml; never overwrite an existing one)"
+        case .vscode, .zed:
             return unavailableReason ?? "Not configured yet."
         default:
             return unavailableReason ?? "Not configured yet."
+        }
+    }
+
+    /// Exactly what Palette installs for the target, so the footer and the
+    /// rows cannot describe the same target differently.
+    public enum InstallKind: String, Sendable, Equatable {
+        case markerBlock = "marker block"
+        case policy = "managed policy"
+        case generated = "generated copy"
+        case manual = "manual"
+    }
+
+    public var installKind: InstallKind {
+        if isBrowser { return .policy }
+        switch self {
+        case .starship: return .generated
+        case .btop, .yazi, .vscode, .zed: return .manual
+        default: return .markerBlock
         }
     }
 }
@@ -676,6 +719,69 @@ public enum ChromiumPolicy {
         "dev.myleshen.palette.chromium.\(bundleID)"
     }
 
+    /// Every identifier Palette can install: the whole catalogue, not only the
+    /// browsers currently checked, so removal cannot leave a stale policy.
+    public static func allPolicyIdentifiers() -> [String] {
+        ChromiumBrowser.catalog.filter(\.supportsThemePolicy).map(\.policyIdentifier)
+    }
+
+    /// Managed preference files macOS may use: device scope, then the user's
+    /// own scope. `complete.plist` carries every forced preference for the
+    /// user, so a profile that only writes there still counts as installed.
+    public static func managedPreferencePaths(
+        bundleID: String,
+        user: String = NSUserName()
+    ) -> [String] {
+        [
+            "/Library/Managed Preferences/\(bundleID).plist",
+            "/Library/Managed Preferences/\(user)/\(bundleID).plist",
+            "/Library/Managed Preferences/\(user)/complete.plist",
+        ]
+    }
+
+    /// True when a managed-preference plist carries this browser's domain.
+    /// `complete.plist` is shared by every managed domain, so its mere
+    /// existence must not count as an installed browser policy.
+    public static func carriesDomain(_ bundleID: String, in data: Data) -> Bool {
+        guard let propertyList = try? PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ), let root = propertyList as? [String: Any] else { return false }
+        return root[bundleID] != nil
+    }
+
+    /// The seeded colour in an installed plist. `complete.plist` nests every
+    /// domain, so the bundle id scopes the search first; a direct domain plist
+    /// has the keys at the root.
+    public static func themeColor(in data: Data, bundleID: String? = nil) -> String? {
+        guard let propertyList = try? PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ) else { return nil }
+        if let bundleID,
+           let root = propertyList as? [String: Any],
+           let domain = root[bundleID] {
+            return themeColor(in: domain)
+        }
+        return themeColor(in: propertyList)
+    }
+
+    private static func themeColor(in object: Any) -> String? {
+        if let dictionary = object as? [String: Any] {
+            if let colour = dictionary["BrowserThemeColor"] as? String { return colour }
+            for value in dictionary.values {
+                if let colour = themeColor(in: value) { return colour }
+            }
+        } else if let array = object as? [Any] {
+            for value in array {
+                if let colour = themeColor(in: value) { return colour }
+            }
+        }
+        return nil
+    }
+
     public static func installCommand(paths: [String]) -> String {
         paths.map { "sudo profiles install -path \(token($0))" }.joined(separator: " && ")
     }
@@ -845,12 +951,11 @@ public enum ThemingRenderer {
         case .zellij: return zellij(palette, header: metadata.header(comment: "//"))
         case .nvim: return nvim(palette, header: metadata.header(comment: "--"))
         case .fish: return fish(palette, header: header)
-        case .starship: return starship(palette, header: header)
         case .bat: return bat(palette, header: header)
         case .delta: return delta(palette, header: header)
         case .btop: return btop(palette, header: header)
         case .yazi: return yazi(palette, header: header)
-        case .vscode, .zed, .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .neovide:
+        case .starship, .vscode, .zed, .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc:
             return nil
         }
     }
@@ -1141,21 +1246,34 @@ public enum ThemingRenderer {
         out.append("set -g fish_color_autosuggestion \(palette.muted)")
         return out.joined(separator: "\n") + "\n"
     }
+}
 
-    private static func starship(_ palette: PalettePalette, header: String) -> String {
-        let names = ["black", "red", "green", "yellow", "blue", "purple", "cyan", "white"]
-        var out = [header, "", "[palettes.palette]"]
-        for (index, name) in names.enumerated() {
-            out.append("\(name) = \"\(palette.ansi[index])\"")
+// MARK: - Staleness
+
+/// Generated files an older build left wrong. Launch repairs them once, quietly,
+/// so an upgrading user's Neovim stops failing on `#` comments in Lua.
+public enum ThemingStaleness {
+    public static func reasons(
+        themeID: String,
+        themeDir: URL,
+        fileManager: FileManager = .default
+    ) -> [String] {
+        var reasons: [String] = []
+        let paletteJSON = themeDir.appendingPathComponent(ThemingRenderer.paletteJSONName)
+        if !themeID.isEmpty,
+           let data = fileManager.contents(atPath: paletteJSON.path),
+           let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+           let written = object["theme_id"] as? String,
+           written != themeID {
+            reasons.append("palette.json theme id '\(written)' does not match '\(themeID)'")
         }
-        out.append("bg = \"\(palette.background)\"")
-        out.append("fg = \"\(palette.foreground)\"")
-        out.append("accent = \"\(palette.cursor)\"")
-        out.append("muted = \"\(palette.muted)\"")
-        for (index, name) in names.enumerated() {
-            out.append("bright-\(name) = \"\(palette.ansi[index + 8])\"")
+        for target in [ThemingTarget.nvim, .zellij] {
+            let url = themeDir.appendingPathComponent(target.fileName)
+            guard let text = try? String(contentsOf: url, encoding: .utf8),
+                  text.first(where: { !$0.isWhitespace }) == "#" else { continue }
+            reasons.append("\(target.fileName) still starts with #")
         }
-        return out.joined(separator: "\n") + "\n"
+        return reasons
     }
 }
 
