@@ -45,6 +45,13 @@ public struct ThemingConfig: Sendable, Equatable {
     public var darkMode: String
     /// Pictures the theme cards' leading wallpaper group is built from.
     public var wallpaperDirectory: String
+    /// Wallpaper extraction algorithm. Only pywal's pipeline ships: 16 sampled
+    /// colours, adjusted and ordered the way pywal writes `colors.json`.
+    public var extraction: String
+    /// pywal `--saturate`: -1...1, 0 leaves colours alone.
+    public var saturation: Double
+    /// pywal `--contrast`: 1...21, 0 disables. 1.5–4.5 is the useful range.
+    public var contrast: Double
 
     public init(
         enabled: Bool = false,
@@ -53,7 +60,10 @@ public struct ThemingConfig: Sendable, Equatable {
         followWallpaper: Bool = false,
         targets: [String] = ThemingTarget.phaseOne.map(\.rawValue),
         darkMode: String = "auto",
-        wallpaperDirectory: String = WallpaperLibrary.defaultDirectory
+        wallpaperDirectory: String = WallpaperLibrary.defaultDirectory,
+        extraction: String = ThemingConfig.pywal,
+        saturation: Double = 0,
+        contrast: Double = 0
     ) {
         self.enabled = enabled
         self.source = source
@@ -62,7 +72,12 @@ public struct ThemingConfig: Sendable, Equatable {
         self.targets = targets
         self.darkMode = darkMode
         self.wallpaperDirectory = wallpaperDirectory
+        self.extraction = extraction
+        self.saturation = saturation
+        self.contrast = contrast
     }
+
+    public static let pywal = "pywal"
 
     public static let defaults = ThemingConfig()
 
@@ -78,6 +93,13 @@ public struct ThemingConfig: Sendable, Equatable {
         // desktop card only. Returning a missing default here silently hid the
         // user's choice.
         value.wallpaperDirectory = value.wallpaperDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.extraction.lowercased() != ThemingConfig.pywal {
+            value.extraction = ThemingConfig.pywal
+        }
+        value.saturation = min(1, max(-1, value.saturation))
+        if value.contrast != 0 && !(1...21).contains(value.contrast) {
+            value.contrast = 0
+        }
         return value
     }
     public static func parse(_ table: TOMLTable) -> ThemingConfig {
@@ -93,6 +115,9 @@ public struct ThemingConfig: Sendable, Equatable {
         }
         config.darkMode = (table.str("dark_mode") ?? config.darkMode).lowercased()
         config.wallpaperDirectory = table.str("wallpaper_directory") ?? config.wallpaperDirectory
+        config.extraction = table.str("extraction") ?? config.extraction
+        config.saturation = table.number("saturation") ?? config.saturation
+        config.contrast = table.number("contrast") ?? config.contrast
         return config.normalized()
     }
 
@@ -116,6 +141,12 @@ public struct ThemingConfig: Sendable, Equatable {
         out.append("dark_mode = \"\(value.darkMode)\"")
         out.append("# Pictures the theme cards' Wallpapers group is built from.")
         out.append("wallpaper_directory = \(ThemingConfig.quote(value.wallpaperDirectory))")
+        out.append("# Wallpaper colours use pywal's 16-colour pipeline.")
+        out.append("extraction = \"\(value.extraction)\"")
+        out.append("# pywal --saturate: -1.0...1.0 adds saturation, 0 leaves colours alone.")
+        out.append("saturation = \(value.saturation)")
+        out.append("# pywal --contrast: 0 disables; 1.5...4.5 guarantees readable ANSI colours.")
+        out.append("contrast = \(value.contrast)")
         out.append("targets = [\(value.targets.map(ThemingConfig.quote).joined(separator: ", "))]")
         return out.joined(separator: "\n")
     }
@@ -148,6 +179,29 @@ public struct ThemingConfig: Sendable, Equatable {
             diagnostics.append(Diagnostic(
                 .warning,
                 "Unknown theming dark_mode '\(raw)'; using auto.",
+                source: "config"
+            ))
+        }
+        if let raw = table.str("extraction"), raw.lowercased() != ThemingConfig.pywal {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "Unknown theming extraction '\(raw)'; using pywal.",
+                source: "config"
+            ))
+        }
+        if let value = table.number("saturation"),
+           !(value == 0 || (-1...1).contains(value)) {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "theming saturation \(value) is outside -1...1; using 0.",
+                source: "config"
+            ))
+        }
+        if let value = table.number("contrast"),
+           value != 0, !(1...21).contains(value) {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "theming contrast \(value) is outside 1...21; using 0.",
                 source: "config"
             ))
         }
@@ -586,31 +640,39 @@ public enum WallpaperPalette {
 
     public static func extract(
         from image: NSImage,
-        appearance: String = "dark"
+        appearance: String = "dark",
+        saturation: Double = 0,
+        contrast: Double = 0
     ) -> PalettePalette? {
         guard let pixels = pixels(from: image) else { return nil }
-        return extract(pixels: pixels, appearance: appearance)
+        return extract(pixels: pixels, appearance: appearance, saturation: saturation, contrast: contrast)
     }
 
-    /// Pure: k-means over the sampled pixels, background by luminance for the
-    /// requested appearance, foreground and accent by contrast.
-    public static func extract(pixels: WallpaperPixels, appearance: String = "dark") -> PalettePalette? {
+    /// Pure: pywal's pipeline. Quantize to 16 colours (ascending luminance, the
+    /// order its ImageMagick backend returns), pour them into pywal's
+    /// `color0...color15` slots, then run its dark/light adjustment, `--saturate`
+    /// and `--contrast` steps. Palette's contrast clamp only touches the UI
+    /// roles, never the terminal's 16 colours.
+    public static func extract(
+        pixels: WallpaperPixels,
+        appearance: String = "dark",
+        saturation: Double = 0,
+        contrast: Double = 0
+    ) -> PalettePalette? {
         let opaque = pixels.pixels.filter { $0.alpha > 0.5 }
-        guard !opaque.isEmpty else { return nil }
-        let clusters = kmeans(opaque, k: 6)
-        guard !clusters.isEmpty else { return nil }
+        guard let scheme = pywalScheme(
+            opaque,
+            light: appearance == "light",
+            saturation: min(1, max(-1, saturation)),
+            contrast: (1...21).contains(contrast) ? contrast : 0
+        ) else { return nil }
 
-        let sorted = clusters.sorted { $0.center.luminance < $1.center.luminance }
-        let backdrop = appearance == "light" ? sorted.last! : sorted.first!
-        let background = backdrop.center
-        let foreground = readable(bestText(on: background), on: background, minimum: 4.5)
-
-        let accentCluster = clusters
-            .filter { $0.center.contrast(with: background) >= 2 }
-            .max { lhs, rhs in
-                (lhs.center.saturation * sqrt(lhs.weight)) < (rhs.center.saturation * sqrt(rhs.weight))
-            }
-        let accent = readable(accentCluster?.center ?? foreground, on: background, minimum: 3)
+        let background = scheme[0]
+        let foreground = readable(scheme[15], on: background, minimum: 4.5)
+        // pywal's `special.cursor` is the foreground. Palette draws its caret and
+        // its whole UI accent from this slot, so it takes the most saturated
+        // terminal colour that reads on the background instead.
+        let accent = readable(accentColor(in: scheme, on: background) ?? foreground, on: background, minimum: 3)
         let surface = background.mixed(with: foreground, amount: 0.06)
         let elevated = background.mixed(with: foreground, amount: 0.12)
         let border = readable(background.mixed(with: foreground, amount: 0.24), on: background, minimum: 1.8)
@@ -632,20 +694,258 @@ public enum WallpaperPalette {
             elevated: hex(elevated),
             border: hex(border),
             muted: hex(muted),
-            ansi: PalettePalette.ansi(
-                background: background,
-                foreground: foreground,
-                appearance: appearance,
-                colors: [
-                    RGBA(red: 0.85, green: 0.35, blue: 0.38),
-                    RGBA(red: 0.45, green: 0.76, blue: 0.52),
-                    RGBA(red: 0.87, green: 0.75, blue: 0.40),
-                    RGBA(red: 0.40, green: 0.62, blue: 0.95),
-                    accent,
-                    RGBA(red: 0.42, green: 0.75, blue: 0.82),
-                ]
-            )
+            ansi: scheme.map(hex)
         )
+    }
+
+    /// Most saturated colour in slots 1...14 that stands off the background.
+    private static func accentColor(in scheme: [RGBA], on background: RGBA) -> RGBA? {
+        scheme[1...14]
+            .filter { $0.contrast(with: background) >= 2 }
+            .max { $0.saturation < $1.saturation }
+    }
+
+    // MARK: pywal pipeline
+
+    /// pywal's `wal` backend quantizes with ImageMagick, whose unique-colour
+    /// output is ordered dark to light. We quantize with the deterministic
+    /// k-means below and sort by luminance, then use pywal's own slot layout and
+    /// adjustments unchanged. With the same 16 input colours this matches
+    /// pywal's `colors.json` exactly.
+    static func pywalScheme(
+        _ pixels: [RGBA],
+        light: Bool,
+        saturation: Double,
+        contrast: Double
+    ) -> [RGBA]? {
+        guard !pixels.isEmpty else { return nil }
+        var cols = kmeans(pixels, k: 16)
+            .map { quantized($0.center) }
+            .sorted { $0.luminance < $1.luminance }
+        // A low-colour image cannot fill 16 slots. pywal16 doubles the list in
+        // that case (`extend(hex_colors)`), so keep its colours instead of
+        // repeating only the brightest one.
+        while cols.count < 16 {
+            cols.append(contentsOf: cols)
+        }
+        cols = Array(cols.prefix(16))
+
+        // wal.py: raw = colors[:1] + colors[8:16] + colors[8:-1]
+        var scheme = [cols[0]] + Array(cols[8..<16]) + Array(cols[8..<15])
+        pywalAdjust(&scheme, light: light)
+        pywalSaturate(&scheme, amount: saturation)
+        pywalContrast(&scheme, ratio: contrast, light: light, average: average(pixels))
+        return scheme
+    }
+
+    /// colors.py `generic_adjust` (pywal16 3.8.15, the maintained pywal on
+    /// PyPI; dylanaraps' 3.3.1 differs only in its light loop, which assigns to
+    /// a local and therefore does nothing).
+    static func pywalAdjust(_ colors: inout [RGBA], light: Bool) {
+        if light {
+            colors[0] = lighten(colors[0], 0.95)
+            colors[7] = darken(colors[0], 0.75)
+            colors[8] = darken(colors[0], 0.25)
+            colors[15] = colors[7]
+        } else {
+            // colors[0][1] is the red channel's high hex digit.
+            if redByte(colors[0]) >= 16 {
+                colors[0] = darken(colors[0], 0.40)
+            }
+            // A near-black background loses all hue; pywal lifts it first.
+            if redByte(colors[0]) < 16 || greenByte(colors[0]) < 16 || blueByte(colors[0]) < 16 {
+                colors[0] = saturate(lighten(colors[0], 0.03), to: 0.40)
+            }
+            colors[7] = lighten(colors[0], 0.75)
+            colors[8] = saturate(lighten(colors[0], 0.35), to: 0.10)
+            colors[15] = colors[7]
+        }
+    }
+
+    /// colors.py `saturate_colors`: `--saturate` adds to every slot except the
+    /// foreground pair, so text never turns neon.
+    static func pywalSaturate(_ colors: inout [RGBA], amount: Double) {
+        guard amount != 0, (-1...1).contains(amount) else { return }
+        for index in colors.indices where index != 7 && index != 15 {
+            colors[index] = addSaturation(colors[index], amount)
+        }
+    }
+
+    /// colors.py `ensure_contrast`: `--contrast` pushes slots 1...14 past the
+    /// requested W3 ratio against the image's average luminance. pywal16's
+    /// light branch is unreachable (both conditions skip every colour), so the
+    /// light path here does what that branch intended: darkens colours that are
+    /// too light.
+    static func pywalContrast(_ colors: inout [RGBA], ratio: Double, light: Bool, average: RGBA) {
+        guard ratio != 0, (1...21).contains(ratio) else { return }
+        let mean = quantized(average)
+        let desired = light
+            ? (pywalLuminance(mean) + 0.05) / ratio - 0.05
+            : (pywalLuminance(mean) + 0.05) * ratio - 0.05
+        guard desired < 0.99, desired > 0.01 else { return }
+        for index in 1...14 {
+            let luminance = pywalLuminance(colors[index])
+            if light ? luminance <= desired : luminance >= desired { continue }
+            colors[index] = contrastAdjusted(colors[index], luminance: desired, light: light)
+        }
+    }
+
+    /// util.py `Color.w3_luminance`: the hex channel is read back as a
+    /// three-decimal string (`"%.3f" % (v / 255)`), so reproduce that rounding.
+    static func pywalLuminance(_ color: RGBA) -> Double {
+        let (r, g, b) = bytes(color)
+        func linear(_ byte: Int) -> Double {
+            let value = (Double(byte) / 255 * 1000).rounded() / 1000
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+    }
+
+    /// colorsys.rgb_to_hsv over the same three-decimal channels pywal's
+    /// `ensure_contrast` feeds it.
+    static func pywalHSV(_ color: RGBA) -> (hue: Double, saturation: Double, value: Double) {
+        let (r, g, b) = bytes(color)
+        func channel(_ byte: Int) -> Double { (Double(byte) / 255 * 1000).rounded() / 1000 }
+        return RGBA(red: channel(r), green: channel(g), blue: channel(b)).hsv
+    }
+
+    /// colors.py `binary_luminance_adjust`, ten bisections over saturation and
+    /// value in HSV.
+    static func contrastAdjusted(_ color: RGBA, luminance desired: Double, light: Bool) -> RGBA {
+        let (h, s, v) = pywalHSV(color)
+        var sMin = s
+        var sMax = s
+        var vMin = v
+        var vMax = v
+        if light {
+            sMin = s
+            sMax = 1
+            vMin = 0
+            vMax = v
+        } else if pywalLuminance(hsv(h, s, 1)) >= desired {
+            vMax = 1
+        } else {
+            sMin = 0
+            vMin = 1
+            vMax = 1
+        }
+        var result = color
+        for _ in 0..<10 {
+            let midS = (sMin + sMax) / 2
+            let midV = (vMin + vMax) / 2
+            let candidate = hsv(h, midS, midV)
+            if pywalLuminance(candidate) >= desired {
+                sMin = midS
+                vMax = midV
+            } else {
+                sMax = midS
+                vMin = midV
+            }
+            result = candidate
+        }
+        return result
+    }
+
+    static func average(_ pixels: [RGBA]) -> RGBA {
+        guard !pixels.isEmpty else { return RGBA(red: 0, green: 0, blue: 0) }
+        let total = Double(pixels.count)
+        let sums = pixels.reduce(into: (red: 0.0, green: 0.0, blue: 0.0)) { sums, pixel in
+            sums.red += pixel.red
+            sums.green += pixel.green
+            sums.blue += pixel.blue
+        }
+        return RGBA(red: sums.red / total, green: sums.green / total, blue: sums.blue / total)
+    }
+
+    // MARK: pywal colour math (8-bit, truncating, as util.py does)
+
+    private static func redByte(_ color: RGBA) -> Int { bytes(color).red }
+    private static func greenByte(_ color: RGBA) -> Int { bytes(color).green }
+    private static func blueByte(_ color: RGBA) -> Int { bytes(color).blue }
+
+    static func bytes(_ color: RGBA) -> (red: Int, green: Int, blue: Int) {
+        func byte(_ value: Double) -> Int {
+            Int((min(1, max(0, value)) * 255).rounded())
+        }
+        return (byte(color.red), byte(color.green), byte(color.blue))
+    }
+
+    static func quantized(_ color: RGBA) -> RGBA {
+        let (r, g, b) = bytes(color)
+        return fromBytes(r, g, b)
+    }
+
+    static func fromBytes(_ red: Int, _ green: Int, _ blue: Int) -> RGBA {
+        func channel(_ value: Int) -> Double { Double(min(255, max(0, value))) / 255 }
+        return RGBA(red: channel(red), green: channel(green), blue: channel(blue))
+    }
+
+    /// util.py `darken_color`.
+    static func darken(_ color: RGBA, _ amount: Double) -> RGBA {
+        let (r, g, b) = bytes(color)
+        return fromBytes(Int(Double(r) * (1 - amount)), Int(Double(g) * (1 - amount)), Int(Double(b) * (1 - amount)))
+    }
+
+    /// util.py `lighten_color`.
+    static func lighten(_ color: RGBA, _ amount: Double) -> RGBA {
+        let (r, g, b) = bytes(color)
+        func channel(_ value: Int) -> Int { Int(Double(value) + (255 - Double(value)) * amount) }
+        return fromBytes(channel(r), channel(g), channel(b))
+    }
+
+    /// util.py `saturate_color`: set saturation to an absolute value in HLS.
+    static func saturate(_ color: RGBA, to amount: Double) -> RGBA {
+        let (h, l, _) = color.hls
+        return fromHLS(h, l, amount)
+    }
+
+    /// util.py `add_saturation`: add to saturation in HLS. pywal clamps only at
+    /// ±1, so a negative result is fed to colorsys (channels can invert).
+    static func addSaturation(_ color: RGBA, _ amount: Double) -> RGBA {
+        let (h, l, s) = color.hls
+        return fromHLS(h, l, min(1, max(-1, s + amount)))
+    }
+
+    // colorsys.hls_to_rgb / hsv_to_rgb, truncated to 8 bits like rgb_to_hex.
+    static func fromHLS(_ hue: Double, _ lightness: Double, _ saturation: Double) -> RGBA {
+        let m2 = lightness <= 0.5
+            ? lightness * (1 + saturation)
+            : lightness + saturation - lightness * saturation
+        let m1 = 2 * lightness - m2
+        func channel(_ offset: Double) -> Double {
+            var hue = (hue + offset).truncatingRemainder(dividingBy: 1)
+            if hue < 0 { hue += 1 }
+            if hue < 1.0 / 6 { return m1 + (m2 - m1) * hue * 6 }
+            if hue < 0.5 { return m2 }
+            if hue < 2.0 / 3 { return m1 + (m2 - m1) * (2.0 / 3 - hue) * 6 }
+            return m1
+        }
+        return fromUnit(channel(1.0 / 3), channel(0), channel(-1.0 / 3))
+    }
+
+    static func hsv(_ hue: Double, _ saturation: Double, _ value: Double) -> RGBA {
+        guard saturation > 0 else { return fromUnit(value, value, value) }
+        let sector = hue * 6
+        let index = Int(sector) % 6
+        let fraction = sector - Double(Int(sector))
+        let p = value * (1 - saturation)
+        let q = value * (1 - saturation * fraction)
+        let t = value * (1 - saturation * (1 - fraction))
+        switch index {
+        case 0: return fromUnit(value, t, p)
+        case 1: return fromUnit(q, value, p)
+        case 2: return fromUnit(p, value, t)
+        case 3: return fromUnit(p, q, value)
+        case 4: return fromUnit(t, p, value)
+        default: return fromUnit(value, p, q)
+        }
+    }
+
+    private static func fromUnit(_ red: Double, _ green: Double, _ blue: Double) -> RGBA {
+        func byte(_ value: Double) -> Int {
+            Int((min(1, max(0, value)) * 255).rounded(.down))
+        }
+        return fromBytes(byte(red), byte(green), byte(blue))
     }
 
     private static func hex(_ color: RGBA) -> String { PalettePalette.hex(color) }
@@ -660,17 +960,28 @@ public enum WallpaperPalette {
 
     struct Cluster {
         var center: RGBA
-        var weight: Double
     }
 
-    /// Deterministic k-means: seeds come from luminance quantiles, so the same
-    /// wallpaper always produces the same palette.
+    /// Deterministic k-means: seeds are picked farthest-first in RGB, so a
+    /// dark wallpaper still contributes its small bright accents instead of
+    /// collapsing into empty clusters. Same wallpaper, same palette.
     static func kmeans(_ pixels: [RGBA], k: Int, iterations: Int = 10) -> [Cluster] {
         guard !pixels.isEmpty, k > 0 else { return [] }
-        let ordered = pixels.sorted { $0.luminance < $1.luminance }
-        var centers: [RGBA] = (0..<k).map { index in
-            let position = Int((Double(index) + 0.5) / Double(k) * Double(ordered.count - 1))
-            return ordered[position]
+        let first = pixels.min { $0.luminance < $1.luminance } ?? pixels[0]
+        var centers: [RGBA] = [first]
+        while centers.count < k {
+            var farthest = pixels[0]
+            var farthestDistance = -1.0
+            for pixel in pixels {
+                let distance = centers.reduce(Double.infinity) { best, center in
+                    min(best, squaredDistance(pixel, center))
+                }
+                if distance > farthestDistance {
+                    farthestDistance = distance
+                    farthest = pixel
+                }
+            }
+            centers.append(farthest)
         }
         var assignments = [Int](repeating: 0, count: pixels.count)
 
@@ -713,10 +1024,8 @@ public enum WallpaperPalette {
 
         var counts = [Int](repeating: 0, count: k)
         for slot in assignments { counts[slot] += 1 }
-        let total = Double(pixels.count)
         return centers.enumerated().compactMap { index, center in
-            guard counts[index] > 0 else { return nil }
-            return Cluster(center: center, weight: Double(counts[index]) / total)
+            counts[index] > 0 ? Cluster(center: center) : nil
         }
     }
 
@@ -1497,6 +1806,53 @@ extension RGBA {
         let minimum = min(red, green, blue)
         guard maximum > 0 else { return 0 }
         return (maximum - minimum) / maximum
+    }
+
+    /// colorsys.rgb_to_hls.
+    var hls: (hue: Double, lightness: Double, saturation: Double) {
+        let maximum = max(red, green, blue)
+        let minimum = min(red, green, blue)
+        let lightness = (maximum + minimum) / 2
+        guard maximum != minimum else { return (0, lightness, 0) }
+        let delta = maximum - minimum
+        let saturation = lightness <= 0.5 ? delta / (maximum + minimum) : delta / (2 - maximum - minimum)
+        let redPart = (maximum - red) / delta
+        let greenPart = (maximum - green) / delta
+        let bluePart = (maximum - blue) / delta
+        var hue: Double
+        if red == maximum {
+            hue = bluePart - greenPart
+        } else if green == maximum {
+            hue = 2 + redPart - bluePart
+        } else {
+            hue = 4 + greenPart - redPart
+        }
+        hue = (hue / 6).truncatingRemainder(dividingBy: 1)
+        if hue < 0 { hue += 1 }
+        return (hue, lightness, saturation)
+    }
+
+    /// colorsys.rgb_to_hsv.
+    var hsv: (hue: Double, saturation: Double, value: Double) {
+        let maximum = max(red, green, blue)
+        let minimum = min(red, green, blue)
+        let delta = maximum - minimum
+        let saturation = maximum == 0 ? 0 : delta / maximum
+        guard delta != 0 else { return (0, saturation, maximum) }
+        let redPart = (maximum - red) / delta
+        let greenPart = (maximum - green) / delta
+        let bluePart = (maximum - blue) / delta
+        var hue: Double
+        if red == maximum {
+            hue = bluePart - greenPart
+        } else if green == maximum {
+            hue = 2 + redPart - bluePart
+        } else {
+            hue = 4 + greenPart - redPart
+        }
+        hue = (hue / 6).truncatingRemainder(dividingBy: 1)
+        if hue < 0 { hue += 1 }
+        return (hue, saturation, maximum)
     }
 
     func mixed(with other: RGBA, amount: Double) -> RGBA {

@@ -2277,7 +2277,7 @@ struct SettingsView: View {
                                     .lineLimit(2)
                                 Button("Extract palette") {
                                     Task { @MainActor in
-                                        await theming.previewWallpaper(darkMode: config.theming.darkMode)
+                                        await theming.previewWallpaper(config: config.theming)
                                     }
                                 }
                                 .disabled(theming.busy)

@@ -229,8 +229,18 @@ theme = "catppuccin-mocha"           # catalogue id; empty = the theme Palette s
 follow_wallpaper = false             # source = "wallpaper" only
 dark_mode = "auto"                   # auto | dark | light
 wallpaper_directory = "~/dot-files/wallpapers"
+extraction = "pywal"                 # wallpaper palettes use pywal's pipeline
+saturation = 0.0                     # pywal --saturate: -1.0...1.0
+contrast = 0.0                       # pywal --contrast: 0 off, 1.5...4.5 useful
 targets = ["kitty", "ghostty", "zellij", "nvim", "fish", "starship"]
 ```
+
+Wallpaper palettes are extracted with pywal's pipeline: the image is quantized
+to sixteen colours, ordered dark to light, poured into pywal's
+`color0`…`color15` slots and adjusted for the chosen `dark_mode`. `color0` is
+the background, `color15` the foreground, and slots 1–14 are the image's own
+colours rather than Palette's fixed semantic hues. `saturation` and `contrast`
+mirror pywal's `--saturate` and `--contrast` flags and are applied on top.
 
 `theme` is a catalogue id (`catppuccin-mocha`, `ghostty-alxpro-dark`), not the
 display name. Older builds saved the display name; the value is migrated on
