@@ -22,6 +22,9 @@ provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
 | `ExternalProviderTests` | NDJSON round-trip against the hello example |
 | `PerformanceTests` | hard budgets for theme menu open, warm catalog, 5k clipboard snapshot, cached `/neo`, and theme apply file generation |
 | `ThemeApplyIntegrationTests` | Apply/uncheck/Revert against a sandbox HOME with real kitty, Ghostty, zellij, Neovim, fish and Starship configs |
+| `ThemeCardsTests`, `ThemeFanTests` | deck order (wallpaper first), filtering, favourites, wallpaper listing, fan geometry, thumbnail cache, open/flip timings |
+| `ThemeFormatTests`, `ThemeIDTests` | per-format generated syntax (Lua/KDL/TOML/XML headers), display-name → id resolution and migration |
+| `ThemingIncludesTests`, `ThemingReloadTests`, `ThemingTests` | marker blocks per format, created-file removal, backup/Revert, per-target reload truth, palette extraction |
 | `AnnotationInteractionTests` | pointer hit-test, delete selected, one-step move undo, crop clamping |
 
 ## Provider conformance harness
@@ -66,6 +69,15 @@ Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `comma`, `k`, `r`, `w`, `1`…`9`, optionally prefixed with `cmd+`, `opt+`, or
 `shift+` (for example `key=cmd+k`). `snapshot` writes the panel content without
 screen-recording permission, so it works on a locked display.
+
+Theme cards have their own steps: `themecards` opens the fanned gallery,
+`themecards_next` / `_prev` / `_first` / `_last` move, `themecards_filter=<text>`
+types into the filter, `themecards_tab` toggles favourites, `themecards_favourite`
+marks the front card, `themecards_apply` applies it without Return, and
+`themecards_snapshot=<path>` / `themecardsclose` capture and close it.
+`Scripts/theme-cards-snapshot.sh` uses those steps to render
+`Tests/Snapshots/theme-cards-fan.png` headlessly, which is how the hand, the
+dimming and the lifted card are checked without opening the app.
 
 A scripted run never takes focus. Windows are ordered to the back of the normal
 level, panels never become key, the app stays an accessory (no Dock icon), and a
@@ -114,9 +126,13 @@ highlight moves and Esc closes.
 
 What remains human-only: the system app menu bar, Services, file panels,
 first-run and TCC alerts, and confirming that a real Carbon hotkey still fires
-while a panel is open. Script mode can also prove the app stayed out of focus
-(`appActive=false`), but not that a real activation (click, Dock, `open`) leaves
-the panel placed correctly. Those stay on the manual checklist.
+while a panel is open. The theme cards gallery renders in script mode without
+activation, but its steps drive the deck model directly: real arrow-key handling,
+typing into the filter, click-to-deal and drag on a card, and the lift animation
+are checked by eye (see `theme-cards-fan.png`). Script mode can also prove the
+app stayed out of focus (`appActive=false`), but not that a real activation
+(click, Dock, `open`) leaves the panel placed correctly. Those stay on the manual
+checklist.
 
 ## E2E flows
 
@@ -146,6 +162,7 @@ leftover Palette process before exiting:
 | `palette-menu-picker` | a `PaletteMenuPicker` menu builds four rows and Up/Down move between choices |
 | `engine-browser-picker` | the web-search engine browser picker builds its rows, stays inactive, and moves the highlight |
 | `theme-menu-lazy` | the 942-row theme browser reports the whole catalog but renders under 45 rows (`themeMenuRows`, `themeMenuRendered`) |
+| `quit-intercepted` | with the panel open, a terminate request (⌘Q) hides the panel instead of quitting; reaching `dump`/`exit` proves the process survived |
 
 The capture flow asserts panel visibility only: a real capture needs Screen
 Recording TCC, which CI does not grant.
@@ -184,16 +201,20 @@ they guard. The numbers below are from a 2026-11-26 run on the development Mac
 The last row is a UI-laziness assertion and lives in the e2e flow because
 `PaletteTests` does not link the `PaletteApp` target that owns the view.
 
+The fanned deck logs its catalogue build time (`Theme cards catalogue: … in …
+ms`, 942 themes plus the wallpaper folder) but has no hard budget: its cost is
+dominated by `ThemeLoader.catalog`, which the row above budgets. Card flips and
+thumbnail loads are bounded by drawing only the cards near the selection.
+
 `AnnotationInteractionTests` drives the editor model, not the window: hit-test
-picking, delete-selected, one undo step per move, and crop clamping. This branch
-has no per-mark resize handles — the only resize path is the crop rectangle,
-which is what the clamp test covers. If the annotate branch lands a resize API,
-extend that suite against it instead of the crop path.
+picking, delete-selected, one undo step per move, and crop clamping. The
+corner-handle text resize added in 2.19.0 is not covered here yet; extend this
+suite against the annotation model rather than the crop path.
 
 ## Layout check
 
 Unit tests cannot see a clipped label or a squashed stepper. `make layout-check`
-renders every Settings pane headlessly — all 19 of them — and compares each with
+renders every Settings pane headlessly — all 20 of them — and compares each with
 the reference in `Tests/Snapshots/`:
 
 ```sh
@@ -319,24 +340,19 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 **Packaging**
 - [ ] `make install` replaces `~/Applications/Palette.app`.
 - [ ] The app launches after a fresh rebuild and reinstall.
-- [ ] v1 has no login item; launch Palette after login (or add it to Login Items).
+- [ ] Palette installs itself as a login item on first launch from
+      `/Applications` (or `~/Applications`); **Open Palette at login** in
+      Settings → General turns it off and that choice sticks across reinstalls.
 - [ ] Rebuild + reinstall preserves config, state, and clipboard history.
 
-## Verified in this build
+## Earlier verification
 
-Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
+Per-release evidence lives in `CHANGELOG.md`; the dated checks below are kept as
+history and carry the version they were run on. They are not a claim about the
+current build.
 
-- `swift test` — 168 tests, 0 failures (including ordered NDJSON delivery,
-  web-app URL normalization, shortcut parsing, store dedupe, text/image/file
-  clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
-  `search_position`, and `web_app_browser`, emoji catalog and Apple names,
-  breadth-first paths, browser validation, the shortcut recorder, Bitwarden
-  session classification, encrypted cache expiry and refresh, path filtering,
-  use counts, fuzzy abbreviations, fuzzy clipboard/file search, Ask config
-  without secrets, free-first models, quota fallback, invalid-key endpoint
-  skipping, response parsing, Ask history trimming, scratch notes, recent-use
-  queries, and snippet placeholder expansion).
-- `make app` and `make install` — release bundle assembled, ad-hoc signed,
+- v2.2.2 install check (2026-11-03, macOS 27.2 arm64): `make app` and
+  `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
   version 2.2.2). Launcher, clipboard, terminal, scratchpad, and Ask hotkeys
   registered without a conflict.
@@ -498,7 +514,8 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   inverted the layout, and old `bottom` configs now open in the center.
 - v1.5.1 physical round on the installed app (screen unlocked):
   `⌥Space` opened the launcher and `⌥V` opened the clipboard browser with the
-  wide preview and filter chips; `Esc` dismissed them. In Settings, clicking the
+  wide preview (the kind filter chips of that release were removed in 2.19.0;
+  the preview remains); `Esc` dismissed them. In Settings, clicking the
   launcher recorder and pressing `⌃⌥K` changed the field to `opt+ctrl+k`; Save
   rewrote `config.toml`, the app logged `Hotkey registered: opt+ctrl+k`, and the
   recorded shortcut opened the panel. Recording `⌥Space` again restored it.
@@ -514,8 +531,9 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   first with web-search rows below; the 1.5 build's `search_position =
   "bottom"` put the tab strip and search field under the results (removed in
   1.7.1); `/clip` showed pinned-first
-  Text/Images/Files groups, the All/Text/Images/Files chips highlighted the
-  matching filter, and `/clip image` showed only the 1024×1024 image with its
+  Text/Images/Files groups with All/Text/Images/Files chips (both since removed:
+  `/clip` is one chronological list) highlighting the matching filter, and
+  `/clip image` showed only the 1024×1024 image with its
   preview; Settings showed recorded `opt+space` / `opt+v` and the position
   picker.
 - v1.3 parity checks: empty query is a list by default; `/neo ~/dev/` showed
@@ -541,8 +559,10 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   badges; `/emoji star` ranked Star first, followed by Starry Eyes, Star of
   David, and other literal matches.
 - Clipboard browser (`⌥V` via the harness clipboard step): text, a 1360×928
-  screenshot, and a two-file Finder selection were captured and grouped under
-  Text/Images/Files. Images rendered in the preview pane; a single
+  screenshot, and a two-file Finder selection were captured; the build of that
+  era grouped them under Text/Images/Files (kind grouping was removed in
+  2.19.0). Images
+  rendered in the preview pane; a single
   `emoji-test.txt` entry rendered header, icon, 672 KB size, and a `bat` text
   preview; `/clip text` filtered to the text entry. Copy Files restored file
   URLs to the pasteboard (`«class furl»`).

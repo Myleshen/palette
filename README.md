@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.19.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.20.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -24,8 +24,9 @@ Where each headline feature landed. Every fix, and everything before 1.8, is in
 
 | Feature | Version |
 |---|---|
-| Pinned screenshots, on-device OCR, learned ranking, provider groups, update nudge | 2.18.0 |
+| Fanned theme cards (`⌘⌥G`), wallpaper cards and wallpaper palettes, generated configs in each app's real syntax, Starship prompt theming, theme-id fix | 2.20.0 |
 | Cross-app theming (tokens + browser policy), 942 themes, non-tracking menus, annotator selection, trigger hiding | 2.19.0 |
+| Pinned screenshots, on-device OCR, learned ranking, provider groups, update nudge | 2.18.0 |
 | Custom hotkey binder — `[[binding]]` launches an app, runs a shell command, opens a provider trigger, or opens a URL | 2.16.0 |
 | Ask web search on by default; installed-font dropdowns; onboarding shows the real capture keys and Skip applies Essentials | 2.16.0 |
 | Ask chat window — multi-turn, streaming, saved chats, markdown (code, tables, images), optional web search | 2.15.0 |
@@ -386,18 +387,19 @@ fallbacks.
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window with nineteen panes in
-four sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
+`⌘,` (or the menu-bar icon) opens a native Settings window with twenty panes in
+five sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
 and **Shortcuts**; Features holds **Search**, **Ask**, **Embedded Terminal**,
 **Bookmarks**, **Cheatsheets**, **Web Apps**, **Screenshots**, **After a
-capture**, **Recordings**, and **Captures**; System holds **About** and
-**Providers**; Advanced holds **Provider Files**, **Config Files**, and
-**Diagnostics**. General holds startup, permissions, power, notifications, the
+capture**, **Recordings**, and **Captures**; Theming holds **Theming** (Palette
+theme, cross-app targets and browsers); Advanced holds **Provider Files**,
+**Config Files**, and **Diagnostics**; System holds **About** and
+**Providers**. General holds startup, permissions, power, notifications, the
 editor/terminal apps used by providers, clipboard history, and the command
 prefix; Launcher holds where the panel opens, the search placeholder, app order,
-and the panel size; Appearance holds themes, typography, and glass; Shortcuts
-holds every global shortcut, including capture, recording, and your own **Custom
-hotkeys**. **Search** holds the web-results toggle and one card per engine
+and the panel size; Appearance holds typography and glass; Theming holds the
+Palette theme, cross-app targets and the browser policy; Shortcuts holds every
+global shortcut, including capture, recording, and your own **Custom hotkeys**. **Search** holds the web-results toggle and one card per engine
 (Name · Search URL · `!keyword` · Browser · Open in web app). **Ask** selects the
 endpoint and model, saves a local API key, toggles fallback, answer
 notifications (sound, Notification Center banner, Dock badge) and the per-turn
@@ -817,6 +819,19 @@ clip = ["cb"]
 Mocha/Latte, Gruvbox Dark/Light, and **Aetheria Pink** (the pink/violet Noctalia
 palette). Settings can choose the dark/light pair and auto/dark/light mode; theme
 TOML files live in `~/.config/palette/themes`.
+
+**Theme cards** (`⌘⌥G`, or `/theme cards`) open a fanned deck of every theme plus
+the pictures in `[theming] wallpaper_directory`: ←/→ or scroll flips, typing
+filters, Tab shows favourites, ⌃F marks a card, Return applies, Esc closes.
+Choosing a wallpaper card sets it as the desktop picture and, with cross-app
+theming on, applies the palette sampled from it.
+
+**Cross-app theming** (Settings → Theming, off by default) writes the palette into
+kitty, Ghostty, zellij, Neovim, fish, Starship, bat, delta and btop through a
+marked block in each app's own config, with one-step Revert; yazi and the
+Chromium browser policy are the manual/approval cases. The generated files, the
+exact reload each app needs, marker blocks, backup/Revert, wallpaper rules and
+Starship's remapped copy are documented in [THEMING.md](THEMING.md#6-cross-app-theming).
 
 ## Configuration
 

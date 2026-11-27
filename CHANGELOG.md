@@ -17,13 +17,21 @@
   your keys and prompt format, wired through `STARSHIP_CONFIG` in the fish block.
   Your own `starship.toml` is never edited.
 
+### Removed
+
+- **The `/unit` converter is gone.** It disappeared in 2.18.2 without a
+  user-facing note; this entry records it. `/calc` still answers arithmetic,
+  and no unit or currency conversion is provided.
+- **Clipboard kind filter chips are gone.** Since 2.19.0 `/clip` is one flat
+  chronological list across text, images and files; pins keep their badge but
+  do not jump the queue.
+
 ### Fixed
 
 - **Theme ids vs display names** — `[theming] theme` stored `Ghostty · AlxPro
   Dark`, which the loader could not resolve, so Apply silently used Default Dark.
   It now stores `ghostty-alxpro-dark`, resolves display names everywhere, and
-  migrates an existing value on launch. Verified with a real apply (kitty palette
-  matches the selected theme).
+  migrates an existing value on launch.
 - **Browsers card** — the Chromium browsers (Helium always) moved to their own
   card above Targets, so the policy rows are visible without deep scrolling.
 - Theme override in Settings shows the resolved id instead of a “Custom/missing”
@@ -45,19 +53,26 @@
   Advanced) owns the Palette theme, optional theming of other apps (off by
   default), and the target list. A palette is generated from the chosen theme or
   extracted from the wallpaper, written as managed includes under
-  `~/.config/palette/theme/` (kitty, Ghostty, zellij, Neovim, fish, starship,
-  bat, delta, btop, yazi). Includes are installed and removed automatically per
-  target with marker blocks, one original backup and a one-step Revert; Palette
-  never rewrites an app's config beyond its marked block. Wallpaper palettes
-  re-apply automatically when the wallpaper changes; theme palettes apply on
-  demand. Apply reports the truth per app: kitty reloads through remote control
-  when available, and Ghostty/zellij/Neovim/fish/Starship say exactly what they
+  `~/.config/palette/theme/` (kitty, Ghostty, zellij, Neovim, fish, Starship,
+  bat, delta, btop, yazi). Eight of those targets get their include installed
+  and removed automatically as a marked block in the app's own config; Starship
+  is never edited (Palette writes a remapped copy that fish points
+  `STARSHIP_CONFIG` at), and yazi is a manual merge because appending a second
+  TOML section would be invalid. Each edited config keeps one original backup
+  and a one-step Revert; Palette never rewrites an app's config beyond its marked
+  block. Wallpaper palettes re-apply automatically when the wallpaper changes;
+  theme palettes apply on demand. Apply reports the truth per app: kitty reloads
+  through remote control when available, and the rest say exactly what they
   need (restart, new session, source, next prompt).
 - **Chromium browser theming via managed policy.** Installed Chromium browsers
   (Helium, Chrome, Edge, Brave, Vivaldi, Chromium) can inherit the palette
-  background as `BrowserThemeColor` through a per-browser `.mobileconfig`,
-  installed with one native Touch ID/password prompt, removable the same way.
-  App-wide per browser and approximate by design; Arc is listed as unsupported.
+  background as `BrowserThemeColor` through a per-browser `.mobileconfig`.
+  Palette opens the generated profile in System Settings; you approve it under
+  General → Device Management → Profiles and press Refresh. Palette issues no
+  password prompt of its own (macOS 27 removed `profiles install`; older macOS
+  still offers the legacy sudo command as a note, and removal there is the only
+  sudo path). App-wide per browser and approximate by design; Arc is listed as
+  unsupported.
 - **19 Omarchy themes** (`omarchy-*`), MIT, contrast-checked, alongside the 914
   Ghostty themes in the theme browser.
 - Action-routing contract and store-level wiring tests with mutation checks.
