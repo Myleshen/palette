@@ -151,6 +151,10 @@ public final class ThemingEngine: ObservableObject {
     /// or the user dismissed it.
     @Published public private(set) var restartPrompt: RestartPrompt?
 
+    /// Called on the main actor after an Apply wrote the palette, so Palette's
+    /// own theme can follow the same colours without a second engine pass.
+    public var onAppliedPalette: ((PalettePalette, PaletteMetadata) -> Void)?
+
     public let themeDir: URL
     public let previousDir: URL
     public let themesDirectory: URL
@@ -740,6 +744,7 @@ public final class ThemingEngine: ObservableObject {
                 : nil
             status = summary
             lastResult = result
+            onAppliedPalette?(palette, metadata)
 
             return result
         } catch {

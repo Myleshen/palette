@@ -20,6 +20,20 @@ public struct ThemeSelection: Sendable, Equatable {
         self.dark = dark
         self.light = light
     }
+
+    /// Records an applied theme in the slot that matches its appearance, so a
+    /// relaunch and every other reader of `[theme]` agree with what is on screen.
+    public func applying(themeID: String, appearance: String) -> ThemeSelection {
+        var updated = self
+        if appearance.lowercased() == "light" {
+            updated.mode = .light
+            updated.light = themeID
+        } else {
+            updated.mode = .dark
+            updated.dark = themeID
+        }
+        return updated
+    }
 }
 
 public enum SearchPosition: String, Sendable, Equatable, CaseIterable {

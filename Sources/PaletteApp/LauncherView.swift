@@ -2371,10 +2371,8 @@ struct TerminalSurface: NSViewRepresentable {
         let terminal = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 560))
         terminal.configureNativeColors()
         terminal.usesMetalLayerSurface = false
-        terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
-        terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
+        TerminalPalette.apply(theme, to: terminal)
         terminal.wantsLayer = true
-        terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
         terminal.layer?.cornerRadius = 10
         terminal.font = resolvedFont()
         context.coordinator.view = terminal
@@ -2444,10 +2442,10 @@ struct TerminalSurface: NSViewRepresentable {
     }
 
     func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
-        terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
-        terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
+        // A theme change recolours the live pane in place; the session keeps
+        // running, so a palette apply does not restart anyone's shell.
+        TerminalPalette.apply(theme, to: terminal)
         terminal.font = resolvedFont()
-        terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
         context.coordinator.session = session
         context.coordinator.initialCommand = initialCommand
         context.coordinator.onExit = onExit

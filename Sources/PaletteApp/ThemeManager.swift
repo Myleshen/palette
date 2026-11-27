@@ -25,6 +25,8 @@ public final class ThemeManager: ObservableObject {
     private var applyTask: Task<Void, Never>?
     private var slowApplyTask: Task<Void, Never>?
     private var generation = 0
+    /// Colours with no theme file of their own, set by a wallpaper-backed apply.
+    private var derivedTheme: Theme?
 
     public init(paths: PalettePaths, selection: ThemeSelection, store: PaletteStore?) {
         self.paths = paths
@@ -74,11 +76,22 @@ public final class ThemeManager: ObservableObject {
     /// the main actor, so a caller that needs the resolved appearance (the
     /// `/theme` config write) does not have to load the theme twice.
     public func select(_ name: String, completion: ((Theme) -> Void)? = nil) {
+        derivedTheme = nil
         overrideName = name
         apply(completion: completion)
     }
 
+    /// Shows a palette with no theme file (a wallpaper extraction) until the
+    /// next real theme pick replaces it.
+    public func applyPalette(_ palette: PalettePalette) {
+        derivedTheme = Theme(palette: palette)
+        apply()
+    }
+
+    public var hasDerivedPalette: Bool { derivedTheme != nil }
+
     public func resetToConfig() {
+        derivedTheme = nil
         overrideName = nil
         apply()
     }
@@ -87,6 +100,9 @@ public final class ThemeManager: ObservableObject {
     public func updateSelection(_ selection: ThemeSelection) {
         let changed = selection != self.selection
         self.selection = selection
+        if changed {
+            derivedTheme = nil
+        }
         if changed, overrideName != nil {
             resetToConfig()
         } else {
@@ -107,6 +123,19 @@ public final class ThemeManager: ObservableObject {
     /// it. A newer call wins over an older one that finishes late, so typing in
     /// a typography field cannot apply themes out of order.
     private func apply(completion: ((Theme) -> Void)? = nil) {
+        if let derivedTheme {
+            applyTask?.cancel()
+            slowApplyTask?.cancel()
+            generation += 1
+            applyingTheme = nil
+            finish(
+                ThemeLoadResult(theme: derivedTheme, diagnostics: []),
+                typography: typography,
+                placeholder: searchPlaceholder,
+                completion: completion
+            )
+            return
+        }
         let appearanceDark = ThemeManager.appearanceIsDark
         let name: String
         if let overrideName {
