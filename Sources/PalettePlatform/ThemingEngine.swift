@@ -315,9 +315,22 @@ public final class ThemingEngine: ObservableObject {
         var value = config.normalized()
         value.source = .theme
         // Never trust the caller's spelling: display names resolve to the file
-        // id, and only a genuinely missing theme falls back to Default Dark.
-        let resolvedID = ThemeLoader.themeID(for: name, themesDirectory: themesDirectory)
-        let id = resolvedID ?? "default-dark"
+        // id. A name that does not resolve is an error, not a silent fallback:
+        // writing Default Dark would report success for a theme that is gone.
+        guard let id = ThemeLoader.themeID(for: name, themesDirectory: themesDirectory) else {
+            let message = name.isEmpty
+                ? "No theme name was given; nothing was applied."
+                : "Theme '\(name)' was not found; nothing was applied."
+            Log.shared.warn(message, source: "theming")
+            status = message
+            let result = ApplyResult(
+                status: message, source: "theme", appearance: "",
+                written: [], skipped: [], includeLines: [], notices: [message],
+                changes: [], targets: [], error: message
+            )
+            lastResult = result
+            return result
+        }
         value.theme = id
         let fallback = Theme.defaultDark
         let loaded = ThemeLoader.load(name: id, themesDirectory: themesDirectory, fallback: fallback)
@@ -333,18 +346,7 @@ public final class ThemingEngine: ObservableObject {
             "Applying '\(loaded.theme.name)' (\(id)) · bg \(palette.background) fg \(palette.foreground)",
             source: "theming"
         )
-        var result = await finish(palette: palette, metadata: metadata, config: value)
-        if resolvedID == nil {
-            let message = name.isEmpty
-                ? "No theme name was given; applied Default Dark."
-                : "Theme '\(name)' was not found; applied Default Dark."
-            Log.shared.warn(message, source: "theming")
-            result.notices.insert(message, at: 0)
-            result.status += " · " + message
-            status = result.status
-            lastResult = result
-        }
-        return result
+        return await finish(palette: palette, metadata: metadata, config: value)
     }
 
     public func applyWallpaper(_ config: ThemingConfig) async -> ApplyResult {
@@ -415,17 +417,27 @@ public final class ThemingEngine: ObservableObject {
             )
         }
         do {
+            // Generated files first: include backups are only touched once the
+            // swap succeeded, so a failed swap leaves every app config intact
+            // and Revert retryable.
+            let restored = try swapWithPrevious()
             let includeOutcomes = includes.revert()
             reloadStatuses.removeAll()
             restartPrompt = nil
-            let restored = try swapWithPrevious()
             let failures = includeOutcomes.filter { $0.action == .failed }
             let includeCount = includeOutcomes.filter { $0.action != .failed }.count
-            var message = "Restored the previous palette set (\(restored.count) file\(restored.count == 1 ? "" : "s"))"
-            if includeCount > 0 {
-                message += " and \(includeCount) app config\(includeCount == 1 ? "" : "s")"
+            var message: String
+            if restored.isEmpty {
+                message = includeCount > 0
+                    ? "Restored \(includeCount) app config\(includeCount == 1 ? "" : "s"); there was no previous palette set."
+                    : "No previous palette set was stored."
+            } else {
+                message = "Restored the previous palette set (\(restored.count) file\(restored.count == 1 ? "" : "s"))"
+                if includeCount > 0 {
+                    message += " and \(includeCount) app config\(includeCount == 1 ? "" : "s")"
+                }
+                message += "."
             }
-            message += "."
             status = message
             let result = ApplyResult(
                 status: message,
@@ -451,7 +463,7 @@ public final class ThemingEngine: ObservableObject {
 
             return result
         } catch {
-            let message = "Could not revert: \(error.localizedDescription)"
+            let message = "Could not revert palette files: \(error.localizedDescription) App configs were left unchanged, so Revert can be tried again."
             status = message
             return ApplyResult(
                 status: message, source: "", appearance: "",
@@ -798,7 +810,13 @@ public final class ThemingEngine: ObservableObject {
         targets: [String]
     ) async throws -> WriteOutcome {
         try fileManager.createDirectory(at: themeDir, withIntermediateDirectories: true)
-        snapshotCurrentSet()
+        // An identical re-apply must not replace the snapshot with the same
+        // set, or Revert would restore what is already on screen.
+        if !generatedSetMatchesDisk(
+            renderedGeneratedFiles(palette: palette, metadata: metadata, targets: targets)
+        ) {
+            snapshotCurrentSet()
+        }
 
         let selected = targets.compactMap(ThemingTarget.init(rawValue:))
         let selectedIDs = Set(selected.map(\.rawValue))
@@ -1105,6 +1123,71 @@ public final class ThemingEngine: ObservableObject {
         return ChromiumOutcome(state: .written, note: note, changes: changes, needsEnable: false)
     }
 
+    /// The exact bytes the next Apply will leave in every managed file, so a
+    /// no-op apply can be detected before the snapshot is replaced.
+    private func renderedGeneratedFiles(
+        palette: PalettePalette,
+        metadata: PaletteMetadata,
+        targets: [String]
+    ) -> [String: String] {
+        let selected = Set(targets)
+        let installed = chromiumProbe.installed()
+        var files: [String: String] = [:]
+        for target in ThemingTarget.allCases where selected.contains(target.rawValue) {
+            if let browser = target.browser {
+                guard browser.supportsThemePolicy, installed.contains(browser.bundleID) else { continue }
+                files[target.fileName] = ChromiumPolicy.mobileConfig(browser: browser, palette: palette)
+                continue
+            }
+            if target == .starship {
+                let userPath = includes.plan(for: .starship)?.path
+                let userConfig = userPath.flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+                let rendered = StarshipTheme.render(
+                    userConfig: userConfig,
+                    palette: palette,
+                    header: metadata.header
+                )
+                files[StarshipTheme.fileName] = rendered.text
+                files[StarshipTheme.snippetFileName] = StarshipTheme.fishSnippet(
+                    themePath: includes.starshipThemeURL.path,
+                    fishPath: themeDir.appendingPathComponent(ThemingTarget.fish.fileName).path,
+                    header: metadata.header
+                )
+                continue
+            }
+            if let contents = ThemingRenderer.contents(for: target, palette: palette, metadata: metadata) {
+                files[target.fileName] = contents
+            }
+        }
+        files[ThemingRenderer.paletteJSONName] = ThemingRenderer.paletteJSON(palette: palette, metadata: metadata)
+        return files
+    }
+
+    private func generatedSetMatchesDisk(_ rendered: [String: String]) -> Bool {
+        for name in managedFileNames {
+            let path = themeDir.appendingPathComponent(name).path
+            if let text = rendered[name] {
+                guard let current = try? String(contentsOfFile: path, encoding: .utf8),
+                      withoutStamp(current) == withoutStamp(text) else {
+                    return false
+                }
+            } else if fileManager.fileExists(atPath: path) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// A generated header carries the apply's timestamp, so two applies of the
+    /// same palette differ only there. Strip it before comparing.
+    private func withoutStamp(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"#,
+            with: "",
+            options: .regularExpression
+        )
+    }
+
     /// The previous generated set is a plain directory copy. App configs are
     /// never in it because Palette never writes them.
     private func snapshotCurrentSet() {
@@ -1180,25 +1263,43 @@ public final class ThemingEngine: ObservableObject {
         contrast: Double
     ) async -> PalettePalette? {
         guard let url = wallpaperURLs.first else { return nil }
-        guard let image = NSImage(contentsOf: url) else {
+        guard let palette = await Self.wallpaperPalette(
+            from: url,
+            appearance: appearance,
+            saturation: saturation,
+            contrast: contrast
+        ) else {
             Log.shared.warn("Could not read wallpaper at \(url.path)", source: "theming")
             return nil
         }
-        // AppKit drawing stays on the main actor; only the clustering moves off.
-        guard let pixels = WallpaperPalette.pixels(from: image) else {
-            Log.shared.warn("Could not sample wallpaper at \(url.path)", source: "theming")
-            return nil
-        }
-        let palette = await Task.detached(priority: .userInitiated) {
-            WallpaperPalette.extract(
+        previewPalette = palette
+        return palette
+    }
+
+    /// Decoding and downsampling a 6K wallpaper is expensive, so it runs with
+    /// the clustering on a background task instead of blocking the main actor.
+    /// `readPixels` is injected so a test can prove where the read runs.
+    nonisolated static func wallpaperPalette(
+        from url: URL,
+        appearance: String,
+        saturation: Double,
+        contrast: Double,
+        readPixels: @escaping @Sendable (URL) -> WallpaperPixels? = { ThemingEngine.readWallpaperPixels($0) }
+    ) async -> PalettePalette? {
+        await Task.detached(priority: .userInitiated) {
+            guard let pixels = readPixels(url) else { return nil }
+            return WallpaperPalette.extract(
                 pixels: pixels,
                 appearance: appearance,
                 saturation: saturation,
                 contrast: contrast
             )
         }.value
-        previewPalette = palette
-        return palette
+    }
+
+    nonisolated static func readWallpaperPixels(_ url: URL) -> WallpaperPixels? {
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        return WallpaperPalette.pixels(from: image)
     }
 
     // MARK: - Restart prompt

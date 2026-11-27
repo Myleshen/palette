@@ -70,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var restartPromptController: RestartPromptController?
     private var restartPromptCancellable: AnyCancellable?
     private var themingTimer: Timer?
-    private var lastWallpaperSignature = ""
+    private var wallpaperFollow = WallpaperFollowState()
     private var launcher: LauncherService!
     private var pasteboard: PasteboardService!
     private var clipboardMonitor: ClipboardMonitor?
@@ -2604,17 +2604,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             to: configuration,
             providers: providerSettingsInfo()
         )
+        var saved = false
         do {
             try writeConfig(essentials)
+            saved = true
         } catch {
             Log.shared.warn("Could not save the Essentials preset: \(error.localizedDescription)", source: "onboarding")
         }
-        if !isScriptMode {
+        if Self.shouldMarkOnboardingComplete(saved: saved, isScriptMode: isScriptMode) {
             UserDefaults.standard.set(true, forKey: "onboardingCompleted")
         }
         onboardingWindow?.close()
         onboardingWindow = nil
         reload(quiet: false)
+    }
+
+    /// The flag only moves after a successful save, so a failed write offers
+    /// setup again instead of pretending the user finished it.
+    static func shouldMarkOnboardingComplete(saved: Bool, isScriptMode: Bool) -> Bool {
+        saved && !isScriptMode
     }
 
     private func showOnboardingIfNeeded() {
@@ -2625,12 +2633,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             providers: providerSettingsInfo(),
             onFinish: { [weak self] updated in
                 guard let self else { return }
+                var saved = false
                 do {
                     try self.writeConfig(updated)
+                    saved = true
                 } catch {
                     self.searchController.setStatus("Could not save setup: \(error.localizedDescription)", duration: 4)
                 }
-                if !self.isScriptMode {
+                if AppDelegate.shouldMarkOnboardingComplete(saved: saved, isScriptMode: self.isScriptMode) {
                     UserDefaults.standard.set(true, forKey: "onboardingCompleted")
                 }
                 self.onboardingWindow?.close()
@@ -3190,7 +3200,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Every config write goes through here so the watcher can tell our save
     /// from an external edit and never reload in a loop.
     private func writeConfig(_ config: PaletteConfig) throws {
-        try ConfigWriter.write(config, to: paths.configFile)
+        do {
+            try ConfigWriter.write(config, to: paths.configFile, parseError: configErrorMessage)
+        } catch {
+            // The broken file and its .bak are the user's only copy; say what
+            // happened instead of letting a caller swallow a silent failure.
+            if searchController != nil {
+                searchController.setStatus(error.localizedDescription, duration: 8)
+            }
+            throw error
+        }
         lastConfigModification = modificationDate(paths.configFile)
     }
 
@@ -3244,7 +3263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 themeID: name,
                 appearance: theme.appearance
             )
-            self.themeManager.selection = self.configuration.theme
+            self.themeManager.updateSelection(self.configuration.theme)
             do {
                 try self.writeConfig(self.configuration)
             } catch {
@@ -3535,7 +3554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themingTimer = nil
         let config = configuration.theming
         guard config.enabled, config.source == .wallpaper, config.followWallpaper else { return }
-        lastWallpaperSignature = wallpaperSignature()
+        wallpaperFollow.reseed(wallpaperSignature())
         let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.themingWallpaperTick()
@@ -3555,11 +3574,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let signature = wallpaperSignature()
-        guard signature != lastWallpaperSignature else { return }
-        lastWallpaperSignature = signature
+        guard wallpaperFollow.begin(signature) else { return }
         let config = configuration.theming
         Task { @MainActor in
             let result = await themingEngine.applyWallpaper(config)
+            // A failed read must be retried, so the signature only advances
+            // once the palette was actually written.
+            wallpaperFollow.finish(signature: signature, succeeded: result.error == nil)
             searchController?.setStatus(result.status, duration: 5)
         }
     }

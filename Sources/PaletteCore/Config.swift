@@ -1417,6 +1417,20 @@ public enum ConfigLoader {
     }
 }
 
+/// A save that was refused because config.toml could not be parsed. The message
+/// already names the .bak the user can restore.
+public struct ConfigWriteRefusal: LocalizedError, Equatable, Sendable {
+    public let parseError: String
+
+    public init(parseError: String) {
+        self.parseError = parseError
+    }
+
+    public var errorDescription: String? {
+        "\(parseError) Nothing was saved; the broken file and its backup are untouched."
+    }
+}
+
 public enum ConfigWriter {
     /// Bumped when a key's on-disk meaning changes. Written as
     /// `[meta] config_version`.
@@ -1428,8 +1442,12 @@ public enum ConfigWriter {
 
     /// Saves the canonical render, keeping the exact previous file as a single
     /// rolling backup. The backup is written first: if it fails, the original
-    /// file stays untouched.
-    public static func write(_ config: PaletteConfig, to url: URL) throws {
+    /// file stays untouched. A file Palette could not parse is the user's, so
+    /// `parseError` refuses the write instead of erasing it.
+    public static func write(_ config: PaletteConfig, to url: URL, parseError: String? = nil) throws {
+        if let parseError {
+            throw ConfigWriteRefusal(parseError: parseError)
+        }
         let manager = FileManager.default
         if manager.fileExists(atPath: url.path) {
             let previous = try Data(contentsOf: url)
