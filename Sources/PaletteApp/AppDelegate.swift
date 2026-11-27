@@ -710,6 +710,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.writeStatusPanelSnapshot(to: value)
                 } else if step == "themecards" {
                     self.showThemeGallery(mode: .colors)
+                } else if let value = step.dropPrefix("themecards_size=") {
+                    self.themeGallery?.scriptSize(value)
+                } else if let value = step.dropPrefix("themecards_deal="), let progress = Double(value) {
+                    self.themeGallery?.scriptDeal(progress)
                 } else if let value = step.dropPrefix("themecards_mode=") {
                     self.themeGallery?.scriptMode(ThemeCardMode(rawValue: value) ?? .colors)
                 } else if step == "themecardsclose" {
@@ -3263,6 +3267,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 themeID: name,
                 appearance: theme.appearance
             )
+            // A theme pick owns the palette again; leaving `source` on wallpaper
+            // would keep the deck's theme cards blocked.
+            self.configuration.theming = WallpaperCardPolicy.themeConfig(
+                from: self.configuration.theming
+            )
             self.themeManager.updateSelection(self.configuration.theme)
             do {
                 try self.writeConfig(self.configuration)
@@ -3368,7 +3377,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @discardableResult
     private func applyPaletteToAppsNow(_ name: String) async -> ThemingEngine.ApplyResult {
         configuration.theming.enabled = true
-        configuration.theming.source = .theme
+        configuration.theming = WallpaperCardPolicy.themeConfig(from: configuration.theming)
         configuration.theming.theme = name
         configuration.theming = configuration.theming.resolvingThemeID(
             fallback: themeManager.currentThemeID,
@@ -3451,8 +3460,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The gallery's apply route. Theme cards take the same two paths as the
     /// theme browser: the Palette theme write plus the cross-app engine when
-    /// that is enabled. A wallpaper card sets the picture first, then takes
-    /// the engine path when cross-app theming is on.
+    /// that is enabled. Picking a wallpaper is picking its colours: the picture
+    /// changes first, then the palette follows it — other apps only when the
+    /// master switch is on.
     private func applyGalleryTarget(_ target: ThemeCardTarget) async -> ThemeGalleryApplyOutcome {
         let message: String
         let failed: Bool
@@ -3468,43 +3478,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 failed = false
             }
         case .wallpaper:
-            guard ThemingEngine.shouldApplyWallpaperCard(configuration.theming) else {
-                message = wallpaperPaletteSkippedMessage()
-                failed = false
-                break
-            }
             let applied = await applyWallpaperPaletteNow()
             message = applied.error ?? applied.status
             failed = applied.error != nil
         case .wallpaperFile(let path):
             let name = URL(fileURLWithPath: path).lastPathComponent
-            guard setDesktopPicture(path) else {
-                message = "Could not set \(name) as the desktop picture."
-                failed = true
-                break
-            }
-            if ThemingEngine.shouldApplyWallpaperCard(configuration.theming) {
-                let applied = await applyWallpaperPaletteNow()
-                message = applied.error ?? "\(name): \(applied.status)"
-                failed = applied.error != nil
-            } else {
-                message = configuration.theming.enabled
-                    ? "Desktop picture set: \(name) · palette source is Theme, palette unchanged"
-                    : "Desktop picture set: \(name) · cross-app theming is off"
-                failed = false
-            }
+            let flow = await ThemeCardApplyFlow.wallpaperFile(
+                path: path,
+                name: name,
+                config: configuration,
+                setDesktopPicture: { [weak self] in self?.setDesktopPicture($0) ?? false },
+                saveConfig: { [weak self] updated in
+                    guard let self else { return }
+                    try self.writeConfig(updated)
+                },
+                applyPalette: { [weak self] config in
+                    guard let self else { return .empty }
+                    return await self.themingEngine.applyWallpaper(config)
+                }
+            )
+            configuration = flow.config
+            message = flow.outcome.message
+            failed = flow.outcome.failed
         }
         searchController?.setStatus(message, duration: 6)
         return ThemeGalleryApplyOutcome(message: message, failed: failed)
-    }
-
-    /// Why a wallpaper card left the palette alone. The card never switches
-    /// `source` behind the user: an enabled engine on the Theme source is a
-    /// deliberate "picture only" state.
-    private func wallpaperPaletteSkippedMessage() -> String {
-        configuration.theming.enabled
-            ? "Palette source is Theme; the desktop palette was not applied."
-            : "Cross-app theming is off; the palette was not applied."
     }
 
     /// Puts one file on every screen. Returns false when macOS rejects it,
@@ -3529,14 +3527,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The "From wallpaper" card and the wallpaper-follow timer: the same
-    /// engine and config write, just triggered by a key instead. The engine is
-    /// only reached with cross-app theming already on; a card never enables it.
+    /// engine and config write, just triggered by a key instead. The picture
+    /// owns the palette, so the source is recorded as wallpaper first even when
+    /// no files are written.
     @discardableResult
     private func applyWallpaperPaletteNow() async -> ThemingEngine.ApplyResult {
-        guard ThemingEngine.shouldApplyWallpaperCard(configuration.theming) else {
-            return .empty
-        }
-        configuration.theming.source = .wallpaper
+        configuration.theming = WallpaperCardPolicy.wallpaperConfig(from: configuration.theming)
         do {
             try writeConfig(configuration)
         } catch {

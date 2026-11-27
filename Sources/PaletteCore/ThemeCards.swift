@@ -132,6 +132,35 @@ public enum ThemeCardSourceGuard {
     }
 }
 
+/// Picking a wallpaper is picking its colours, the way pywal does on Linux: the
+/// picture, the palette and the config source move together. A wallpaper card
+/// never asks what the source was, and a theme pick always leaves the config in
+/// theme mode so the deck's guard is never ambiguous.
+public enum WallpaperCardPolicy {
+    /// The config a wallpaper card leaves behind. `follow_wallpaper` is the
+    /// user's own setting and is never forced.
+    public static func wallpaperConfig(from config: ThemingConfig) -> ThemingConfig {
+        var next = config
+        next.source = .wallpaper
+        return next
+    }
+
+    public static func themeConfig(from config: ThemingConfig) -> ThemingConfig {
+        var next = config
+        next.source = .theme
+        return next
+    }
+
+    public static func appliedMessage(name: String) -> String {
+        "Desktop picture set and palette applied — \(name)"
+    }
+
+    /// The picture changed; only the palette run failed. Say both.
+    public static func failedMessage(name: String, reason: String) -> String {
+        "Desktop picture set, but the palette was not applied — \(name): \(reason)"
+    }
+}
+
 /// The deck's two shows: theme cards and wallpaper cards. A hotkey picks one;
 /// filters and the favourites view then stay inside it.
 public enum ThemeCardMode: String, Equatable, Sendable, CaseIterable {

@@ -2145,7 +2145,10 @@ struct SettingsView: View {
                 ThemeBrowserView(
                     themeManager: themeManager,
                     selection: $config.theme,
-                    themesDirectory: themesDirectory
+                    themesDirectory: themesDirectory,
+                    onUseTheme: {
+                        config.theming = WallpaperCardPolicy.themeConfig(from: config.theming)
+                    }
                 )
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {

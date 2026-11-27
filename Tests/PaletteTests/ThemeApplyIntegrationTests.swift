@@ -1,3 +1,4 @@
+import AppKit
 import TOMLKit
 import XCTest
 import Foundation
@@ -115,6 +116,92 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         config.theme = "catppuccin-mocha"
         config.targets = targets.map(\.rawValue)
         return config
+    }
+
+    /// A small striped picture so a wallpaper apply samples a fixture instead
+    /// of whatever is on the user's desktop.
+    private func writePicture(_ name: String = "wall.png") throws -> URL {
+        let size = 64
+        let image = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: size,
+            pixelsHigh: size,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+        let colours: [NSColor] = [
+            NSColor(red: 0.12, green: 0.14, blue: 0.24, alpha: 1),
+            NSColor(red: 0.86, green: 0.30, blue: 0.35, alpha: 1),
+            NSColor(red: 0.20, green: 0.70, blue: 0.45, alpha: 1),
+            NSColor(red: 0.74, green: 0.62, blue: 0.20, alpha: 1),
+        ]
+        let bitmap = try XCTUnwrap(image)
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        for column in 0..<colours.count {
+            colours[column].setFill()
+            NSRect(
+                x: column * (size / colours.count),
+                y: 0,
+                width: size / colours.count,
+                height: size
+            ).fill()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let url = root.appendingPathComponent(name)
+        try data.write(to: url)
+        return url
+    }
+
+    /// With cross-app theming off nothing is generated, but the picture still
+    /// owns Palette's own colours: pywal parity, one publish, no files.
+    func testWallpaperApplyPublishesOnceWithoutWritingWhenThemingIsOff() async throws {
+        let engine = makeEngine()
+        var published = 0
+        engine.onAppliedPalette = { _, metadata in
+            published += 1
+            XCTAssertEqual(metadata.source, "wallpaper")
+        }
+        engine.wallpaperURLOverride = try writePicture()
+
+        var config = ThemingConfig()
+        config.enabled = false
+        config.source = .theme
+        let result = await engine.applyWallpaper(config)
+
+        XCTAssertNil(result.error)
+        XCTAssertEqual(published, 1, "one palette pass, no double apply")
+        XCTAssertTrue(result.written.isEmpty, "cross-app theming is off")
+        XCTAssertEqual(result.source, "wallpaper")
+        XCTAssertEqual(result.appearance, "dark")
+        XCTAssertTrue(
+            result.status.contains("Cross-app theming is off"),
+            "the report says why no files were written: \(result.status)"
+        )
+    }
+
+    /// The deck may find the source on Theme; the picture still takes over.
+    func testWallpaperApplyIgnoresTheSourceItFound() async throws {
+        let engine = makeEngine()
+        var published = 0
+        engine.onAppliedPalette = { _, _ in published += 1 }
+        engine.wallpaperURLOverride = try writePicture()
+
+        var config = theming([.kitty])
+        config.source = .theme
+        let result = await engine.applyWallpaper(config)
+
+        XCTAssertNil(result.error)
+        XCTAssertEqual(published, 1)
+        XCTAssertFalse(result.written.isEmpty, "an enabled engine writes the generated files")
+        XCTAssertEqual(engine.lastResult?.source, "wallpaper")
     }
 
     /// Every engine apply announces the palette so Palette's own surfaces can

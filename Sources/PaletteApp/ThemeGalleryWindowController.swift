@@ -4,42 +4,6 @@ import PaletteCore
 import PalettePlatform
 import SwiftUI
 
-/// One place for the gallery's frame numbers: the panel and the SwiftUI view
-/// must agree or the hand letterboxes or spills past the panel edge.
-enum ThemeGalleryLayout {
-    static let panelWidth: CGFloat = 1280
-    static let panelHeight: CGFloat = 720
-    static let cardWidth: CGFloat = 260
-    static let cardHeight: CGFloat = 368
-    /// How many cards each side of the selection the fan can show. Three keeps
-    /// the outermost card's rotated corner inside a 1280 pt panel.
-    static let reach = 3
-    static let geometry = ThemeCardFanGeometry()
-    /// A rotated card's bottom corner dips below its frame; reserve that much
-    /// so the hand never spills into the footer.
-    static let rotationAllowance = CGFloat(
-        sin(ThemeCardFanGeometry.standard.maxRotation * .pi / 180)
-    ) * cardWidth / 2 + 8
-    /// Card height + the selected card's lift + the deepest arc drop + the
-    /// rotation skirt + air.
-    static let handHeight = cardHeight + geometry.selectedLift + geometry.maxDrop
-        + rotationAllowance + 16
-    /// Smallest gap kept between the panel and the usable screen edge.
-    static let margin: CGFloat = 12
-
-    /// The panel never grows past the usable screen. On a display smaller than
-    /// 1280×720 an unclamped frame pushed the footer off-screen.
-    static func frame(in visible: NSRect) -> NSRect {
-        let width = max(1, min(panelWidth, visible.width - 2 * margin))
-        let height = max(1, min(panelHeight, visible.height - 2 * margin))
-        let x = min(max(visible.midX - width / 2, visible.minX + margin),
-                    visible.maxX - margin - width)
-        let y = min(max(visible.midY - height / 2, visible.minY + margin),
-                    visible.maxY - margin - height)
-        return NSRect(x: x, y: y, width: width, height: height)
-    }
-}
-
 /// The gallery shows both halves of an apply: what happened, and whether it
 /// failed, so an error is red instead of looking like success.
 struct ThemeGalleryApplyOutcome: Sendable {
@@ -69,6 +33,16 @@ final class ThemeGalleryModel: ObservableObject {
     @Published var dealID = 0
     /// Bumped on every apply so the chosen card can rise before the status.
     @Published var celebration = 0
+    /// The layout of the screen the deck opened on: frame, card size, arc and
+    /// reach. Rebuilt on every show and every display change.
+    @Published var layout = ThemeGalleryLayout.metrics(
+        in: NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1280, height: 800)
+    )
+    /// Script hook: freeze the deal at a progress so a snapshot can catch the
+    /// hand mid-open.
+    @Published var dealOverride: Double?
+    /// Dismiss animates the hand back out before the panel orders off.
+    @Published var closing = false
 
     init(deck: ThemeCardDeck = ThemeCardDeck()) {
         self.deck = deck
@@ -114,6 +88,7 @@ final class ThemeGalleryWindowController: NSWindowController {
     private let solid = NSView()
     private var clickMonitors: [Any] = []
     private var appearanceObserver: NSObjectProtocol?
+    private var screenObserver: NSObjectProtocol?
     private var themeCancellable: AnyCancellable?
     private var catalog: ThemeBrowserCatalog?
     private var catalogTask: Task<Void, Never>?
@@ -144,11 +119,7 @@ final class ThemeGalleryWindowController: NSWindowController {
         self.paletteSource = paletteSource
 
         let panel = ThemeGalleryWindow(
-            contentRect: NSRect(
-                x: 0, y: 0,
-                width: ThemeGalleryLayout.panelWidth,
-                height: ThemeGalleryLayout.panelHeight
-            ),
+            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -204,6 +175,19 @@ final class ThemeGalleryWindowController: NSWindowController {
         ) { [weak self] _ in
             Task { @MainActor in self?.updateAppearance() }
         }
+        // Replugging a monitor or changing a display's resolution must not
+        // leave a hand sized for the old frame.
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.isOpen else { return }
+                self.relayout()
+                self.loadVisibleCards()
+            }
+        }
         themeCancellable = themeManager.$theme.sink { [weak self] _ in
             Task { @MainActor in self?.updateAppearance() }
         }
@@ -216,8 +200,8 @@ final class ThemeGalleryWindowController: NSWindowController {
     }
 
     deinit {
-        if let appearanceObserver {
-            NotificationCenter.default.removeObserver(appearanceObserver)
+        for observer in [appearanceObserver, screenObserver].compactMap({ $0 }) {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
 
@@ -314,6 +298,35 @@ final class ThemeGalleryWindowController: NSWindowController {
 
     // MARK: - Presentation
 
+    /// Script-only visible-frame override, so the wide deck can be rendered
+    /// for a display size the harness machine does not have.
+    private var scriptedVisibleFrame: NSRect?
+
+    /// The pointer's screen, resolved now — never a remembered one.
+    private func deckMetrics() -> ThemeDeckMetrics? {
+        if let scriptedVisibleFrame { return ThemeGalleryLayout.metrics(in: scriptedVisibleFrame) }
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return nil }
+        let fallback = screens.firstIndex(where: { $0 == NSScreen.main }) ?? 0
+        let index = ThemeGalleryLayout.screenIndex(
+            for: NSEvent.mouseLocation,
+            screens: screens.map(\.frame),
+            fallback: fallback
+        )
+        let chosen = index ?? fallback
+        guard screens.indices.contains(chosen) else { return nil }
+        return ThemeGalleryLayout.metrics(in: screens[chosen].visibleFrame)
+    }
+
+    /// Sizes the open panel to the display under the pointer and hands the same
+    /// numbers to the view. Called on show and on every display change.
+    private func relayout() {
+        guard let window, let metrics = deckMetrics() else { return }
+        model.layout = metrics
+        window.setFrame(metrics.frame, display: true)
+        layoutContent()
+    }
+
     func show(mode: ThemeCardMode? = nil) {
         preload()
         if let mode { model.deck.mode = mode }
@@ -328,13 +341,14 @@ final class ThemeGalleryWindowController: NSWindowController {
         model.statusFailed = false
         model.applying = false
         model.wallpaperUnavailable = false
-        loadVisibleCards()
         updateAppearance()
         installClickMonitors()
         guard let window else { return }
-        if let screen = NSScreen.main ?? NSScreen.screens.first {
-            window.setFrame(ThemeGalleryLayout.frame(in: screen.visibleFrame), display: true)
-        }
+        model.dealOverride = nil
+        model.closing = false
+        relayout()
+        loadVisibleCards()
+        showSourceHintIfNeeded()
         if WindowPresentation.isScripted {
             // A scripted run must leave focus alone; the panel still renders.
             window.orderFront(nil)
@@ -359,7 +373,33 @@ final class ThemeGalleryWindowController: NSWindowController {
     func hide() {
         model.previewing = false
         removeClickMonitors()
-        window?.orderOut(nil)
+        guard let window else { return }
+        guard !model.closing else { return }
+        // Close by reversing the deal, then order the panel off; a scripted
+        // snapshot run has no user watching the animation.
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+              !WindowPresentation.isScripted else {
+            window.orderOut(nil)
+            return
+        }
+        model.closing = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard let self, self.model.closing else { return }
+            self.model.closing = false
+            self.window?.orderOut(nil)
+        }
+    }
+
+    /// The deck is in wallpaper mode's guard territory: Colors can be looked
+    /// at, but the footer says why applying a theme card will not work until
+    /// the source flips back.
+    private func showSourceHintIfNeeded() {
+        guard model.deck.mode == .colors,
+              model.deck.count > 0,
+              paletteSource() == .wallpaper else { return }
+        model.status = ThemeCardSourceGuard.wallpaperHint
+        model.statusFailed = false
     }
 
     func toggle() {
@@ -461,8 +501,10 @@ final class ThemeGalleryWindowController: NSWindowController {
     /// Only the fanned window is decoded: the selected card and at most
     /// `reach` neighbours on each side.
     private func visibleCards() -> [ThemeCard] {
-        model.deck.fanWindow(reach: ThemeGalleryLayout.reach).map(\.card)
+        model.deck.fanWindow(reach: reach).map(\.card)
     }
+
+    private var reach: Int { model.layout.reach }
 
     private func loadVisibleCards() {
         for card in visibleCards() {
@@ -702,6 +744,23 @@ final class ThemeGalleryWindowController: NSWindowController {
     func scriptPreview() { openPreview() }
     func scriptPreviewClose() { closePreview() }
 
+    /// Script hook: `themecards_deal=0.5` freezes the open animation halfway so
+    /// a snapshot can show the hand mid-deal.
+    func scriptDeal(_ progress: Double) {
+        model.dealOverride = min(max(progress, 0), 1)
+        model.dealID += 1
+    }
+
+    /// Script hook: `themecards_size=1710x1073` lays the deck out for a display
+    /// of that usable size and resizes the open panel to match.
+    func scriptSize(_ spec: String) {
+        let parts = spec.split(separator: "x").compactMap { Double($0) }
+        guard parts.count == 2, parts[0] > 0, parts[1] > 0 else { return }
+        scriptedVisibleFrame = NSRect(x: 0, y: 0, width: parts[0], height: parts[1])
+        relayout()
+        loadVisibleCards()
+    }
+
     /// Script hook: `themecards_mode=colors|wallpapers`. Switching while open
     /// keeps the panel up; a closed deck is opened in that mode.
     func scriptMode(_ mode: ThemeCardMode) {
@@ -716,6 +775,7 @@ final class ThemeGalleryWindowController: NSWindowController {
         model.deck.favouritesOnly = false
         rebuildDeck(keepSelection: false)
         loadVisibleCards()
+        showSourceHintIfNeeded()
         Log.shared.info("Theme cards mode → \(mode.title)", source: "theme")
     }
 
@@ -795,12 +855,18 @@ final class ThemeGalleryWindowController: NSWindowController {
 
 /// A nonactivating panel that can still take arrow keys, typing and the wheel,
 /// like the status menu.
-private final class ThemeGalleryWindow: NSPanel {
+final class ThemeGalleryWindow: NSPanel {
     var onKeyDown: ((NSEvent) -> Bool)?
     var onScroll: ((CGFloat) -> Void)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// The deck is exactly the usable width of its display. AppKit's default
+    /// constraining would leave a margin on a shared edge, so it is disabled.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
 
     override func keyDown(with event: NSEvent) {
         if onKeyDown?(event) == true { return }
@@ -831,6 +897,9 @@ private struct ThemeGalleryView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var deal: Double = 0
     @State private var pulse = false
+    /// Cards do not take clicks while the hand is still moving.
+    @State private var transitioning = false
+    @State private var hoveredKey: String?
     /// The focused preview's grow-from-the-card progress, and whether the layer
     /// is mounted for the collapse animation.
     @State private var previewProgress: Double = 0
@@ -838,27 +907,45 @@ private struct ThemeGalleryView: View {
 
     private var theme: Theme { themeManager.theme }
     private var muted: Color { theme.color(theme.palette.fgMuted) }
-    private var geometry: ThemeCardFanGeometry { ThemeGalleryLayout.geometry }
+    private var metrics: ThemeDeckMetrics { model.layout }
+    private var arc: ThemeCardFanGeometry { metrics.arc }
+    private var reach: Int { metrics.reach }
+    private var motion: ThemeDeckMotion { .standard }
 
     var body: some View {
         ZStack {
+            // Only the hand and its header take the side padding: the preview
+            // is a full-deck layer underneath.
             VStack(spacing: 0) {
                 header
                 Spacer(minLength: 0)
                 fan
+                    .padding(.bottom, metrics.bottomInset)
                 footer
             }
+            .padding(.horizontal, metrics.sideInset)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .accessibilityHidden(model.previewing)
 
             previewLayer
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Pin the root to the deck's exact frame: no child's ideal width may
+        // push the fan off-centre, and the panel is always the full width.
+        .frame(width: metrics.frame.width, height: metrics.frame.height, alignment: .top)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Theme cards")
         .onAppear { dealIn() }
         .onChange(of: model.dealID) { _, _ in dealIn() }
+        .onChange(of: model.closing) { _, closing in
+            guard closing else { return }
+            if reduceMotion {
+                deal = 0
+            } else {
+                withAnimation(.easeIn(duration: 0.18)) { deal = 0 }
+            }
+        }
+        .onChange(of: model.deck.selected) { _, _ in markTransitioning() }
         .onChange(of: model.celebration) { _, _ in pulseApply() }
         .onChange(of: model.previewing) { _, open in
             if open {
@@ -947,7 +1034,7 @@ private struct ThemeGalleryView: View {
         }
         .padding(.horizontal, 9)
         .frame(height: 24)
-        .frame(minWidth: 150, alignment: .leading)
+        .frame(minWidth: 180, maxWidth: 360, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(theme.color(theme.palette.elevated).opacity(0.65))
@@ -995,7 +1082,7 @@ private struct ThemeGalleryView: View {
     // MARK: - Fan
 
     private var fan: some View {
-        let slots = model.deck.fanWindow(reach: ThemeGalleryLayout.reach)
+        let slots = model.deck.fanWindow(reach: reach)
         return ZStack(alignment: .bottom) {
             if slots.isEmpty {
                 Text(model.deck.favouritesOnly && model.deck.query.isEmpty
@@ -1010,15 +1097,10 @@ private struct ThemeGalleryView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: ThemeGalleryLayout.handHeight, alignment: .bottom)
-        .animation(
-            reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.82),
-            value: model.deck.selected
-        )
-        .animation(
-            reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.82),
-            value: model.deck.query
-        )
+        // The hand rises out of the deck's bottom edge; on a screen too short
+        // for it the header wins and the card tops are cropped.
+        .frame(height: metrics.handHeight, alignment: .bottom)
+        .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Fanned hand of cards")
     }
@@ -1026,21 +1108,38 @@ private struct ThemeGalleryView: View {
     private func cardView(_ slot: FanSlot) -> some View {
         let card = slot.card
         let selected = slot.relative == 0
-        let placement = geometry.placement(
+        let placement = arc.placement(
             relative: slot.relative,
-            reduceMotion: reduceMotion,
-            deal: deal
+            progress: motion.progress(for: slot.relative, deal: deal)
         )
+        let hovered = hoveredKey == card.cacheKey && !model.previewing
+        let cardScale = metrics.scale * placement.scale * (selected && pulse ? 1.06 : 1)
+            * (hovered ? motion.hoverScale : 1)
+        let pivotLift = -placement.y - (hovered ? motion.hoverLift : 0)
+        // Reduce Motion never slides the hand: the cards keep their positions
+        // and the change of front card reads as a short crossfade instead.
+        let selectionAnimation: Animation? = reduceMotion
+            ? nil
+            : .spring(response: motion.response, dampingFraction: motion.damping)
+                .delay(Double(abs(slot.relative)) * 0.004)
+        let fanOpacity = deal * (selected ? 1 : 0.9)
         let palette = model.palette(for: card)
         let background = color(palette?.background, fallback: theme.palette.surface)
         let foreground = color(palette?.foreground, fallback: theme.palette.fg)
 
         return cardBody(card, palette: palette, foreground: foreground, selected: selected)
-            .frame(width: ThemeGalleryLayout.cardWidth, height: ThemeGalleryLayout.cardHeight)
+            .frame(width: metrics.cardWidth, height: metrics.cardHeight)
+            .opacity(fanOpacity)
+            // Scoped before the transforms, so Reduce Motion fades the dim
+            // without animating the position.
+            .animation(
+                reduceMotion ? .easeInOut(duration: motion.crossfade) : nil,
+                value: model.deck.selected
+            )
             .background(background)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(
                         selected
                             ? accentColor(palette, foreground: foreground).opacity(0.85)
@@ -1051,7 +1150,7 @@ private struct ThemeGalleryView: View {
             .overlay(
                 // Side cards are shaded; the selected card stays at full light.
                 Color.black.opacity(placement.dim)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .allowsHitTesting(false)
             )
             .overlay(alignment: .topLeading) {
@@ -1068,15 +1167,29 @@ private struct ThemeGalleryView: View {
                 radius: selected ? 22 : 8,
                 y: selected ? 12 : 5
             )
-            .scaleEffect(
-                placement.scale * (selected && pulse ? 1.06 : 1),
-                anchor: .bottom
-            )
+            .scaleEffect(cardScale, anchor: .bottom)
             .rotationEffect(.degrees(placement.rotation), anchor: .bottom)
-            .offset(x: placement.x, y: placement.y - geometry.maxDrop - ThemeGalleryLayout.rotationAllowance)
+            // The pivot rides the arc: `placement.y` is its height above the
+            // canvas bottom.
+            .offset(x: placement.x, y: pivotLift)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: motion.crossfade),
+                value: hoveredKey
+            )
+            .animation(selectionAnimation, value: model.deck.selected)
             .zIndex(placement.zIndex)
-            .opacity(deal)
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            // Hit testing follows the rotated, offset frame: the content shape
+            // is declared after the transform.
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .allowsHitTesting(!transitioning && !model.previewing)
+            .onHover { inside in
+                let key = card.cacheKey
+                if inside {
+                    hoveredKey = key
+                } else if hoveredKey == key {
+                    hoveredKey = nil
+                }
+            }
             .onTapGesture { selectRelative(slot.relative) }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(cardLabel(card, selected: selected))
@@ -1225,44 +1338,14 @@ private struct ThemeGalleryView: View {
     ) -> some View {
         let image = model.thumbnail(for: card)
         let video = isVideoCard(card)
-        return VStack(alignment: .leading, spacing: selected ? 7 : 4) {
-            Spacer(minLength: 0)
-            Text(card.displayName)
-                .font(.system(size: selected ? 16 : 11, weight: .semibold))
-                .foregroundStyle(Color.white)
-                .lineLimit(selected ? 1 : 2)
-            if selected {
-                HStack(spacing: 5) {
-                    Text(card.sectionTitle.uppercased())
-                        .font(.system(size: 9, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(Color.white.opacity(0.75))
-                    if video {
-                        Text("VIDEO")
-                            .font(.system(size: 9, weight: .semibold))
-                            .tracking(0.6)
-                            .foregroundStyle(Color.white.opacity(0.75))
-                    }
-                    Spacer(minLength: 4)
-                    ForEach(Array((palette?.brightestANSI ?? []).prefix(8).enumerated()), id: \.offset) { _, hex in
-                        Circle()
-                            .fill(color(hex, fallback: theme.palette.fgMuted))
-                            .frame(width: 9, height: 9)
-                    }
-                }
-            }
-        }
-        .padding(selected ? 15 : 11)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        // The picture is a background so it cannot stretch the label layout.
-        .background(alignment: .bottom) {
-            ZStack(alignment: .bottom) {
+        // Full bleed: the picture is the card, corner to corner. The name sits
+        // on a scrim over it, with no inner frame or inset thumbnail.
+        return ZStack(alignment: .bottomLeading) {
+            Group {
                 if let image {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
                 } else {
                     LinearGradient(
                         colors: [
@@ -1275,15 +1358,50 @@ private struct ThemeGalleryView: View {
                     Image(systemName: video ? "film" : "photo")
                         .font(.system(size: selected ? 44 : 28, weight: .light))
                         .foregroundStyle(foreground.opacity(0.35))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.78)],
-                    startPoint: .center,
-                    endPoint: .bottom
-                )
-                .frame(height: selected ? 200 : 150)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.8)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            VStack(alignment: .leading, spacing: selected ? 7 : 4) {
+                Spacer(minLength: 0)
+                Text(card.displayName)
+                    .font(.system(size: selected ? 16 : 11, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .lineLimit(selected ? 1 : 2)
+                if selected {
+                    HStack(spacing: 5) {
+                        Text(card.sectionTitle.uppercased())
+                            .font(.system(size: 9, weight: .semibold))
+                            .tracking(0.6)
+                            .foregroundStyle(Color.white.opacity(0.75))
+                        if video {
+                            Text("VIDEO")
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(0.6)
+                                .foregroundStyle(Color.white.opacity(0.75))
+                        }
+                        Spacer(minLength: 4)
+                        ForEach(Array((palette?.brightestANSI ?? []).prefix(8).enumerated()), id: \.offset) { _, hex in
+                            Circle()
+                                .fill(color(hex, fallback: theme.palette.fgMuted))
+                                .frame(width: 9, height: 9)
+                        }
+                    }
+                }
+            }
+            .padding(selected ? 15 : 11)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Focused preview
@@ -1660,6 +1778,11 @@ private struct ThemeGalleryView: View {
     // MARK: - Animation
 
     private func dealIn() {
+        markTransitioning()
+        if let override = model.dealOverride {
+            deal = override
+            return
+        }
         deal = 0
         guard !reduceMotion else {
             deal = 1
@@ -1667,9 +1790,18 @@ private struct ThemeGalleryView: View {
         }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 16_000_000)
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: motion.response, dampingFraction: motion.damping)) {
                 deal = 1
             }
+        }
+    }
+
+    /// Clicks and hovers are off until the hand has settled.
+    private func markTransitioning() {
+        transitioning = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 420_000_000)
+            transitioning = false
         }
     }
 

@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+@testable import PaletteApp
 @testable import PaletteCore
 import PalettePlatform
 import TOMLKit
@@ -67,54 +68,268 @@ final class ThemeFanTests: XCTestCase {
 
     // MARK: - Fan geometry
 
-    func testFanGeometryOffsetsAndRotations() {
-        let geometry = ThemeCardFanGeometry.standard
-        let centre = geometry.placement(relative: 0)
-        XCTAssertEqual(centre.x, 0)
-        XCTAssertEqual(centre.y, -geometry.selectedLift)
-        XCTAssertEqual(centre.rotation, 0)
-        XCTAssertEqual(centre.scale, 1)
-        XCTAssertEqual(centre.dim, 0)
-        XCTAssertEqual(centre.zIndex, 1000)
+    /// The hand rides an arc: the selected card is the apex, the neighbours sit
+    /// on the circle below it, and each card's rotation is the tangent there.
+    func testArcKeepsTheSelectionAtTheApexAndDescendsOutward() {
+        let arc = ThemeCardFanGeometry.standard
+        let apex = arc.placement(relative: 0)
+        XCTAssertEqual(apex.x, 0)
+        XCTAssertEqual(apex.y, arc.apexY)
+        XCTAssertEqual(apex.rotation, 0)
+        XCTAssertEqual(apex.scale, 1)
+        XCTAssertEqual(apex.dim, 0)
+        XCTAssertEqual(apex.zIndex, 1000)
 
-        let right = geometry.placement(relative: 1)
-        XCTAssertEqual(right.x, geometry.stepX)
-        XCTAssertEqual(right.y, geometry.arcDrop)
-        XCTAssertEqual(right.rotation, 6)
-        XCTAssertEqual(right.scale, 0.85)
-        XCTAssertEqual(right.dim, 0.35, accuracy: 0.0001)
+        for relative in 1...5 {
+            let card = arc.placement(relative: relative)
+            let degrees = min(Double(relative) * arc.stepAngle, arc.maxAngle)
+            let radians = degrees * .pi / 180
+            XCTAssertEqual(card.rotation, degrees, accuracy: 0.0001, "rotation is the arc tangent")
+            XCTAssertEqual(card.x, arc.radius * sin(radians), accuracy: 0.01)
+            XCTAssertEqual(
+                card.y,
+                arc.apexY - arc.radius * (1 - cos(radians)),
+                accuracy: 0.01,
+                "the pivot is on the circle"
+            )
+            XCTAssertLessThan(card.y, apex.y, "outer cards descend from the apex")
+            XCTAssertEqual(card.dim, 0.30 + Double(relative) * 0.05, accuracy: 0.0001)
 
-        let left = geometry.placement(relative: -1)
-        XCTAssertEqual(left.x, -geometry.stepX)
-        XCTAssertEqual(left.rotation, -6)
-
-        // Four steps would be 24° uncapped; the hand stops at 15° and the arc
-        // stops at maxDrop so the outer cards stay on screen.
-        let far = geometry.placement(relative: 4)
-        XCTAssertEqual(far.rotation, geometry.maxRotation)
-        XCTAssertEqual(far.y, geometry.maxDrop)
-        XCTAssertEqual(far.x, geometry.stepX * 4)
-    }
-
-    func testFanGeometryFlattensForReduceMotion() {
-        let geometry = ThemeCardFanGeometry.standard
-        let far = geometry.placement(relative: 3, reduceMotion: true)
-        XCTAssertEqual(far.rotation, 0)
-        XCTAssertEqual(far.y, 0)
-        XCTAssertEqual(far.x, geometry.stepX * 3)
-        XCTAssertEqual(far.scale, geometry.sideScale)
-    }
-
-    func testFanGeometryDealsFromTheCentre() {
-        let geometry = ThemeCardFanGeometry.standard
-        for relative in -3...3 {
-            let stacked = geometry.placement(relative: relative, deal: 0)
-            XCTAssertEqual(stacked.x, 0, "every card starts stacked at the centre")
-            XCTAssertEqual(stacked.rotation, 0)
-            XCTAssertEqual(stacked.dim, 0)
+            let left = arc.placement(relative: -relative)
+            XCTAssertEqual(left.x, -card.x)
+            XCTAssertEqual(left.rotation, -card.rotation)
+            XCTAssertEqual(left.y, card.y)
         }
-        XCTAssertEqual(geometry.placement(relative: 0, deal: 0).y, 0)
-        XCTAssertEqual(geometry.placement(relative: 0, deal: 1).scale, 1)
+
+        let falls = (1...6).map { arc.placement(relative: $0).y }
+        XCTAssertEqual(falls, falls.sorted(by: >), "descent is monotonic")
+    }
+
+    func testArcStepClampsAtTheWidestCard() {
+        let arc = ThemeCardFanGeometry.standard
+        XCTAssertEqual(arc.angle(relative: 100), arc.maxAngle)
+        XCTAssertEqual(arc.placement(relative: 100).rotation, arc.maxAngle)
+        XCTAssertEqual(arc.placement(relative: 100).x, arc.radius * sin(arc.maxAngle * .pi / 180), accuracy: 0.01)
+    }
+
+    func testArcDealsUpFromBelowTheBottomEdge() {
+        let arc = ThemeCardFanGeometry.standard
+        for relative in -3...3 {
+            let collapsed = arc.placement(relative: relative, progress: 0)
+            XCTAssertEqual(collapsed.x, 0, "the hand starts collapsed at the centre")
+            XCTAssertEqual(collapsed.y, arc.apexY - arc.rise, "and below the canvas")
+            XCTAssertEqual(collapsed.rotation, 0)
+            XCTAssertEqual(collapsed.dim, 0)
+        }
+        let mid = arc.placement(relative: 3, progress: 0.5)
+        XCTAssertGreaterThan(mid.x, 0)
+        XCTAssertLessThan(mid.x, arc.placement(relative: 3).x)
+        XCTAssertGreaterThan(mid.y, arc.apexY - arc.rise)
+        XCTAssertLessThan(mid.y, arc.placement(relative: 3).y + 1)
+    }
+
+    func testDealStaggersOuterCards() {
+        let motion = ThemeDeckMotion.standard
+        XCTAssertEqual(motion.progress(for: 0, deal: 1), 1)
+        XCTAssertEqual(motion.progress(for: 9, deal: 0), 0)
+        XCTAssertLessThan(
+            motion.progress(for: 4, deal: 0.5),
+            motion.progress(for: 0, deal: 0.5),
+            "the middle unfolds first"
+        )
+        XCTAssertEqual(motion.progress(for: 9, deal: 1), 1)
+    }
+
+    func testMotionIsAShippingSpringWithAReduceMotionCrossfade() {
+        let motion = ThemeDeckMotion.standard
+        XCTAssertGreaterThanOrEqual(motion.response, 0.28)
+        XCTAssertLessThanOrEqual(motion.response, 0.34)
+        XCTAssertGreaterThan(motion.damping, 0.7)
+        XCTAssertLessThan(motion.damping, 0.9)
+        XCTAssertGreaterThan(motion.crossfade, 0)
+        XCTAssertGreaterThan(motion.stagger, 0)
+        XCTAssertGreaterThan(motion.hoverScale, 1)
+    }
+
+    // MARK: - Deck frame and hand on a table
+
+    /// Every display the deck must handle: landscape, ultrawide, 4K, portrait,
+    /// a small laptop, a side Dock's narrower visible frame and a menu bar.
+    private var displays: [(String, CGRect)] {
+        [
+            ("1024x640 laptop", CGRect(x: 0, y: 0, width: 1024, height: 640)),
+            ("1280x800", CGRect(x: 0, y: 0, width: 1280, height: 800)),
+            ("1710x1073", CGRect(x: 0, y: 0, width: 1710, height: 1073)),
+            ("2560x1440", CGRect(x: 0, y: 0, width: 2560, height: 1440)),
+            ("3440x1440 ultrawide", CGRect(x: 0, y: 0, width: 3440, height: 1440)),
+            ("3840x2160 4K", CGRect(x: 0, y: 0, width: 3840, height: 2160)),
+            ("1080x1920 portrait", CGRect(x: 0, y: 0, width: 1080, height: 1920)),
+            ("1200x1920 portrait", CGRect(x: 0, y: 0, width: 1200, height: 1920)),
+            // Dock on the left: the usable frame starts 80 pt in.
+            ("dock left 1280x800", CGRect(x: 80, y: 0, width: 1200, height: 800)),
+            // Menu bar: the usable frame starts below it.
+            ("menu bar 1512x945", CGRect(x: 0, y: 25, width: 1512, height: 945)),
+        ]
+    }
+
+    func testDeckSpansEachDisplayAndRestsOnItsBottomEdge() {
+        for (name, visible) in displays {
+            let metrics = ThemeGalleryLayout.metrics(in: visible)
+            XCTAssertEqual(metrics.frame.width, visible.width, name)
+            XCTAssertEqual(metrics.frame.minX, visible.minX, name)
+            XCTAssertEqual(metrics.frame.minY, visible.minY, name)
+            XCTAssertGreaterThan(metrics.frame.height, 0, name)
+            XCTAssertLessThanOrEqual(metrics.frame.height, visible.height, name)
+            XCTAssertGreaterThanOrEqual(
+                metrics.frame.height,
+                metrics.chromeHeight + metrics.handHeight - 0.5,
+                "\(name) must fit one card plus header and footer"
+            )
+        }
+    }
+
+    /// The panel takes the computed frame on every display: never the old
+    /// 1280×720 box, never a shared-edge margin, and nothing AppKit may shrink.
+    func testThePanelIsExactlyTheUsableWidth() {
+        for (name, visible) in displays {
+            let metrics = ThemeGalleryLayout.metrics(in: visible)
+            let window = ThemeGalleryWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720),
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: true
+            )
+            window.setFrame(metrics.frame, display: false)
+            XCTAssertEqual(window.frame.width, visible.width, name)
+            XCTAssertEqual(window.frame.minX, visible.minX, name)
+            XCTAssertEqual(window.frame.minY, visible.minY, name)
+            XCTAssertEqual(window.frame.height, metrics.frame.height, name)
+            XCTAssertNotEqual(window.frame.size, NSSize(width: 1280, height: 720), name)
+            let constrained = window.constrainFrameRect(metrics.frame, to: nil)
+            XCTAssertEqual(constrained, metrics.frame, "\(name) must not be constrained")
+        }
+    }
+
+    /// The rotated AABB of every card, not its centre, has to stay in the deck.
+    func testEveryRotatedCardStaysInsideTheDeck() {
+        for (name, visible) in displays {
+            let metrics = ThemeGalleryLayout.metrics(in: visible)
+            let canvas = metrics.canvas.insetBy(dx: -0.5, dy: -0.5)
+            for relative in -metrics.reach...metrics.reach {
+                let box = metrics.bounds(relative: relative)
+                XCTAssertTrue(
+                    canvas.contains(box),
+                    "\(name) card \(relative) \(box) spills out of \(canvas)"
+                )
+            }
+            XCTAssertEqual(metrics.bounds(relative: 0).midX, 0, accuracy: 0.01, "\(name) selection is centred")
+        }
+    }
+
+    func testCardScaleShrinksOnShortScreens() {
+        let wide = ThemeGalleryLayout.metrics(in: CGRect(x: 0, y: 0, width: 1710, height: 1073))
+        let small = ThemeGalleryLayout.metrics(in: CGRect(x: 0, y: 0, width: 1024, height: 640))
+        let portrait = ThemeGalleryLayout.metrics(in: CGRect(x: 0, y: 0, width: 1080, height: 1920))
+        XCTAssertEqual(wide.scale, 1)
+        XCTAssertLessThan(small.scale, 0.7, "a 640 pt screen cannot hold a full 368 pt card")
+        XCTAssertGreaterThan(small.cardHeight, 0)
+        XCTAssertGreaterThan(small.cardWidth, 0)
+        XCTAssertEqual(portrait.scale, 1, "a tall portrait screen still fits a full card")
+        XCTAssertLessThan(small.handHeight, wide.handHeight)
+    }
+
+    func testReachGrowsWithTheDeckWidth() {
+        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1024), 3)
+        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1080), 4)
+        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1280), 4)
+        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1440), 5)
+        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1710), 6)
+        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 3440), 9)
+        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 8000), ThemeGalleryLayout.maxReach)
+        let widths: [CGFloat] = [800, 1024, 1280, 1440, 1710, 2560, 3440, 5000]
+        let reaches = widths.map(ThemeGalleryLayout.reach(forWidth:))
+        XCTAssertEqual(reaches, reaches.sorted(), "more width never shows fewer cards")
+    }
+
+    func testPortraitUsesASteeperArcWithFewerCards() {
+        let portrait = ThemeGalleryLayout.metrics(in: CGRect(x: 0, y: 0, width: 1080, height: 1920))
+        let wide = ThemeGalleryLayout.metrics(in: CGRect(x: 0, y: 0, width: 1710, height: 1073))
+        XCTAssertLessThan(portrait.reach, wide.reach)
+        XCTAssertGreaterThan(portrait.arc.maxAngle, wide.arc.maxAngle, "a narrow frame needs a steeper fan")
+        XCTAssertGreaterThan(portrait.arc.stepAngle, wide.arc.stepAngle)
+        XCTAssertLessThanOrEqual(portrait.arc.maxAngle, ThemeGalleryLayout.maxAngle)
+    }
+
+    func testTheDeckFollowsThePointerScreen() throws {
+        let laptop = ThemeDeckScreen(
+            frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 945)
+        )
+        let portrait = ThemeDeckScreen(
+            frame: CGRect(x: -1080, y: -480, width: 1080, height: 1920),
+            visibleFrame: CGRect(x: -1080, y: -480, width: 1080, height: 1920)
+        )
+        let onPortrait = try XCTUnwrap(ThemeGalleryLayout.metrics(
+            for: CGPoint(x: -500, y: 300),
+            screens: [laptop, portrait],
+            fallback: 0
+        ))
+        XCTAssertEqual(onPortrait.frame.width, 1080)
+        XCTAssertEqual(onPortrait.frame.minX, -1080)
+        XCTAssertEqual(onPortrait.frame.minY, -480)
+
+        let onLaptop = try XCTUnwrap(ThemeGalleryLayout.metrics(
+            for: CGPoint(x: 400, y: 300),
+            screens: [laptop, portrait],
+            fallback: 1
+        ))
+        XCTAssertEqual(onLaptop.frame.width, 1512)
+
+        // Between displays: the main screen answers.
+        XCTAssertEqual(ThemeGalleryLayout.screenIndex(
+            for: CGPoint(x: 9000, y: 9000),
+            screens: [laptop.frame, portrait.frame],
+            fallback: 0
+        ), 0)
+        XCTAssertNil(ThemeGalleryLayout.metrics(for: .zero, screens: []))
+    }
+
+    /// A display change while the deck is open re-lays it out from the new list,
+    /// including falling back when the display under the pointer is unplugged.
+    func testScreenChangeRelaysOutTheVisibleDeck() throws {
+        let laptop = ThemeDeckScreen(
+            frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+            visibleFrame: CGRect(x: 0, y: 25, width: 1512, height: 945)
+        )
+        let portrait = ThemeDeckScreen(
+            frame: CGRect(x: 1512, y: 0, width: 1080, height: 1920),
+            visibleFrame: CGRect(x: 1512, y: 0, width: 1080, height: 1920)
+        )
+        let pointer = CGPoint(x: 1800, y: 400)
+        let before = try XCTUnwrap(ThemeGalleryLayout.metrics(
+            for: pointer,
+            screens: [laptop, portrait]
+        ))
+        XCTAssertEqual(before.frame.width, 1080)
+        XCTAssertEqual(before.frame.minX, 1512)
+
+        // The portrait panel is unplugged: the same pointer now resolves to the
+        // main display instead of keeping the dead frame.
+        let after = try XCTUnwrap(ThemeGalleryLayout.metrics(
+            for: pointer,
+            screens: [laptop],
+            fallback: 0
+        ))
+        XCTAssertEqual(after.frame.width, 1512)
+        XCTAssertEqual(after.frame.minY, 25)
+        XCTAssertNotEqual(before, after)
+    }
+
+    func testPreviewFillsTheDeck() {
+        let deck = ThemeGalleryLayout.frame(in: CGRect(x: 0, y: 0, width: 1710, height: 1073))
+        let preview = ThemeGalleryLayout.previewFrame(in: deck)
+        XCTAssertEqual(preview, deck)
+        XCTAssertEqual(preview.width, 1710)
     }
 
     // MARK: - Filter and favourites
@@ -307,7 +522,7 @@ final class ThemeFanTests: XCTestCase {
             currentDesktop: wallpapers[0],
             mode: .colors
         )
-        let reach = ThemeGalleryReachForTests.reach
+        let reach = ThemeDeckReachForTests.reach
         var parsed = Set<String>()
         func parseWindow() {
             for slot in deck.fanWindow(reach: reach) { parsed.insert(slot.card.cacheKey) }
@@ -378,7 +593,7 @@ final class ThemeFanTests: XCTestCase {
                 currentDesktop: wallpapers[0],
                 mode: .colors
             )
-            for slot in deck.fanWindow(reach: ThemeGalleryReachForTests.reach) {
+            for slot in deck.fanWindow(reach: ThemeDeckReachForTests.reach) {
                 guard let name = slot.card.themeID else { continue }
                 palettes[slot.card.cacheKey] = ThemeCardPalette(theme: ThemeLoader.load(
                     name: name,
@@ -419,8 +634,7 @@ final class ThemeFanTests: XCTestCase {
     }
 }
 
-/// Mirrors the app's `ThemeGalleryLayout.reach`; the layout lives in the
-/// executable, so the tests keep their own copy of this one number.
-private enum ThemeGalleryReachForTests {
-    static let reach = 3
+/// The hand the deck shows on a 1280 pt screen, for the parse-count tests.
+private enum ThemeDeckReachForTests {
+    static let reach = ThemeGalleryLayout.reach(forWidth: 1280)
 }

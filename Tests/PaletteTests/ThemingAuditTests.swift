@@ -337,20 +337,16 @@ final class ThemingAuditTests: XCTestCase {
 
     // MARK: - Deck
 
-    func testDeckFrameClampsToTheVisibleScreen() {
+    func testDeckFrameFillsTheVisibleScreen() {
         let normal = NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let centered = ThemeGalleryLayout.frame(in: normal)
-        XCTAssertEqual(centered.width, ThemeGalleryLayout.panelWidth)
-        XCTAssertEqual(centered.height, ThemeGalleryLayout.panelHeight)
-        XCTAssertTrue(normal.contains(centered))
+        let frame = ThemeGalleryLayout.frame(in: normal)
+        XCTAssertEqual(frame.width, normal.width, "the deck spans the usable width")
+        XCTAssertEqual(frame.minX, normal.minX)
+        XCTAssertEqual(frame.minY, normal.minY, "the hand rests on the bottom edge")
+        XCTAssertTrue(normal.contains(frame))
 
-        let small = NSRect(x: 0, y: 0, width: 1000, height: 600)
-        let clamped = ThemeGalleryLayout.frame(in: small)
-        XCTAssertLessThanOrEqual(clamped.width, small.width - 2 * ThemeGalleryLayout.margin)
-        XCTAssertLessThanOrEqual(clamped.height, small.height - 2 * ThemeGalleryLayout.margin)
-        XCTAssertTrue(small.contains(clamped))
-        XCTAssertGreaterThanOrEqual(clamped.minX, small.minX + ThemeGalleryLayout.margin)
-        XCTAssertGreaterThanOrEqual(clamped.minY, small.minY + ThemeGalleryLayout.margin)
+        let inset = NSRect(x: 1440, y: 0, width: 1512, height: 900)
+        XCTAssertEqual(ThemeGalleryLayout.frame(in: inset).width, 1512)
     }
 
     func testShowingTheDeckClearsTheFilter() {
