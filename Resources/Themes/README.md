@@ -4,6 +4,26 @@ Palette uses semantic theme files rather than a widget stylesheet. A theme is a
 TOML file in this folder (or the bundled defaults) with a `name`, `appearance`,
 and any of these tables:
 
+The bundled `ghostty-*.toml` files are colour ports of the themes Ghostty ships,
+which are the MIT-licensed iTerm2-Color-Schemes collection. Only colour values
+were copied; the original themes live at
+<https://github.com/ghostty-org/ghostty/tree/main/themes>. Each port maps the
+terminal background, foreground, cursor and ANSI colours onto Palette's palette
+and derives surface, muted, border, badge and row states. A user theme in this
+folder with the same name overrides the bundled copy.
+
+The bundled `omarchy-*.toml` files are colour ports of the themes shipped with
+[Omarchy](https://github.com/basecamp/omarchy), which is MIT-licensed. Only
+colour values were copied from each theme's `colors.toml`; the originals live at
+<https://github.com/basecamp/omarchy/tree/master/themes>. They use the same
+mapping as the Ghostty ports.
+
+After adding or importing a theme, repair its palette with
+`swift run ThemeRepair Resources/Themes`. The app applies the same contrast
+repair at load time, so the files, the picker swatches and the live theme agree.
+
+
+
 - `[palette]` — background, foreground, accent, selection, badge, and status colors
 - `[window]` — anchor, offset, corner radius, material, opacity
 - `[search]`, `[list]`, `[typography]`, `[states.*]`, `[motion]`, `[footer]`

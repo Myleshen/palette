@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Golden Retriever Honey" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Golden Retriever Honey"
+appearance = "light"
+
+[palette]
+bg = "#fdf6e7"
+surface = "#f0eadb"
+elevated = "#fefbf4"
+fg = "#5b4630"
+fg_muted = "#7f6f5c"
+accent = "#28709c"
+accent_fg = "#ebebeb"
+selection_bg = "#c6a477"
+selection_fg = "#4b3826"
+match_fg = "#a86bd8"
+border = "#ddd3c2"
+separator = "#fefbf480"
+danger = "#d35400"
+warning = "#ad8b1b"
+success = "#7d992d"
+info = "#4a8fbd"
+badge_bg = "#fefbf4"
+badge_fg = "#5b4630"
+
+[states.selected]
+bg = "#c6a477"
+fg = "#4b3826"
+[states.hover]
+bg = "#fefbf4"
+[states.disabled]
+fg = "#948470"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#948470"

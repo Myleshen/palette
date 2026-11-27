@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Crayon Pony Fish" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Crayon Pony Fish"
+appearance = "dark"
+
+[palette]
+bg = "#150707"
+surface = "#0f0505"
+elevated = "#2c2020"
+fg = "#a7969c"
+fg_muted = "#86757a"
+accent = "#cfc9ff"
+accent_fg = "#000000"
+selection_bg = "#2b1b1d"
+selection_fg = "#938288"
+match_fg = "#fc6cba"
+border = "#2c1d1e"
+separator = "#2c202080"
+danger = "#ae2a41"
+warning = "#ab321c"
+success = "#579524"
+info = "#8c87b0"
+badge_bg = "#2c2020"
+badge_fg = "#95868b"
+
+[states.selected]
+bg = "#2b1b1d"
+fg = "#938288"
+[states.hover]
+bg = "#2c2020"
+[states.disabled]
+fg = "#6b5a5f"
+
+[footer]
+hint_color = "#6b5a5f"

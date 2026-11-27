@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "X Bogota" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · X Bogota"
+appearance = "dark"
+
+[palette]
+bg = "#200b0a"
+surface = "#170807"
+elevated = "#362323"
+fg = "#f7f1ff"
+fg_muted = "#aca0a9"
+accent = "#47e6ff"
+accent_fg = "#000000"
+selection_bg = "#f7f1ff"
+selection_fg = "#200b0a"
+match_fg = "#ff9999"
+border = "#4b393b"
+separator = "#36232380"
+danger = "#fc618d"
+warning = "#ffed89"
+success = "#7bd88f"
+info = "#47e6ff"
+badge_bg = "#362323"
+badge_fg = "#f7f1ff"
+
+[states.selected]
+bg = "#f7f1ff"
+fg = "#200b0a"
+[states.hover]
+bg = "#362323"
+[states.disabled]
+fg = "#aca0a9"
+
+[footer]
+hint_color = "#aca0a9"

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Builtin Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Builtin Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#000000"
+fg_muted = "#595959"
+accent = "#0000bb"
+accent_fg = "#ffffff"
+selection_bg = "#b5d5ff"
+selection_fg = "#000000"
+match_fg = "#bb00bb"
+border = "#cccccc"
+separator = "#ffffff80"
+danger = "#bb0000"
+warning = "#9a9a00"
+success = "#00ad00"
+info = "#0000bb"
+badge_bg = "#ffffff"
+badge_fg = "#000000"
+
+[states.selected]
+bg = "#b5d5ff"
+fg = "#000000"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#595959"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#595959"

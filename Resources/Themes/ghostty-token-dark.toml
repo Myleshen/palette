@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Token Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Token Dark"
+appearance = "dark"
+
+[palette]
+bg = "#262624"
+surface = "#1b1b1a"
+elevated = "#3c3c3a"
+fg = "#e8e4dc"
+fg_muted = "#a4a29c"
+accent = "#96b8d3"
+accent_fg = "#000000"
+selection_bg = "#3a3a37"
+selection_fg = "#e8e4dc"
+match_fg = "#bea5d4"
+border = "#4d4c49"
+separator = "#3c3c3a80"
+danger = "#c67777"
+warning = "#c4a855"
+success = "#7da47a"
+info = "#7b9ebd"
+badge_bg = "#3c3c3a"
+badge_fg = "#e8e4dc"
+
+[states.selected]
+bg = "#3a3a37"
+fg = "#e8e4dc"
+[states.hover]
+bg = "#3c3c3a"
+[states.disabled]
+fg = "#a4a29c"
+
+[footer]
+hint_color = "#a4a29c"

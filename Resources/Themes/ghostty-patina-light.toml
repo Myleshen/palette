@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Patina Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Patina Light"
+appearance = "light"
+
+[palette]
+bg = "#ddd7c4"
+surface = "#d2ccba"
+elevated = "#f0ede4"
+fg = "#2e2a24"
+fg_muted = "#615e53"
+accent = "#2c5660"
+accent_fg = "#ffffff"
+selection_bg = "#bfb8a3"
+selection_fg = "#2e2a24"
+match_fg = "#6d463e"
+border = "#bab4a4"
+separator = "#f0ede480"
+danger = "#9b3b3b"
+warning = "#6e5817"
+success = "#34644c"
+info = "#2f626f"
+badge_bg = "#f0ede4"
+badge_fg = "#2e2a24"
+
+[states.selected]
+bg = "#bfb8a3"
+fg = "#2e2a24"
+[states.hover]
+bg = "#f0ede4"
+[states.disabled]
+fg = "#6b675c"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6b675c"

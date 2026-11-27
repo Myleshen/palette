@@ -1,0 +1,44 @@
+# Ported from Ghostty's bundled "Poimandres White" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Poimandres White"
+appearance = "light"
+
+[palette]
+bg = "#fefeff"
+surface = "#f1f1f2"
+elevated = "#ffffff"
+fg = "#54576e"
+fg_muted = "#737588"
+accent = "#0076a0"
+accent_fg = "#f1f1f1"
+selection_bg = "#969cbd"
+selection_fg = "#32343c"
+match_fg = "#eb8394"
+border = "#e1e2e7"
+separator = "#ffffff80"
+danger = "#ff2090"
+warning = "#b88e10"
+success = "#00a788"
+info = "#6c9bae"
+badge_bg = "#ffffff"
+badge_fg = "#6c7088"
+
+[states.selected]
+bg = "#969cbd"
+fg = "#32343c"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#8f92a5"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#8f92a5"

@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "C64" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · C64"
+appearance = "dark"
+
+[palette]
+bg = "#40318d"
+surface = "#2e2366"
+elevated = "#534698"
+fg = "#d7d0ff"
+fg_muted = "#aea3e7"
+accent = "#c4beff"
+accent_fg = "#535252"
+selection_bg = "#7869c4"
+selection_fg = "#030206"
+match_fg = "#984ca3"
+border = "#56489d"
+separator = "#53469880"
+danger = "#c7746c"
+warning = "#bfce72"
+success = "#55a049"
+info = "#8b7ede"
+badge_bg = "#534698"
+badge_fg = "#c8c2e7"
+
+[states.selected]
+bg = "#7869c4"
+fg = "#030206"
+[states.hover]
+bg = "#534698"
+[states.disabled]
+fg = "#8e83c4"
+
+[footer]
+hint_color = "#8e83c4"

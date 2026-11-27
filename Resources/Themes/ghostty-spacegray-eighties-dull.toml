@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Spacegray Eighties Dull" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Spacegray Eighties Dull"
+appearance = "dark"
+
+[palette]
+bg = "#222222"
+surface = "#181818"
+elevated = "#383838"
+fg = "#c9c6bc"
+fg_muted = "#8f8d86"
+accent = "#8fa3b9"
+accent_fg = "#000000"
+selection_bg = "#272e36"
+selection_fg = "#ffffff"
+match_fg = "#bf83c1"
+border = "#434341"
+separator = "#38383880"
+danger = "#b24a56"
+warning = "#c6735a"
+success = "#92b477"
+info = "#7c8fa5"
+badge_bg = "#383838"
+badge_fg = "#c9c6bc"
+
+[states.selected]
+bg = "#272e36"
+fg = "#ffffff"
+[states.hover]
+bg = "#383838"
+[states.disabled]
+fg = "#8f8d86"
+
+[footer]
+hint_color = "#8f8d86"

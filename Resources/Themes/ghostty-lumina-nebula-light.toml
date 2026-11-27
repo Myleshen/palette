@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Lumina Nebula Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Nebula Light"
+appearance = "light"
+
+[palette]
+bg = "#f8f4ff"
+surface = "#ece8f2"
+elevated = "#fcfaff"
+fg = "#2d2c46"
+fg_muted = "#716f83"
+accent = "#0e417f"
+accent_fg = "#ffffff"
+selection_bg = "#c7c7ef"
+selection_fg = "#2d2c46"
+match_fg = "#72356e"
+border = "#cfccda"
+separator = "#fcfaff80"
+danger = "#932222"
+warning = "#955b01"
+success = "#007650"
+info = "#3f5777"
+badge_bg = "#fcfaff"
+badge_fg = "#2d2c46"
+
+[states.selected]
+bg = "#c7c7ef"
+fg = "#2d2c46"
+[states.hover]
+bg = "#fcfaff"
+[states.disabled]
+fg = "#747287"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#747287"

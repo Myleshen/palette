@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Solar Flare" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Solar Flare"
+appearance = "light"
+
+[palette]
+bg = "#fff9e6"
+surface = "#f2eddb"
+elevated = "#fffcf4"
+fg = "#1a1a1a"
+fg_muted = "#6a6861"
+accent = "#15479a"
+accent_fg = "#ffffff"
+selection_bg = "#f5e1a8"
+selection_fg = "#1a1a1a"
+match_fg = "#673096"
+border = "#d1ccbd"
+separator = "#fffcf480"
+danger = "#8d1818"
+warning = "#685000"
+success = "#0f5c2b"
+info = "#15479a"
+badge_bg = "#fffcf4"
+badge_fg = "#1a1a1a"
+
+[states.selected]
+bg = "#f5e1a8"
+fg = "#1a1a1a"
+[states.hover]
+bg = "#fffcf4"
+[states.disabled]
+fg = "#6a6861"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6a6861"

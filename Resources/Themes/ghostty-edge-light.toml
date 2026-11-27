@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Edge Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Edge Light"
+appearance = "light"
+
+[palette]
+bg = "#fafafa"
+surface = "#ededed"
+elevated = "#fdfdfd"
+fg = "#4b505b"
+fg_muted = "#71737b"
+accent = "#436baf"
+accent_fg = "#ededed"
+selection_bg = "#e3eaf6"
+selection_fg = "#45505b"
+match_fg = "#b05ccc"
+border = "#d7d8da"
+separator = "#fdfdfd80"
+danger = "#d05858"
+warning = "#be7e05"
+success = "#608e32"
+info = "#5079be"
+badge_bg = "#fdfdfd"
+badge_fg = "#4b505b"
+
+[states.selected]
+bg = "#e3eaf6"
+fg = "#45505b"
+[states.hover]
+bg = "#fdfdfd"
+[states.disabled]
+fg = "#888b93"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#888b93"

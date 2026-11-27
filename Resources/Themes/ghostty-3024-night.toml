@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "3024 Night" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · 3024 Night"
+appearance = "dark"
+
+[palette]
+bg = "#090300"
+surface = "#060200"
+elevated = "#221c1a"
+fg = "#a5a2a2"
+fg_muted = "#7a7574"
+accent = "#01a0e4"
+accent_fg = "#000000"
+selection_bg = "#4a4543"
+selection_fg = "#b7b5b5"
+match_fg = "#d6d5d4"
+border = "#282320"
+separator = "#221c1a80"
+danger = "#db2d20"
+warning = "#fded02"
+success = "#01a252"
+info = "#01a0e4"
+badge_bg = "#221c1a"
+badge_fg = "#a5a2a2"
+
+[states.selected]
+bg = "#4a4543"
+fg = "#b7b5b5"
+[states.hover]
+bg = "#221c1a"
+[states.disabled]
+fg = "#6e6a69"
+
+[footer]
+hint_color = "#6e6a69"

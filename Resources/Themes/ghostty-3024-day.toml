@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "3024 Day" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · 3024 Day"
+appearance = "light"
+
+[palette]
+bg = "#f7f7f7"
+surface = "#ebebeb"
+elevated = "#fbfbfb"
+fg = "#4a4543"
+fg_muted = "#757170"
+accent = "#6c6a69"
+accent_fg = "#ebebeb"
+selection_bg = "#a5a2a2"
+selection_fg = "#3b3736"
+match_fg = "#a16a94"
+border = "#d4d3d3"
+separator = "#fbfbfb80"
+danger = "#db2d20"
+warning = "#9e9100"
+success = "#01a252"
+info = "#0098da"
+badge_bg = "#fbfbfb"
+badge_fg = "#4a4543"
+
+[states.selected]
+bg = "#a5a2a2"
+fg = "#3b3736"
+[states.hover]
+bg = "#fbfbfb"
+[states.disabled]
+fg = "#878382"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#878382"

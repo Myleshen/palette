@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Terafox" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Terafox"
+appearance = "dark"
+
+[palette]
+bg = "#152528"
+surface = "#0f1b1d"
+elevated = "#2c3b3e"
+fg = "#e6eaea"
+fg_muted = "#9da5a6"
+accent = "#77a8bc"
+accent_fg = "#000000"
+selection_bg = "#293e40"
+selection_fg = "#e6eaea"
+match_fg = "#b97490"
+border = "#3f4c4f"
+separator = "#2c3b3e80"
+danger = "#e85c51"
+warning = "#fda47f"
+success = "#7aa4a1"
+info = "#5a93aa"
+badge_bg = "#2c3b3e"
+badge_fg = "#e6eaea"
+
+[states.selected]
+bg = "#293e40"
+fg = "#e6eaea"
+[states.hover]
+bg = "#2c3b3e"
+[states.disabled]
+fg = "#9da5a6"
+
+[footer]
+hint_color = "#9da5a6"

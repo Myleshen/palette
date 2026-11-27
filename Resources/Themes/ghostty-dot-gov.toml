@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Dot Gov" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Dot Gov"
+appearance = "dark"
+
+[palette]
+bg = "#262c35"
+surface = "#1b2026"
+elevated = "#3c4149"
+fg = "#ebebeb"
+fg_muted = "#a6a8ab"
+accent = "#27bae8"
+accent_fg = "#000000"
+selection_bg = "#1a4080"
+selection_fg = "#ffffff"
+match_fg = "#7830b0"
+border = "#4d5259"
+separator = "#3c414980"
+danger = "#da3235"
+warning = "#f6bb34"
+success = "#3d9751"
+info = "#17b2e0"
+badge_bg = "#3c4149"
+badge_fg = "#ebebeb"
+
+[states.selected]
+bg = "#1a4080"
+fg = "#ffffff"
+[states.hover]
+bg = "#3c4149"
+[states.disabled]
+fg = "#a6a8ab"
+
+[footer]
+hint_color = "#a6a8ab"

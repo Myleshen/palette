@@ -33,6 +33,53 @@ public struct CaptureResult: Sendable {
     public var copied: Bool
 }
 
+/// Image bytes Palette put on the pasteboard itself, with the thumbnail and
+/// pixel size when the caller already has them. Zero dimensions and a nil
+/// thumbnail are filled in once by `prepared()`, never by the store.
+public struct PaletteClipboardImage: Sendable {
+    public var png: Data
+    public var thumbnail: Data?
+    public var width: Int
+    public var height: Int
+
+    public init(png: Data, thumbnail: Data? = nil, width: Int = 0, height: Int = 0) {
+        self.png = png
+        self.thumbnail = thumbnail
+        self.width = width
+        self.height = height
+    }
+}
+
+/// Bytes Palette put on the pasteboard itself. The clipboard monitor skips
+/// Palette's own writes, so the app records these explicitly to keep `/clip`
+/// complete; path and reveal copies carry no bytes and are never recorded.
+public enum PaletteClipboardCopy: Sendable {
+    case image(PaletteClipboardImage)
+    case files([String], thumbnail: Data?)
+
+    /// Does the one decode or icon lookup a copy needs, so the store only
+    /// writes bytes. Call it off the main actor: a full-size screenshot decode
+    /// is what used to stall the capture path.
+    public func prepared() -> PaletteClipboardCopy {
+        switch self {
+        case .image(var image):
+            if image.width <= 0 || image.height <= 0,
+               let size = ClipboardMonitor.imageSize(of: image.png) {
+                image.width = size.width
+                image.height = size.height
+            }
+            if image.thumbnail == nil {
+                image.thumbnail = ClipboardMonitor.thumbnailPNG(from: image.png)
+            }
+            return .image(image)
+        case .files(let paths, .none):
+            return .files(paths, thumbnail: ClipboardMonitor.fileThumbnail(paths.first))
+        case .files:
+            return self
+        }
+    }
+}
+
 /// What `startRecording` leaves on disk so a relaunch can adopt or clean up the
 /// recorder after a quit or a crash.
 struct RecordingState: Codable, Equatable, Sendable {
@@ -65,6 +112,9 @@ public final class CaptureService {
     /// stops, so the app can show the annotator or the player.
     public var onScreenshot: ((URL) -> Void)?
     public var onRecordingStopped: ((URL) -> Void)?
+    /// Palette's own copy, which the monitor deliberately skips. The app
+    /// records it in history; only bytes, never a path copy.
+    public var onCopiedToPasteboard: ((PaletteClipboardCopy) -> Void)?
     /// Set false for scripted runs: a TCC dialog steals focus from the panel
     /// the flow is checking, and CI cannot grant Screen Recording anyway.
     public var requestsPermission = true
@@ -281,6 +331,7 @@ public final class CaptureService {
     /// grant is missing, so ask for the permission and say what to do.
     private func requireScreenRecording() throws {
         if CGPreflightScreenCaptureAccess() { return }
+        // Native by necessity: macOS owns the TCC permission prompt.
         if requestsPermission, CGRequestScreenCaptureAccess() { return }
         throw CaptureError.failed(
             "Screen Recording is off for Palette. Enable it in System Settings → Privacy & Security → Screen Recording, then try again."
@@ -492,12 +543,19 @@ public final class CaptureService {
     }
 
     private func copyImageToPasteboard(_ url: URL) -> Bool {
-        guard let image = NSImage(contentsOf: url) else { return false }
+        // One read for the pasteboard write and the history row; the old path
+        // read the saved file again after the copy. The bytes go straight onto
+        // the pasteboard, so no full-size decode or TIFF encode runs here.
+        guard let data = try? Data(contentsOf: url) else { return false }
+        let type: NSPasteboard.PasteboardType = url.pathExtension.lowercased() == "jpg"
+            ? NSPasteboard.PasteboardType("public.jpeg")
+            : .png
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        let copied = pasteboard.writeObjects([image])
-        if copied { ClipboardMonitor.notePaletteWrite(pasteboard.changeCount) }
-        return copied
+        guard pasteboard.setData(data, forType: type) else { return false }
+        ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+        onCopiedToPasteboard?(.image(PaletteClipboardImage(png: data)))
+        return true
     }
 
     private func copyFileToPasteboard(_ url: URL) {
@@ -505,6 +563,7 @@ public final class CaptureService {
         pasteboard.clearContents()
         pasteboard.writeObjects([url as NSURL])
         ClipboardMonitor.notePaletteWrite(pasteboard.changeCount)
+        onCopiedToPasteboard?(.files([url.path], thumbnail: nil))
     }
 
     private static func message(_ result: ProcessResult, fallback: String) -> String {

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Selenized Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Selenized Dark"
+appearance = "dark"
+
+[palette]
+bg = "#103c48"
+surface = "#0c2b34"
+elevated = "#28505a"
+fg = "#bacac9"
+fg_muted = "#8aa4a8"
+accent = "#88bdff"
+accent_fg = "#000000"
+selection_bg = "#184956"
+selection_fg = "#53d6c7"
+match_fg = "#ff84cd"
+border = "#2f565f"
+separator = "#28505a80"
+danger = "#fa5750"
+warning = "#dbb32d"
+success = "#75b938"
+info = "#4695f7"
+badge_bg = "#28505a"
+badge_fg = "#b0bfbf"
+
+[states.selected]
+bg = "#184956"
+fg = "#53d6c7"
+[states.hover]
+bg = "#28505a"
+[states.disabled]
+fg = "#768f93"
+
+[footer]
+hint_color = "#768f93"

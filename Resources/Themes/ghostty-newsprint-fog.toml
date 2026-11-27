@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Newsprint Fog" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Newsprint Fog"
+appearance = "light"
+
+[palette]
+bg = "#f2f2f0"
+surface = "#e6e6e4"
+elevated = "#f9f9f8"
+fg = "#333331"
+fg_muted = "#6f6e6d"
+accent = "#4c6990"
+accent_fg = "#ffffff"
+selection_bg = "#ddddd6"
+selection_fg = "#333331"
+match_fg = "#85607f"
+border = "#ccccca"
+separator = "#f9f9f880"
+danger = "#b3402e"
+warning = "#987921"
+success = "#5d7f52"
+info = "#4f6d94"
+badge_bg = "#f9f9f8"
+badge_fg = "#333331"
+
+[states.selected]
+bg = "#ddddd6"
+fg = "#333331"
+[states.hover]
+bg = "#f9f9f8"
+[states.disabled]
+fg = "#767674"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#767674"

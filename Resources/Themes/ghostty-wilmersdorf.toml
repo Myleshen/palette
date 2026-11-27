@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Wilmersdorf" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Wilmersdorf"
+appearance = "dark"
+
+[palette]
+bg = "#282b33"
+surface = "#1d1f25"
+elevated = "#3e4047"
+fg = "#c6c6c6"
+fg_muted = "#909295"
+accent = "#b2cff0"
+accent_fg = "#000000"
+selection_bg = "#3e4047"
+selection_fg = "#c6c6c6"
+match_fg = "#efccfd"
+border = "#484a50"
+separator = "#3e404780"
+danger = "#e06383"
+warning = "#cccccc"
+success = "#7ebebd"
+info = "#a6c1e0"
+badge_bg = "#3e4047"
+badge_fg = "#c6c6c6"
+
+[states.selected]
+bg = "#3e4047"
+fg = "#c6c6c6"
+[states.hover]
+bg = "#3e4047"
+[states.disabled]
+fg = "#8f9093"
+
+[footer]
+hint_color = "#8f9093"

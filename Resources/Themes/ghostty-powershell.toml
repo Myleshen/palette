@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Powershell" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Powershell"
+appearance = "dark"
+
+[palette]
+bg = "#052454"
+surface = "#041a3c"
+elevated = "#1e3a65"
+fg = "#f6f6f7"
+fg_muted = "#a2acbe"
+accent = "#4baaf4"
+accent_fg = "#000000"
+selection_bg = "#f6f6f7"
+selection_fg = "#052454"
+match_fg = "#fe13fa"
+border = "#354e75"
+separator = "#1e3a6580"
+danger = "#c14443"
+warning = "#c4a000"
+success = "#0d8206"
+info = "#585fe3"
+badge_bg = "#1e3a65"
+badge_fg = "#f6f6f7"
+
+[states.selected]
+bg = "#f6f6f7"
+fg = "#052454"
+[states.hover]
+bg = "#1e3a65"
+[states.disabled]
+fg = "#a2acbe"
+
+[footer]
+hint_color = "#a2acbe"

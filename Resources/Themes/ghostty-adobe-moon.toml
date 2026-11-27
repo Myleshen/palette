@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Adobe Moon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Adobe Moon"
+appearance = "dark"
+
+[palette]
+bg = "#54251d"
+surface = "#3c1b15"
+elevated = "#653b34"
+fg = "#fff0d8"
+fg_muted = "#c3a997"
+accent = "#acd8f4"
+accent_fg = "#000000"
+selection_bg = "#7b4033"
+selection_fg = "#fff6e8"
+match_fg = "#efbddc"
+border = "#764e42"
+separator = "#653b3480"
+danger = "#ff9b83"
+warning = "#f6d06d"
+success = "#8ed8a8"
+info = "#8fc8ef"
+badge_bg = "#653b34"
+badge_fg = "#fff0d8"
+
+[states.selected]
+bg = "#7b4033"
+fg = "#fff6e8"
+[states.hover]
+bg = "#653b34"
+[states.disabled]
+fg = "#c3a997"
+
+[footer]
+hint_color = "#c3a997"

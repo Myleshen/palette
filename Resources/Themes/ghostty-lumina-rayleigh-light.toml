@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Lumina Rayleigh Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Rayleigh Light"
+appearance = "light"
+
+[palette]
+bg = "#edf8ff"
+surface = "#e1ecf2"
+elevated = "#f7fcff"
+fg = "#1d2f47"
+fg_muted = "#647284"
+accent = "#004c87"
+accent_fg = "#ffffff"
+selection_bg = "#b5d0e9"
+selection_fg = "#1d2f47"
+match_fg = "#763171"
+border = "#c3d0da"
+separator = "#f7fcff80"
+danger = "#94171b"
+warning = "#a35f00"
+success = "#1e773b"
+info = "#0160a7"
+badge_bg = "#f7fcff"
+badge_fg = "#1d2f47"
+
+[states.selected]
+bg = "#b5d0e9"
+fg = "#1d2f47"
+[states.hover]
+bg = "#f7fcff"
+[states.disabled]
+fg = "#667587"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#667587"

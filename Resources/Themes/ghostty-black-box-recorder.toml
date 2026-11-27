@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Black Box Recorder" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Black Box Recorder"
+appearance = "dark"
+
+[palette]
+bg = "#050608"
+surface = "#040406"
+elevated = "#1e1f21"
+fg = "#f4f1e8"
+fg_muted = "#a09f9a"
+accent = "#ffcc33"
+accent_fg = "#000000"
+selection_bg = "#2b2414"
+selection_fg = "#fff8e7"
+match_fg = "#e4b9ed"
+border = "#353535"
+separator = "#1e1f2180"
+danger = "#ff806d"
+warning = "#f1ca63"
+success = "#78d19d"
+info = "#8cb2ed"
+badge_bg = "#1e1f21"
+badge_fg = "#f4f1e8"
+
+[states.selected]
+bg = "#2b2414"
+fg = "#fff8e7"
+[states.hover]
+bg = "#1e1f21"
+[states.disabled]
+fg = "#a09f9a"
+
+[footer]
+hint_color = "#a09f9a"

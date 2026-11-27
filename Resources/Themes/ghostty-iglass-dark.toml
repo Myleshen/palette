@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "iglass Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · iglass Dark"
+appearance = "dark"
+
+[palette]
+bg = "#17181c"
+surface = "#111114"
+elevated = "#2e2f33"
+fg = "#f7f8fd"
+fg_muted = "#a9aaae"
+accent = "#a3cdff"
+accent_fg = "#000000"
+selection_bg = "#124172"
+selection_fg = "#f7f8fd"
+match_fg = "#e7b9ff"
+border = "#444549"
+separator = "#2e2f3380"
+danger = "#ff7f70"
+warning = "#ffd60a"
+success = "#32d74b"
+info = "#62a7ff"
+badge_bg = "#2e2f33"
+badge_fg = "#f7f8fd"
+
+[states.selected]
+bg = "#124172"
+fg = "#f7f8fd"
+[states.hover]
+bg = "#2e2f33"
+[states.disabled]
+fg = "#a9aaae"
+
+[footer]
+hint_color = "#a9aaae"

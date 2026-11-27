@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Nord Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Nord Light"
+appearance = "light"
+
+[palette]
+bg = "#e5e9f0"
+surface = "#dadde4"
+elevated = "#f3f5f8"
+fg = "#414858"
+fg_muted = "#646976"
+accent = "#476482"
+accent_fg = "#dddddd"
+selection_bg = "#f3f5f8"
+selection_fg = "#4c556a"
+match_fg = "#b48ead"
+border = "#c4c9d2"
+separator = "#f3f5f880"
+danger = "#bf616a"
+warning = "#a08142"
+success = "#748d5d"
+info = "#6989a8"
+badge_bg = "#f3f5f8"
+badge_fg = "#414858"
+
+[states.selected]
+bg = "#f3f5f8"
+fg = "#4c556a"
+[states.hover]
+bg = "#f3f5f8"
+[states.disabled]
+fg = "#7a808d"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7a808d"

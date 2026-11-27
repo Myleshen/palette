@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Moss & Ember" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Moss & Ember"
+appearance = "dark"
+
+[palette]
+bg = "#18231f"
+surface = "#111916"
+elevated = "#2f3935"
+fg = "#e9ddc6"
+fg_muted = "#a09c8c"
+accent = "#9ebcc0"
+accent_fg = "#000000"
+selection_bg = "#36483a"
+selection_fg = "#aeb4b2"
+match_fg = "#c8a4b6"
+border = "#424840"
+separator = "#2f393580"
+danger = "#c5755e"
+warning = "#c6a667"
+success = "#829d69"
+info = "#799ca0"
+badge_bg = "#2f3935"
+badge_fg = "#e9ddc6"
+
+[states.selected]
+bg = "#36483a"
+fg = "#aeb4b2"
+[states.hover]
+bg = "#2f3935"
+[states.disabled]
+fg = "#a09c8c"
+
+[footer]
+hint_color = "#a09c8c"

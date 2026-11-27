@@ -1,6 +1,21 @@
 import XCTest
 @testable import PaletteCore
+@testable import PalettePlatform
 @testable import PaletteProviders
+
+private actor AtlasBridge: HostBridge {
+    private var notes: [String] = []
+
+    func lastNotification() -> String? { notes.last }
+
+    func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String? { nil }
+
+    func notify(_ message: String) async {
+        notes.append(message)
+    }
+
+    func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {}
+}
 
 final class AtlasProviderTests: XCTestCase {
     private var home: URL!
@@ -163,6 +178,91 @@ final class AtlasProviderTests: XCTestCase {
         let provider = AtlasProvider(bridge: nil, stateFile: stateFile, previewDirectory: previewDir, home: home.path)
         let rows = try await provider.search(SearchRequest(text: "", isBound: true))
         XCTAssertNil(rows.first?.actions.first { $0.id == "review" })
+    }
+
+    // MARK: - Tool resolution
+
+    func testReviewResolvesAtlasThroughToolLocator() async throws {
+        let file = try write("note.md", "---\nreview: true\n---\n# Note\n")
+        try writeState([file.path: ["title": "Note", "kind": "artifact"]])
+
+        // atlas may exist in /opt/homebrew/bin, which ToolLocator probes after
+        // PATH, so shadow PATH with the directory holding the fake binary.
+        let tools = home.appendingPathComponent("tools", isDirectory: true)
+        try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        let log = home.appendingPathComponent("review.log")
+        let fake = tools.appendingPathComponent("atlas")
+        try "#!/bin/sh\nprintf '%s\\n' \"$@\" > '\(log.path)'\n".write(to: fake, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fake.path)
+
+        let originalPath = ProcessInfo.processInfo.environment["PATH"]
+        setenv("PATH", tools.path, 1)
+        ToolLocator.shared.configure(extraPaths: [tools.path])
+        defer {
+            setenv("PATH", originalPath ?? "/usr/bin:/bin", 1)
+            ToolLocator.shared.configure(extraPaths: [])
+        }
+        XCTAssertEqual(ToolLocator.shared.path(for: "atlas"), fake.path)
+
+        let bridge = AtlasBridge()
+        let provider = AtlasProvider(bridge: bridge, stateFile: stateFile, previewDirectory: previewDir, home: home.path)
+        let rows = try await provider.search(SearchRequest(text: "", isBound: true))
+        let item = try XCTUnwrap(rows.first)
+        let review = try XCTUnwrap(item.actions.first { $0.id == "review" })
+        try await provider.activate(item, action: review)
+
+        XCTAssertEqual(try String(contentsOf: log, encoding: .utf8), "review\n\(file.path)\n")
+        let note = await bridge.lastNotification()
+        XCTAssertEqual(note, "Reviewed Note")
+    }
+
+    func testReviewWithoutAtlasNotifies() async throws {
+        let file = try write("note.md", "---\nreview: true\n---\n# Note\n")
+        try writeState([file.path: ["title": "Note", "kind": "artifact"]])
+        let bridge = AtlasBridge()
+        // The binary cannot be removed from this machine, so the lookup is
+        // stubbed empty instead of relying on atlas being absent.
+        let provider = AtlasProvider(
+            bridge: bridge,
+            stateFile: stateFile,
+            previewDirectory: previewDir,
+            home: home.path,
+            toolPath: { nil }
+        )
+        let rows = try await provider.search(SearchRequest(text: "", isBound: true))
+        let item = try XCTUnwrap(rows.first)
+        let review = try XCTUnwrap(item.actions.first { $0.id == "review" })
+        do {
+            try await provider.activate(item, action: review)
+            XCTFail("review should fail without atlas")
+        } catch {
+            XCTAssertEqual(error as? ProviderError, .toolMissing("atlas"))
+        }
+        let note = await bridge.lastNotification()
+        XCTAssertEqual(note, "atlas is not installed")
+    }
+
+    func testSetupRowSaysInstallWhenAtlasIsMissing() async throws {
+        let missing = AtlasProvider(
+            bridge: nil,
+            stateFile: stateFile,
+            previewDirectory: previewDir,
+            home: home.path,
+            toolPath: { nil }
+        )
+        let missingRow = try await missing.search(SearchRequest(text: "", isBound: true)).first
+        XCTAssertEqual(missingRow?.title, "Install atlas")
+        XCTAssertEqual(missingRow?.badge, "SETUP")
+
+        let present = AtlasProvider(
+            bridge: nil,
+            stateFile: stateFile,
+            previewDirectory: previewDir,
+            home: home.path,
+            toolPath: { "/opt/homebrew/bin/atlas" }
+        )
+        let presentRow = try await present.search(SearchRequest(text: "", isBound: true)).first
+        XCTAssertEqual(presentRow?.title, "Atlas state not found — run `atlas`")
     }
 
     // MARK: - Fixtures

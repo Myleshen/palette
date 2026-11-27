@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Golden Mischief" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Golden Mischief"
+appearance = "dark"
+
+[palette]
+bg = "#d7b37a"
+surface = "#9b8158"
+elevated = "#dbbb87"
+fg = "#30233d"
+fg_muted = "#594542"
+accent = "#04145b"
+accent_fg = "#ffffff"
+selection_bg = "#563d70"
+selection_fg = "#ffffff"
+match_fg = "#632b85"
+border = "#b6966e"
+separator = "#dbbb8780"
+danger = "#8b1838"
+warning = "#5f4300"
+success = "#145232"
+info = "#233f88"
+badge_bg = "#dbbb87"
+badge_fg = "#30233d"
+
+[states.selected]
+bg = "#563d70"
+fg = "#ffffff"
+[states.hover]
+bg = "#dbbb87"
+[states.disabled]
+fg = "#6a5552"
+
+[footer]
+hint_color = "#6a5552"

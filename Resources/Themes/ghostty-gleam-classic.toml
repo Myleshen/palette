@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Gleam Classic" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Gleam Classic"
+appearance = "dark"
+
+[palette]
+bg = "#1e1e1e"
+surface = "#161616"
+elevated = "#343434"
+fg = "#ffffff"
+fg_muted = "#b0b0b0"
+accent = "#9ce7ff"
+accent_fg = "#000000"
+selection_bg = "#777777"
+selection_fg = "#000000"
+match_fg = "#ffaff3"
+border = "#4b4b4b"
+separator = "#34343480"
+danger = "#f44747"
+warning = "#ffd596"
+success = "#aadd8b"
+info = "#6796e6"
+badge_bg = "#343434"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#777777"
+fg = "#000000"
+[states.hover]
+bg = "#343434"
+[states.disabled]
+fg = "#b0b0b0"
+
+[footer]
+hint_color = "#b0b0b0"

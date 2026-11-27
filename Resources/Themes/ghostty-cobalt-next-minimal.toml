@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Cobalt Next Minimal" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Cobalt Next Minimal"
+appearance = "dark"
+
+[palette]
+bg = "#0b1c24"
+surface = "#08141a"
+elevated = "#23333a"
+fg = "#d7deea"
+fg_muted = "#909aa5"
+accent = "#7ac0eb"
+accent_fg = "#000000"
+selection_bg = "#37b5b4"
+selection_fg = "#333333"
+match_fg = "#f3ccef"
+border = "#34434c"
+separator = "#23333a80"
+danger = "#ff657a"
+warning = "#ffc64c"
+success = "#8cc98f"
+info = "#409dd4"
+badge_bg = "#23333a"
+badge_fg = "#d7deea"
+
+[states.selected]
+bg = "#37b5b4"
+fg = "#333333"
+[states.hover]
+bg = "#23333a"
+[states.disabled]
+fg = "#909aa5"
+
+[footer]
+hint_color = "#909aa5"

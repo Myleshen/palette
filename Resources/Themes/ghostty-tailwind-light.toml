@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Tailwind Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Tailwind Light"
+appearance = "light"
+
+[palette]
+bg = "#fafafa"
+surface = "#ededed"
+elevated = "#fdfdfd"
+fg = "#0a0a0a"
+fg_muted = "#5e5e5e"
+accent = "#0369a1"
+accent_fg = "#ffffff"
+selection_bg = "#e2e8f0"
+selection_fg = "#0a0a0a"
+match_fg = "#a21caf"
+border = "#cacaca"
+separator = "#fdfdfd80"
+danger = "#b91c1c"
+warning = "#a16207"
+success = "#15803d"
+info = "#0369a1"
+badge_bg = "#fdfdfd"
+badge_fg = "#0a0a0a"
+
+[states.selected]
+bg = "#e2e8f0"
+fg = "#0a0a0a"
+[states.hover]
+bg = "#fdfdfd"
+[states.disabled]
+fg = "#5e5e5e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#5e5e5e"

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Redacted" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Redacted"
+appearance = "light"
+
+[palette]
+bg = "#fffdf8"
+surface = "#f2f0ec"
+elevated = "#fffefc"
+fg = "#171717"
+fg_muted = "#686866"
+accent = "#123a78"
+accent_fg = "#ffffff"
+selection_bg = "#e8e4dc"
+selection_fg = "#171717"
+match_fg = "#5e2e86"
+border = "#d1cfcb"
+separator = "#fffefc80"
+danger = "#821e1e"
+warning = "#654b00"
+success = "#125b31"
+info = "#17458d"
+badge_bg = "#fffefc"
+badge_fg = "#171717"
+
+[states.selected]
+bg = "#e8e4dc"
+fg = "#171717"
+[states.hover]
+bg = "#fffefc"
+[states.disabled]
+fg = "#686866"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#686866"

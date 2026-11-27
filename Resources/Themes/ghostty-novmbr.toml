@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "novmbr" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · novmbr"
+appearance = "dark"
+
+[palette]
+bg = "#241d1a"
+surface = "#1a1513"
+elevated = "#3a3431"
+fg = "#c7b8ac"
+fg_muted = "#90837a"
+accent = "#5eaaa8"
+accent_fg = "#363535"
+selection_bg = "#c7b8ac"
+selection_fg = "#241d1a"
+match_fg = "#b5896e"
+border = "#453c37"
+separator = "#3a343180"
+danger = "#9f6434"
+warning = "#cca75f"
+success = "#9dac5f"
+info = "#2f7d7c"
+badge_bg = "#3a3431"
+badge_fg = "#c7b8ac"
+
+[states.selected]
+bg = "#c7b8ac"
+fg = "#241d1a"
+[states.hover]
+bg = "#3a3431"
+[states.disabled]
+fg = "#8e8279"
+
+[footer]
+hint_color = "#8e8279"

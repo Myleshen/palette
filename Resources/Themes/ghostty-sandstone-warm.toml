@@ -1,0 +1,43 @@
+# Ported from Ghostty's bundled "Sandstone Warm" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Sandstone Warm"
+appearance = "light"
+
+[palette]
+bg = "#fdf6e3"
+surface = "#f0ead8"
+elevated = "#fefbf2"
+fg = "#3e3220"
+fg_muted = "#7a705e"
+accent = "#3e3220"
+accent_fg = "#ffffff"
+selection_bg = "#e8dfc4"
+selection_fg = "#635f54"
+match_fg = "#b52d6e"
+border = "#d7cfbc"
+separator = "#fefbf280"
+danger = "#cf2522"
+warning = "#865e00"
+success = "#5d7b00"
+info = "#0d6eb2"
+badge_bg = "#fefbf2"
+badge_fg = "#3e3220"
+
+[states.selected]
+bg = "#e8dfc4"
+fg = "#635f54"
+[states.hover]
+bg = "#fefbf2"
+[states.disabled]
+fg = "#817764"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#817764"

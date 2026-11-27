@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Hivacruz" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Hivacruz"
+appearance = "dark"
+
+[palette]
+bg = "#132638"
+surface = "#0e1b28"
+elevated = "#2b3c4c"
+fg = "#ede4e4"
+fg_muted = "#a1a2a8"
+accent = "#9da3b9"
+accent_fg = "#000000"
+selection_bg = "#5e6687"
+selection_fg = "#e6e7ed"
+match_fg = "#dfe2f1"
+border = "#3f4c5a"
+separator = "#2b3c4c80"
+danger = "#c94922"
+warning = "#c08b30"
+success = "#ac9739"
+info = "#3d8fd1"
+badge_bg = "#2b3c4c"
+badge_fg = "#ede4e4"
+
+[states.selected]
+bg = "#5e6687"
+fg = "#e6e7ed"
+[states.hover]
+bg = "#2b3c4c"
+[states.disabled]
+fg = "#a1a2a8"
+
+[footer]
+hint_color = "#a1a2a8"

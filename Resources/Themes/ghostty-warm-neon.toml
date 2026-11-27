@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Warm Neon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Warm Neon"
+appearance = "dark"
+
+[palette]
+bg = "#404040"
+surface = "#2e2e2e"
+elevated = "#535353"
+fg = "#b3dfba"
+fg_muted = "#95b29b"
+accent = "#30ff24"
+accent_fg = "#000000"
+selection_bg = "#b0ad21"
+selection_fg = "#3d3d3d"
+match_fg = "#f674ba"
+border = "#565f58"
+separator = "#53535380"
+danger = "#f25253"
+warning = "#dae145"
+success = "#39b13a"
+info = "#6285ec"
+badge_bg = "#535353"
+badge_fg = "#afdab6"
+
+[states.selected]
+bg = "#b0ad21"
+fg = "#3d3d3d"
+[states.hover]
+bg = "#535353"
+[states.disabled]
+fg = "#88a48d"
+
+[footer]
+hint_color = "#88a48d"

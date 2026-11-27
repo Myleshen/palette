@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Haunted House" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Haunted House"
+appearance = "dark"
+
+[palette]
+bg = "#23394e"
+surface = "#192938"
+elevated = "#394d60"
+fg = "#f1f4ed"
+fg_muted = "#a9b3b5"
+accent = "#b8d6ec"
+accent_fg = "#000000"
+selection_bg = "#40566a"
+selection_fg = "#ffffff"
+match_fg = "#d0c2e0"
+border = "#4c5e6e"
+separator = "#394d6080"
+danger = "#ed9b8c"
+warning = "#e5cb7c"
+success = "#9fcba7"
+info = "#9fc7e5"
+badge_bg = "#394d60"
+badge_fg = "#f1f4ed"
+
+[states.selected]
+bg = "#40566a"
+fg = "#ffffff"
+[states.hover]
+bg = "#394d60"
+[states.disabled]
+fg = "#a9b3b5"
+
+[footer]
+hint_color = "#a9b3b5"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Everblush" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Everblush"
+appearance = "dark"
+
+[palette]
+bg = "#141b1e"
+surface = "#0e1316"
+elevated = "#2c3234"
+fg = "#dadada"
+fg_muted = "#959798"
+accent = "#71baf2"
+accent_fg = "#000000"
+selection_bg = "#2c3234"
+selection_fg = "#dadada"
+match_fg = "#ce89df"
+border = "#3c4144"
+separator = "#2c323480"
+danger = "#e57474"
+warning = "#e5c76b"
+success = "#8ccf7e"
+info = "#67b0e8"
+badge_bg = "#2c3234"
+badge_fg = "#dadada"
+
+[states.selected]
+bg = "#2c3234"
+fg = "#dadada"
+[states.hover]
+bg = "#2c3234"
+[states.disabled]
+fg = "#959798"
+
+[footer]
+hint_color = "#959798"

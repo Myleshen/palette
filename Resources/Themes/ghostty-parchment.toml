@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Parchment" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Parchment"
+appearance = "light"
+
+[palette]
+bg = "#fdf7e7"
+surface = "#f0ebdb"
+elevated = "#fefbf4"
+fg = "#1a1a1a"
+fg_muted = "#696762"
+accent = "#123a78"
+accent_fg = "#ffffff"
+selection_bg = "#e5dcc3"
+selection_fg = "#1a1a1a"
+match_fg = "#523073"
+border = "#d0cbbe"
+separator = "#fefbf480"
+danger = "#851c1c"
+warning = "#685000"
+success = "#0d6030"
+info = "#164a9b"
+badge_bg = "#fefbf4"
+badge_fg = "#1a1a1a"
+
+[states.selected]
+bg = "#e5dcc3"
+fg = "#1a1a1a"
+[states.hover]
+bg = "#fefbf4"
+[states.disabled]
+fg = "#696762"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#696762"

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "London Columbia Road" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · London Columbia Road"
+appearance = "light"
+
+[palette]
+bg = "#f8f5ec"
+surface = "#ece9e0"
+elevated = "#fcfbf6"
+fg = "#1f3a2f"
+fg_muted = "#65746b"
+accent = "#317181"
+accent_fg = "#ffffff"
+selection_bg = "#ece5d0"
+selection_fg = "#1f3a2f"
+match_fg = "#c45f8a"
+border = "#cdd0c6"
+separator = "#fcfbf680"
+danger = "#c14a4a"
+warning = "#b18800"
+success = "#5a8a3a"
+info = "#3a7a8a"
+badge_bg = "#fcfbf6"
+badge_fg = "#1f3a2f"
+
+[states.selected]
+bg = "#ece5d0"
+fg = "#1f3a2f"
+[states.hover]
+bg = "#fcfbf6"
+[states.disabled]
+fg = "#6b7b71"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6b7b71"

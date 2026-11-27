@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "13th Floor" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · 13th Floor"
+appearance = "dark"
+
+[palette]
+bg = "#4a0710"
+surface = "#35050c"
+elevated = "#5c2028"
+fg = "#f2e2c8"
+fg_muted = "#b79588"
+accent = "#93a8b9"
+accent_fg = "#000000"
+selection_bg = "#c5b4b7"
+selection_fg = "#47443e"
+match_fg = "#c09cb1"
+border = "#6c3335"
+separator = "#5c202880"
+danger = "#e07f70"
+warning = "#d0af63"
+success = "#9eae80"
+info = "#849caf"
+badge_bg = "#5c2028"
+badge_fg = "#f2e2c8"
+
+[states.selected]
+bg = "#c5b4b7"
+fg = "#47443e"
+[states.hover]
+bg = "#5c2028"
+[states.disabled]
+fg = "#b79588"
+
+[footer]
+hint_color = "#b79588"

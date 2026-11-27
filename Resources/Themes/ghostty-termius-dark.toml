@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Termius Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Termius Dark"
+appearance = "dark"
+
+[palette]
+bg = "#141729"
+surface = "#0e111e"
+elevated = "#2c2e3e"
+fg = "#29ba6c"
+fg_muted = "#349163"
+accent = "#6ba0c3"
+accent_fg = "#000000"
+selection_bg = "#1b6649"
+selection_fg = "#a6e1c3"
+match_fg = "#ff7dc5"
+border = "#173736"
+separator = "#2c2e3e80"
+danger = "#f24e50"
+warning = "#eca855"
+success = "#008463"
+info = "#1369a5"
+badge_bg = "#2c2e3e"
+badge_fg = "#21b568"
+
+[states.selected]
+bg = "#1b6649"
+fg = "#a6e1c3"
+[states.hover]
+bg = "#2c2e3e"
+[states.disabled]
+fg = "#1c7e52"
+
+[footer]
+hint_color = "#1c7e52"

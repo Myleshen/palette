@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Atom One Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Atom One Dark"
+appearance = "dark"
+
+[palette]
+bg = "#21252b"
+surface = "#181b1f"
+elevated = "#373b40"
+fg = "#abb2bf"
+fg_muted = "#858c96"
+accent = "#61afef"
+accent_fg = "#000000"
+selection_bg = "#323844"
+selection_fg = "#abb2bf"
+match_fg = "#c678dd"
+border = "#3d4149"
+separator = "#373b4080"
+danger = "#e06c75"
+warning = "#e5c07b"
+success = "#98c379"
+info = "#61afef"
+badge_bg = "#373b40"
+badge_fg = "#abb2bf"
+
+[states.selected]
+bg = "#323844"
+fg = "#abb2bf"
+[states.hover]
+bg = "#373b40"
+[states.disabled]
+fg = "#7b818b"
+
+[footer]
+hint_color = "#7b818b"

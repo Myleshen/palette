@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Clu" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Clu"
+appearance = "dark"
+
+[palette]
+bg = "#000d15"
+surface = "#00090f"
+elevated = "#1a252c"
+fg = "#fdd48d"
+fg_muted = "#a48e63"
+accent = "#00b5e4"
+accent_fg = "#000000"
+selection_bg = "#1a252c"
+selection_fg = "#fdd48d"
+match_fg = "#e96700"
+border = "#33352d"
+separator = "#1a252c80"
+danger = "#f60004"
+warning = "#ffff0f"
+success = "#00b5e4"
+info = "#e96700"
+badge_bg = "#1a252c"
+badge_fg = "#fdd48d"
+
+[states.selected]
+bg = "#1a252c"
+fg = "#fdd48d"
+[states.hover]
+bg = "#1a252c"
+[states.disabled]
+fg = "#a48e63"
+
+[footer]
+hint_color = "#a48e63"

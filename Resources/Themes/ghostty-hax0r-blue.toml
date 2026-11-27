@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "HaX0R Blue" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · HaX0R Blue"
+appearance = "dark"
+
+[palette]
+bg = "#010515"
+surface = "#01040f"
+elevated = "#1a1e2c"
+fg = "#11b7ff"
+fg_muted = "#157eb2"
+accent = "#10b6ff"
+accent_fg = "#000000"
+selection_bg = "#c1e4ff"
+selection_fg = "#5f5f5f"
+match_fg = "#10b6ff"
+border = "#042944"
+separator = "#1a1e2c80"
+danger = "#10b6ff"
+warning = "#10b6ff"
+success = "#10b6ff"
+info = "#10b6ff"
+badge_bg = "#1a1e2c"
+badge_fg = "#11b7ff"
+
+[states.selected]
+bg = "#c1e4ff"
+fg = "#5f5f5f"
+[states.hover]
+bg = "#1a1e2c"
+[states.disabled]
+fg = "#0b79ad"
+
+[footer]
+hint_color = "#0b79ad"

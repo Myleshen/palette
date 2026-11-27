@@ -67,7 +67,7 @@ final class TerminalSessionTests: XCTestCase {
             script,
             "'/opt/homebrew/bin/zellij' attach 'Work' || "
                 + "{ '/opt/homebrew/bin/zellij' delete-session --force 'Work'; "
-                + "exec '/opt/homebrew/bin/zellij' attach --create 'Work'; }"
+                + "exec '/opt/homebrew/bin/zellij' --session 'Work'; }"
         )
         XCTAssertTrue(
             ZellijLauncher.attachScript(zellij: "/z", name: "Work", create: true)

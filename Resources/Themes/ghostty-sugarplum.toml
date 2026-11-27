@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Sugarplum" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Sugarplum"
+appearance = "dark"
+
+[palette]
+bg = "#111147"
+surface = "#0c0c33"
+elevated = "#292959"
+fg = "#e081e1"
+fg_muted = "#a769bc"
+accent = "#fa5dfd"
+accent_fg = "#000000"
+selection_bg = "#5ca8dc"
+selection_fg = "#38343d"
+match_fg = "#d0beee"
+border = "#392765"
+separator = "#29295980"
+danger = "#5ca8dc"
+warning = "#249a84"
+success = "#53b397"
+info = "#db7ddd"
+badge_bg = "#292959"
+badge_fg = "#db7ddd"
+
+[states.selected]
+bg = "#5ca8dc"
+fg = "#38343d"
+[states.hover]
+bg = "#292959"
+[states.disabled]
+fg = "#9457a9"
+
+[footer]
+hint_color = "#9457a9"

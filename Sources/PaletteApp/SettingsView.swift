@@ -1,6 +1,8 @@
 import AppKit
 import ApplicationServices
+import AVFoundation
 import CoreGraphics
+import CoreText
 import ServiceManagement
 import SwiftUI
 import PaletteCore
@@ -47,6 +49,7 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
     case providerFiles
     case configFiles
     case diagnostics
+    case theming
 
     var id: Int { rawValue }
     var title: String {
@@ -70,6 +73,7 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providerFiles: return "Provider Files"
         case .configFiles: return "Config Files"
         case .diagnostics: return "Diagnostics"
+        case .theming: return "Theming"
         }
     }
     var icon: String {
@@ -93,6 +97,7 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providerFiles: return "folder.fill"
         case .configFiles: return "doc.text.fill"
         case .diagnostics: return "stethoscope"
+        case .theming: return "paintbrush.pointed.fill"
         }
     }
     /// Fixed tile colours like System Settings, deliberately not read from the
@@ -118,6 +123,7 @@ enum SettingsTab: Int, CaseIterable, Identifiable {
         case .providerFiles: return Color(red: 0.76, green: 0.53, blue: 0.16)
         case .configFiles: return Color(red: 0.36, green: 0.42, blue: 0.50)
         case .diagnostics: return Color(red: 0.20, green: 0.62, blue: 0.52)
+        case .theming: return Color(red: 0.80, green: 0.36, blue: 0.22)
         }
     }
 }
@@ -135,8 +141,9 @@ private extension SettingsTab {
             .search, .ask, .terminal, .bookmarks, .cheatsheets, .webApps,
             .screenshots, .afterCapture, .recordings, .captures,
         ]),
-        SettingsTabGroup(title: "System", tabs: [.about, .providers]),
+        SettingsTabGroup(title: "Theming", tabs: [.theming]),
         SettingsTabGroup(title: "Advanced", tabs: [.providerFiles, .configFiles, .diagnostics]),
+        SettingsTabGroup(title: "System", tabs: [.about, .providers]),
     ]
 }
 
@@ -243,6 +250,7 @@ struct SettingsView: View {
 
     @ObservedObject private var themeManager: ThemeManager
     @ObservedObject private var updates: UpdateService
+    @ObservedObject private var theming: ThemingEngine
     @State private var config: PaletteConfig
     /// The last values actually written to disk. A row with an invalid value
     /// keeps what the user typed on screen while the file keeps this.
@@ -294,6 +302,9 @@ struct SettingsView: View {
     @State private var terminalShellChoice: String
     @State private var cheatsheetFolders: [String]
     @State private var cheatsheetExtensions: String
+    @State private var wallpaperPreviewImage: NSImage?
+    @State private var copiedInclude: String?
+    @State private var removePoliciesPending = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
@@ -302,7 +313,16 @@ struct SettingsView: View {
     /// Bundle ids the clipboard ignores, with names resolved from installed and
     /// running apps only while this pane is open.
     @State private var ignoredAppChoices: [AppRecord] = []
+    /// Running apps are refreshed by workspace notifications instead of being
+    /// read from NSWorkspace on every body pass.
+    @State private var runningAppChoices: [(id: String, name: String)] = []
     @State private var ignoredAppDraft = ""
+    /// Device and font lists are read off-main once per pane appearance; the
+    /// old computed properties reran AVFoundation and font enumeration on
+    /// every re-render.
+    @State private var microphones: [(id: String, name: String)] = []
+    @State private var captureDisplays: [CaptureDisplay] = []
+    @State private var fontFamilies: [String] = []
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -330,6 +350,7 @@ struct SettingsView: View {
         config: PaletteConfig,
         keepAwake: KeepAwakeService,
         themeManager: ThemeManager,
+        theming: ThemingEngine,
         themesDirectory: URL,
         accessibilityTrusted: Bool,
         providers: [ProviderSettingsInfo],
@@ -402,6 +423,7 @@ struct SettingsView: View {
         self.onOpen = onOpen
         self.onExportBackup = onExportBackup
         self.onForgetLearned = onForgetLearned
+        _theming = ObservedObject(wrappedValue: theming)
     }
 
     private var theme: Theme { themeManager.theme }
@@ -449,6 +471,23 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("The key is deleted from the encrypted local key file. This cannot be undone.")
+            }
+            .confirmationDialog(
+                "Remove the managed palette policies?",
+                isPresented: $removePoliciesPending,
+                titleVisibility: .visible
+            ) {
+                Button(theming.supportsLegacyPolicyCLI ? "Remove policies" : "Show removal steps",
+                       role: .destructive) {
+                    Task { @MainActor in
+                        await theming.removePolicies(config.theming)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(theming.supportsLegacyPolicyCLI
+                    ? "Each selected browser stops using Palette's theme. Running browsers may need a restart."
+                    : "macOS 27 removed profiles install; remove Palette under System Settings → General → Device Management → Profiles.")
             }
     }
 
@@ -982,6 +1021,15 @@ struct SettingsView: View {
         )
     }
 
+    private var previewSizeAutomatic: Binding<Bool> {
+        Binding(
+            get: { config.typography.previewSize == 0 },
+            set: { automatic in
+                config.typography.previewSize = automatic ? 0 : 13
+            }
+        )
+    }
+
     /// 0 is the loader's sentinel for "Kitty's size, then the theme".
     private var terminalFontSizeAutomatic: Binding<Bool> {
         Binding(
@@ -1014,6 +1062,7 @@ struct SettingsView: View {
         case .providerFiles: providerFilesPane
         case .configFiles: configFilesPane
         case .diagnostics: diagnosticsPane
+        case .theming: themingPane
         }
     }
 
@@ -1036,7 +1085,7 @@ struct SettingsView: View {
             .init(title: "Editor", tab: .general, anchor: "row-Editor", keywords: "editor neovide vscode cursor zed"),
             .init(title: "Terminal", tab: .general, anchor: "row-Terminal", keywords: "terminal binary zellij project command embedded"),
             .init(title: "Terminal app", tab: .general, anchor: "row-Terminal app", keywords: "terminal kitty ghostty ssh docker github external app"),
-            .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries poll clear retention secrets"),
+            .init(title: "Clipboard history", tab: .general, anchor: "row-Record clipboard history", keywords: "clipboard history entries text images files poll clear retention secrets"),
             .init(title: "Ignored clipboard apps", tab: .general, anchor: "row-Never record from", keywords: "clipboard ignore apps password manager 1password secrets bundle id"),
             .init(title: "Commands", tab: .general, anchor: "general-commands", keywords: "command prefix provider slash"),
             .init(title: "Command prefix", tab: .general, anchor: "row-Command prefix", keywords: "prefix provider command slash"),
@@ -1047,11 +1096,13 @@ struct SettingsView: View {
             .init(title: "Search placeholder", tab: .launcher, anchor: "row-Placeholder", keywords: "search hint placeholder text"),
             .init(title: "App order", tab: .launcher, anchor: "launcher-tabs", keywords: "alphabetical frequent sorting"),
             .init(title: "Preview layout", tab: .launcher, anchor: "row-Preview", keywords: "preview beside below layout"),
-            .init(title: "Themes", tab: .appearance, anchor: "appearance-theme", keywords: "theme dark light catppuccin gruvbox aetheria glass material"),
+            .init(title: "Palette", tab: .theming, anchor: "appearance-theme", keywords: "palette theme browser ghostty search preview dark light catppuccin gruvbox aetheria"),
+            .init(title: "Themes", tab: .theming, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
             .init(title: "Mono size", tab: .appearance, anchor: "row-Mono size", keywords: "font size mono code typography"),
+            .init(title: "Preview text", tab: .appearance, anchor: "row-Preview text", keywords: "font size preview text typography"),
             .init(title: "Launcher shortcut", tab: .shortcuts, anchor: "row-Launcher shortcut", keywords: "hotkey shortcut launcher"),
             .init(title: "Global shortcuts", tab: .shortcuts, anchor: "shortcuts-global", keywords: "global hotkey shortcut launcher clipboard terminal ask"),
             .init(title: "Clipboard shortcut", tab: .shortcuts, anchor: "row-Clipboard shortcut", keywords: "hotkey shortcut clipboard"),
@@ -1093,6 +1144,14 @@ struct SettingsView: View {
             .init(title: "File indexing", tab: .providers, anchor: "providers-indexing", keywords: "home folder index consent fd walk permissions privacy"),
             .init(title: "Config Files", tab: .configFiles, anchor: "config-files", keywords: "config log crash backup export reveal diagnostics"),
             .init(title: "Diagnostics", tab: .diagnostics, anchor: "diagnostics-lines", keywords: "diagnostics startup warnings log"),
+            .init(title: "Theming", tab: .theming, anchor: "theming-section", keywords: "theming cross app palette terminal editor export managed files"),
+            .init(title: "Other apps", tab: .theming, anchor: "theming-section", keywords: "other apps palette source theme wallpaper extract desktop picture follow"),
+            .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
+            .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium neovide apps"),
+            .init(title: "Browsers", tab: .theming, anchor: "theming-targets", keywords: "browsers helium chrome edge brave vivaldi chromium arc managed policy mobileconfig admin all profiles seed install remove"),
+            .init(title: "Helium policy", tab: .theming, anchor: "theming-targets", keywords: "helium managed policy mobileconfig admin all profiles seed install remove profiles"),
+            .init(title: "Include lines", tab: .theming, anchor: "theming-targets", keywords: "include line config-file source copy kitty ghostty zellij neovim fish starship bat delta btop yazi"),
+            .init(title: "Apply", tab: .theming, anchor: "theming-section", keywords: "apply palette revert previous generated files"),
         ]
     }
 
@@ -1519,8 +1578,12 @@ struct SettingsView: View {
 
             card("Clipboard history", anchor: "general-clipboard") {
                 toggleRow("Record clipboard history", isOn: $config.clipboard.enabled)
-                numericRow("Maximum entries", value: $config.clipboard.maxEntries,
-                           in: 50...50_000, step: 500)
+                numericRow("Text entries", value: $config.clipboard.maxText,
+                           in: 10...10_000, step: 10)
+                numericRow("Image entries", value: $config.clipboard.maxImages,
+                           in: 1...100, step: 1)
+                numericRow("File entries", value: $config.clipboard.maxFiles,
+                           in: 1...200, step: 1)
                 numericRow("Poll interval", value: $config.clipboard.pollMs,
                            in: 200...2_000, step: 50, unit: "ms")
                 numericRow("Clear copied secrets after", value: clearAfterSecondsBinding,
@@ -1531,12 +1594,20 @@ struct SettingsView: View {
                            in: 0...2_048, step: 50, unit: "MB")
                 ignoredAppsRow
             } footer: {
-                Text("Text and PNG images are stored. Copies an app marks concealed or transient are never recorded, even when that app is allowed below. Zero seconds keeps secrets until you clear the history.")
+                Text("Text, images and file selections are limited separately, so a run of screenshots never evicts text. Pinned entries are always kept. Copies an app marks concealed or transient are never recorded, even when that app is allowed below. Zero seconds keeps secrets until you clear the history.")
             }
             .task {
-                guard ignoredAppChoices.isEmpty else { return }
-                ignoredAppChoices = await AppIndex().applications()
+                if ignoredAppChoices.isEmpty {
+                    ignoredAppChoices = await AppIndex().applications()
+                }
+                refreshRunningAppChoices()
             }
+            .onReceive(NSWorkspace.shared.notificationCenter.publisher(
+                for: NSWorkspace.didLaunchApplicationNotification
+            ).receive(on: RunLoop.main)) { _ in refreshRunningAppChoices() }
+            .onReceive(NSWorkspace.shared.notificationCenter.publisher(
+                for: NSWorkspace.didTerminateApplicationNotification
+            ).receive(on: RunLoop.main)) { _ in refreshRunningAppChoices() }
 
             card("Commands", anchor: "general-commands") {
                 fieldRow("Command prefix", error: providerPrefixIssue) {
@@ -1580,11 +1651,12 @@ struct SettingsView: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    Menu("Add app…") {
-                        ForEach(ignorableApps, id: \.id) { app in
-                            Button(app.name) { addIgnoredApp(app.id) }
-                        }
-                    }
+                    PaletteMenuButton(
+                        title: "Add app…",
+                        items: ignorableApps.map { PaletteMenuItem(id: $0.id, title: $0.name) },
+                        theme: theme,
+                        onSelect: { addIgnoredApp($0) }
+                    )
                     .frame(maxWidth: 160)
                     .disabled(ignorableApps.isEmpty)
                     TextField("Bundle id, e.g. com.1password.1password", text: $ignoredAppDraft)
@@ -1597,6 +1669,18 @@ struct SettingsView: View {
         }
     }
 
+    /// Cached, so a body pass never walks NSWorkspace. Workspace notifications
+    /// keep the list current while the pane is open.
+    @MainActor
+    private func refreshRunningAppChoices() {
+        var seen = Set<String>()
+        runningAppChoices = NSWorkspace.shared.runningApplications.compactMap { app in
+            guard let bundleID = app.bundleIdentifier, !bundleID.isEmpty,
+                  seen.insert(bundleID).inserted else { return nil }
+            return (bundleID, app.localizedName ?? bundleID)
+        }
+    }
+
     private var ignorableApps: [(id: String, name: String)] {
         var seen = Set<String>()
         var rows: [(id: String, name: String)] = []
@@ -1604,10 +1688,8 @@ struct SettingsView: View {
             guard let bundleID = record.bundleID, seen.insert(bundleID).inserted else { continue }
             rows.append((bundleID, record.name))
         }
-        for app in NSWorkspace.shared.runningApplications {
-            guard let bundleID = app.bundleIdentifier, !bundleID.isEmpty,
-                  seen.insert(bundleID).inserted else { continue }
-            rows.append((bundleID, app.localizedName ?? bundleID))
+        for app in runningAppChoices where seen.insert(app.id).inserted {
+            rows.append(app)
         }
         return rows.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -1868,20 +1950,26 @@ struct SettingsView: View {
                     .frame(maxWidth: 260)
                 }
                 pickerRow("App order") {
-                    Picker("App order", selection: $config.appSort) {
-                        Text("Alphabetical").tag(AppSort.alphabetical)
-                        Text("Most used").tag(AppSort.frequent)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.appSort,
+                        choices: [
+                            PaletteMenuChoice(value: .alphabetical, label: "Alphabetical"),
+                            PaletteMenuChoice(value: .frequent, label: "Most used"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 pickerRow("Preview") {
-                    Picker("Preview", selection: $config.window.previewLayout) {
-                        Text("Automatic (frame width)").tag(PreviewPlacement.auto)
-                        Text("Below the list").tag(PreviewPlacement.below)
-                        Text("Beside the list").tag(PreviewPlacement.beside)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.window.previewLayout,
+                        choices: [
+                            PaletteMenuChoice(value: .auto, label: "Automatic (frame width)"),
+                            PaletteMenuChoice(value: .below, label: "Below the list"),
+                            PaletteMenuChoice(value: .beside, label: "Beside the list"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 toggleRow("Site favicons", isOn: $config.window.favicons)
@@ -1897,13 +1985,16 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Terminal", anchor: "terminal-session") {
                 pickerRow("Session") {
-                    Picker("Session", selection: $config.terminalSession.multiplexer) {
-                        Text("Auto").tag(TerminalMultiplexer.auto)
-                        Text("Zellij").tag(TerminalMultiplexer.zellij)
-                        Text("tmux").tag(TerminalMultiplexer.tmux)
-                        Text("Plain shell").tag(TerminalMultiplexer.none)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.terminalSession.multiplexer,
+                        choices: [
+                            PaletteMenuChoice(value: .auto, label: "Auto"),
+                            PaletteMenuChoice(value: .zellij, label: "Zellij"),
+                            PaletteMenuChoice(value: .tmux, label: "tmux"),
+                            PaletteMenuChoice(value: .none, label: "Plain shell"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 fieldRow("Session name") {
@@ -1911,13 +2002,16 @@ struct SettingsView: View {
                         .settingsField()
                 }
                 pickerRow("Shell") {
-                    Picker("Shell", selection: $terminalShellChoice) {
-                        Text("Auto (fish, then zsh)").tag("auto")
-                        Text("Fish").tag("fish")
-                        Text("Zsh").tag("zsh")
-                        Text("Custom…").tag("custom")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $terminalShellChoice,
+                        choices: [
+                            PaletteMenuChoice(value: "auto", label: "Auto (fish, then zsh)"),
+                            PaletteMenuChoice(value: "fish", label: "Fish"),
+                            PaletteMenuChoice(value: "zsh", label: "Zsh"),
+                            PaletteMenuChoice(value: "custom", label: "Custom…"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 260, alignment: .leading)
                 }
                 if terminalShellChoice == "custom" {
@@ -1937,46 +2031,13 @@ struct SettingsView: View {
                 Text("Auto uses Zellij, then tmux, then a plain shell. Plain shells end when the panel closes. A size of 0 uses Kitty's font size, then the theme. Use a Nerd Font for icons.")
             }
         }
+        .task { await loadFontFamilies() }
     }
 
     // MARK: - Appearance
 
     private var appearance: some View {
         VStack(alignment: .leading, spacing: 20) {
-            card("Theme", anchor: "appearance-theme") {
-                pickerRow("Mode") {
-                    Picker("Mode", selection: $config.theme.mode) {
-                        Text("Auto").tag(ThemeMode.auto)
-                        Text("Dark").tag(ThemeMode.dark)
-                        Text("Light").tag(ThemeMode.light)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 260)
-                }
-                pickerRow("Dark theme") {
-                    Picker("Dark theme", selection: $config.theme.dark) {
-                        ForEach(themeChoices(config.theme.dark), id: \.self) { name in
-                            Text(themeLabel(name)).tag(name)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 320, alignment: .leading)
-                }
-                pickerRow("Light theme") {
-                    Picker("Light theme", selection: $config.theme.light) {
-                        ForEach(themeChoices(config.theme.light), id: \.self) { name in
-                            Text(themeLabel(name)).tag(name)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 320, alignment: .leading)
-                }
-                Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
-            } footer: {
-                Text("Theme files use TOML. The active theme reloads when you pick another.")
-            }
-
             card("Typography", anchor: "appearance-typography") {
                 fieldRow("UI family", help: "Leave on Inherit to use the theme's \(theme.typography.family).") {
                     fontFamilyPicker($config.typography.uiFamily, inherited: theme.typography.family)
@@ -1992,6 +2053,10 @@ struct SettingsView: View {
                            in: 9...48, step: 1, unit: "pt",
                            automatic: monoSizeAutomatic,
                            automaticValue: "\(Int(theme.typography.monoSize)) pt")
+                numericRow("Preview text", value: $config.typography.previewSize,
+                           in: 9...24, step: 1, unit: "pt",
+                           automatic: previewSizeAutomatic,
+                           automaticValue: "\(Int(theme.previewTextSize)) pt")
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Preview").font(.caption).foregroundStyle(muted)
                     Text("Palette — quick, local, yours")
@@ -2003,6 +2068,12 @@ struct SettingsView: View {
                         .font(.custom(
                             config.typography.monoFamily.isEmpty ? "Menlo" : config.typography.monoFamily,
                             size: config.typography.monoSize == 0 ? 12 : config.typography.monoSize
+                        ))
+                        .foregroundStyle(muted)
+                    Text("preview: clipboard, paths, snippets")
+                        .font(.custom(
+                            config.typography.monoFamily.isEmpty ? "Menlo" : config.typography.monoFamily,
+                            size: config.typography.previewSize == 0 ? 13 : config.typography.previewSize
                         ))
                         .foregroundStyle(muted)
                 }
@@ -2022,35 +2093,554 @@ struct SettingsView: View {
                 Text("Palette replaces glass with an opaque background when Reduce Transparency is on, and Settings follows the same rule.")
             }
         }
+        .task { await loadFontFamilies() }
     }
 
-    private var themeNames: [String] {
-        ThemeLoader.catalog(themesDirectory: themesDirectory).map(\.name)
+    // MARK: - Theming
+
+    private enum OtherAppsPalette: String, CaseIterable, Identifiable {
+        case palette
+        case theme
+        case wallpaper
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .palette: return "Palette theme"
+            case .theme: return "Another theme"
+            case .wallpaper: return "Wallpaper"
+            }
+        }
     }
 
-    private var microphones: [(id: String, name: String)] {
-        CaptureMicrophones.active()
+    private var themingPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card("Palette", anchor: "appearance-theme") {
+                pickerRow("Mode") {
+                    Picker("Mode", selection: $config.theme.mode) {
+                        Text("Auto").tag(ThemeMode.auto)
+                        Text("Dark").tag(ThemeMode.dark)
+                        Text("Light").tag(ThemeMode.light)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+                }
+                ThemeBrowserView(
+                    themeManager: themeManager,
+                    selection: $config.theme,
+                    themesDirectory: themesDirectory
+                )
+                Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
+            } footer: {
+                Text("Theme files use TOML. Browsing previews a theme without changing anything; Use Theme applies it and saves the choice for the current mode. This is Palette's own palette.")
+            }
+
+            card("Other apps", anchor: "theming-section") {
+                toggleRow(
+                    "Use Palette's palette in other apps",
+                    isOn: Binding(
+                        get: { config.theming.enabled },
+                        set: { enabled in
+                            config.theming.enabled = enabled
+                            if !enabled {
+                                // Master off must stop the apps using Palette now,
+                                // not on the next Apply.
+                                Task { @MainActor in _ = theming.removeAllIncludes() }
+                            }
+                        }
+                    ),
+                    help: "Off by default. Palette always themes itself; this also writes managed palette files for terminals and editors."
+                )
+                if !config.theming.enabled {
+                    Text("Palette themes itself here and in Appearance; enable this to also theme other apps.")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    pickerRow("Palette for other apps", help: "Palette theme uses the palette chosen in Palette above.") {
+                        Picker("Palette for other apps", selection: otherAppsPaletteBinding) {
+                            ForEach(OtherAppsPalette.allCases) { option in
+                                Text(option.title).tag(option)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 380)
+                    }
+                    if config.theming.source == .theme && !config.theming.theme.isEmpty {
+                        pickerRow("Theme override", help: "Empty follows the Palette theme above.") {
+                            PaletteMenuPicker(
+                                selection: $config.theming.theme,
+                                choices: [PaletteMenuChoice(value: "", label: "Use the Palette theme")]
+                                    + otherAppsThemeChoices.map { info in
+                                        PaletteMenuChoice(
+                                            value: info.name,
+                                            label: "\(info.shortDisplayName) · \(info.section.title)"
+                                        )
+                                    },
+                                theme: theme
+                            )
+                            .frame(maxWidth: 360, alignment: .leading)
+                        }
+                    }
+                    if config.theming.source == .wallpaper {
+                        HStack(alignment: .top, spacing: 12) {
+                            Group {
+                                if let wallpaperPreviewImage {
+                                    Image(nsImage: wallpaperPreviewImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(theme.color(theme.palette.elevated))
+                                        .overlay {
+                                            Image(systemName: "photo")
+                                                .foregroundStyle(muted)
+                                        }
+                                }
+                            }
+                            .frame(width: 168, height: 96)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(theme.color(theme.palette.border), lineWidth: 1)
+                            )
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(theming.wallpaperURLs.first?.lastPathComponent ?? "No desktop picture found")
+                                    .font(.caption)
+                                    .foregroundStyle(muted)
+                                    .lineLimit(2)
+                                Button("Extract palette") {
+                                    Task { @MainActor in
+                                        await theming.previewWallpaper(darkMode: config.theming.darkMode)
+                                    }
+                                }
+                                .disabled(theming.busy)
+                                if let palette = theming.previewPalette {
+                                    HStack(spacing: 3) {
+                                        ForEach(Array(palette.ansi.enumerated()), id: \.offset) { _, hex in
+                                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                .fill(theme.color(hex))
+                                                .frame(width: 14, height: 18)
+                                        }
+                                    }
+                                    Text("\(palette.background) on \(palette.foreground)")
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(muted)
+                                }
+                            }
+                        }
+                        .task {
+                            wallpaperPreviewImage = theming.wallpaperURLs.first.flatMap(NSImage.init(contentsOf:))
+                        }
+                        toggleRow(
+                            "Follow wallpaper changes",
+                            isOn: $config.theming.followWallpaper,
+                            help: "Checks the desktop image every five seconds while Palette is running. Only wallpaper-sourced palettes auto-apply."
+                        )
+                        pickerRow("Appearance") {
+                            Picker("Appearance", selection: $config.theming.darkMode) {
+                                Text("Auto").tag("auto")
+                                Text("Dark").tag("dark")
+                                Text("Light").tag("light")
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 260)
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+                    HStack(spacing: 8) {
+                        Button("Apply Palette") { applyTheming() }
+                            .disabled(theming.busy)
+                        Button("Revert to previous") { revertTheming() }
+                            .disabled(theming.busy || !theming.hasPrevious)
+                        if theming.busy {
+                            PaletteSpinner()
+                        }
+                    }
+                    Text(theming.status)
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let result = theming.lastResult {
+                        if !result.written.isEmpty {
+                            Text("Wrote: \(result.written.joined(separator: ", "))")
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                        ForEach(result.changes, id: \.self) { change in
+                            Text("Changed \(change)")
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        ForEach(result.targets, id: \.id) { target in
+                            Text("\(target.title): \(target.note)")
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        ForEach(result.notices, id: \.self) { note in
+                            Text(note)
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            } footer: {
+                Text("Theme palettes apply when you press Apply Palette. Wallpaper palettes can also follow the desktop image automatically. Revert swaps back the previous generated set in one step.")
+            }
+
+            if config.theming.enabled {
+                card("Targets", anchor: "theming-targets") {
+                    ForEach(ThemingTarget.allCases.filter { !$0.isBrowser }) { target in
+                        if target.isImplemented {
+                            let status = theming.includeStatus(for: target)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Toggle(target.title, isOn: themingTargetBinding(target))
+                                    .toggleStyle(.checkbox)
+                                    .font(theme.font(size: 13))
+                                Text(status.available
+                                    ? status.note
+                                    : "Unavailable — \(target.unavailableReason ?? target.includeHint)")
+                                    .font(.caption)
+                                    .foregroundStyle(muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if status.installed {
+                                    HStack(spacing: 8) {
+                                        Text(theming.reloadStatus(for: target).message)
+                                            .font(.caption)
+                                            .foregroundStyle(muted)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        if ThemingReload.canAttempt(target) {
+                                            Button("Reload") {
+                                                Task { @MainActor in await theming.reload(target) }
+                                            }
+                                            .controlSize(.small)
+                                            .help("Ask the running app to re-read the Palette colours. Palette never restarts it.")
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            HStack(spacing: 8) {
+                                Toggle(target.title, isOn: .constant(false))
+                                    .toggleStyle(.checkbox)
+                                    .disabled(true)
+                                    .font(theme.font(size: 13))
+                                Text(target.statusLabel)
+                                    .font(.caption)
+                                    .foregroundStyle(muted)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+                    Text("Browsers")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(muted)
+                    Text("admin once · all profiles of that browser · seed colour, approximate")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                    ForEach(theming.browserRows()) { browser in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if browser.supportsThemePolicy {
+                                toggleRow(
+                                    browser.targetTitle,
+                                    isOn: themingTargetBinding(browser.target),
+                                    help: "Managed policy \(browser.policyIdentifier)"
+                                )
+                            } else {
+                                HStack(spacing: 8) {
+                                    Toggle(browser.targetTitle, isOn: .constant(false))
+                                        .toggleStyle(.checkbox)
+                                        .disabled(true)
+                                        .font(theme.font(size: 13))
+                                    Text("Unsupported — does not implement BrowserThemeColor.")
+                                        .font(.caption)
+                                        .foregroundStyle(muted)
+                                }
+                            }
+                            Text(browserPolicyStatus(browser))
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                    }
+
+                    if !selectedBrowsers.isEmpty {
+                        Divider().padding(.vertical, 4)
+                        Text("Profiles install: the generated .mobileconfig opens in System Settings, where you approve it under General → Device Management. No password prompt comes from Palette.")
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            Button(theming.policyBusy ? "Opening…" : "Open in System Settings…") {
+                                Task { @MainActor in
+                                    await theming.installPolicies(config.theming)
+                                }
+                            }
+                            .disabled(theming.policyBusy || browserPolicyFiles.isEmpty)
+                            .help("Press Apply Palette to generate the profile files first.")
+                            Button("Reveal file") { revealPolicyFiles() }
+                                .disabled(browserPolicyFiles.isEmpty)
+                            Button("Refresh") {
+                                Task { @MainActor in await theming.refreshPolicyStates() }
+                            }
+                            .disabled(theming.policyBusy)
+                            Button("Remove Policies…") {
+                                removePoliciesPending = true
+                            }
+                            .disabled(theming.policyBusy)
+                            if theming.policyBusy {
+                                PaletteSpinner()
+                            }
+                        }
+                        if let status = theming.policyStatus {
+                            Text(status)
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let error = theming.policyError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(danger)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if theming.supportsLegacyPolicyCLI, !browserInstallCommand.isEmpty {
+                            Text("Legacy CLI (still available on this macOS; macOS 27 removed it)")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(muted)
+                            ForEach([browserInstallCommand, browserRemoveCommand], id: \.self) { command in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(command)
+                                        .font(.caption.monospaced())
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: 8)
+                                    Button(copiedInclude == command ? "Copied" : "Copy") {
+                                        copyInclude(command)
+                                    }
+                                    .controlSize(.small)
+                                }
+                            }
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+                    let selected = config.theming.targets
+                        .compactMap(ThemingTarget.init(rawValue:))
+                        .filter(\.isImplemented)
+                    DisclosureGroup("Manual setup") {
+                        if selected.isEmpty {
+                            Text("Pick at least one app above.")
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                        ForEach(selected) { target in
+                            HStack(alignment: .top, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(target.title)
+                                        .font(.caption)
+                                        .foregroundStyle(muted)
+                                    Text(target.includeHint)
+                                        .font(.caption.monospaced())
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 8)
+                                Button(copiedInclude == target.includeHint ? "Copied" : "Copy") {
+                                    copyInclude(target.includeHint)
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(muted)
+                } footer: {
+                    Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path).")
+                }
+                .task { await theming.refreshPolicyStates() }
+            }
+        }
     }
 
-    private var captureDisplays: [CaptureDisplay] {
-        CaptureDisplays.active()
+    private var selectedBrowsers: [ChromiumBrowser] {
+        config.theming.targets.compactMap { raw in
+            guard let target = ThemingTarget(rawValue: raw) else { return nil }
+            return ChromiumBrowser.browser(for: target)
+        }
+        .filter(\.supportsThemePolicy)
     }
 
-    /// Installed themes plus the configured name even when its file is gone,
-    /// so a deleted theme stays visible as missing instead of blank.
-    private func themeChoices(_ selected: String) -> [String] {
-        let names = themeNames
-        guard !selected.isEmpty, !names.contains(selected) else { return names }
-        return [selected] + names
+    private var browserPolicyFiles: [String] {
+        selectedBrowsers.compactMap { browser in
+            let path = theming.policyURL(for: browser).path
+            return FileManager.default.fileExists(atPath: path) ? path : nil
+        }
     }
 
-    private func themeLabel(_ name: String) -> String {
-        let label = displayName(name)
-        return themeNames.contains(name) ? label : "\(label) (missing)"
+    private var browserInstallCommand: String {
+        ChromiumPolicy.installCommand(paths: browserPolicyFiles)
     }
 
-    private var fontFamilies: [String] {
-        NSFontManager.shared.availableFontFamilies.sorted()
+    private var browserRemoveCommand: String {
+        ChromiumPolicy.removeCommand(identifiers: selectedBrowsers.map(\.policyIdentifier))
+    }
+
+    private func browserPolicyStatus(_ browser: ChromiumBrowser) -> String {
+        guard browser.supportsThemePolicy else {
+            return "Unsupported — does not implement BrowserThemeColor."
+        }
+        switch theming.policyStates[browser.bundleID] {
+        case true?: return "Installed — all profiles"
+        case false?: return "Not installed"
+        case nil: return "Not checked"
+        }
+    }
+
+    private func revealPolicyFiles() {
+        let urls = browserPolicyFiles.map { URL(fileURLWithPath: $0) }
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    private var otherAppsPaletteBinding: Binding<OtherAppsPalette> {
+        Binding(
+            get: {
+                if config.theming.source == .wallpaper { return .wallpaper }
+                return config.theming.theme.isEmpty ? .palette : .theme
+            },
+            set: { option in
+                switch option {
+                case .palette:
+                    config.theming.source = .theme
+                    config.theming.theme = ""
+                case .theme:
+                    config.theming.source = .theme
+                    if config.theming.theme.isEmpty {
+                        config.theming.theme = themeManager.currentThemeID
+                    }
+                case .wallpaper:
+                    config.theming.source = .wallpaper
+                }
+            }
+        )
+    }
+
+    private var otherAppsThemeChoices: [ThemeInfo] {
+        let themes = themeCatalogThemes
+        let selected = config.theming.theme
+        guard !selected.isEmpty, !themes.contains(where: { $0.name == selected }) else {
+            return themes
+        }
+        let missing = ThemeInfo(
+            name: selected,
+            displayName: selected,
+            appearance: "dark",
+            isBuiltin: false
+        )
+        return [missing] + themes
+    }
+
+    private var themeCatalogThemes: [ThemeInfo] {
+        ThemeLoader.catalog(themesDirectory: themesDirectory).sorted {
+            $0.shortDisplayName.localizedCaseInsensitiveCompare($1.shortDisplayName) == .orderedAscending
+        }
+    }
+
+    private func themingTargetBinding(_ target: ThemingTarget) -> Binding<Bool> {
+        Binding(
+            get: { config.theming.targets.contains(target.rawValue) },
+            set: { enabled in
+                var targets = config.theming.targets
+                if enabled {
+                    if !targets.contains(target.rawValue) { targets.append(target.rawValue) }
+                } else {
+                    targets.removeAll { $0 == target.rawValue }
+                }
+                config.theming.targets = targets
+            }
+        )
+    }
+
+    private func applyTheming() {
+        let themingConfig = config.theming
+        let fallback = themeManager.currentThemeID
+        Task { @MainActor in
+            _ = await theming.apply(themingConfig, fallbackThemeName: fallback)
+        }
+    }
+
+    private func revertTheming() {
+        Task { @MainActor in
+            _ = await theming.revert()
+        }
+    }
+
+    private func copyInclude(_ hint: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(hint, forType: .string)
+        copiedInclude = hint
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if copiedInclude == hint { copiedInclude = nil }
+        }
+    }
+
+    /// AVFoundation cold start stays off the main thread; the pane shows
+    /// "System default" for a beat instead of freezing.
+    @MainActor
+    private func loadRecordingDevices(force: Bool = false) async {
+        if force || captureDisplays.isEmpty {
+            captureDisplays = CaptureDisplays.active()
+        }
+        if force || microphones.isEmpty {
+            microphones = await Task.detached(priority: .userInitiated, operation: {
+                CaptureMicrophones.active()
+            }).value
+        }
+    }
+
+    /// CoreText's list is safe off-main; NSFontManager's was not.
+    @MainActor
+    private func loadFontFamilies() async {
+        guard fontFamilies.isEmpty else { return }
+        fontFamilies = await Task.detached(priority: .userInitiated, operation: {
+            (CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []).sorted()
+        }).value
+    }
+
+    private var captureDisplayChoices: [PaletteMenuChoice<Int>] {
+        var choices = captureDisplays.map { PaletteMenuChoice(value: $0.index, label: $0.label) }
+        if !captureDisplays.contains(where: { $0.index == config.capture.recordingDisplay }) {
+            choices.append(PaletteMenuChoice(
+                value: config.capture.recordingDisplay,
+                label: "Display \(config.capture.recordingDisplay) (missing)"
+            ))
+        }
+        return choices
+    }
+
+    private var recordingMicrophoneChoices: [PaletteMenuChoice<String>] {
+        var choices = [PaletteMenuChoice(value: "", label: "System default")]
+        choices += microphones.map { PaletteMenuChoice(value: $0.id, label: $0.name) }
+        if !config.capture.recordingMicrophone.isEmpty,
+           !microphones.contains(where: { $0.id == config.capture.recordingMicrophone }) {
+            choices.append(PaletteMenuChoice(
+                value: config.capture.recordingMicrophone,
+                label: "\(config.capture.recordingMicrophone) (missing)"
+            ))
+        }
+        return choices
     }
 
     /// Installed fonts plus the configured family even when it is gone, so a
@@ -2063,20 +2653,15 @@ struct SettingsView: View {
 
     private func fontFamilyPicker(_ value: Binding<String>, inherited: String) -> some View {
         let installed = fontFamilies
-        return Picker("Font family", selection: value) {
-            Text("Inherit — \(inherited)").tag("")
-            ForEach(fontChoices(value.wrappedValue, installed: installed), id: \.self) { family in
-                Text(installed.contains(family) ? family : "\(family) (missing)")
-                    .tag(family)
-            }
+        var choices = [PaletteMenuChoice(value: "", label: "Inherit — \(inherited)")]
+        choices += fontChoices(value.wrappedValue, installed: installed).map { family in
+            PaletteMenuChoice(
+                value: family,
+                label: installed.contains(family) ? family : "\(family) (missing)"
+            )
         }
-        .labelsHidden()
-        .frame(maxWidth: 380, alignment: .leading)
-    }
-
-    private func displayName(_ name: String) -> String {
-        ThemeLoader.catalog(themesDirectory: themesDirectory).first(where: { $0.name == name })?.displayName
-            ?? name.split(separator: "-").map { $0.capitalized }.joined(separator: " ")
+        return PaletteMenuPicker(selection: value, choices: choices, theme: theme)
+            .frame(maxWidth: 380, alignment: .leading)
     }
 
     // MARK: - Shortcuts
@@ -2171,12 +2756,13 @@ struct SettingsView: View {
                     }
                 )
                 .frame(width: 180, height: 26)
-                Picker("Action", selection: $config.bindings[index].action) {
-                    ForEach(HotkeyAction.allCases, id: \.self) { action in
-                        Text(action.title).tag(action)
-                    }
-                }
-                .labelsHidden()
+                PaletteMenuPicker(
+                    selection: $config.bindings[index].action,
+                    choices: HotkeyAction.allCases.map {
+                        PaletteMenuChoice(value: $0, label: $0.title)
+                    },
+                    theme: theme
+                )
                 .frame(width: 130)
                 TextField(
                     bindingPlaceholder(config.bindings[index].action),
@@ -2512,7 +3098,7 @@ struct SettingsView: View {
                     }
                 }
             } footer: {
-                Text("Type !keyword in the launcher, for example !yt lo-fi. The search URL must contain {query}, which Palette replaces with the URL-encoded text. An invalid engine is flagged here and the last valid one stays in config.toml.")
+                Text("Type !keyword in the launcher, for example !yt lo-fi. The search URL must contain {query}, which Palette replaces with the URL-encoded text. An invalid engine is flagged here and the last valid one stays in config.toml. “Web app” opens the result in a dedicated Palette web-app window for that site (its own browser profile), not in a PWA installed inside Helium/Chrome — those live in the browser's own profile and cannot be handed a search URL.")
             }
 
             card("Learning", anchor: "search-learning") {
@@ -2581,7 +3167,7 @@ struct SettingsView: View {
                                     .settingsField()
                             }
                             fieldRow("Browser", anchor: "row-bookmark-\(bookmark.id)-browser") {
-                                BrowserPicker(browser: $bookmark.browser)
+                                BrowserPicker(browser: $bookmark.browser, theme: theme)
                             }
                             fieldRow("Keywords", anchor: "row-bookmark-\(bookmark.id)-keywords") {
                                 TextField("Keywords (comma separated)", text: Binding(
@@ -2682,16 +3268,20 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Web Apps", anchor: "webapps-browser") {
                 fieldRow("Open web apps in", error: webAppBrowserIssue) {
-                    Picker("Open web apps in", selection: webAppBrowserBinding) {
-                        if webAppBrowserChoices.isEmpty {
-                            Text("No Chromium browser found").tag("")
-                        }
-                        ForEach(webAppBrowserChoices, id: \.self) { name in
-                            Text(installedChromium.contains(name) ? name : "\(name) (not installed)")
-                                .tag(name)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: webAppBrowserBinding,
+                        choices: webAppBrowserChoices.isEmpty
+                            ? [PaletteMenuChoice(value: "", label: "No Chromium browser found")]
+                            : webAppBrowserChoices.map { name in
+                                PaletteMenuChoice(
+                                    value: name,
+                                    label: installedChromium.contains(name)
+                                        ? name
+                                        : "\(name) (not installed)"
+                                )
+                            },
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
             } footer: {
@@ -2723,21 +3313,27 @@ struct SettingsView: View {
                     }
                 }
                 pickerRow("Action", anchor: "row-screenshot-action") {
-                    Picker("Action", selection: $config.capture.screenshotAction) {
-                        Text("Save").tag(CaptureAction.save)
-                        Text("Copy").tag(CaptureAction.copy)
-                        Text("Save and copy").tag(CaptureAction.saveCopy)
-                        Text("Save and preview").tag(CaptureAction.preview)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.screenshotAction,
+                        choices: [
+                            PaletteMenuChoice(value: .save, label: "Save"),
+                            PaletteMenuChoice(value: .copy, label: "Copy"),
+                            PaletteMenuChoice(value: .saveCopy, label: "Save and copy"),
+                            PaletteMenuChoice(value: .preview, label: "Save and preview"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
                 pickerRow("Format", anchor: "row-screenshot-format") {
-                    Picker("Format", selection: $config.capture.screenshotFormat) {
-                        Text("PNG").tag("png")
-                        Text("JPG").tag("jpg")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.screenshotFormat,
+                        choices: [
+                            PaletteMenuChoice(value: "png", label: "PNG"),
+                            PaletteMenuChoice(value: "jpg", label: "JPG"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 160, alignment: .leading)
                 }
                 numericRow("Delay before capture", value: $config.capture.delay,
@@ -2754,34 +3350,35 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Recordings", anchor: "recordings-action") {
                 pickerRow("Action", anchor: "row-recording-action") {
-                    Picker("Action", selection: $config.capture.recordingAction) {
-                        Text("Save").tag(CaptureAction.save)
-                        Text("Save and copy").tag(CaptureAction.saveCopy)
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.recordingAction,
+                        choices: [
+                            PaletteMenuChoice(value: .save, label: "Save"),
+                            PaletteMenuChoice(value: .saveCopy, label: "Save and copy"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
                 pickerRow("What to record") {
-                    Picker("What to record", selection: $config.capture.recordingTarget) {
-                        Text("Whole screen").tag("screen")
-                        Text("A display").tag("display")
-                        Text("A region").tag("region")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.recordingTarget,
+                        choices: [
+                            PaletteMenuChoice(value: "screen", label: "Whole screen"),
+                            PaletteMenuChoice(value: "display", label: "A display"),
+                            PaletteMenuChoice(value: "region", label: "A region"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
                 if config.capture.recordingTarget == "display" {
                     pickerRow("Display") {
-                        Picker("Display", selection: $config.capture.recordingDisplay) {
-                            ForEach(captureDisplays) { display in
-                                Text(display.label).tag(display.index)
-                            }
-                            if !captureDisplays.contains(where: { $0.index == config.capture.recordingDisplay }) {
-                                Text("Display \(config.capture.recordingDisplay) (missing)")
-                                    .tag(config.capture.recordingDisplay)
-                            }
-                        }
-                        .labelsHidden()
+                        PaletteMenuPicker(
+                            selection: $config.capture.recordingDisplay,
+                            choices: captureDisplayChoices,
+                            theme: theme
+                        )
                         .frame(maxWidth: 280, alignment: .leading)
                     }
                 }
@@ -2792,33 +3389,39 @@ struct SettingsView: View {
                     }
                 }
                 pickerRow("Format", anchor: "row-recording-format") {
-                    Picker("Format", selection: $config.capture.recordingFormat) {
-                        Text("MOV").tag("mov")
-                        Text("MP4").tag("mp4")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.recordingFormat,
+                        choices: [
+                            PaletteMenuChoice(value: "mov", label: "MOV"),
+                            PaletteMenuChoice(value: "mp4", label: "MP4"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 160, alignment: .leading)
                 }
                 toggleRow("Record audio", isOn: $config.capture.recordingAudio)
                 pickerRow("Microphone") {
-                    Picker("Microphone", selection: $config.capture.recordingMicrophone) {
-                        Text("System default").tag("")
-                        ForEach(microphones, id: \.id) { microphone in
-                            Text(microphone.name).tag(microphone.id)
-                        }
-                        if !config.capture.recordingMicrophone.isEmpty,
-                           !microphones.contains(where: { $0.id == config.capture.recordingMicrophone }) {
-                            Text("\(config.capture.recordingMicrophone) (missing)")
-                                .tag(config.capture.recordingMicrophone)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.recordingMicrophone,
+                        choices: recordingMicrophoneChoices,
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                     .disabled(!config.capture.recordingAudio)
                 }
             } footer: {
                 Text("Use /rec to start or stop a recording. Recordings are saved with the system capture engine.")
             }
+        }
+        .task { await loadRecordingDevices() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            Task { await loadRecordingDevices(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
+            Task { await loadRecordingDevices(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
+            Task { await loadRecordingDevices(force: true) }
         }
     }
 
@@ -2844,11 +3447,14 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Captures list", anchor: "search-captures") {
                 pickerRow("List") {
-                    Picker("List", selection: $config.capture.gallery) {
-                        Text("Everything in the folder").tag("all")
-                        Text("Only Palette's captures").tag("palette")
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.capture.gallery,
+                        choices: [
+                            PaletteMenuChoice(value: "all", label: "Everything in the folder"),
+                            PaletteMenuChoice(value: "palette", label: "Only Palette's captures"),
+                        ],
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
             } footer: {
@@ -2913,34 +3519,40 @@ struct SettingsView: View {
     }
 
     private func engineBrowserButton(_ engine: Binding<WebSearchEngine>) -> some View {
-        Menu {
-            Button("Default browser") { engine.wrappedValue.browser = "" }
-            Divider()
-            ForEach(BrowserCatalog.activeBrowsers(), id: \.self) { name in
-                Button {
-                    engine.wrappedValue.browser = name
-                } label: {
-                    if engine.wrappedValue.browser == name {
-                        Label(name, systemImage: "checkmark")
-                    } else {
-                        Text(name)
-                    }
-                }
+        let items = EngineBrowserMenu.items(
+            browser: engine.wrappedValue.browser,
+            browsers: BrowserCatalog.activeBrowsers(),
+            appMode: engine.wrappedValue.appMode
+        )
+        return PaletteMenuButton(
+            title: engine.wrappedValue.appMode
+                ? "Web app · \(engine.wrappedValue.browser.isEmpty ? "default" : engine.wrappedValue.browser)"
+                : (engine.wrappedValue.browser.isEmpty ? "Default" : engine.wrappedValue.browser),
+            items: items,
+            theme: theme
+        ) { id in
+            if id.hasPrefix("browser:") {
+                engine.wrappedValue.browser = String(id.dropFirst("browser:".count))
+                return
             }
-            if !engine.wrappedValue.browser.isEmpty,
-               !BrowserCatalog.activeBrowsers().contains(engine.wrappedValue.browser) {
-                Text("\(engine.wrappedValue.browser) (not installed)")
-                    .disabled(true)
+            switch id {
+            case "default-browser":
+                engine.wrappedValue.browser = ""
+            case "app-mode":
+                setEngineAppMode(engine.wrappedValue, true)
+            case "tab-mode":
+                setEngineAppMode(engine.wrappedValue, false)
+            default:
+                break
             }
-            Divider()
-            Toggle("Open in web app", isOn: engine.appMode)
-        } label: {
-            Text(engine.wrappedValue.browser.isEmpty ? "Default" : engine.wrappedValue.browser)
-                .lineLimit(1)
-                .truncationMode(.tail)
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Mutates by identity so a menu dismissal cannot leave a stale index
+    /// binding pointing at a different engine.
+    private func setEngineAppMode(_ engine: WebSearchEngine, _ value: Bool) {
+        guard let index = config.webSearchEngines.firstIndex(where: { $0.id == engine.id }) else { return }
+        config.webSearchEngines[index].appMode = value
     }
 
     private var webAppBrowserBinding: Binding<String> {
@@ -2961,22 +3573,28 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             card("Model", anchor: "ask-model") {
                 pickerRow("Provider") {
-                    Picker("Provider", selection: $config.ask.endpoint) {
-                        ForEach(AskEndpoint.allCases, id: \.self) { endpoint in
-                            Text(endpoint.displayName).tag(endpoint)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.ask.endpoint,
+                        choices: AskEndpoint.allCases.map {
+                            PaletteMenuChoice(value: $0, label: $0.displayName)
+                        },
+                        theme: theme
+                    )
                     .frame(maxWidth: 280, alignment: .leading)
                 }
                 pickerRow("Model") {
-                    Picker("Model", selection: $config.ask.model) {
-                        ForEach(AskModel.models(for: config.ask.endpoint)) { model in
-                            Text(model.free ? "FREE · \(model.name)" : "\(model.name) · \(model.note)")
-                                .tag(model.id)
-                        }
-                    }
-                    .labelsHidden()
+                    PaletteMenuPicker(
+                        selection: $config.ask.model,
+                        choices: AskModel.models(for: config.ask.endpoint).map { model in
+                            PaletteMenuChoice(
+                                value: model.id,
+                                label: model.free
+                                    ? "FREE · \(model.name)"
+                                    : "\(model.name) · \(model.note)"
+                            )
+                        },
+                        theme: theme
+                    )
                     .frame(maxWidth: 360, alignment: .leading)
                 }
                 numericRow("Max answer tokens", value: $config.ask.maxTokens,
@@ -3615,7 +4233,7 @@ struct SettingsView: View {
         case .launcher:
             return "Restores launcher position, search-field behaviour, and layout defaults."
         case .appearance:
-            return "Restores the default theme and the theme's typography."
+            return "Restores typography and font defaults. Palette's theme lives in Theming."
         case .shortcuts:
             return "Restores every global shortcut to its default. Custom hotkeys are left alone."
         case .search:
@@ -3648,6 +4266,8 @@ struct SettingsView: View {
             return "Config Files only opens files and exports a backup; there is nothing to reset."
         case .diagnostics:
             return "Diagnostics is read-only; there is nothing to reset."
+        case .theming:
+            return "Restores Palette's default theme and turns cross-app theming off. Generated files already on disk are left alone until the next Apply."
         }
     }
 
@@ -3669,7 +4289,6 @@ struct SettingsView: View {
             config.window = WindowConfig()
             config.searchPlaceholder = defaults.searchPlaceholder
         case .appearance:
-            config.theme = ThemeSelection()
             config.typography = TypographyConfig()
         case .shortcuts:
             config.hotkey = defaults.hotkey
@@ -3728,6 +4347,9 @@ struct SettingsView: View {
             config.capture.recordingMicrophone = capture.recordingMicrophone
         case .captures:
             config.capture.gallery = CaptureConfig().gallery
+        case .theming:
+            config.theme = ThemeSelection()
+            config.theming = ThemingConfig()
         case .about, .providerFiles, .configFiles, .diagnostics:
             break
         case .providers:
@@ -3744,6 +4366,7 @@ struct SettingsView: View {
     // MARK: - File helpers
 
     private func addCheatsheetFolder() {
+        // Native by necessity: the folder picker is macOS-owned.
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -3754,7 +4377,9 @@ struct SettingsView: View {
         }
     }
 
-    private func chooseDirectory(into binding: Binding<String>) {        let panel = NSOpenPanel()
+    private func chooseDirectory(into binding: Binding<String>) {
+        // Native by necessity: the folder picker is macOS-owned.
+        let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false

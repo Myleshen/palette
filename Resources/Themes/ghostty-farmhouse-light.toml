@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Farmhouse Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Farmhouse Light"
+appearance = "light"
+
+[palette]
+bg = "#e8e4e1"
+surface = "#dcd9d6"
+elevated = "#f5f3f2"
+fg = "#1d2027"
+fg_muted = "#646568"
+accent = "#092ccd"
+accent_fg = "#ffffff"
+selection_bg = "#b3b1aa"
+selection_fg = "#3e4546"
+match_fg = "#820046"
+border = "#bfbdbc"
+separator = "#f5f3f280"
+danger = "#8d0003"
+warning = "#a95600"
+success = "#3a7d00"
+info = "#092ccd"
+badge_bg = "#f5f3f2"
+badge_fg = "#1d2027"
+
+[states.selected]
+bg = "#b3b1aa"
+fg = "#3e4546"
+[states.hover]
+bg = "#f5f3f2"
+[states.disabled]
+fg = "#646568"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#646568"

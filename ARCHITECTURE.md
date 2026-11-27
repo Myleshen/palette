@@ -236,7 +236,8 @@ retention limits trim `ask_history`; saved chats keep their full transcript.
 - Poll `NSPasteboard.general.changeCount` every 500 ms.
 - Ignore `org.nspasteboard.ConcealedType`, `org.nspasteboard.TransientType`, and
   empty content.
-- Deduplicate by SHA-256. Cap at `max_entries`.
+- Deduplicate by SHA-256. Trim the newest `max_text`, `max_images` and
+  `max_files` rows independently; pinned rows are exempt.
 - `copyText` writes the pasteboard; with `concealed` it also marks the item so
   Palette's own history skips it.
 - `pasteText`: remember the previously frontmost app, hide the panel, reactivate

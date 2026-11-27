@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "SeedFlip Wavelength" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SeedFlip Wavelength"
+appearance = "dark"
+
+[palette]
+bg = "#0d1117"
+surface = "#090c11"
+elevated = "#25292e"
+fg = "#e6edf3"
+fg_muted = "#9aa0a6"
+accent = "#9ab9e5"
+accent_fg = "#000000"
+selection_bg = "#25292e"
+selection_fg = "#e6edf3"
+match_fg = "#e59ae5"
+border = "#383d43"
+separator = "#25292e80"
+danger = "#d55d5d"
+warning = "#d5c15d"
+success = "#5dd585"
+info = "#5d8fd5"
+badge_bg = "#25292e"
+badge_fg = "#e6edf3"
+
+[states.selected]
+bg = "#25292e"
+fg = "#e6edf3"
+[states.hover]
+bg = "#25292e"
+[states.disabled]
+fg = "#9aa0a6"
+
+[footer]
+hint_color = "#9aa0a6"

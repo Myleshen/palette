@@ -259,7 +259,7 @@ struct AskMarkdownView: View {
     }
 
     private var bodySize: Double {
-        theme.typography.size
+        theme.previewTextSize
     }
 
     private var tableSize: Double {

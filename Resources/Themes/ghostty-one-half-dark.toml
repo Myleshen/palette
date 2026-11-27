@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "One Half Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · One Half Dark"
+appearance = "dark"
+
+[palette]
+bg = "#282c34"
+surface = "#1d2025"
+elevated = "#3e4148"
+fg = "#dcdfe4"
+fg_muted = "#9da0a6"
+accent = "#64b3f3"
+accent_fg = "#000000"
+selection_bg = "#474e5d"
+selection_fg = "#dcdfe4"
+match_fg = "#c678dd"
+border = "#4c5057"
+separator = "#3e414880"
+danger = "#e06c75"
+warning = "#e5c07b"
+success = "#98c379"
+info = "#61afef"
+badge_bg = "#3e4148"
+badge_fg = "#dcdfe4"
+
+[states.selected]
+bg = "#474e5d"
+fg = "#dcdfe4"
+[states.hover]
+bg = "#3e4148"
+[states.disabled]
+fg = "#9da0a6"
+
+[footer]
+hint_color = "#9da0a6"

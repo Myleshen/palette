@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Stairway Skies" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Stairway Skies"
+appearance = "dark"
+
+[palette]
+bg = "#201a10"
+surface = "#17130c"
+elevated = "#363128"
+fg = "#f7e9ca"
+fg_muted = "#aca189"
+accent = "#e7c66e"
+accent_fg = "#000000"
+selection_bg = "#4a3830"
+selection_fg = "#fff8ee"
+match_fg = "#cbb2d8"
+border = "#4b4335"
+separator = "#36312880"
+danger = "#d59a6b"
+warning = "#e7c66e"
+success = "#a6be82"
+info = "#8aaed0"
+badge_bg = "#363128"
+badge_fg = "#f7e9ca"
+
+[states.selected]
+bg = "#4a3830"
+fg = "#fff8ee"
+[states.hover]
+bg = "#363128"
+[states.disabled]
+fg = "#aca189"
+
+[footer]
+hint_color = "#aca189"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ocotillo" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ocotillo"
+appearance = "dark"
+
+[palette]
+bg = "#66301e"
+surface = "#492316"
+elevated = "#754534"
+fg = "#fff0d8"
+fg_muted = "#c9ad97"
+accent = "#b1d8f3"
+accent_fg = "#000000"
+selection_bg = "#854b37"
+selection_fg = "#fff8e9"
+match_fg = "#efbfdb"
+border = "#855643"
+separator = "#75453480"
+danger = "#ffa08a"
+warning = "#f4cf6c"
+success = "#91d6a4"
+info = "#95c9ed"
+badge_bg = "#754534"
+badge_fg = "#fff0d8"
+
+[states.selected]
+bg = "#854b37"
+fg = "#fff8e9"
+[states.hover]
+bg = "#754534"
+[states.disabled]
+fg = "#c9ad97"
+
+[footer]
+hint_color = "#c9ad97"

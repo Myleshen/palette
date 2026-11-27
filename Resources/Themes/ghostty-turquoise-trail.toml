@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Turquoise Trail" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Turquoise Trail"
+appearance = "dark"
+
+[palette]
+bg = "#075153"
+surface = "#053a3c"
+elevated = "#206264"
+fg = "#fff0d5"
+fg_muted = "#abbbaa"
+accent = "#c8e3f7"
+accent_fg = "#000000"
+selection_bg = "#287071"
+selection_fg = "#fff8e8"
+match_fg = "#f4c6df"
+border = "#39716d"
+separator = "#20626480"
+danger = "#ffad8e"
+warning = "#f7d879"
+success = "#a7dfae"
+info = "#b1d6f4"
+badge_bg = "#206264"
+badge_fg = "#fff0d5"
+
+[states.selected]
+bg = "#287071"
+fg = "#fff8e8"
+[states.hover]
+bg = "#206264"
+[states.disabled]
+fg = "#a8b8a8"
+
+[footer]
+hint_color = "#a8b8a8"

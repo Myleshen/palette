@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Rainbows and Unicorns EGA 85" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Rainbows and Unicorns EGA 85"
+appearance = "dark"
+
+[palette]
+bg = "#050507"
+surface = "#040405"
+elevated = "#1e1e20"
+fg = "#aaaaaa"
+fg_muted = "#767778"
+accent = "#7b7bff"
+accent_fg = "#000000"
+selection_bg = "#aaaaaa"
+selection_fg = "#050507"
+match_fg = "#ff55ff"
+border = "#262628"
+separator = "#1e1e2080"
+danger = "#cc3b3b"
+warning = "#c2782e"
+success = "#2fb84a"
+info = "#4a6cf0"
+badge_bg = "#1e1e20"
+badge_fg = "#aaaaaa"
+
+[states.selected]
+bg = "#aaaaaa"
+fg = "#050507"
+[states.hover]
+bg = "#1e1e20"
+[states.disabled]
+fg = "#707071"
+
+[footer]
+hint_color = "#707071"

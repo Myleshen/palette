@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Gruvbox Light Hard" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Gruvbox Light Hard"
+appearance = "light"
+
+[palette]
+bg = "#f9f5d7"
+surface = "#ede9cc"
+elevated = "#fcfbed"
+fg = "#3c3836"
+fg_muted = "#737064"
+accent = "#076678"
+accent_fg = "#ffffff"
+selection_bg = "#3c3836"
+selection_fg = "#f9f5d7"
+match_fg = "#8f3f71"
+border = "#d3cfb7"
+separator = "#fcfbed80"
+danger = "#cc241d"
+warning = "#bc8200"
+success = "#93910e"
+info = "#458588"
+badge_bg = "#fcfbed"
+badge_fg = "#3c3836"
+
+[states.selected]
+bg = "#3c3836"
+fg = "#f9f5d7"
+[states.hover]
+bg = "#fcfbed"
+[states.disabled]
+fg = "#7e7a6e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7e7a6e"

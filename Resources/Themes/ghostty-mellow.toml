@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Mellow" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Mellow"
+appearance = "dark"
+
+[palette]
+bg = "#161617"
+surface = "#101011"
+elevated = "#2d2d2e"
+fg = "#c9c7cd"
+fg_muted = "#8a898d"
+accent = "#b9aeda"
+accent_fg = "#000000"
+selection_bg = "#2a2a2d"
+selection_fg = "#c1c0d4"
+match_fg = "#ecaad6"
+border = "#3a393b"
+separator = "#2d2d2e80"
+danger = "#f5a191"
+warning = "#e6b99d"
+success = "#90b99f"
+info = "#aca1cf"
+badge_bg = "#2d2d2e"
+badge_fg = "#c9c7cd"
+
+[states.selected]
+bg = "#2a2a2d"
+fg = "#c1c0d4"
+[states.hover]
+bg = "#2d2d2e"
+[states.disabled]
+fg = "#8a898d"
+
+[footer]
+hint_color = "#8a898d"

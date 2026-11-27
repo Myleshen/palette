@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Patina Moss" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Patina Moss"
+appearance = "dark"
+
+[palette]
+bg = "#20231f"
+surface = "#171916"
+elevated = "#363935"
+fg = "#dbd7ca"
+fg_muted = "#9a988e"
+accent = "#67abb8"
+accent_fg = "#000000"
+selection_bg = "#383b31"
+selection_fg = "#dbd7ca"
+match_fg = "#c08a7d"
+border = "#454741"
+separator = "#36393580"
+danger = "#c07878"
+warning = "#d4bf6e"
+success = "#5ba886"
+info = "#65a8b5"
+badge_bg = "#363935"
+badge_fg = "#dbd7ca"
+
+[states.selected]
+bg = "#383b31"
+fg = "#dbd7ca"
+[states.hover]
+bg = "#363935"
+[states.disabled]
+fg = "#9a988e"
+
+[footer]
+hint_color = "#9a988e"

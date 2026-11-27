@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Unikitty" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Unikitty"
+appearance = "dark"
+
+[palette]
+bg = "#ff8cd9"
+surface = "#b8659c"
+elevated = "#ff98dd"
+fg = "#0b0b0b"
+fg_muted = "#603853"
+accent = "#001640"
+accent_fg = "#ffffff"
+selection_bg = "#3ea9fe"
+selection_fg = "#333333"
+match_fg = "#ffefff"
+border = "#ce72b0"
+separator = "#ff98dd80"
+danger = "#a80f20"
+warning = "#666200"
+success = "#406b00"
+info = "#0e5ac8"
+badge_bg = "#ff98dd"
+badge_fg = "#0b0b0b"
+
+[states.selected]
+bg = "#3ea9fe"
+fg = "#333333"
+[states.hover]
+bg = "#ff98dd"
+[states.disabled]
+fg = "#603853"
+
+[footer]
+hint_color = "#603853"

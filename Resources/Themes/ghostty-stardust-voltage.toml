@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Stardust Voltage" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Stardust Voltage"
+appearance = "light"
+
+[palette]
+bg = "#f0e5d9"
+surface = "#e4dace"
+elevated = "#f8f3ee"
+fg = "#27354e"
+fg_muted = "#626874"
+accent = "#224078"
+accent_fg = "#ffffff"
+selection_bg = "#dbc6c4"
+selection_fg = "#27354e"
+match_fg = "#5c3b68"
+border = "#c8c2bd"
+separator = "#f8f3ee80"
+danger = "#892c3e"
+warning = "#745418"
+success = "#346c51"
+info = "#274988"
+badge_bg = "#f8f3ee"
+badge_fg = "#27354e"
+
+[states.selected]
+bg = "#dbc6c4"
+fg = "#27354e"
+[states.hover]
+bg = "#f8f3ee"
+[states.disabled]
+fg = "#6d737f"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6d737f"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Matte Black" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Matte Black"
+appearance = "dark"
+
+[palette]
+bg = "#121212"
+surface = "#0d0d0d"
+elevated = "#2a2a2a"
+fg = "#bebebe"
+fg_muted = "#828282"
+accent = "#f59e0b"
+accent_fg = "#000000"
+selection_bg = "#333333"
+selection_fg = "#eaeaea"
+match_fg = "#d35f5f"
+border = "#343434"
+separator = "#2a2a2a80"
+danger = "#d35f5f"
+warning = "#bc201e"
+success = "#ffc107"
+info = "#e68e0d"
+badge_bg = "#2a2a2a"
+badge_fg = "#bebebe"
+
+[states.selected]
+bg = "#333333"
+fg = "#eaeaea"
+[states.hover]
+bg = "#2a2a2a"
+[states.disabled]
+fg = "#828282"
+
+[footer]
+hint_color = "#828282"

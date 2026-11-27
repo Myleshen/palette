@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Phala Green Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Phala Green Dark"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#c1fc03"
+fg_muted = "#7da402"
+accent = "#c1fc03"
+accent_fg = "#000000"
+selection_bg = "#014804"
+selection_fg = "#ffffff"
+match_fg = "#ed3aea"
+border = "#273201"
+separator = "#1a1a1a80"
+danger = "#b01c07"
+warning = "#a9a700"
+success = "#00b100"
+info = "#1547e0"
+badge_bg = "#1a1a1a"
+badge_fg = "#c1fc03"
+
+[states.selected]
+bg = "#014804"
+fg = "#ffffff"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#7da402"
+
+[footer]
+hint_color = "#7da402"

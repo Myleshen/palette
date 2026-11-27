@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Kolorit" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Kolorit"
+appearance = "dark"
+
+[palette]
+bg = "#1d1a1e"
+surface = "#151316"
+elevated = "#343134"
+fg = "#efecec"
+fg_muted = "#a6a2a4"
+accent = "#5db4ee"
+accent_fg = "#000000"
+selection_bg = "#e1925c"
+selection_fg = "#1d1a1e"
+match_fg = "#da6cda"
+border = "#474447"
+separator = "#34313480"
+danger = "#ff5b82"
+warning = "#e8e562"
+success = "#47d7a1"
+info = "#5db4ee"
+badge_bg = "#343134"
+badge_fg = "#efecec"
+
+[states.selected]
+bg = "#e1925c"
+fg = "#1d1a1e"
+[states.hover]
+bg = "#343134"
+[states.disabled]
+fg = "#a6a2a4"
+
+[footer]
+hint_color = "#a6a2a4"

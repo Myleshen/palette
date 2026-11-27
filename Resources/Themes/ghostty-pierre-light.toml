@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Pierre Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Pierre Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#070707"
+fg_muted = "#5e5e5e"
+accent = "#216cab"
+accent_fg = "#ffffff"
+selection_bg = "#dfebff"
+selection_fg = "#070707"
+match_fg = "#a631be"
+border = "#cdcdcd"
+separator = "#ffffff80"
+danger = "#d52c36"
+warning = "#ac8816"
+success = "#1d8138"
+info = "#216cab"
+badge_bg = "#ffffff"
+badge_fg = "#070707"
+
+[states.selected]
+bg = "#dfebff"
+fg = "#070707"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#5e5e5e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#5e5e5e"

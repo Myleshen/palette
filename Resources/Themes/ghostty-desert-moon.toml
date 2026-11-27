@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Desert Moon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Desert Moon"
+appearance = "dark"
+
+[palette]
+bg = "#0b3459"
+surface = "#082540"
+elevated = "#23486a"
+fg = "#f2f2e8"
+fg_muted = "#a1b0b6"
+accent = "#a9d0e7"
+accent_fg = "#000000"
+selection_bg = "#285273"
+selection_fg = "#fffdf2"
+match_fg = "#cabce2"
+border = "#395a76"
+separator = "#23486a80"
+danger = "#e79b90"
+warning = "#e2c979"
+success = "#8fc9a3"
+info = "#8dbfdd"
+badge_bg = "#23486a"
+badge_fg = "#f2f2e8"
+
+[states.selected]
+bg = "#285273"
+fg = "#fffdf2"
+[states.hover]
+bg = "#23486a"
+[states.disabled]
+fg = "#a1b0b6"
+
+[footer]
+hint_color = "#a1b0b6"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Night Pharmacy" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Night Pharmacy"
+appearance = "dark"
+
+[palette]
+bg = "#07100b"
+surface = "#050c08"
+elevated = "#202823"
+fg = "#ecf5ef"
+fg_muted = "#9ca59f"
+accent = "#7ff0bd"
+accent_fg = "#000000"
+selection_bg = "#173425"
+selection_fg = "#f5fff8"
+match_fg = "#dabbe8"
+border = "#353e39"
+separator = "#20282380"
+danger = "#ef8088"
+warning = "#e6cb69"
+success = "#72d1a0"
+info = "#83b3e7"
+badge_bg = "#202823"
+badge_fg = "#ecf5ef"
+
+[states.selected]
+bg = "#173425"
+fg = "#f5fff8"
+[states.hover]
+bg = "#202823"
+[states.disabled]
+fg = "#9ca59f"
+
+[footer]
+hint_color = "#9ca59f"

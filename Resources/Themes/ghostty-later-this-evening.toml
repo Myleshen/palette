@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Later This Evening" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Later This Evening"
+appearance = "dark"
+
+[palette]
+bg = "#222222"
+surface = "#181818"
+elevated = "#383838"
+fg = "#acacab"
+fg_muted = "#898888"
+accent = "#a0bad6"
+accent_fg = "#000000"
+selection_bg = "#424242"
+selection_fg = "#aeaeae"
+match_fg = "#c092d6"
+border = "#393939"
+separator = "#38383880"
+danger = "#d45a60"
+warning = "#e5d289"
+success = "#afba67"
+info = "#a0bad6"
+badge_bg = "#383838"
+badge_fg = "#a2a2a2"
+
+[states.selected]
+bg = "#424242"
+fg = "#aeaeae"
+[states.hover]
+bg = "#383838"
+[states.disabled]
+fg = "#6d6d6d"
+
+[footer]
+hint_color = "#6d6d6d"

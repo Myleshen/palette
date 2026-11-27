@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Retro Legends" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Retro Legends"
+appearance = "dark"
+
+[palette]
+bg = "#0d0d0d"
+surface = "#090909"
+elevated = "#252525"
+fg = "#45eb45"
+fg_muted = "#319d31"
+accent = "#45eb45"
+accent_fg = "#000000"
+selection_bg = "#336633"
+selection_fg = "#f2fff2"
+match_fg = "#e666ff"
+border = "#183918"
+separator = "#25252580"
+danger = "#de5454"
+warning = "#f7bf2b"
+success = "#45eb45"
+info = "#4066f2"
+badge_bg = "#252525"
+badge_fg = "#45eb45"
+
+[states.selected]
+bg = "#336633"
+fg = "#f2fff2"
+[states.hover]
+bg = "#252525"
+[states.disabled]
+fg = "#319d31"
+
+[footer]
+hint_color = "#319d31"

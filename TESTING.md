@@ -20,6 +20,9 @@ provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
 | `AskTests` | Ask config round-trip without secrets, free-first model order, endpoint scoping, response/error parsing, quota fallback, invalid-key endpoint skipping, Settings model precedence, streaming, saved chats and sources, markdown blocks/tables/images, web-search parsing and the untrusted system note |
 | `KeepAwakeTests` | keep-awake start/stop, timed expiry, provider rows/actions, clamshell toggle independence, clamshell flag cleanup, AC/battery guard transitions |
 | `ExternalProviderTests` | NDJSON round-trip against the hello example |
+| `PerformanceTests` | hard budgets for theme menu open, warm catalog, 5k clipboard snapshot, cached `/neo`, and theme apply file generation |
+| `ThemeApplyIntegrationTests` | Apply/uncheck/Revert against a sandbox HOME with real kitty, Ghostty, zellij, Neovim, fish and Starship configs |
+| `AnnotationInteractionTests` | pointer hit-test, delete selected, one-step move undo, crop clamping |
 
 ## Provider conformance harness
 
@@ -51,9 +54,12 @@ Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `scratchlist`, `snapshot=<path>`, `shot`,
 `settings_tab=<index>`,
 `settings_size=<w>x<h>`, `settings_edit=<field>=<value>`,
-`settings_clear_search`, `awake=<seconds>`, `settings_snapshot=<path>`,
-`window_snapshot=<path>`, `askwindow=<question>`, `chatwindow`,
+`settings_clear_search`, `theming_apply=<theme>`, `awake=<seconds>`,
+`settings_snapshot=<path>`,
+`window_snapshot=<path>`, `statuspanel`, `statuspanelclose`,
+`statuspanel_snapshot=<path>`, `askwindow=<question>`, `chatwindow`,
 `chatopen=<index>`, `ask_cancel`, `asktoggle`, `askclose`,
+`palette_menu=<probe|picker|engine_browser>`, `palettemenu_probe`,
 `wait=<seconds>`, `dump=<path>`, `assert=<cond>`,
 `wait_until=<cond>[;timeout=<s>]`, and
 `key=<token>` where token is `up`, `down`, `enter`, `esc`, `tab`, `space`,
@@ -73,8 +79,44 @@ Other hooks: `PALETTE_QUERY`, `PALETTE_SHOW_ON_LAUNCH`,
 and `PALETTE_ACTIONS`. `dump` also exposes the Ask window as `askWindows`,
 `askStreaming`, `askTurns`, `askChats`, and `askBadge`.
 
+Cross-app theming needs a home of its own, or a scripted apply would edit the
+real kitty/Ghostty/fish configs. `PALETTE_HOME` moves every managed path into a
+temp directory, and `PALETTE_KITTY` points the reload step at a fake binary:
+
+```sh
+PALETTE_HOME="$TMP/home" PALETTE_KITTY="$TMP/bin/kitty" \
+PALETTE_STATE_DIR="$TMP/state" PALETTE_CACHE_DIR="$TMP/cache" \
+PALETTE_SCRIPT="theming_apply=default-dark; wait=1; dump=$TMP/dump.json; exit" \
+  build/Palette.app/Contents/MacOS/Palette
+```
+
+`dump` then carries a `theming` object with the apply status and one
+`{id, title, state, note}` row per target, so a shell check can assert the
+markers and the reload answers.
+
 The harness calls the same `SearchController` keyboard path as the panel, but
 it does not test Carbon hotkey delivery or real typing. Check those manually.
+
+### What quiet script mode cannot reproduce
+
+Script mode cannot enter a native menu-tracking loop, because it never opens a
+native `NSMenu` and never activates the app. The custom, non-activating panels
+replaced those menus for exactly that reason, and the flows drive them instead:
+`statuspanel` opens the status-item panel, and
+`palette_menu=<probe|picker|engine_browser>` opens a representative menu, a
+`PaletteMenuPicker` menu, or the engine browser picker. While one is open the
+dump exposes `paletteMenuOpen`, `paletteMenuRows`, `paletteMenuHighlight` and
+`statusPanelOpen`, `statusPanelRows`, `statusPanelHighlight`. `palettemenu_probe`
+stands in for a global hotkey callback and increments `paletteMenuProbe`; a
+native tracking loop would block that callback until the menu closed.
+`key=` routes Up/Down/Return/Esc to the open panel, so the flows assert the
+highlight moves and Esc closes.
+
+What remains human-only: the system app menu bar, Services, file panels,
+first-run and TCC alerts, and confirming that a real Carbon hotkey still fires
+while a panel is open. Script mode can also prove the app stayed out of focus
+(`appActive=false`), but not that a real activation (click, Dock, `open`) leaves
+the panel placed correctly. Those stay on the manual checklist.
 
 ## E2E flows
 
@@ -99,6 +141,11 @@ leftover Palette process before exiting:
 | `ask-window-not-modal` | the Ask window opens while the scratchpad stays active |
 | `ask-window-coexists` | the Ask window and the launcher are both visible |
 | `cheatsheets` | a temp `[cheatsheets] folders` entry reaches `/cheat`, which returns rows from the `cheat` provider |
+| `status-panel-interaction` | the status-item panel opens without activation, reports rows, and Esc closes it |
+| `palette-menu-probe` | the menu holds its five fixed rows, a hotkey probe runs while it is open, Up cycles the highlight while skipping a separator and a disabled row, and Esc closes |
+| `palette-menu-picker` | a `PaletteMenuPicker` menu builds four rows and Up/Down move between choices |
+| `engine-browser-picker` | the web-search engine browser picker builds its rows, stays inactive, and moves the highlight |
+| `theme-menu-lazy` | the 942-row theme browser reports the whole catalog but renders under 45 rows (`themeMenuRows`, `themeMenuRendered`) |
 
 The capture flow asserts panel visibility only: a real capture needs Screen
 Recording TCC, which CI does not grant.
@@ -117,6 +164,31 @@ Three steps make a script verifiable: `dump=<path>` writes the observable
 state as JSON, `assert=<condition>` records a failure when the condition is
 false, and `wait_until=<condition>;timeout=<seconds>` polls until it holds
 (5 s default). Any failure makes the process exit non-zero.
+
+## Performance budgets
+
+`PerformanceTests` fails with the measured value when a budget is crossed.
+Thresholds are loose enough for a loaded laptop and far below the regression
+they guard. The numbers below are from a 2026-11-26 run on the development Mac
+(M-series, debug build, `swift test`):
+
+| What | Threshold | Measured |
+|---|---|---|
+| Opening the 942-row theme menu (warm catalog, building the rows) | < 250 ms | 4.9 ms |
+| `ThemeLoader.catalog` warm | < 400 ms | 21.8 ms |
+| 5k-entry clipboard search snapshot rebuild | < 100 ms | 20.8 ms |
+| Cached `/neo` open (empty query over a 20k-path snapshot) | < 200 ms | 50.9 ms; 101 ms at background QoS |
+| Theme apply file generation (sandbox HOME, 7 files, no reloads) | < 300 ms | 10.1 ms |
+| Theme browser first frame (942 rows in catalog) | renders < 45 rows | checked by `theme-menu-lazy` in e2e |
+
+The last row is a UI-laziness assertion and lives in the e2e flow because
+`PaletteTests` does not link the `PaletteApp` target that owns the view.
+
+`AnnotationInteractionTests` drives the editor model, not the window: hit-test
+picking, delete-selected, one undo step per move, and crop clamping. This branch
+has no per-mark resize handles — the only resize path is the crop rectangle,
+which is what the clamp test covers. If the annotate branch lands a resize API,
+extend that suite against it instead of the crop path.
 
 ## Layout check
 

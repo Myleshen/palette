@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Aztec Sunset" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Aztec Sunset"
+appearance = "dark"
+
+[palette]
+bg = "#1b0c18"
+surface = "#130911"
+elevated = "#32242f"
+fg = "#ffe6c7"
+fg_muted = "#af9a8a"
+accent = "#8bd8d2"
+accent_fg = "#000000"
+selection_bg = "#743829"
+selection_fg = "#fff0d8"
+match_fg = "#f194bd"
+border = "#49383b"
+separator = "#32242f80"
+danger = "#f47c62"
+warning = "#e9bd59"
+success = "#67c894"
+info = "#72c6c2"
+badge_bg = "#32242f"
+badge_fg = "#ffe6c7"
+
+[states.selected]
+bg = "#743829"
+fg = "#fff0d8"
+[states.hover]
+bg = "#32242f"
+[states.disabled]
+fg = "#af9a8a"
+
+[footer]
+hint_color = "#af9a8a"

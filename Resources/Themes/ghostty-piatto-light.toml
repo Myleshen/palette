@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Piatto Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Piatto Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#414141"
+fg_muted = "#777676"
+accent = "#3c5ea8"
+accent_fg = "#ffffff"
+selection_bg = "#706b4e"
+selection_fg = "#e8ecf5"
+match_fg = "#a454b2"
+border = "#d9d9d9"
+separator = "#ffffff80"
+danger = "#b23771"
+warning = "#cd6f34"
+success = "#66781e"
+info = "#3c5ea8"
+badge_bg = "#ffffff"
+badge_fg = "#414141"
+
+[states.selected]
+bg = "#706b4e"
+fg = "#e8ecf5"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#848484"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#848484"

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Rainbows and Unicorns Paper White" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Rainbows and Unicorns Paper White"
+appearance = "light"
+
+[palette]
+bg = "#efede6"
+surface = "#e3e1db"
+elevated = "#f8f7f4"
+fg = "#1b1b1f"
+fg_muted = "#656565"
+accent = "#0069a0"
+accent_fg = "#ffffff"
+selection_bg = "#1b1b1f"
+selection_fg = "#efede6"
+match_fg = "#8a2f8c"
+border = "#c5c3be"
+separator = "#f8f7f480"
+danger = "#c2272d"
+warning = "#8a6100"
+success = "#2f7d1f"
+info = "#0b6fa6"
+badge_bg = "#f8f7f4"
+badge_fg = "#1b1b1f"
+
+[states.selected]
+bg = "#1b1b1f"
+fg = "#efede6"
+[states.hover]
+bg = "#f8f7f4"
+[states.disabled]
+fg = "#656565"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#656565"

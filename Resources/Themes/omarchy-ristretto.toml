@@ -1,0 +1,38 @@
+# Ported from Omarchy's bundled "Ristretto" theme.
+# Source: https://github.com/basecamp/omarchy/blob/master/themes/ristretto/colors.toml
+# Omarchy is MIT-licensed; colour values only, no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Omarchy · Ristretto"
+appearance = "dark"
+
+[palette]
+bg = "#2c2525"
+surface = "#201b1b"
+elevated = "#413b3b"
+fg = "#e6d9db"
+fg_muted = "#a59a9b"
+accent = "#f38d70"
+accent_fg = "#000000"
+selection_bg = "#403e41"
+selection_fg = "#e6d9db"
+match_fg = "#bebffd"
+border = "#514949"
+separator = "#413b3b80"
+danger = "#fd6883"
+warning = "#f9cc6c"
+success = "#adda78"
+info = "#f38d70"
+badge_bg = "#413b3b"
+badge_fg = "#e6d9db"
+
+[states.selected]
+bg = "#403e41"
+fg = "#e6d9db"
+[states.hover]
+bg = "#413b3b"
+[states.disabled]
+fg = "#a59a9b"
+
+[footer]
+hint_color = "#a59a9b"

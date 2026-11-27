@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Neon Analog" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Neon Analog"
+appearance = "dark"
+
+[palette]
+bg = "#0b0f14"
+surface = "#080b0e"
+elevated = "#23272c"
+fg = "#e6ebf5"
+fg_muted = "#999ea6"
+accent = "#bdd7f7"
+accent_fg = "#000000"
+selection_bg = "#1f2a3a"
+selection_fg = "#f5f8ff"
+match_fg = "#dfbdf7"
+border = "#373b41"
+separator = "#23272c80"
+danger = "#ff6b9d"
+warning = "#f5c14d"
+success = "#a8d8bc"
+info = "#a8c9f2"
+badge_bg = "#23272c"
+badge_fg = "#e6ebf5"
+
+[states.selected]
+bg = "#1f2a3a"
+fg = "#f5f8ff"
+[states.hover]
+bg = "#23272c"
+[states.disabled]
+fg = "#999ea6"
+
+[footer]
+hint_color = "#999ea6"

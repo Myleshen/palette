@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Sequoia Moonlight Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Sequoia Moonlight Light"
+appearance = "light"
+
+[palette]
+bg = "#edeef2"
+surface = "#e1e2e6"
+elevated = "#f7f7f9"
+fg = "#282930"
+fg_muted = "#6b6c72"
+accent = "#8346bf"
+accent_fg = "#e2e2e2"
+selection_bg = "#817c9c"
+selection_fg = "#16171b"
+match_fg = "#282930"
+border = "#c6c7cb"
+separator = "#f7f7f980"
+danger = "#c94da8"
+warning = "#6a6a78"
+success = "#4a85d4"
+info = "#9a5fd9"
+badge_bg = "#f7f7f9"
+badge_fg = "#282930"
+
+[states.selected]
+bg = "#817c9c"
+fg = "#16171b"
+[states.hover]
+bg = "#f7f7f9"
+[states.disabled]
+fg = "#6d6e74"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6d6e74"

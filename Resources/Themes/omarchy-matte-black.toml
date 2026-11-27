@@ -1,0 +1,39 @@
+# Ported from Omarchy's bundled "Matte Black" theme.
+# Source: https://github.com/basecamp/omarchy/blob/master/themes/matte-black/colors.toml
+# Omarchy is MIT-licensed; colour values only, no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Omarchy · Matte Black"
+appearance = "dark"
+
+[palette]
+bg = "#121212"
+surface = "#0d0d0d"
+elevated = "#2a2a2a"
+fg = "#bebebe"
+fg_muted = "#828282"
+accent = "#e68e0d"
+accent_fg = "#000000"
+selection_bg = "#515151"
+selection_fg = "#c3c3c3"
+match_fg = "#B91C1C"
+border = "#343434"
+separator = "#2a2a2a80"
+danger = "#D35F5F"
+warning = "#bc201e"
+success = "#FFC107"
+info = "#e68e0d"
+badge_bg = "#2a2a2a"
+badge_fg = "#bebebe"
+
+[states.selected]
+bg = "#515151"
+fg = "#c3c3c3"
+[states.hover]
+bg = "#2a2a2a"
+[states.disabled]
+fg = "#828282"
+
+[footer]
+hint_color = "#828282"

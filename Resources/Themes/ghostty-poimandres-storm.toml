@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Poimandres Storm" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Poimandres Storm"
+appearance = "dark"
+
+[palette]
+bg = "#252b37"
+surface = "#1b1f28"
+elevated = "#3b404b"
+fg = "#aeb5d6"
+fg_muted = "#8a90ab"
+accent = "#add7ff"
+accent_fg = "#000000"
+selection_bg = "#a6accd"
+selection_fg = "#3d3d3d"
+match_fg = "#f087bd"
+border = "#3f4555"
+separator = "#3b404b80"
+danger = "#d0679d"
+warning = "#fffac2"
+success = "#5de4c7"
+info = "#89ddff"
+badge_bg = "#3b404b"
+badge_fg = "#a6accd"
+
+[states.selected]
+bg = "#a6accd"
+fg = "#3d3d3d"
+[states.hover]
+bg = "#3b404b"
+[states.disabled]
+fg = "#797f99"
+
+[footer]
+hint_color = "#797f99"

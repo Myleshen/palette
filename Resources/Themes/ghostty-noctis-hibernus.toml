@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Noctis Hibernus" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Noctis Hibernus"
+appearance = "light"
+
+[palette]
+bg = "#f4f6f6"
+surface = "#e8eaea"
+elevated = "#fafbfb"
+fg = "#005661"
+fg_muted = "#417980"
+accent = "#006db4"
+accent_fg = "#eaeaea"
+selection_bg = "#d9e0e0"
+selection_fg = "#005661"
+match_fg = "#ff5792"
+border = "#c3d6d8"
+separator = "#fafbfb80"
+danger = "#e34e1c"
+warning = "#ce7a00"
+success = "#00a35f"
+info = "#0093ef"
+badge_bg = "#fafbfb"
+badge_fg = "#005661"
+
+[states.selected]
+bg = "#d9e0e0"
+fg = "#005661"
+[states.hover]
+bg = "#fafbfb"
+[states.disabled]
+fg = "#558e95"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#558e95"

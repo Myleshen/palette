@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Gruber Darker Legacy" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Gruber Darker Legacy"
+appearance = "dark"
+
+[palette]
+bg = "#181818"
+surface = "#111111"
+elevated = "#2f2f2f"
+fg = "#e4e4e4"
+fg_muted = "#9d9d9d"
+accent = "#ffdb00"
+accent_fg = "#000000"
+selection_bg = "#ffffff"
+selection_fg = "#54494e"
+match_fg = "#afafda"
+border = "#414141"
+separator = "#2f2f2f80"
+danger = "#ff0a36"
+warning = "#ffdb00"
+success = "#42dc00"
+info = "#92a7cb"
+badge_bg = "#2f2f2f"
+badge_fg = "#e4e4e4"
+
+[states.selected]
+bg = "#ffffff"
+fg = "#54494e"
+[states.hover]
+bg = "#2f2f2f"
+[states.disabled]
+fg = "#9d9d9d"
+
+[footer]
+hint_color = "#9d9d9d"

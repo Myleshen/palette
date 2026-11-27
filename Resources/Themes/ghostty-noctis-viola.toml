@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Noctis Viola" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Noctis Viola"
+appearance = "dark"
+
+[palette]
+bg = "#30243d"
+surface = "#231a2c"
+elevated = "#453a50"
+fg = "#ccbfd9"
+fg_muted = "#978ba4"
+accent = "#60b6eb"
+accent_fg = "#000000"
+selection_bg = "#3e3352"
+selection_fg = "#ccbfd9"
+match_fg = "#e798b3"
+border = "#4f435c"
+separator = "#453a5080"
+danger = "#e66533"
+warning = "#e4b781"
+success = "#49e9a6"
+info = "#49ace9"
+badge_bg = "#453a50"
+badge_fg = "#ccbfd9"
+
+[states.selected]
+bg = "#3e3352"
+fg = "#ccbfd9"
+[states.hover]
+bg = "#453a50"
+[states.disabled]
+fg = "#9589a2"
+
+[footer]
+hint_color = "#9589a2"

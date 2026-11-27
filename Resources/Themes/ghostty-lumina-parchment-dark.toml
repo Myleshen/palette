@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lumina Parchment Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Parchment Dark"
+appearance = "dark"
+
+[palette]
+bg = "#2a2116"
+surface = "#1e1810"
+elevated = "#3f372d"
+fg = "#efe5d0"
+fg_muted = "#aaa08f"
+accent = "#bbd7ff"
+accent_fg = "#000000"
+selection_bg = "#54452a"
+selection_fg = "#efe5d0"
+match_fg = "#ecbef3"
+border = "#51483b"
+separator = "#3f372d80"
+danger = "#d47169"
+warning = "#e0ba6a"
+success = "#92d3b9"
+info = "#97bdf4"
+badge_bg = "#3f372d"
+badge_fg = "#efe5d0"
+
+[states.selected]
+bg = "#54452a"
+fg = "#efe5d0"
+[states.hover]
+bg = "#3f372d"
+[states.disabled]
+fg = "#aaa08f"
+
+[footer]
+hint_color = "#aaa08f"

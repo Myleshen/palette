@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Paranoid Circuit" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Paranoid Circuit"
+appearance = "dark"
+
+[palette]
+bg = "#27322b"
+surface = "#1c241f"
+elevated = "#3d4640"
+fg = "#f2e9d3"
+fg_muted = "#aba998"
+accent = "#aec8c6"
+accent_fg = "#000000"
+selection_bg = "#4b4a3b"
+selection_fg = "#ffffff"
+match_fg = "#d7b2dc"
+border = "#50574d"
+separator = "#3d464080"
+danger = "#dc9771"
+warning = "#d5bd6e"
+success = "#a7c67c"
+info = "#9cb4b5"
+badge_bg = "#3d4640"
+badge_fg = "#f2e9d3"
+
+[states.selected]
+bg = "#4b4a3b"
+fg = "#ffffff"
+[states.hover]
+bg = "#3d4640"
+[states.disabled]
+fg = "#aba998"
+
+[footer]
+hint_color = "#aba998"

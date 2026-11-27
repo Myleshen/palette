@@ -3,6 +3,8 @@
 //   * CoreEmoji AppleName.strings (the names Spotlight and the
 //     Character Viewer use on this Mac)
 // Fully-qualified emoji, merged by base glyph. Do not hand-edit.
+import PaletteCore
+
 public struct EmojiCatalogEntry: Sendable {
     public let glyph: String
     public let name: String
@@ -14,10 +16,23 @@ public struct EmojiCatalogEntry: Sendable {
         self.appleName = appleName
         self.group = group
     }
+}
 
-    public var searchText: String {
-        "\(name) \(appleName) \(group)".lowercased()
-    }
+/// The searchable form of an entry. Folded once here, so a search compares
+/// against the same text every keystroke instead of re-folding 3,967 entries
+/// per term. Kept beside the raw catalog because building it inside the
+/// 3,967-element array literal overflows the test thread's stack.
+public struct EmojiSearchEntry: Sendable {
+    public let emoji: EmojiCatalogEntry
+    public let foldedName: String
+    public let foldedAppleName: String
+    public let foldedGroup: String
+    /// The combined text the literal-match check used to build on the fly.
+    public let searchText: String
+    public var glyph: String { emoji.glyph }
+    public var name: String { emoji.name }
+    public var appleName: String { emoji.appleName }
+    public var group: String { emoji.group }
 }
 
 public enum EmojiCatalog {
@@ -3990,4 +4005,15 @@ public enum EmojiCatalog {
         .init(glyph: "👩‍🤝‍👩", name: "women holding hands", appleName: "women holding hands", group: "Apple"),
         .init(glyph: "🫱‍🫲", name: "handshake", appleName: "handshake", group: "Apple"),
     ]
+
+    /// Built once, lazily, outside the giant literal above.
+    public static let searchIndex: [EmojiSearchEntry] = all.map { emoji in
+        EmojiSearchEntry(
+            emoji: emoji,
+            foldedName: Ranking.normalize(emoji.name),
+            foldedAppleName: Ranking.normalize(emoji.appleName),
+            foldedGroup: Ranking.normalize(emoji.group),
+            searchText: "\(emoji.name) \(emoji.appleName) \(emoji.group)".lowercased()
+        )
+    }
 }

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Code 2026 Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Code 2026 Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#202020"
+fg_muted = "#6e6e6e"
+accent = "#0550ae"
+accent_fg = "#ffffff"
+selection_bg = "#c2daf5"
+selection_fg = "#202020"
+match_fg = "#8250df"
+border = "#d2d2d2"
+separator = "#ffffff80"
+danger = "#cf222e"
+warning = "#953800"
+success = "#116329"
+info = "#0550ae"
+badge_bg = "#ffffff"
+badge_fg = "#202020"
+
+[states.selected]
+bg = "#c2daf5"
+fg = "#202020"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#6e6e6e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6e6e6e"

@@ -745,7 +745,7 @@ public actor PaletteStore {
         bind(statement, 3, trimmed)
         sqlite3_bind_double(statement, 4, date.timeIntervalSince1970)
         try step(statement)
-        try trimClipboard(maxEntries: maxEntries)
+        try trimClipboard(kind: "text", maxEntries: maxEntries)
         clipboardRevisionValue += 1
         return !existing
     }
@@ -815,7 +815,7 @@ public actor PaletteStore {
             try step(metadata)
         }
 
-        try trimClipboard(maxEntries: maxEntries)
+        try trimClipboard(kind: "image", maxEntries: maxEntries)
         clipboardRevisionValue += 1
         return !existing
     }
@@ -915,9 +915,42 @@ public actor PaletteStore {
             try step(metadata)
         }
 
-        try trimClipboard(maxEntries: maxEntries)
+        try trimClipboard(kind: "files", maxEntries: maxEntries)
         clipboardRevisionValue += 1
         return !existing
+    }
+
+    /// Palette's own copies: the clipboard monitor skips Palette's pasteboard
+    /// writes, so the capture and annotator paths record their bytes here
+    /// instead. Text and path copies are never routed through this; dedupe is
+    /// by hash like any other copy, and the monitor's own write is still
+    /// suppressed. The caller hands over bytes, size and thumbnail it already
+    /// has — nothing here decodes an image or reads a file's contents.
+    @discardableResult
+    public func insertPaletteCopy(
+        _ copy: PaletteClipboardCopy,
+        maxImages: Int,
+        maxFiles: Int,
+        at date: Date = Date()
+    ) throws -> Bool {
+        switch copy {
+        case .image(let image):
+            return try insertClipboardImage(
+                png: image.png,
+                thumbnail: image.thumbnail,
+                width: image.width,
+                height: image.height,
+                maxEntries: maxImages,
+                at: date
+            )
+        case .files(let paths, let thumbnail):
+            return try insertClipboardFiles(
+                paths: paths,
+                thumbnail: thumbnail,
+                maxEntries: maxFiles,
+                at: date
+            )
+        }
     }
 
     public func clipboardEntries(
@@ -938,7 +971,7 @@ public actor PaletteStore {
         if !conditions.isEmpty {
             sql += " WHERE " + conditions.joined(separator: " AND ")
         }
-        sql += " ORDER BY c.pinned DESC, c.created DESC LIMIT ?;"
+        sql += " ORDER BY c.created DESC LIMIT ?;"
 
         let statement = try prepare(sql)
         defer { sqlite3_finalize(statement) }
@@ -1013,9 +1046,7 @@ public actor PaletteStore {
         let statement = try prepare("""
         SELECT id, substr(text, 1, 4096), kind, pinned, created, width, height
         FROM clipboard
-        ORDER BY pinned DESC,
-                 CASE kind WHEN 'text' THEN 0 WHEN 'image' THEN 1 ELSE 2 END,
-                 created DESC
+        ORDER BY created DESC
         LIMIT ?;
         """)
         defer { sqlite3_finalize(statement) }
@@ -1811,11 +1842,15 @@ public actor PaletteStore {
         }
     }
 
-    private func trimClipboard(maxEntries: Int) throws {
+    /// Keeps the newest `maxEntries` unpinned rows of one kind. Kinds are
+    /// trimmed independently and pinned rows never count or get evicted.
+    private func trimClipboard(kind: String, maxEntries: Int) throws {
         let doomed = try stringValues("""
         SELECT id FROM clipboard
-        WHERE pinned = 0 AND id NOT IN (
-            SELECT id FROM clipboard WHERE pinned = 0 ORDER BY created DESC LIMIT \(max(1, maxEntries))
+        WHERE pinned = 0 AND kind = '\(kind)' AND id NOT IN (
+            SELECT id FROM clipboard
+            WHERE pinned = 0 AND kind = '\(kind)'
+            ORDER BY created DESC LIMIT \(max(1, maxEntries))
         );
         """)
         guard !doomed.isEmpty else { return }

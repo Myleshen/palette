@@ -13,7 +13,7 @@ public final class EmojiProvider: PaletteProvider, @unchecked Sendable {
 
     /// Every emoji macOS itself knows about, with the system names so searches
     /// like "crying" or "heart hands" land on the same pick as Character Viewer.
-    private static let entries = EmojiCatalog.all
+    private static let entries = EmojiCatalog.searchIndex
 
     public init() {}
 
@@ -26,19 +26,19 @@ public final class EmojiProvider: PaletteProvider, @unchecked Sendable {
         }
 
         let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
-        var literalMatches: [(EmojiCatalogEntry, Double)] = []
-        var fuzzyMatches: [(EmojiCatalogEntry, Double)] = []
+        let foldedTerms = terms.map(Ranking.normalize)
+        let loweredTerms = terms.map { $0.lowercased() }
+        var literalMatches: [(EmojiSearchEntry, Double)] = []
+        var fuzzyMatches: [(EmojiSearchEntry, Double)] = []
         for emoji in Self.entries {
-            let fields = [emoji.name, emoji.appleName, emoji.group]
             var total: Double = 0
             var literal = true
             var matchedAll = true
 
-            for term in terms {
-                let lower = term.lowercased()
+            for (index, term) in foldedTerms.enumerated() {
                 var best: Double?
-                for field in fields where !field.isEmpty {
-                    if let score = Ranking.termScore(term, candidate: field) {
+                for field in [emoji.foldedName, emoji.foldedAppleName, emoji.foldedGroup] where !field.isEmpty {
+                    if let score = Ranking.score(foldedTerm: term, foldedCandidate: field) {
                         best = max(best ?? score, score)
                     }
                 }
@@ -47,7 +47,7 @@ public final class EmojiProvider: PaletteProvider, @unchecked Sendable {
                     break
                 }
                 total += best
-                if !emoji.searchText.contains(lower) { literal = false }
+                if !emoji.searchText.contains(loweredTerms[index]) { literal = false }
             }
             guard matchedAll else { continue }
             if literal {
@@ -67,7 +67,7 @@ public final class EmojiProvider: PaletteProvider, @unchecked Sendable {
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {}
 
-    private func item(for emoji: EmojiCatalogEntry, score: Double) -> PaletteItem {
+    private func item(for emoji: EmojiSearchEntry, score: Double) -> PaletteItem {
         let label = (emoji.appleName.isEmpty ? emoji.name : emoji.appleName).capitalized
         // The group already reads in the subtitle; a badge would print it twice.
         let detail = emoji.group.isEmpty ? "Paste emoji" : emoji.group

@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Breadog" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Breadog"
+appearance = "light"
+
+[palette]
+bg = "#f1ebe6"
+surface = "#e5dfdb"
+elevated = "#f9f6f4"
+fg = "#362c24"
+fg_muted = "#716a63"
+accent = "#005cb4"
+accent_fg = "#ffffff"
+selection_bg = "#362c24"
+selection_fg = "#f1ebe6"
+match_fg = "#9b0097"
+border = "#ccc5bf"
+separator = "#f9f6f480"
+danger = "#b10b00"
+warning = "#8b4c00"
+success = "#007232"
+info = "#005cb4"
+badge_bg = "#f9f6f4"
+badge_fg = "#362c24"
+
+[states.selected]
+bg = "#362c24"
+fg = "#f1ebe6"
+[states.hover]
+bg = "#f9f6f4"
+[states.disabled]
+fg = "#776f68"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#776f68"

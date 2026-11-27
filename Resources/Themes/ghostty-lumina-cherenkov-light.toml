@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Lumina Cherenkov Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Cherenkov Light"
+appearance = "light"
+
+[palette]
+bg = "#f5f8ff"
+surface = "#e9ecf2"
+elevated = "#fbfcff"
+fg = "#1f2e53"
+fg_muted = "#68728c"
+accent = "#1d448f"
+accent_fg = "#ffffff"
+selection_bg = "#b3d0f4"
+selection_fg = "#1f2e53"
+match_fg = "#793474"
+border = "#cad0dd"
+separator = "#fbfcff80"
+danger = "#a32224"
+warning = "#a35f00"
+success = "#227a3e"
+info = "#0a4fcc"
+badge_bg = "#fbfcff"
+badge_fg = "#1f2e53"
+
+[states.selected]
+bg = "#b3d0f4"
+fg = "#1f2e53"
+[states.hover]
+bg = "#fbfcff"
+[states.disabled]
+fg = "#6a758f"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6a758f"

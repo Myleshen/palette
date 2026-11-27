@@ -169,6 +169,12 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     private let terminal: String
     private let cache = ResultCache()
 
+    /// Custom action ids `activate` routes; the host owns the embedded panel.
+    static let handledCustomActions: Set<String> = [
+        "auth", "clone", "copy-slug", "checkout", "rerun", "cancel", "mark-done", "open",
+    ]
+    static let hostHandledCustomActions: Set<String> = ["cmd-run-panel"]
+
     /// `gh` is spawned per keystroke otherwise. Results live for 20 s, and a
     /// cancelled search kills its child through `ProcessRunner`, so a newer
     /// query simply replaces the in-flight one.
@@ -228,22 +234,43 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             )]
         }
 
-        let key = "\(kind.rawValue)|\(FileManager.default.currentDirectoryPath)|\(query)"
-        if let cached = await cache.cached(key) { return cached }
+        // The typed text is only a local filter, so keying on it spawned `gh`
+        // for every keystroke. A full `owner/repo` changes what is fetched, so
+        // it stays part of the key; partial phrases reuse the listing.
+        let repo = GitHubRepoRef.slug(from: query) ?? ""
+        let key = "\(kind.rawValue)|\(FileManager.default.currentDirectoryPath)|\(repo)"
+        if let cached = await cache.cached(key) { return locallyFiltered(cached, query: query) }
         let items: [PaletteItem]
         switch kind {
         case .context: items = await contextItems(gh, query: query)
-        case .repos: items = await repositoryItems(gh, query: query)
-        case .pulls: items = await pullRequestItems(gh, query: query)
-        case .issues: items = await issueItems(gh, query: query)
+        case .repos: items = await repositoryItems(gh)
+        case .pulls: items = await pullRequestItems(gh)
+        case .issues: items = await issueItems(gh)
         case .actions: items = await actionRunItems(gh, query: query)
-        case .notifications: items = await notificationItems(gh, query: query)
+        case .notifications: items = await notificationItems(gh)
         }
         await cache.store(items, key: key)
-        return items
+        return locallyFiltered(items, query: query)
     }
 
+    /// Filtering happens after the cache so the entry always holds the full
+    /// listing. A full `owner/repo` picks the repository rather than filtering
+    /// text, and setup/error rows must survive whatever is typed.
+    private func locallyFiltered(_ items: [PaletteItem], query: String) -> [PaletteItem] {
+        guard !query.isEmpty else { return items }
+        if kind == .context || kind == .actions, GitHubRepoRef.slug(from: query) != nil {
+            return items
+        }
+        return items.filter { item in
+            guard Self.listingPrefixes.contains(where: { item.id.hasPrefix($0) }) else { return true }
+            return Ranking.score(query: query, candidate: "\(item.title) \(item.subtitle ?? "")") != nil
+        }
+    }
+
+    private static let listingPrefixes = ["pr:", "issue:", "repo:", "run:", "notification:"]
+
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
+        guard Self.handledCustomActions.contains(action.id) else { return }
         switch action.id {
         case "auth":
             try await openTerminal("gh auth login", app: terminalApp)
@@ -301,13 +328,13 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         var failures: [String] = []
 
         if let slug = GitHubRepoRef.slug(from: query) {
-            let attempt = await repositoryContext(gh, repo: slug, cwd: nil, query: "")
+            let attempt = await repositoryContext(gh, repo: slug, cwd: nil)
             if attempt.error == nil { return attempt.items }
             failures.append(attempt.error ?? "")
         }
 
         if let root = await repositoryRoot() {
-            let attempt = await repositoryContext(gh, repo: nil, cwd: root, query: query)
+            let attempt = await repositoryContext(gh, repo: nil, cwd: root)
             if attempt.error == nil { return attempt.items }
             failures.append(attempt.error ?? "")
         }
@@ -330,8 +357,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     private func repositoryContext(
         _ gh: String,
         repo: String?,
-        cwd: String?,
-        query: String
+        cwd: String?
     ) async -> (items: [PaletteItem], error: String?) {
         var prArgs = ["pr", "list"]
         var issueArgs = ["issue", "list"]
@@ -397,8 +423,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             }
         }
 
-        guard !query.isEmpty else { return (items, nil) }
-        return (items.filter { Ranking.score(query: query, candidate: "\($0.title) \($0.subtitle ?? "")") != nil }, nil)
+        return (items, nil)
     }
 
     /// The account's open PRs, which works with no repository and no cwd.
@@ -456,7 +481,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
 
     // MARK: - `ghr`: repositories
 
-    private func repositoryItems(_ gh: String, query: String) async -> [PaletteItem] {
+    private func repositoryItems(_ gh: String) async -> [PaletteItem] {
         let args = [
             "repo", "list", "--limit", "50",
             "--json", "nameWithOwner,description,isPrivate,updatedAt,url",
@@ -489,7 +514,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
                     providerName: descriptor.name
                 )
             }
-            return Self.filtered(items, query: query)
+            return items
         }
     }
 
@@ -520,7 +545,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
 
     // MARK: - `ghp`: pull requests
 
-    private func pullRequestItems(_ gh: String, query: String) async -> [PaletteItem] {
+    private func pullRequestItems(_ gh: String) async -> [PaletteItem] {
         let groups: [(String, [String])] = [
             ("Authored", [
                 "search", "prs", "--author=@me", "--state=open", "--limit", "30",
@@ -579,12 +604,12 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         }
 
         if !anySuccess, let failure = failures.first { return [errorRow(failure)] }
-        return Self.filtered(items, query: query)
+        return items
     }
 
     // MARK: - `ghi`: assigned issues
 
-    private func issueItems(_ gh: String, query: String) async -> [PaletteItem] {
+    private func issueItems(_ gh: String) async -> [PaletteItem] {
         let args = [
             "search", "issues", "--assignee=@me", "--state=open", "--limit", "30",
             "--json", "number,title,state,url,repository",
@@ -612,7 +637,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
                     providerName: descriptor.name
                 )
             }
-            return Self.filtered(items, query: query)
+            return items
         }
     }
 
@@ -688,7 +713,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
                     providerName: descriptor.name
                 )
             }
-            return Self.filtered(items, query: explicit == nil ? query : "")
+            return items
         }
     }
 
@@ -730,7 +755,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
 
     // MARK: - `ghn`: notifications
 
-    private func notificationItems(_ gh: String, query: String) async -> [PaletteItem] {
+    private func notificationItems(_ gh: String) async -> [PaletteItem] {
         switch await jsonPages(gh, ["api", "notifications", "--paginate", "--slurp"]) {
         case .failure(let error):
             if GitHubNotification.isScopeError(error.message) {
@@ -796,7 +821,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
                     providerName: descriptor.name
                 )
             }
-            return Self.filtered(items, query: query)
+            return items
         }
     }
 

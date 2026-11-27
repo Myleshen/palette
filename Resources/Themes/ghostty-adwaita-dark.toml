@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Adwaita Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Adwaita Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1c1c1f"
+surface = "#141416"
+elevated = "#333335"
+fg = "#ffffff"
+fg_muted = "#b0b0b1"
+accent = "#51a1ff"
+accent_fg = "#000000"
+selection_bg = "#ffffff"
+selection_fg = "#1c1c1f"
+match_fg = "#c061cb"
+border = "#49494c"
+separator = "#33333580"
+danger = "#c7252e"
+warning = "#f5c211"
+success = "#2ec27e"
+info = "#1e78e4"
+badge_bg = "#333335"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#ffffff"
+fg = "#1c1c1f"
+[states.hover]
+bg = "#333335"
+[states.disabled]
+fg = "#b0b0b1"
+
+[footer]
+hint_color = "#b0b0b1"

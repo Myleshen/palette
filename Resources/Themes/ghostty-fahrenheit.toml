@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Fahrenheit" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Fahrenheit"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#ffffce"
+fg_muted = "#a6a686"
+accent = "#db591f"
+accent_fg = "#1b1a1a"
+selection_bg = "#4e739f"
+selection_fg = "#ffffce"
+match_fg = "#4e739f"
+border = "#333329"
+separator = "#1a1a1a80"
+danger = "#cda074"
+warning = "#fecf75"
+success = "#9e744d"
+info = "#a0332c"
+badge_bg = "#1a1a1a"
+badge_fg = "#ffffce"
+
+[states.selected]
+bg = "#4e739f"
+fg = "#ffffce"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#a6a686"
+
+[footer]
+hint_color = "#a6a686"

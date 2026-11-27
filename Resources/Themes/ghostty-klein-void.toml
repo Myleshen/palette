@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Klein Void" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Klein Void"
+appearance = "dark"
+
+[palette]
+bg = "#0b0d14"
+surface = "#08090e"
+elevated = "#23252c"
+fg = "#ede6d3"
+fg_muted = "#9e9a90"
+accent = "#a8bef0"
+accent_fg = "#000000"
+selection_bg = "#002fa7"
+selection_fg = "#ede6d3"
+match_fg = "#c8b4d4"
+border = "#38383a"
+separator = "#23252c80"
+danger = "#f09890"
+warning = "#e8bc75"
+success = "#a6c080"
+info = "#2055ce"
+badge_bg = "#23252c"
+badge_fg = "#ede6d3"
+
+[states.selected]
+bg = "#002fa7"
+fg = "#ede6d3"
+[states.hover]
+bg = "#23252c"
+[states.disabled]
+fg = "#9e9a90"
+
+[footer]
+hint_color = "#9e9a90"

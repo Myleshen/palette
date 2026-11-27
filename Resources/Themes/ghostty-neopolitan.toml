@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Neopolitan" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Neopolitan"
+appearance = "dark"
+
+[palette]
+bg = "#271f19"
+surface = "#1c1612"
+elevated = "#3d3530"
+fg = "#ffffff"
+fg_muted = "#b3b1ae"
+accent = "#829ee0"
+accent_fg = "#373636"
+selection_bg = "#253b76"
+selection_fg = "#ffffff"
+match_fg = "#ff0080"
+border = "#524c47"
+separator = "#3d353080"
+danger = "#bc3f38"
+warning = "#fbde2d"
+success = "#61ce3c"
+info = "#5069a6"
+badge_bg = "#3d3530"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#253b76"
+fg = "#ffffff"
+[states.hover]
+bg = "#3d3530"
+[states.disabled]
+fg = "#b3b1ae"
+
+[footer]
+hint_color = "#b3b1ae"

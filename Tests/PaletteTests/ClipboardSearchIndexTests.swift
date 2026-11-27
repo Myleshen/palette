@@ -49,6 +49,103 @@ final class ClipboardSearchIndexTests: XCTestCase {
         XCTAssertEqual(results.first?.title, "zebra older")
     }
 
+    /// The browser is one flat list: newest capture first, whatever its kind.
+    func testBrowseInterleavesKindsInCreationOrder() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let base = Date(timeIntervalSince1970: 1_000)
+
+        _ = try await store.insertClipboard(text: "older text", maxEntries: 50, at: base)
+        _ = try await store.insertClipboardImage(
+            png: Data("interleaved-image".utf8), thumbnail: nil, width: 2, height: 2,
+            maxEntries: 50, at: base.addingTimeInterval(1)
+        )
+        _ = try await store.insertClipboardFiles(
+            paths: ["/tmp/report.pdf"], thumbnail: nil, maxEntries: 50,
+            at: base.addingTimeInterval(2)
+        )
+        _ = try await store.insertClipboard(
+            text: "newest text", maxEntries: 50, at: base.addingTimeInterval(3)
+        )
+
+        let provider = ClipboardProvider(store: store, bridge: ClipboardSearchBridge())
+        let items = try await provider.search(SearchRequest(text: "", limit: 20, isBound: true))
+        XCTAssertEqual(items.map(\.title), ["newest text", "report.pdf", "Image 2×2", "older text"])
+        XCTAssertTrue(items.allSatisfy { $0.group == nil }, "the browser is not grouped")
+    }
+
+    /// A thumbnail file can be missing after a cache sweep or a restored
+    /// database; the row must still be listed, with a placeholder icon.
+    func testMissingThumbnailRowsStillAppearInTheBrowser() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let base = Date(timeIntervalSince1970: 2_000)
+
+        _ = try await store.insertClipboardImage(
+            png: Data("thumbless-image".utf8), thumbnail: nil, width: 4, height: 3,
+            maxEntries: 50, at: base
+        )
+        _ = try await store.insertClipboardFiles(
+            paths: ["/tmp/thumbless.txt"], thumbnail: nil, maxEntries: 50,
+            at: base.addingTimeInterval(1)
+        )
+
+        let provider = ClipboardProvider(store: store, bridge: ClipboardSearchBridge())
+        let items = try await provider.search(SearchRequest(text: "", limit: 20, isBound: true))
+        XCTAssertEqual(items.map(\.title), ["thumbless.txt", "Image 4×3"])
+        XCTAssertEqual(items.first?.icon, .symbol("doc"))
+        XCTAssertEqual(items.last?.icon, .symbol("photo"))
+    }
+
+    /// Pinned keeps its badge and its pinned search boost, but browse order
+    /// stays chronological instead of moving it to the top.
+    func testPinnedEntryKeepsItsBadgeWithoutForcedPosition() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let base = Date(timeIntervalSince1970: 3_000)
+
+        _ = try await store.insertClipboard(text: "older pinned", maxEntries: 50, at: base)
+        let stored = try await store.clipboardEntries(limit: 20)
+        let pinnedID = try XCTUnwrap(stored.first { $0.text == "older pinned" }?.id)
+        try await store.setClipboardPinned(id: pinnedID, pinned: true)
+        _ = try await store.insertClipboard(
+            text: "newer plain", maxEntries: 50, at: base.addingTimeInterval(10)
+        )
+
+        let provider = ClipboardProvider(store: store, bridge: ClipboardSearchBridge())
+        let items = try await provider.search(SearchRequest(text: "", limit: 20, isBound: true))
+        XCTAssertEqual(items.map(\.title), ["newer plain", "older pinned"])
+        XCTAssertEqual(items[1].badge, "pinned")
+        XCTAssertNil(items[0].badge)
+    }
+
+    /// A leading kind word is ordinary search text: `/clip images` searches
+    /// for "images" instead of switching to an image-only view.
+    func testKindWordsAreSearchText() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let base = Date(timeIntervalSince1970: 4_000)
+
+        _ = try await store.insertClipboard(text: "images of cats", maxEntries: 50, at: base)
+        _ = try await store.insertClipboard(
+            text: "plain note", maxEntries: 50, at: base.addingTimeInterval(1)
+        )
+        _ = try await store.insertClipboardImage(
+            png: Data("filter-image".utf8), thumbnail: nil, width: 6, height: 5,
+            maxEntries: 50, at: base.addingTimeInterval(2)
+        )
+        _ = try await store.insertClipboardFiles(
+            paths: ["/tmp/filter.txt"], thumbnail: nil, maxEntries: 50,
+            at: base.addingTimeInterval(3)
+        )
+
+        let provider = ClipboardProvider(store: store, bridge: ClipboardSearchBridge())
+        let images = try await provider.search(SearchRequest(text: "images", limit: 20, isBound: true))
+        XCTAssertEqual(images.map(\.title), ["images of cats"])
+        let all = try await provider.search(SearchRequest(text: "", limit: 20, isBound: true))
+        XCTAssertEqual(all.count, 4)
+    }
+
     func testFoldedScoringMatchesTheUncachedRanking() {
         let query = "zebra"
         let terms = query.split(whereSeparator: \.isWhitespace).map { Ranking.normalize(String($0)) }

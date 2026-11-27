@@ -119,6 +119,13 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
     }
     private let cache = Cache()
 
+    /// Custom action ids `activate` routes; `term-here` belongs to the host.
+    static let handledCustomActions: Set<String> = [
+        "clone-repo", "new-project", "neovide", "terminal", "workspace",
+        "new-worktree", "remove-worktree", "apply-config", "devx-config", "reveal",
+    ]
+    static let hostHandledCustomActions: Set<String> = ["term-here"]
+
     /// Git state is only ever read off the row path: `search` returns the list
     /// from whatever is cached, and the selected row's preview is fetched by the
     /// host afterwards. Five minutes plus the checkout's own HEAD/index mtimes,
@@ -233,6 +240,7 @@ public final class ProjectProvider: PaletteProvider, @unchecked Sendable {
     }
 
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
+        guard Self.handledCustomActions.contains(action.id) else { return }
         if action.id == "clone-repo" {
             try await cloneRepository()
             await invalidateCaches(delayed: true)

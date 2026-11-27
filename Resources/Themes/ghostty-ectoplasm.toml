@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Ectoplasm" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Ectoplasm"
+appearance = "dark"
+
+[palette]
+bg = "#06454a"
+surface = "#043235"
+elevated = "#1f585c"
+fg = "#effffb"
+fg_muted = "#9dbebd"
+accent = "#86cff1"
+accent_fg = "#000000"
+selection_bg = "#c8d6d5"
+selection_fg = "#535c59"
+match_fg = "#b4a7eb"
+border = "#356a6d"
+separator = "#1f585c80"
+danger = "#f19b8d"
+warning = "#d7dd5e"
+success = "#78e0aa"
+info = "#76c9ef"
+badge_bg = "#1f585c"
+badge_fg = "#effffb"
+
+[states.selected]
+bg = "#c8d6d5"
+fg = "#535c59"
+[states.hover]
+bg = "#1f585c"
+[states.disabled]
+fg = "#9dbebd"
+
+[footer]
+hint_color = "#9dbebd"

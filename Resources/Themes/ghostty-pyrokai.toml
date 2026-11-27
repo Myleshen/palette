@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Pyrokai" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Pyrokai"
+appearance = "dark"
+
+[palette]
+bg = "#151312"
+surface = "#0f0e0d"
+elevated = "#2c2b2a"
+fg = "#faf6f5"
+fg_muted = "#aaa7a6"
+accent = "#5bb3ff"
+accent_fg = "#000000"
+selection_bg = "#312d2b"
+selection_fg = "#faf6f5"
+match_fg = "#f681ac"
+border = "#43403f"
+separator = "#2c2b2a80"
+danger = "#ec6785"
+warning = "#bb9500"
+success = "#75ad2f"
+info = "#2aa0f9"
+badge_bg = "#2c2b2a"
+badge_fg = "#faf6f5"
+
+[states.selected]
+bg = "#312d2b"
+fg = "#faf6f5"
+[states.hover]
+bg = "#2c2b2a"
+[states.disabled]
+fg = "#aaa7a6"
+
+[footer]
+hint_color = "#aaa7a6"

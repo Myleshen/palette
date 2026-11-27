@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Dayfox" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Dayfox"
+appearance = "light"
+
+[palette]
+bg = "#f6f2ee"
+surface = "#eae6e2"
+elevated = "#fbf9f7"
+fg = "#3d2b5a"
+fg_muted = "#766a86"
+accent = "#2848a9"
+accent_fg = "#ffffff"
+selection_bg = "#e7d2be"
+selection_fg = "#3d2b5a"
+match_fg = "#6e33ce"
+border = "#d1cad0"
+separator = "#fbf9f780"
+danger = "#a5222f"
+warning = "#ac5402"
+success = "#396847"
+info = "#2848a9"
+badge_bg = "#fbf9f7"
+badge_fg = "#3d2b5a"
+
+[states.selected]
+bg = "#e7d2be"
+fg = "#3d2b5a"
+[states.hover]
+bg = "#fbf9f7"
+[states.disabled]
+fg = "#7e718e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7e718e"

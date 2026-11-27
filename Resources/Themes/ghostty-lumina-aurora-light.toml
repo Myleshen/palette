@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Lumina Aurora Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Aurora Light"
+appearance = "light"
+
+[palette]
+bg = "#f2faf9"
+surface = "#e6eded"
+elevated = "#f9fdfc"
+fg = "#163236"
+fg_muted = "#627678"
+accent = "#17467d"
+accent_fg = "#ffffff"
+selection_bg = "#b9d4c9"
+selection_fg = "#163236"
+match_fg = "#733a6e"
+border = "#c6d2d2"
+separator = "#f9fdfc80"
+danger = "#942a28"
+warning = "#9f6116"
+success = "#026d43"
+info = "#425b7a"
+badge_bg = "#f9fdfc"
+badge_fg = "#163236"
+
+[states.selected]
+bg = "#b9d4c9"
+fg = "#163236"
+[states.hover]
+bg = "#f9fdfc"
+[states.disabled]
+fg = "#63787a"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#63787a"

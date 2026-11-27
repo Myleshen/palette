@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Tomorrow Night" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Tomorrow Night"
+appearance = "dark"
+
+[palette]
+bg = "#1d1f21"
+surface = "#151618"
+elevated = "#343537"
+fg = "#c5c8c6"
+fg_muted = "#8a8d8c"
+accent = "#81a2be"
+accent_fg = "#000000"
+selection_bg = "#373b41"
+selection_fg = "#c5c8c6"
+match_fg = "#b294bb"
+border = "#3f4142"
+separator = "#34353780"
+danger = "#cc6666"
+warning = "#f0c674"
+success = "#b5bd68"
+info = "#81a2be"
+badge_bg = "#343537"
+badge_fg = "#c5c8c6"
+
+[states.selected]
+bg = "#373b41"
+fg = "#c5c8c6"
+[states.hover]
+bg = "#343537"
+[states.disabled]
+fg = "#8a8d8c"
+
+[footer]
+hint_color = "#8a8d8c"

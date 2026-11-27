@@ -9,6 +9,11 @@ public final class ThemeManager: ObservableObject {
     @Published public private(set) var theme: Theme
     @Published public private(set) var diagnostics: [Diagnostic] = []
     @Published public private(set) var overrideName: String?
+    /// The theme being loaded, once that has taken longer than 100 ms, so a
+    /// visible UI can say "Applying theme…" instead of looking stuck.
+    @Published public private(set) var applyingTheme: String?
+    /// Called the same way as `applyingTheme`, for surfaces without a binding.
+    public var onSlowApply: ((String) -> Void)?
 
     public let paths: PalettePaths
     public var selection: ThemeSelection
@@ -17,6 +22,9 @@ public final class ThemeManager: ObservableObject {
     public var onChange: ((Theme) -> Void)?
 
     private let store: PaletteStore?
+    private var applyTask: Task<Void, Never>?
+    private var slowApplyTask: Task<Void, Never>?
+    private var generation = 0
 
     public init(paths: PalettePaths, selection: ThemeSelection, store: PaletteStore?) {
         self.paths = paths
@@ -50,9 +58,12 @@ public final class ThemeManager: ObservableObject {
         }
     }
 
-    public func select(_ name: String) {
+    /// Applies a picked theme. `completion` runs after the load finishes, on
+    /// the main actor, so a caller that needs the resolved appearance (the
+    /// `/theme` config write) does not have to load the theme twice.
+    public func select(_ name: String, completion: ((Theme) -> Void)? = nil) {
         overrideName = name
-        apply()
+        apply(completion: completion)
     }
 
     public func resetToConfig() {
@@ -80,7 +91,10 @@ public final class ThemeManager: ObservableObject {
         apply()
     }
 
-    private func apply() {
+    /// Parsing runs off the main actor; the resolved theme is applied back on
+    /// it. A newer call wins over an older one that finishes late, so typing in
+    /// a typography field cannot apply themes out of order.
+    private func apply(completion: ((Theme) -> Void)? = nil) {
         let appearanceDark = ThemeManager.appearanceIsDark
         let name: String
         if let overrideName {
@@ -93,7 +107,37 @@ public final class ThemeManager: ObservableObject {
             }
         }
         let fallback = appearanceDark ? Theme.defaultDark : Theme.defaultLight
-        let result = ThemeLoader.load(name: name, themesDirectory: paths.themesDir, fallback: fallback)
+        let directory = paths.themesDir
+        let typography = self.typography
+        let placeholder = searchPlaceholder
+        generation += 1
+        let token = generation
+        applyTask?.cancel()
+        slowApplyTask?.cancel()
+        applyTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                ThemeLoader.load(name: name, themesDirectory: directory, fallback: fallback)
+            }.value
+            guard !Task.isCancelled, let self, token == self.generation else { return }
+            self.slowApplyTask?.cancel()
+            self.slowApplyTask = nil
+            self.applyingTheme = nil
+            self.finish(result, typography: typography, placeholder: placeholder, completion: completion)
+        }
+        slowApplyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            guard !Task.isCancelled, let self, token == self.generation else { return }
+            self.applyingTheme = name
+            self.onSlowApply?(name)
+        }
+    }
+
+    private func finish(
+        _ result: ThemeLoadResult,
+        typography: TypographyConfig,
+        placeholder: String,
+        completion: ((Theme) -> Void)?
+    ) {
         var resolved = result.theme
         var diagnostics = result.diagnostics
         if !typography.uiFamily.isEmpty {
@@ -108,8 +152,8 @@ public final class ThemeManager: ObservableObject {
                 diagnostics.append(Diagnostic(.warning, "Mono font '\(typography.monoFamily)' is not installed; using the system font.", source: "theme"))
             }
         }
-        if !searchPlaceholder.isEmpty {
-            resolved.search.placeholder = searchPlaceholder
+        if !placeholder.isEmpty {
+            resolved.search.placeholder = placeholder
         }
         if typography.uiSize > 0 {
             resolved.typography.size = typography.uiSize
@@ -117,6 +161,9 @@ public final class ThemeManager: ObservableObject {
         }
         if typography.monoSize > 0 {
             resolved.typography.monoSize = typography.monoSize
+        }
+        if typography.previewSize > 0 {
+            resolved.typography.previewSize = typography.previewSize
         }
         theme = resolved
         self.diagnostics = diagnostics
@@ -127,6 +174,7 @@ public final class ThemeManager: ObservableObject {
             Log.shared.warn(diagnostic.message, source: "theme")
         }
         onChange?(theme)
+        completion?(theme)
     }
 
     private static func fontExists(_ family: String) -> Bool {

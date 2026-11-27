@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Cobweb" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Cobweb"
+appearance = "dark"
+
+[palette]
+bg = "#20272d"
+surface = "#171c20"
+elevated = "#363d42"
+fg = "#eef1f3"
+fg_muted = "#a6aaae"
+accent = "#abcde0"
+accent_fg = "#000000"
+selection_bg = "#3d454c"
+selection_fg = "#ffffff"
+match_fg = "#cab8d4"
+border = "#494f55"
+separator = "#363d4280"
+danger = "#ed8e88"
+warning = "#dec575"
+success = "#9bc6a3"
+info = "#92bad5"
+badge_bg = "#363d42"
+badge_fg = "#eef1f3"
+
+[states.selected]
+bg = "#3d454c"
+fg = "#ffffff"
+[states.hover]
+bg = "#363d42"
+[states.disabled]
+fg = "#a6aaae"
+
+[footer]
+hint_color = "#a6aaae"

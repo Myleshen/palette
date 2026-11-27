@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Sundried" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Sundried"
+appearance = "dark"
+
+[palette]
+bg = "#1a1818"
+surface = "#131111"
+elevated = "#312f2f"
+fg = "#c9c9c9"
+fg_muted = "#8c8b8b"
+accent = "#7999f7"
+accent_fg = "#000000"
+selection_bg = "#302b2a"
+selection_fg = "#c9c9c9"
+match_fg = "#fd8aa1"
+border = "#3d3b3b"
+separator = "#312f2f80"
+danger = "#a7463d"
+warning = "#9d602a"
+success = "#587744"
+info = "#4e629f"
+badge_bg = "#312f2f"
+badge_fg = "#c9c9c9"
+
+[states.selected]
+bg = "#302b2a"
+fg = "#c9c9c9"
+[states.hover]
+bg = "#312f2f"
+[states.disabled]
+fg = "#8c8b8b"
+
+[footer]
+hint_color = "#8c8b8b"

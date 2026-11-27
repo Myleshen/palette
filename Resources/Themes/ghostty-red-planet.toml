@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Red Planet" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Red Planet"
+appearance = "dark"
+
+[palette]
+bg = "#222222"
+surface = "#181818"
+elevated = "#383838"
+fg = "#c2b790"
+fg_muted = "#90896f"
+accent = "#8aa3c1"
+accent_fg = "#000000"
+selection_bg = "#1b324a"
+selection_fg = "#bcb291"
+match_fg = "#de4974"
+border = "#424038"
+separator = "#38383880"
+danger = "#ab504b"
+warning = "#e8bf6a"
+success = "#728271"
+info = "#69819e"
+badge_bg = "#383838"
+badge_fg = "#c2b790"
+
+[states.selected]
+bg = "#1b324a"
+fg = "#bcb291"
+[states.hover]
+bg = "#383838"
+[states.disabled]
+fg = "#8a836a"
+
+[footer]
+hint_color = "#8a836a"

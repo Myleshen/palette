@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Kibble" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Kibble"
+appearance = "dark"
+
+[palette]
+bg = "#0e100a"
+surface = "#0a0c07"
+elevated = "#262823"
+fg = "#f7f7f7"
+fg_muted = "#a5a6a4"
+accent = "#97a4f7"
+accent_fg = "#000000"
+selection_bg = "#9ba787"
+selection_fg = "#000000"
+match_fg = "#c495f0"
+border = "#3d3e39"
+separator = "#26282380"
+danger = "#c70031"
+warning = "#d8e30e"
+success = "#29cf13"
+info = "#3850d8"
+badge_bg = "#262823"
+badge_fg = "#f7f7f7"
+
+[states.selected]
+bg = "#9ba787"
+fg = "#000000"
+[states.hover]
+bg = "#262823"
+[states.disabled]
+fg = "#a5a6a4"
+
+[footer]
+hint_color = "#a5a6a4"

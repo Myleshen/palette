@@ -47,6 +47,14 @@ extension Theme {
         return .custom(family, size: pointSize).weight(weight)
     }
 
+    /// Monospaced preview body at the configured preview size.
+    func previewFont(size: Double? = nil) -> NSFont {
+        let pointSize = size ?? previewTextSize
+        let family = typography.mono.trimmingCharacters(in: .whitespaces)
+        return NSFont(name: family, size: pointSize)
+            ?? NSFont.monospacedSystemFont(ofSize: pointSize, weight: .regular)
+    }
+
     func nsFont(size: Double, weight: NSFont.Weight = .regular) -> NSFont {        let family = typography.family.trimmingCharacters(in: .whitespaces)
         guard !family.isEmpty, family != "SF Pro Text", family != "System",
               let base = NSFont(name: family, size: size) else {
@@ -688,7 +696,9 @@ struct ActionRow: View {
             if let shortcut = action.shortcut {
                 Text(shortcut)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundColor(theme.color(theme.palette.fgMuted))
+                    .foregroundColor(selected
+                        ? theme.color(theme.palette.selectionFg).opacity(0.85)
+                        : theme.color(theme.palette.fgMuted))
             }
         }
         .padding(.horizontal, LauncherMetrics.innerPadding)
@@ -1139,7 +1149,6 @@ struct LauncherRootView: View {
     private var listCard: some View {
         VStack(spacing: 0) {
             groupStrip
-            modeHeader
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -1202,35 +1211,6 @@ struct LauncherRootView: View {
         )
     }
 
-    /// Filters belong to the list, not the rail: one fixed-height row above
-    /// the results when the clipboard or Ask scope is active.
-    @ViewBuilder
-    private var modeHeader: some View {
-        if controller.activeTabID == "clip" {
-            modeRow {
-                filterChip("All", value: nil)
-                filterChip("Text", value: "text")
-                filterChip("Images", value: "image")
-                filterChip("Files", value: "files")
-            }
-        }
-    }
-
-    private func modeRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 4) {
-            content()
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, LauncherMetrics.innerPadding)
-        .frame(height: 40)
-    }
-
-    private func filterChip(_ title: String, value: String?) -> some View {
-        ChipButton(title: title, selected: controller.effectiveClipboardFilter == value, theme: theme) {
-            controller.setClipboardFilter(value)
-        }
-    }
-
     private func modeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         ChipButton(title: title, selected: selected, theme: theme, action: action)
     }
@@ -1250,7 +1230,10 @@ struct LauncherRootView: View {
                         .lineLimit(1)
                         .allowsHitTesting(false)
                 }
-                TextField("", text: $controller.query)
+                TextField("", text: Binding(
+                    get: { controller.visibleQuery },
+                    set: { controller.editVisibleQuery($0) }
+                ))
                     .textFieldStyle(.plain)
                     .font(theme.font(size: theme.typography.size + 3))
                     .foregroundColor(theme.color(theme.palette.fg))
@@ -1259,6 +1242,11 @@ struct LauncherRootView: View {
                     .accessibilityLabel(theme.search.placeholder)
                     .onSubmit {
                         if controller.actionsMode { controller.executeAction() } else { controller.executePrimary() }
+                    }
+                    .onKeyPress(.delete) {
+                        guard controller.visibleQuery.isEmpty, controller.queryIsBound else { return .ignored }
+                        controller.clearBoundTrigger()
+                        return .handled
                     }
             }
             if controller.isSearching {
@@ -1354,11 +1342,9 @@ struct LauncherRootView: View {
                                 )
                                 .id(item.stableID)
                                 .onTapGesture { controller.activate(index) }
-                                .contextMenu {
-                                    ForEach(controller.actions(for: item)) { action in
-                                        Button(action.title) {
-                                            controller.run(action, on: item)
-                                        }
+                                .overlay {
+                                    RightClickMenuArea { point in
+                                        showRowActions(item, at: point)
                                     }
                                 }
                                 .accessibilityElement(children: .combine)
@@ -1391,6 +1377,54 @@ struct LauncherRootView: View {
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
     }
+
+    /// Right-click opens the same non-tracking panel the Settings menus use,
+    /// so a screenshot hotkey still fires while it is open. The native
+    /// `.contextMenu` it replaces ran an `NSMenu` tracking loop. ⌘K remains the
+    /// keyboard and VoiceOver path for the same actions.
+    private func showRowActions(_ item: PaletteItem, at point: NSPoint) {
+        let actions = controller.actions(for: item)
+        var actionsByID: [String: PaletteAction] = [:]
+        let items = actions.enumerated().map { index, action in
+            let id = "\(index)|\(action.id)"
+            actionsByID[id] = action
+            return PaletteMenuItem(id: id, title: action.title, shortcut: action.shortcut)
+        }
+        presentMenu(items, at: point) { id in
+            guard let action = actionsByID[id] else { return }
+            controller.run(action, on: item)
+        }
+    }
+
+    /// The one-item menu a right-click on an action row used to open.
+    private func showActionRowMenu(_ action: PaletteAction, index: Int, at point: NSPoint) {
+        presentMenu(
+            [PaletteMenuItem(id: action.id, title: action.title, shortcut: action.shortcut)],
+            at: point
+        ) { _ in
+            controller.actionIndex = index
+            controller.executeAction()
+        }
+    }
+
+    /// The menu panel takes key focus for Esc/arrows; the launcher must not
+    /// auto-hide when that happens, and gets key back on dismissal.
+    private func presentMenu(
+        _ items: [PaletteMenuItem],
+        at point: NSPoint,
+        select: @escaping (String) -> Void
+    ) {
+        let previousSuppress = controller.panel?.suppressAutoHide ?? false
+        controller.panel?.suppressAutoHide = true
+        PaletteMenuController.shared.show(
+            items: items,
+            at: point,
+            theme: theme,
+            onSelect: select,
+            onDismiss: { controller.panel?.suppressAutoHide = previousSuppress }
+        )
+    }
+
 
     private var actionsView: some View {
         VStack(spacing: 0) {
@@ -1425,10 +1459,9 @@ struct LauncherRootView: View {
                                 controller.actionIndex = index
                                 controller.executeAction()
                             }
-                            .contextMenu {
-                                Button(action.title) {
-                                    controller.actionIndex = index
-                                    controller.executeAction()
+                            .overlay {
+                                RightClickMenuArea { point in
+                                    showActionRowMenu(action, index: index, at: point)
                                 }
                             }
                         }
@@ -1824,7 +1857,7 @@ struct ClipboardPreviewPane: View {
                             .fill(theme.color(theme.palette.separator))
                             .frame(height: 1)
                         Text(textPreview)
-                            .font(theme.monoFont(size: 10))
+                            .font(theme.monoFont(size: theme.previewTextSize))
                             .foregroundColor(theme.color(theme.palette.fg))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1980,6 +2013,7 @@ struct PreviewTextView: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]
+        textView.font = font ?? theme.previewFont()
         scroll.documentView = textView
         context.coordinator.scrollView = scroll
         context.coordinator.observer = NotificationCenter.default.addObserver(
@@ -2012,8 +2046,7 @@ struct PreviewTextView: NSViewRepresentable {
             textView.string = text
             textView.scrollToBeginningOfDocument(nil)
         }
-        let family = theme.typography.mono
-        textView.font = font ?? NSFont(name: family, size: 11) ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.font = font ?? theme.previewFont()
         textView.textColor = theme.nsColor(theme.palette.fg)
         if lineSpacing > 0 {
             let style = NSMutableParagraphStyle()
@@ -2233,7 +2266,9 @@ struct TerminalSurface: NSViewRepresentable {
                     }
                     view.startProcess(
                         executable: zellij,
-                        args: ["attach", "--create", preparation.name],
+                        args: preparation.recreated
+                            ? ["--session", preparation.name]
+                            : ["attach", "--create", preparation.name],
                         environment: environment,
                         execName: "zellij",
                         currentDirectory: NSHomeDirectory()

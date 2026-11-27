@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Deep" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Deep"
+appearance = "dark"
+
+[palette]
+bg = "#090909"
+surface = "#060606"
+elevated = "#222222"
+fg = "#cdcdcd"
+fg_muted = "#888888"
+accent = "#9fa9ff"
+accent_fg = "#000000"
+selection_bg = "#780002"
+selection_fg = "#ececec"
+match_fg = "#e09aff"
+border = "#303030"
+separator = "#22222280"
+danger = "#d70005"
+warning = "#d9bd26"
+success = "#1cd915"
+info = "#5665ff"
+badge_bg = "#222222"
+badge_fg = "#cdcdcd"
+
+[states.selected]
+bg = "#780002"
+fg = "#ececec"
+[states.hover]
+bg = "#222222"
+[states.disabled]
+fg = "#888888"
+
+[footer]
+hint_color = "#888888"

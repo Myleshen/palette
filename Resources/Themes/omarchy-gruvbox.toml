@@ -1,0 +1,39 @@
+# Ported from Omarchy's bundled "Gruvbox" theme.
+# Source: https://github.com/basecamp/omarchy/blob/master/themes/gruvbox/colors.toml
+# Omarchy is MIT-licensed; colour values only, no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Omarchy · Gruvbox"
+appearance = "dark"
+
+[palette]
+bg = "#282828"
+surface = "#1d1d1d"
+elevated = "#3e3e3e"
+fg = "#d4be98"
+fg_muted = "#9b8d73"
+accent = "#80b2a6"
+accent_fg = "#000000"
+selection_bg = "#d65d0e"
+selection_fg = "#1b1a15"
+match_fg = "#d3869b"
+border = "#4a463e"
+separator = "#3e3e3e80"
+danger = "#ea6962"
+warning = "#d8a657"
+success = "#a9b665"
+info = "#7daea3"
+badge_bg = "#3e3e3e"
+badge_fg = "#d4be98"
+
+[states.selected]
+bg = "#d65d0e"
+fg = "#1b1a15"
+[states.hover]
+bg = "#3e3e3e"
+[states.disabled]
+fg = "#988a71"
+
+[footer]
+hint_color = "#988a71"

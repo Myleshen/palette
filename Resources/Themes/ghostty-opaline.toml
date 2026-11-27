@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Opaline" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Opaline"
+appearance = "dark"
+
+[palette]
+bg = "#131121"
+surface = "#0e0c18"
+elevated = "#2b2937"
+fg = "#ece9f7"
+fg_muted = "#a09dac"
+accent = "#8fb4ff"
+accent_fg = "#000000"
+selection_bg = "#2c2748"
+selection_fg = "#9897a0"
+match_fg = "#ff9ed2"
+border = "#3e3c4c"
+separator = "#2b293780"
+danger = "#ff6b92"
+warning = "#ffc2ae"
+success = "#86e6b4"
+info = "#8fb4ff"
+badge_bg = "#2b2937"
+badge_fg = "#ece9f7"
+
+[states.selected]
+bg = "#2c2748"
+fg = "#9897a0"
+[states.hover]
+bg = "#2b2937"
+[states.disabled]
+fg = "#a09dac"
+
+[footer]
+hint_color = "#a09dac"

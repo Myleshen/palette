@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "SeedFlip Ultraviolet" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SeedFlip Ultraviolet"
+appearance = "dark"
+
+[palette]
+bg = "#0b0014"
+surface = "#08000e"
+elevated = "#231a2c"
+fg = "#e8e0f5"
+fg_muted = "#9b92a6"
+accent = "#89b6f5"
+accent_fg = "#000000"
+selection_bg = "#231a2c"
+selection_fg = "#e8e0f5"
+match_fg = "#f589f5"
+border = "#372d41"
+separator = "#231a2c80"
+danger = "#f04242"
+warning = "#f0d342"
+success = "#42f07c"
+info = "#428bf0"
+badge_bg = "#231a2c"
+badge_fg = "#e8e0f5"
+
+[states.selected]
+bg = "#231a2c"
+fg = "#e8e0f5"
+[states.hover]
+bg = "#231a2c"
+[states.disabled]
+fg = "#9b92a6"
+
+[footer]
+hint_color = "#9b92a6"

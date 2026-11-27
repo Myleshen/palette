@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Sakura" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Sakura"
+appearance = "dark"
+
+[palette]
+bg = "#18131e"
+surface = "#110e16"
+elevated = "#2f2b34"
+fg = "#df7cdd"
+fg_muted = "#a967aa"
+accent = "#ff65fd"
+accent_fg = "#000000"
+selection_bg = "#c05cbf"
+selection_fg = "#1b1b23"
+match_fg = "#e90cdd"
+border = "#3f2844"
+separator = "#2f2b3480"
+danger = "#d52370"
+warning = "#bc7053"
+success = "#41af1a"
+info = "#6964ab"
+badge_bg = "#2f2b34"
+badge_fg = "#dd7bdc"
+
+[states.selected]
+bg = "#c05cbf"
+fg = "#1b1b23"
+[states.hover]
+bg = "#2f2b34"
+[states.disabled]
+fg = "#98579a"
+
+[footer]
+hint_color = "#98579a"

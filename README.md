@@ -12,7 +12,7 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.18.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.19.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
@@ -24,7 +24,8 @@ Where each headline feature landed. Every fix, and everything before 1.8, is in
 
 | Feature | Version |
 |---|---|
-| Pinned screenshots, on-device OCR, learned ranking, provider groups, 19-pane Settings, update nudge | 2.18.0 |
+| Pinned screenshots, on-device OCR, learned ranking, provider groups, update nudge | 2.18.0 |
+| Cross-app theming (tokens + browser policy), 942 themes, non-tracking menus, annotator selection, trigger hiding | 2.19.0 |
 | Custom hotkey binder — `[[binding]]` launches an app, runs a shell command, opens a provider trigger, or opens a URL | 2.16.0 |
 | Ask web search on by default; installed-font dropdowns; onboarding shows the real capture keys and Skip applies Essentials | 2.16.0 |
 | Ask chat window — multi-turn, streaming, saved chats, markdown (code, tables, images), optional web search | 2.15.0 |
@@ -471,9 +472,7 @@ default app screen and global search. Pins are stored in Palette’s SQLite stat
 
 `⌥V` opens a wide clipboard browser with a live preview pane; `/clip` opens the
 same history in the normal window. Copied text, images, and Finder file
-selections are stored separately and listed under **Text**, **Images**, and
-**Files** headings. Add a category word to filter: `/clip text`,
-`/clip images`, `/clip files`, optionally followed by a search.
+selections share one list, newest first, and typing is ordinary search text.
 
 - `⏎` on any clipboard row **pastes immediately** into the app you came from,
   after which the clipboard browser closes. With Accessibility granted this is
@@ -483,9 +482,8 @@ selections are stored separately and listed under **Text**, **Images**, and
 - Files keep their paths, icon, size, and a `bat` render for text files, with
   Copy/Paste Files and Reveal in Finder.
 
-Pinned entries sort to the very top, across every category, and the filter tabs
-above the list switch between **All**, **Text**, **Images**, and **Files**.
-`⌘K` toggles **Pin** and **Delete** for every kind. Retention defaults to 5,000
+Pinned entries keep their badge and rank higher in search, while the list
+itself stays chronological. `⌘K` toggles **Pin** and **Delete** for every kind. Retention defaults to 5,000
 entries and is configurable in Settings; images are stored as PNG and files as
 paths in Palette’s SQLite state. Anything marked concealed by another app is
 never recorded.
@@ -776,7 +774,7 @@ formats render directly in the preview pane.
 `[typography]` overrides the active theme. Empty strings and zero sizes inherit
 from the theme, which in turn falls back to the system font. Settings →
 Appearance has installed-font dropdowns for the UI and mono families, size
-controls, a live preview, and **Reset to Theme**. **Inherit** is the empty
+controls for UI, mono and preview text, a live preview, and **Reset to Theme**. **Inherit** is the empty
 value. A configured family that is no longer installed stays selected and is
 marked **(missing)** instead of being silently reset.
 
@@ -786,6 +784,7 @@ ui_family = "Avenir Next"
 mono_family = "Menlo"
 ui_size = 15
 mono_size = 13
+preview_size = 13
 ```
 
 ### Provider aliases, order, and visibility
@@ -859,6 +858,7 @@ ui_family = ""                 # empty inherits the theme
 mono_family = ""
 ui_size = 0
 mono_size = 0
+preview_size = 13               # 9…24; preview pane, snippets, Ask body
 
 [providers]
 order = ["apps", "clip", "port", "git", "proj"]

@@ -63,7 +63,7 @@ public final class BookmarkProvider: PaletteProvider, @unchecked Sendable {
             icon: .symbol("doc.badge.plus"),
             badge: "SETUP",
             score: 10_000,
-            actions: [PaletteAction(id: "open", title: "Open Bookmarks File", kind: .openPath, value: .text(fileURL.path))],
+            actions: [PaletteAction(id: "open", title: "Open Bookmarks File", kind: .openPathWith, value: .object(["path": fileURL.path, "create": "true"]))],
             providerID: descriptor.id,
             providerName: descriptor.name
         )

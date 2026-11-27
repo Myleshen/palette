@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Glacier" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Glacier"
+appearance = "dark"
+
+[palette]
+bg = "#0c1115"
+surface = "#090c0f"
+elevated = "#24292c"
+fg = "#ffffff"
+fg_muted = "#aaacad"
+accent = "#3897cd"
+accent_fg = "#000000"
+selection_bg = "#bd2523"
+selection_fg = "#ffffff"
+match_fg = "#ea4727"
+border = "#3d4144"
+separator = "#24292c80"
+danger = "#bf1230"
+warning = "#fb9435"
+success = "#35a770"
+info = "#2e6680"
+badge_bg = "#24292c"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#bd2523"
+fg = "#ffffff"
+[states.hover]
+bg = "#24292c"
+[states.disabled]
+fg = "#aaacad"
+
+[footer]
+hint_color = "#aaacad"

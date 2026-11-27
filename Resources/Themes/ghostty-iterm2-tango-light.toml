@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "iTerm2 Tango Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · iTerm2 Tango Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#000000"
+fg_muted = "#595959"
+accent = "#3a72aa"
+accent_fg = "#f2f2f2"
+selection_bg = "#c1deff"
+selection_fg = "#000000"
+match_fg = "#89658e"
+border = "#cccccc"
+separator = "#ffffff80"
+danger = "#d81e00"
+warning = "#af9300"
+success = "#5ea600"
+info = "#427ab3"
+badge_bg = "#ffffff"
+badge_fg = "#000000"
+
+[states.selected]
+bg = "#c1deff"
+fg = "#000000"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#595959"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#595959"

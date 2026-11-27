@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Detroit After Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Detroit After Dark"
+appearance = "dark"
+
+[palette]
+bg = "#24141b"
+surface = "#1a0e13"
+elevated = "#3a2c32"
+fg = "#f7e6d7"
+fg_muted = "#ad9c95"
+accent = "#ecc578"
+accent_fg = "#000000"
+selection_bg = "#4c343f"
+selection_fg = "#f7e6d7"
+match_fg = "#cfa7d9"
+border = "#4e3e41"
+separator = "#3a2c3280"
+danger = "#e66e62"
+warning = "#e9bd66"
+success = "#9dc28e"
+info = "#8cb3d9"
+badge_bg = "#3a2c32"
+badge_fg = "#f7e6d7"
+
+[states.selected]
+bg = "#4c343f"
+fg = "#f7e6d7"
+[states.hover]
+bg = "#3a2c32"
+[states.disabled]
+fg = "#ad9c95"
+
+[footer]
+hint_color = "#ad9c95"

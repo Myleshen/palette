@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 import Foundation
 import PaletteCore
 import PalettePlatform
@@ -87,6 +88,155 @@ final class StorageTests: XCTestCase {
         let entries = try await store.clipboardEntries(limit: 10)
         XCTAssertEqual(entries.filter(\.pinned).count, 3)
         XCTAssertEqual(entries.filter { !$0.pinned }.map(\.text), ["copy 3", "copy 2"])
+    }
+
+    func testPerKindTrimKeepsNewestOfEachKindAndPinnedRows() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let base = Date(timeIntervalSince1970: 1_000)
+
+        for index in 0..<4 {
+            _ = try await store.insertClipboard(
+                text: "text \(index)",
+                maxEntries: 2,
+                at: base.addingTimeInterval(Double(index))
+            )
+        }
+        for index in 0..<4 {
+            _ = try await store.insertClipboardImage(
+                png: Data("image \(index)".utf8), thumbnail: nil, width: 2, height: 2,
+                maxEntries: 2, at: base.addingTimeInterval(10 + Double(index))
+            )
+        }
+        for index in 0..<3 {
+            _ = try await store.insertClipboardFiles(
+                paths: ["/tmp/file-\(index).txt"], thumbnail: nil,
+                maxEntries: 1, at: base.addingTimeInterval(20 + Double(index))
+            )
+        }
+
+        let texts = try await store.clipboardEntries(limit: 20, kind: .text)
+        XCTAssertEqual(texts.map(\.text), ["text 3", "text 2"])
+        let images = try await store.clipboardEntries(limit: 20, kind: .image)
+        XCTAssertEqual(images.count, 2)
+        let files = try await store.clipboardEntries(limit: 20, kind: .files)
+        XCTAssertEqual(files.map(\.paths), [["/tmp/file-2.txt"]])
+
+        // A pinned image stays even after the image limit evicts everything else.
+        try await store.setClipboardPinned(id: images[0].id, pinned: true)
+        for index in 0..<3 {
+            _ = try await store.insertClipboardImage(
+                png: Data("later image \(index)".utf8), thumbnail: nil, width: 2, height: 2,
+                maxEntries: 1, at: base.addingTimeInterval(40 + Double(index))
+            )
+        }
+        let pinnedImages = try await store.clipboardEntries(limit: 20, kind: .image)
+        XCTAssertTrue(pinnedImages.contains { $0.id == images[0].id && $0.pinned })
+        XCTAssertEqual(pinnedImages.filter { !$0.pinned }.count, 1)
+    }
+
+    func testPaletteCopyCallbackRecordsOneImageAndDedupes() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let rep = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 4,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+
+        let copy = PaletteClipboardCopy.image(PaletteClipboardImage(png: png)).prepared()
+        let first = try await store.insertPaletteCopy(copy, maxImages: 5, maxFiles: 5)
+        XCTAssertTrue(first)
+        let second = try await store.insertPaletteCopy(copy, maxImages: 5, maxFiles: 5)
+        XCTAssertFalse(second, "an identical Palette copy must not add a row")
+
+        let count = try await store.clipboardCount()
+        XCTAssertEqual(count, 1)
+        let entries = try await store.clipboardEntries(limit: 10)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.kind, .image)
+        XCTAssertEqual(entries.first?.imageWidth, 8)
+        XCTAssertEqual(entries.first?.imageHeight, 4)
+        XCTAssertNotNil(entries.first?.thumbnailPNG)
+    }
+
+    /// The store writes bytes it is given: no decode, no re-read. These bytes
+    /// are not a PNG, so any decode here would reject the copy.
+    func testPaletteCopyUsesPrebuiltBytesAndThumbnailWithoutDecoding() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let bytes = Data("not-a-png".utf8)
+        let thumbnail = Data("prebuilt-thumb".utf8)
+        let copy = PaletteClipboardCopy.image(PaletteClipboardImage(
+            png: bytes,
+            thumbnail: thumbnail,
+            width: 320,
+            height: 200
+        ))
+
+        let inserted = try await store.insertPaletteCopy(copy, maxImages: 5, maxFiles: 5)
+        XCTAssertTrue(inserted)
+        let entries = try await store.clipboardEntries(limit: 10)
+        let entry = try XCTUnwrap(entries.first)
+        XCTAssertEqual(entry.imageWidth, 320)
+        XCTAssertEqual(entry.imageHeight, 200)
+        XCTAssertEqual(entry.thumbnailPNG, thumbnail)
+        let loaded = try await store.clipboardImage(id: entry.id)
+        XCTAssertEqual(loaded, bytes)
+
+        let duplicate = try await store.insertPaletteCopy(copy, maxImages: 5, maxFiles: 5)
+        XCTAssertFalse(duplicate, "dedupe stays by hash of the bytes")
+        let count = try await store.clipboardCount()
+        XCTAssertEqual(count, 1)
+    }
+
+    /// A recording row is a path list plus a thumbnail. The path does not
+    /// exist, so a store that reads the file would fail or log a miss.
+    func testPaletteFileCopyDoesNotReadTheFile() async throws {
+        let (store, url) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let missing = "/tmp/palette-missing-recording-\(UUID().uuidString).mov"
+        let thumbnail = Data("movie-icon".utf8)
+        let copy = PaletteClipboardCopy.files([missing], thumbnail: thumbnail)
+
+        let inserted = try await store.insertPaletteCopy(copy, maxImages: 5, maxFiles: 5)
+        XCTAssertTrue(inserted)
+        let files = try await store.clipboardEntries(limit: 10, kind: .files)
+        let entry = try XCTUnwrap(files.first)
+        XCTAssertEqual(entry.paths, [missing])
+        XCTAssertEqual(entry.thumbnailPNG, thumbnail)
+        let duplicate = try await store.insertPaletteCopy(copy, maxImages: 5, maxFiles: 5)
+        XCTAssertFalse(duplicate)
+    }
+
+    func testPreparedCopyFillsSizeAndThumbnailOnce() throws {
+        let rep = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 4,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+
+        guard case .image(let filled) = PaletteClipboardCopy.image(
+            PaletteClipboardImage(png: png)
+        ).prepared() else { return XCTFail("expected an image copy") }
+        XCTAssertEqual(filled.width, 8)
+        XCTAssertEqual(filled.height, 4)
+        XCTAssertNotNil(filled.thumbnail)
+
+        // Supplied values survive; preparing again must not redraw anything.
+        let kept = PaletteClipboardCopy.image(PaletteClipboardImage(
+            png: png,
+            thumbnail: Data("keep".utf8),
+            width: 1,
+            height: 2
+        )).prepared()
+        guard case .image(let untouched) = kept else { return XCTFail("expected an image copy") }
+        XCTAssertEqual(untouched.thumbnail, Data("keep".utf8))
+        XCTAssertEqual(untouched.width, 1)
+        XCTAssertEqual(untouched.height, 2)
     }
 
     func testClipboardImages() async throws {        let (store, url) = try makeStore()

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Dracula" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Dracula"
+appearance = "dark"
+
+[palette]
+bg = "#282a36"
+surface = "#1d1e27"
+elevated = "#3e3f4a"
+fg = "#f8f8f2"
+fg_muted = "#afb0b0"
+accent = "#d6acff"
+accent_fg = "#000000"
+selection_bg = "#44475a"
+selection_fg = "#ffffff"
+match_fg = "#ff92df"
+border = "#52535c"
+separator = "#3e3f4a80"
+danger = "#ff5555"
+warning = "#f1fa8c"
+success = "#50fa7b"
+info = "#bd93f9"
+badge_bg = "#3e3f4a"
+badge_fg = "#f8f8f2"
+
+[states.selected]
+bg = "#44475a"
+fg = "#ffffff"
+[states.hover]
+bg = "#3e3f4a"
+[states.disabled]
+fg = "#afb0b0"
+
+[footer]
+hint_color = "#afb0b0"

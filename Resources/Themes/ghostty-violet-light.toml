@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Violet Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+name = "Ghostty · Violet Light"
+appearance = "light"
+
+[palette]
+bg = "#fcf4dc"
+surface = "#efe8d1"
+elevated = "#fefaef"
+fg = "#42565e"
+fg_muted = "#667272"
+accent = "#0f6abb"
+accent_fg = "#ffffff"
+selection_bg = "#595ab7"
+selection_fg = "#fcf4dc"
+match_fg = "#c61c6f"
+border = "#dad8c6"
+separator = "#fefaef80"
+danger = "#c94c22"
+warning = "#b2861a"
+success = "#849619"
+info = "#2e8bce"
+badge_bg = "#fefaef"
+badge_fg = "#536870"
+
+[states.selected]
+bg = "#595ab7"
+fg = "#fcf4dc"
+[states.hover]
+bg = "#fefaef"
+[states.disabled]
+fg = "#828f8e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#828f8e"

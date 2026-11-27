@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Belfry" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Belfry"
+appearance = "dark"
+
+[palette]
+bg = "#4a0c18"
+surface = "#350911"
+elevated = "#5c242f"
+fg = "#fff0dc"
+fg_muted = "#c0a097"
+accent = "#accfe8"
+accent_fg = "#000000"
+selection_bg = "#702331"
+selection_fg = "#fff8eb"
+match_fg = "#dfb3cf"
+border = "#6e3a3f"
+separator = "#5c242f80"
+danger = "#f1817b"
+warning = "#e7c56d"
+success = "#9dcc91"
+info = "#91bfe0"
+badge_bg = "#5c242f"
+badge_fg = "#fff0dc"
+
+[states.selected]
+bg = "#702331"
+fg = "#fff8eb"
+[states.hover]
+bg = "#5c242f"
+[states.disabled]
+fg = "#c0a097"
+
+[footer]
+hint_color = "#c0a097"

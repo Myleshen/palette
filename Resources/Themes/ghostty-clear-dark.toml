@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Clear Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Clear Dark"
+appearance = "dark"
+
+[palette]
+bg = "#212734"
+surface = "#181c25"
+elevated = "#373d48"
+fg = "#e6e6e6"
+fg_muted = "#a1a3a8"
+accent = "#67b5ed"
+accent_fg = "#000000"
+selection_bg = "#334e5e"
+selection_fg = "#b9bcc2"
+match_fg = "#d389e5"
+border = "#484d58"
+separator = "#373d4880"
+danger = "#b45648"
+warning = "#c4ac62"
+success = "#6caa71"
+info = "#6d96b4"
+badge_bg = "#373d48"
+badge_fg = "#e6e6e6"
+
+[states.selected]
+bg = "#334e5e"
+fg = "#b9bcc2"
+[states.hover]
+bg = "#373d48"
+[states.disabled]
+fg = "#a1a3a8"
+
+[footer]
+hint_color = "#a1a3a8"

@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import CryptoKit
 import ImageIO
 import PaletteCore
@@ -136,7 +137,7 @@ public final class ClipboardMonitor: @unchecked Sendable {
         return paths.isEmpty ? nil : paths
     }
 
-    private static func fileThumbnail(_ path: String?) -> Data? {
+    static func fileThumbnail(_ path: String?) -> Data? {
         guard let path else { return nil }
         let icon = NSWorkspace.shared.icon(forFile: path)
         icon.size = NSSize(width: 128, height: 128)
@@ -148,15 +149,21 @@ public final class ClipboardMonitor: @unchecked Sendable {
     private static func imageData(from pasteboard: NSPasteboard) -> (data: Data, width: Int, height: Int)? {
         let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
         guard let data, !data.isEmpty, data.count <= 20_000_000,
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let size = imageSize(of: data) else { return nil }
+        return (data, size.width, size.height)
+    }
+
+    /// Pixel size of image bytes from the pasteboard or a file Palette saved.
+    static func imageSize(of data: Data) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
               width > 0, height > 0 else { return nil }
-        return (data, width, height)
+        return (width, height)
     }
 
-    private static func thumbnailPNG(from data: Data) -> Data? {
+    static func thumbnailPNG(from data: Data) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -185,6 +192,31 @@ struct PendingClipboardClear: Codable, Equatable, Sendable {
     }
 }
 
+/// What happened after the clipboard was written. `.pasted` only schedules the
+/// delivery; focus polling finishes asynchronously.
+public enum PasteOutcome: Equatable, Sendable {
+    /// A menu press or keystroke was scheduled for the target.
+    case pasted
+    /// Clipboard written; the target would mangle an injected shortcut.
+    case copiedOnly
+    /// Clipboard written; Accessibility is missing so nothing was injected.
+    case needsAccessibility
+    /// Clipboard written; there is no previous app to paste into.
+    case noTarget
+}
+
+public extension PasteOutcome {
+    /// Text the host shows when the clipboard was written but no paste was
+    /// delivered. Nil means the panel may hide.
+    var fallbackStatus: String? {
+        switch self {
+        case .pasted: return nil
+        case .copiedOnly, .noTarget: return "Copied — paste with ⌘V"
+        case .needsAccessibility: return "Copied — enable Accessibility to paste automatically."
+        }
+    }
+}
+
 @MainActor
 public final class PasteboardService {
     private var clearWorkItem: DispatchWorkItem?
@@ -193,6 +225,10 @@ public final class PasteboardService {
     public var stateFile: URL?
     /// Tests drive paste scheduling without triggering the Accessibility prompt.
     var requestsAccessibility = true
+    /// Tests pin the trust answer instead of depending on the runner's grant.
+    var accessibilityTrustedOverride: Bool?
+    /// Every clipboard write, so a test can prove a paste writes only once.
+    private(set) var writes = 0
 
     public init() {}
 
@@ -218,16 +254,18 @@ public final class PasteboardService {
     }
 
     public var isAccessibilityTrusted: Bool {
-        AXIsProcessTrusted()
+        accessibilityTrustedOverride ?? AXIsProcessTrusted()
     }
 
     public func requestAccessibility() {
+        // Native by necessity: macOS owns the TCC permission prompt.
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
     @discardableResult
     public func write(text: String, concealed: Bool = false, clearAfterMs: Int? = nil) -> Int {
+        writes += 1
         cancelPendingClear()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -254,6 +292,7 @@ public final class PasteboardService {
 
     @discardableResult
     public func write(image: Data, concealed: Bool = false, clearAfterMs: Int? = nil) -> Int {
+        writes += 1
         cancelPendingClear()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -283,6 +322,7 @@ public final class PasteboardService {
 
     @discardableResult
     public func write(files paths: [String], concealed: Bool = false, clearAfterMs: Int? = nil) -> Int {
+        writes += 1
         cancelPendingClear()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -384,42 +424,81 @@ public final class PasteboardService {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Copies and, when Accessibility is granted, pastes into the given app.
-    /// Returns false when the paste keystroke could not be delivered.
+    /// Copies and, when Accessibility is granted, hands the clipboard to the
+    /// given app. `route` is resolved here only when the caller did not.
     @discardableResult
-    public func paste(text: String, concealed: Bool = false, clearAfterMs: Int? = nil, into app: NSRunningApplication?) -> Bool {
+    public func paste(
+        text: String,
+        concealed: Bool = false,
+        clearAfterMs: Int? = nil,
+        into app: NSRunningApplication?,
+        route: PasteTarget.Route? = nil
+    ) -> PasteOutcome {
         write(text: text, concealed: concealed, clearAfterMs: clearAfterMs)
-        return deliver(to: app)
+        return deliver(to: app, route: route)
     }
 
     @discardableResult
-    public func paste(image: Data, concealed: Bool = false, clearAfterMs: Int? = nil, into app: NSRunningApplication?) -> Bool {
+    public func paste(
+        image: Data,
+        concealed: Bool = false,
+        clearAfterMs: Int? = nil,
+        into app: NSRunningApplication?,
+        route: PasteTarget.Route? = nil
+    ) -> PasteOutcome {
         write(image: image, concealed: concealed, clearAfterMs: clearAfterMs)
         // TUI editors such as OpenCode read images from the clipboard when
         // they receive Ctrl+V; Cmd+V only reaches the terminal's text paste.
-        return deliver(to: app, modifiers: Self.imagePasteModifiers(for: app))
+        return deliver(to: app, route: route, modifiers: Self.imagePasteModifiers(for: app), isImage: true)
     }
 
     @discardableResult
-    public func paste(files paths: [String], clearAfterMs: Int? = nil, into app: NSRunningApplication?) -> Bool {
+    public func paste(
+        files paths: [String],
+        clearAfterMs: Int? = nil,
+        into app: NSRunningApplication?,
+        route: PasteTarget.Route? = nil
+    ) -> PasteOutcome {
         write(files: paths, clearAfterMs: clearAfterMs)
-        return deliver(to: app)
+        return deliver(to: app, route: route)
     }
 
-    private func deliver(to app: NSRunningApplication?, modifiers: CGEventFlags = .maskCommand) -> Bool {
+    private func deliver(
+        to app: NSRunningApplication?,
+        route: PasteTarget.Route?,
+        modifiers: CGEventFlags = .maskCommand,
+        isImage: Bool = false
+    ) -> PasteOutcome {
         guard isAccessibilityTrusted else {
             Log.shared.warn("Paste skipped: Accessibility is not trusted", source: "clipboard")
             if requestsAccessibility { requestAccessibility() }
-            return false
+            return .needsAccessibility
+        }
+
+        // An explicit copy-only route needs no live target: writing the
+        // clipboard is all that happens.
+        if route == .copyOnly {
+            Log.shared.info("Paste copied only (no synthetic shortcut)", source: "clipboard")
+            return .copiedOnly
         }
 
         guard let app, !app.isTerminated else {
             Log.shared.warn("Paste skipped: the previous application is gone", source: "clipboard")
-            return false
+            return .noTarget
+        }
+
+        let route = route ?? PasteTarget.route(
+            bundleID: app.bundleIdentifier,
+            menuAvailable: Self.canPasteViaMenu(into: app),
+            image: isImage
+        )
+        guard route != .copyOnly else {
+            Log.shared.info("Paste copied only target=\(app.localizedName ?? "nil")", source: "clipboard")
+            return .copiedOnly
         }
 
         Log.shared.info(
-            "Paste requested target=\(app.localizedName ?? "nil") modifiers=\(modifiers.rawValue) trusted=\(isAccessibilityTrusted)",
+            "Paste requested target=\(app.localizedName ?? "nil") route=\(route) modifiers=\(modifiers.rawValue)",
             source: "clipboard"
         )
         // Hand focus back explicitly. Without yielding, macOS may keep Palette
@@ -427,8 +506,14 @@ public final class PasteboardService {
         // terminal/editor behind it.
         NSApp.yieldActivation(to: app)
         activate(app)
-        waitForActivation(of: app, modifiers: modifiers, attempt: 0)
-        return true
+        waitForActivation(of: app, route: route, modifiers: modifiers, attempt: 0)
+        return .pasted
+    }
+
+    /// True when the app exposes an enabled Edit ▸ Paste item (⌘V).
+    public func canPasteViaMenu(into app: NSRunningApplication?) -> Bool {
+        guard let app, !app.isTerminated else { return false }
+        return Self.canPasteViaMenu(into: app)
     }
 
     private func activate(_ app: NSRunningApplication) {
@@ -437,22 +522,33 @@ public final class PasteboardService {
     }
 
     /// Activation is asynchronous, and 0.22 s was not enough after hiding the
-    /// panel. Poll until the target is frontmost, then give the window a beat
-    /// before posting the key.
+    /// panel. Poll until the target is frontmost, then give the window a beat.
+    /// Palette must never still be frontmost when the key or menu press goes
+    /// out, so a target that never takes focus is abandoned rather than typed
+    /// into whatever is in front.
     private func waitForActivation(
         of app: NSRunningApplication,
+        route: PasteTarget.Route,
         modifiers: CGEventFlags,
         attempt: Int
     ) {
         let front = NSWorkspace.shared.frontmostApplication
-        if front?.processIdentifier == app.processIdentifier || attempt >= 20 {
+        if front?.processIdentifier == app.processIdentifier {
             Log.shared.info(
-                "Paste delivering target=\(app.localizedName ?? "nil") frontmost=\(front?.localizedName ?? "nil")",
+                "Paste delivering target=\(app.localizedName ?? "nil") route=\(route)",
                 source: "clipboard"
             )
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                Self.sendPaste(modifiers: modifiers)
+                Self.perform(route: route, in: app, modifiers: modifiers)
             }
+            return
+        }
+
+        if attempt >= 20 {
+            Log.shared.warn(
+                "Paste aborted: \(app.localizedName ?? "target") did not take focus (frontmost=\(front?.localizedName ?? "nil"))",
+                source: "clipboard"
+            )
             return
         }
 
@@ -461,21 +557,76 @@ public final class PasteboardService {
             activate(app)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.waitForActivation(of: app, modifiers: modifiers, attempt: attempt + 1)
+            self?.waitForActivation(of: app, route: route, modifiers: modifiers, attempt: attempt + 1)
         }
     }
 
+    private static func perform(route: PasteTarget.Route, in app: NSRunningApplication, modifiers: CGEventFlags) {
+        if route == .menu, pressPasteMenuItem(in: app) {
+            Log.shared.info("Paste delivered via the Edit menu", source: "clipboard")
+            return
+        }
+        // Neovide must not get a bare ⌘V: it would hand nvim `<d+v>`. It keeps
+        // the clipboard-only behaviour when the menu press did not work.
+        if let bundleID = app.bundleIdentifier, PasteTarget.copyOnlyWhenNoMenuBundleIDs.contains(bundleID) {
+            Log.shared.warn("Paste skipped: no usable Edit menu in \(bundleID)", source: "clipboard")
+            return
+        }
+        sendPaste(modifiers: modifiers)
+    }
+
+    // MARK: - Edit ▸ Paste through Accessibility
+
+    private static func canPasteViaMenu(into app: NSRunningApplication) -> Bool {
+        findPasteMenuItem(in: app) != nil
+    }
+
+    @discardableResult
+    private static func pressPasteMenuItem(in app: NSRunningApplication) -> Bool {
+        guard let item = findPasteMenuItem(in: app) else { return false }
+        return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+    }
+
+    /// The app's Edit menu item that owns ⌘V. Matched by shortcut rather than
+    /// title so a localised menu ("Bearbeiten ▸ Einsetzen") still resolves.
+    private static func findPasteMenuItem(in app: NSRunningApplication) -> AXUIElement? {
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(appElement, 0.5) // a hung target must not freeze the panel
+        guard let menuBar = elementAttribute(appElement, kAXMenuBarAttribute),
+              let barItems = attribute(menuBar, kAXChildrenAttribute) as? [AXUIElement] else {
+            return nil
+        }
+        for barItem in barItems {
+            guard let menu = (attribute(barItem, kAXChildrenAttribute) as? [AXUIElement])?.first,
+                  let items = attribute(menu, kAXChildrenAttribute) as? [AXUIElement] else { continue }
+            if let paste = items.first(where: isPasteItem) { return paste }
+        }
+        return nil
+    }
+
+    private static func isPasteItem(_ item: AXUIElement) -> Bool {
+        // ⌘ only: shift, option and control are off in the AX modifier sum.
+        let modifiers = attribute(item, kAXMenuItemCmdModifiersAttribute) as? Int ?? -1
+        guard attribute(item, kAXMenuItemCmdCharAttribute) as? String == "v",
+              modifiers & 0b111 == 0,
+              attribute(item, kAXEnabledAttribute) as? Bool == true else { return false }
+        return true
+    }
+
+    private static func elementAttribute(_ element: AXUIElement, _ name: String) -> AXUIElement? {
+        guard let value = attribute(element, name),
+              CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement)
+    }
+
+    private static func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
+        return value
+    }
+
     private static func imagePasteModifiers(for app: NSRunningApplication?) -> CGEventFlags {
-        let terminalBundleIDs: Set<String> = [
-            "net.kovidgoyal.kitty",
-            "com.apple.Terminal",
-            "com.googlecode.iterm2",
-            "dev.wez.wezterm",
-            "org.alacritty",
-            "com.mitchellh.ghostty",
-            "co.zeit.hyper",
-        ]
-        if let id = app?.bundleIdentifier, terminalBundleIDs.contains(id) {
+        if let id = app?.bundleIdentifier, PasteTarget.imageControlPasteBundleIDs.contains(id) {
             return .maskControl
         }
         return .maskCommand

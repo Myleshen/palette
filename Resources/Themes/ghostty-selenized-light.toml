@@ -1,0 +1,43 @@
+# Ported from Ghostty's bundled "Selenized Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Selenized Light"
+appearance = "light"
+
+[palette]
+bg = "#fbf3db"
+surface = "#eee7d0"
+elevated = "#fdfaef"
+fg = "#42555b"
+fg_muted = "#66726f"
+accent = "#0067c4"
+accent_fg = "#ffffff"
+selection_bg = "#ece3cc"
+selection_fg = "#006d63"
+match_fg = "#c44392"
+border = "#d9d7c5"
+separator = "#fdfaef80"
+danger = "#d2212d"
+warning = "#ac8800"
+success = "#489100"
+info = "#0072d4"
+badge_bg = "#fdfaef"
+badge_fg = "#53676d"
+
+[states.selected]
+bg = "#ece3cc"
+fg = "#006d63"
+[states.hover]
+bg = "#fdfaef"
+[states.disabled]
+fg = "#828e8b"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#828e8b"

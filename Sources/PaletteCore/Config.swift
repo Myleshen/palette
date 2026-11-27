@@ -179,7 +179,11 @@ public struct WebSearchEngine: Sendable, Equatable, Identifiable {
 
 public struct ClipboardConfig: Sendable, Equatable {
     public var enabled: Bool
-    public var maxEntries: Int
+    /// Unpinned rows kept per kind: text, images and file selections are
+    /// trimmed independently, so a run of screenshots cannot evict text.
+    public var maxText: Int
+    public var maxImages: Int
+    public var maxFiles: Int
     public var pollMs: Int
     public var clearAfterMs: Int
     /// Clipboard rows older than this many days are dropped on launch and
@@ -193,7 +197,9 @@ public struct ClipboardConfig: Sendable, Equatable {
 
     public init(
         enabled: Bool = true,
-        maxEntries: Int = 5_000,
+        maxText: Int = 100,
+        maxImages: Int = 20,
+        maxFiles: Int = 20,
         pollMs: Int = 500,
         clearAfterMs: Int = 30_000,
         retentionDays: Int = 30,
@@ -201,7 +207,9 @@ public struct ClipboardConfig: Sendable, Equatable {
         ignoredApps: [String] = []
     ) {
         self.enabled = enabled
-        self.maxEntries = maxEntries
+        self.maxText = maxText
+        self.maxImages = maxImages
+        self.maxFiles = maxFiles
         self.pollMs = pollMs
         self.clearAfterMs = clearAfterMs
         self.retentionDays = retentionDays
@@ -215,12 +223,20 @@ public struct TypographyConfig: Sendable, Equatable {
     public var monoFamily: String
     public var uiSize: Double
     public var monoSize: Double
+    public var previewSize: Double
 
-    public init(uiFamily: String = "", monoFamily: String = "", uiSize: Double = 0, monoSize: Double = 0) {
+    public init(
+        uiFamily: String = "",
+        monoFamily: String = "",
+        uiSize: Double = 0,
+        monoSize: Double = 0,
+        previewSize: Double = 13
+    ) {
         self.uiFamily = uiFamily
         self.monoFamily = monoFamily
         self.uiSize = uiSize
         self.monoSize = monoSize
+        self.previewSize = previewSize
     }
 }
 
@@ -481,6 +497,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var capture: CaptureConfig
     public var cheatsheets: CheatsheetConfig
     public var updates: UpdateConfig
+    /// Cross-app palette generation, separate from Palette's own UI theme.
+    public var theming: ThemingConfig
 
     public init(
         hotkey: String = "opt+space",
@@ -523,7 +541,8 @@ public struct PaletteConfig: Sendable, Equatable {
         timer: TimerConfig = TimerConfig(),
         capture: CaptureConfig = CaptureConfig(),
         cheatsheets: CheatsheetConfig = CheatsheetConfig(),
-        updates: UpdateConfig = UpdateConfig()
+        updates: UpdateConfig = UpdateConfig(),
+        theming: ThemingConfig = ThemingConfig()
     ) {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
@@ -565,6 +584,7 @@ public struct PaletteConfig: Sendable, Equatable {
         self.capture = capture
         self.cheatsheets = cheatsheets
         self.updates = updates
+        self.theming = theming
     }
 }
 
@@ -583,9 +603,12 @@ public struct PalettePaths: Sendable {
 
     public static func resolve(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        home: String = NSHomeDirectory(),
+        home: String? = nil,
         bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) -> PalettePaths {
+        // `PALETTE_HOME` lets a scripted run point every managed config at a
+        // temp directory, so a verification apply never touches the real one.
+        let home = home ?? environment["PALETTE_HOME"] ?? NSHomeDirectory()
         func directory(_ value: String) -> URL {
             URL(fileURLWithPath: PathExpansion.expand(value, home: home), isDirectory: true)
         }
@@ -625,6 +648,9 @@ public struct PalettePaths: Sendable {
     public var bookmarksFile: URL { configDir.appendingPathComponent("bookmarks.toml") }
     public var providersDir: URL { configDir.appendingPathComponent("providers", isDirectory: true) }
     public var themesDir: URL { configDir.appendingPathComponent("themes", isDirectory: true) }
+    /// Managed cross-app palette files. The app's own config only receives a
+    /// marked include block.
+    public var themeDir: URL { configDir.appendingPathComponent("theme", isDirectory: true) }
     public var databaseFile: URL { stateDir.appendingPathComponent("palette.sqlite") }
     /// Content-addressed clipboard image files, beside the database.
     public var clipboardImagesDir: URL { stateDir.appendingPathComponent("clipboard", isDirectory: true) }
@@ -633,7 +659,7 @@ public struct PalettePaths: Sendable {
 
     public func createDirectories() throws {
         let manager = FileManager.default
-        for url in [configDir, providersDir, themesDir, stateDir, logsDir, cacheDir] {
+        for url in [configDir, providersDir, themesDir, themeDir, stateDir, logsDir, cacheDir] {
             try manager.createDirectory(at: url, withIntermediateDirectories: true)
         }
     }
@@ -809,6 +835,9 @@ public enum ConfigLoader {
             }
             if let value = typography.number("mono_size"), value > 0 {
                 config.typography.monoSize = min(48, max(9, value))
+            }
+            if let value = typography.number("preview_size"), value > 0 {
+                config.typography.previewSize = min(24, max(9, value))
             }
         }
 
@@ -1055,6 +1084,10 @@ public enum ConfigLoader {
             config.theme = theme
         }
 
+        if let themingTable = table.table("theming") {
+            config.theming = ThemingConfig.parse(themingTable)
+        }
+
         if let scopesTable = table.table("scopes") {
             var scopes: [String: Scope] = [:]
             for (name, value) in scopesTable {
@@ -1082,7 +1115,16 @@ public enum ConfigLoader {
         if let clipboardTable = table.table("clipboard") {
             var clipboard = config.clipboard
             clipboard.enabled = clipboardTable.bool("enabled") ?? clipboard.enabled
-            clipboard.maxEntries = max(10, clipboardTable.int("max_entries") ?? clipboard.maxEntries)
+            // `max_entries` was one global cap before the per-kind limits; it
+            // now maps to text and is dropped the next time the file is written.
+            clipboard.maxText = max(
+                10,
+                clipboardTable.int("max_text")
+                    ?? clipboardTable.int("max_entries")
+                    ?? clipboard.maxText
+            )
+            clipboard.maxImages = max(1, clipboardTable.int("max_images") ?? clipboard.maxImages)
+            clipboard.maxFiles = max(1, clipboardTable.int("max_files") ?? clipboard.maxFiles)
             clipboard.pollMs = max(150, clipboardTable.int("poll_ms") ?? clipboard.pollMs)
             clipboard.clearAfterMs = max(0, clipboardTable.int("clear_after_ms") ?? clipboard.clearAfterMs)
             clipboard.retentionDays = max(0, clipboardTable.int("retention_days") ?? clipboard.retentionDays)
@@ -1211,6 +1253,7 @@ public enum ConfigLoader {
         mono_family = ""
         ui_size = 0
         mono_size = 0
+        preview_size = 13
 
         # Provider tab order and optional trigger aliases.
         [providers]
@@ -1287,6 +1330,15 @@ public enum ConfigLoader {
         dark = "siri-graphite"
         light = "siri-silver"
 
+        # Cross-app palette files written under ~/.config/palette/theme/.
+        [theming]
+        enabled = false
+        source = "theme"              # theme | wallpaper
+        theme = ""                    # empty uses the theme Palette is showing
+        follow_wallpaper = false
+        dark_mode = "auto"            # auto | dark | light
+        targets = ["kitty", "ghostty", "zellij", "nvim", "fish", "starship"]
+
         [scopes.projects]
         roots = ["~/dev", "~/dot-files"]
         exclude = [
@@ -1314,7 +1366,10 @@ public enum ConfigLoader {
 
         [clipboard]
         enabled = true
-        max_entries = 5000
+        # Unpinned entries kept per kind; pinned rows are always kept.
+        max_text = 100
+        max_images = 20
+        max_files = 20
         poll_ms = 500
         clear_after_ms = 30000
         retention_days = 30
@@ -1418,6 +1473,7 @@ public enum ConfigWriter {
         out.append("mono_family = \(quote(config.typography.monoFamily))")
         out.append("ui_size = \(config.typography.uiSize)")
         out.append("mono_size = \(config.typography.monoSize)")
+        out.append("preview_size = \(config.typography.previewSize)")
         out.append("")
         out.append("[providers]")
         out.append("order = [\(config.providerOrder.map(quote).joined(separator: ", "))]")
@@ -1471,6 +1527,8 @@ public enum ConfigWriter {
         out.append("dark = \(quote(config.theme.dark))")
         out.append("light = \(quote(config.theme.light))")
         out.append("")
+        out.append(config.theming.render())
+        out.append("")
         out.append("[web_search]")
         out.append("enabled = \(config.webSearchEnabled)")
         for engine in config.webSearchEngines {
@@ -1499,7 +1557,9 @@ public enum ConfigWriter {
         out.append("")
         out.append("[clipboard]")
         out.append("enabled = \(config.clipboard.enabled)")
-        out.append("max_entries = \(config.clipboard.maxEntries)")
+        out.append("max_text = \(config.clipboard.maxText)")
+        out.append("max_images = \(config.clipboard.maxImages)")
+        out.append("max_files = \(config.clipboard.maxFiles)")
         out.append("poll_ms = \(config.clipboard.pollMs)")
         out.append("clear_after_ms = \(config.clipboard.clearAfterMs)")
         out.append("retention_days = \(config.clipboard.retentionDays)")

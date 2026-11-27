@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Patina Lichen" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Patina Lichen"
+appearance = "light"
+
+[palette]
+bg = "#cdd1c6"
+surface = "#c3c7bc"
+elevated = "#e8eae5"
+fg = "#393a34"
+fg_muted = "#585a53"
+accent = "#2c5864"
+accent_fg = "#ffffff"
+selection_bg = "#aab0a3"
+selection_fg = "#393a34"
+match_fg = "#854b3f"
+border = "#afb3a9"
+separator = "#e8eae580"
+danger = "#8b4646"
+warning = "#7f5031"
+success = "#33644d"
+info = "#35616d"
+badge_bg = "#e8eae5"
+badge_fg = "#393a34"
+
+[states.selected]
+bg = "#aab0a3"
+fg = "#393a34"
+[states.hover]
+bg = "#e8eae5"
+[states.disabled]
+fg = "#6d6f67"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6d6f67"

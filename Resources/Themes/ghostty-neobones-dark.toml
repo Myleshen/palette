@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Neobones Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Neobones Dark"
+appearance = "dark"
+
+[palette]
+bg = "#0f191f"
+surface = "#0b1216"
+elevated = "#273035"
+fg = "#c6d5cf"
+fg_muted = "#869391"
+accent = "#92a0e2"
+accent_fg = "#000000"
+selection_bg = "#3a3e3d"
+selection_fg = "#c6d5cf"
+match_fg = "#cf86c1"
+border = "#343f42"
+separator = "#27303580"
+danger = "#de6e7c"
+warning = "#b77e64"
+success = "#90ff6b"
+info = "#8190d4"
+badge_bg = "#273035"
+badge_fg = "#c6d5cf"
+
+[states.selected]
+bg = "#3a3e3d"
+fg = "#c6d5cf"
+[states.hover]
+bg = "#273035"
+[states.disabled]
+fg = "#869391"
+
+[footer]
+hint_color = "#869391"

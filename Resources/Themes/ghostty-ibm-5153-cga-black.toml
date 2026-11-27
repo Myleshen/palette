@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "IBM 5153 CGA (Black)" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · IBM 5153 CGA (Black)"
+appearance = "dark"
+
+[palette]
+bg = "#000000"
+surface = "#000000"
+elevated = "#1a1a1a"
+fg = "#c4c4c4"
+fg_muted = "#7f7f7f"
+accent = "#6972ff"
+accent_fg = "#1b1a1a"
+selection_bg = "#c4c4c4"
+selection_fg = "#000000"
+match_fg = "#f34ef3"
+border = "#272727"
+separator = "#1a1a1a80"
+danger = "#c40000"
+warning = "#c47e00"
+success = "#00c400"
+info = "#0942ec"
+badge_bg = "#1a1a1a"
+badge_fg = "#c4c4c4"
+
+[states.selected]
+bg = "#c4c4c4"
+fg = "#000000"
+[states.hover]
+bg = "#1a1a1a"
+[states.disabled]
+fg = "#7f7f7f"
+
+[footer]
+hint_color = "#7f7f7f"

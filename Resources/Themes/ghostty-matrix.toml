@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Matrix" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Matrix"
+appearance = "dark"
+
+[palette]
+bg = "#0f191c"
+surface = "#0b1214"
+elevated = "#273033"
+fg = "#8daa8f"
+fg_muted = "#6e8673"
+accent = "#6e9e9d"
+accent_fg = "#000000"
+selection_bg = "#18282e"
+selection_fg = "#00ff87"
+match_fg = "#11ff25"
+border = "#22302d"
+separator = "#27303380"
+danger = "#23755a"
+warning = "#ffd700"
+success = "#82d967"
+info = "#556958"
+badge_bg = "#273033"
+badge_fg = "#869e88"
+
+[states.selected]
+bg = "#18282e"
+fg = "#00ff87"
+[states.hover]
+bg = "#273033"
+[states.disabled]
+fg = "#546b59"
+
+[footer]
+hint_color = "#546b59"

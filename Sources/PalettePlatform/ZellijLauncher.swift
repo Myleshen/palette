@@ -7,6 +7,9 @@ public enum ZellijLauncher {
     public struct Preparation: Sendable, Equatable {
         /// Sanitized name the attach must use.
         public var name: String
+        /// True when a dead session of the same name was dropped, so the new
+        /// pane should start it with `--session` rather than attach.
+        public var recreated: Bool = false
         /// Set when dropping a stale session failed; attaching may still work.
         public var warning: String?
     }
@@ -27,7 +30,7 @@ public enum ZellijLauncher {
             warning = "could not drop the old session \"\(name)\""
             if !text.isEmpty { warning? += ": " + text }
         }
-        return Preparation(name: name, warning: warning)
+        return Preparation(name: name, recreated: true, warning: warning)
     }
 
     /// Shell line for an external terminal. Attach is retried once because the
@@ -36,7 +39,9 @@ public enum ZellijLauncher {
         let tool = shellQuote(zellij)
         let session = shellQuote(name)
         let attach = "\(tool) attach " + (create ? "--create " : "") + session
-        return "\(attach) || { \(tool) delete-session --force \(session); exec \(tool) attach --create \(session); }"
+        // A dead session is dropped, then started fresh with --session: that is
+        // the form that reliably recreates a deleted/crashed session.
+        return "\(attach) || { \(tool) delete-session --force \(session); exec \(tool) --session \(session); }"
     }
 
     private static func shellQuote(_ value: String) -> String {

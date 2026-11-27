@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Lumina Quartz Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Quartz Light"
+appearance = "light"
+
+[palette]
+bg = "#f5f7fa"
+surface = "#e9ebed"
+elevated = "#fbfbfd"
+fg = "#30353b"
+fg_muted = "#6e7277"
+accent = "#31547e"
+accent_fg = "#ffffff"
+selection_bg = "#bbbec1"
+selection_fg = "#30353b"
+match_fg = "#6c3f69"
+border = "#ced0d4"
+separator = "#fbfbfd80"
+danger = "#7d2b28"
+warning = "#9a642c"
+success = "#217550"
+info = "#446894"
+badge_bg = "#fbfbfd"
+badge_fg = "#30353b"
+
+[states.selected]
+bg = "#bbbec1"
+fg = "#30353b"
+[states.hover]
+bg = "#fbfbfd"
+[states.disabled]
+fg = "#75797e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#75797e"

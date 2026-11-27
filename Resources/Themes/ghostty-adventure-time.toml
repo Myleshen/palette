@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Adventure Time" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Adventure Time"
+appearance = "dark"
+
+[palette]
+bg = "#1f1d45"
+surface = "#161532"
+elevated = "#353458"
+fg = "#f8dcc0"
+fg_muted = "#ac9995"
+accent = "#efbf38"
+accent_fg = "#000000"
+selection_bg = "#706b4e"
+selection_fg = "#f8e8dc"
+match_fg = "#9b5953"
+border = "#4a435e"
+separator = "#35345880"
+danger = "#d02526"
+warning = "#e7741e"
+success = "#4ab118"
+info = "#2863e1"
+badge_bg = "#353458"
+badge_fg = "#f8dcc0"
+
+[states.selected]
+bg = "#706b4e"
+fg = "#f8e8dc"
+[states.hover]
+bg = "#353458"
+[states.disabled]
+fg = "#ac9995"
+
+[footer]
+hint_color = "#ac9995"

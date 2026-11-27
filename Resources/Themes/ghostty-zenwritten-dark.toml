@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Zenwritten Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Zenwritten Dark"
+appearance = "dark"
+
+[palette]
+bg = "#191919"
+surface = "#121212"
+elevated = "#303030"
+fg = "#bbbbbb"
+fg_muted = "#828282"
+accent = "#61abda"
+accent_fg = "#000000"
+selection_bg = "#404040"
+selection_fg = "#bbbbbb"
+match_fg = "#cf86c1"
+border = "#393939"
+separator = "#30303080"
+danger = "#de6e7c"
+warning = "#b77e64"
+success = "#819b69"
+info = "#6099c0"
+badge_bg = "#303030"
+badge_fg = "#bbbbbb"
+
+[states.selected]
+bg = "#404040"
+fg = "#bbbbbb"
+[states.hover]
+bg = "#303030"
+[states.disabled]
+fg = "#828282"
+
+[footer]
+hint_color = "#828282"

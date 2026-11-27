@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Scabos Sand" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Scabos Sand"
+appearance = "dark"
+
+[palette]
+bg = "#79563b"
+surface = "#573e2a"
+elevated = "#86674f"
+fg = "#ffffff"
+fg_muted = "#e7d4ba"
+accent = "#e3f2ff"
+accent_fg = "#000000"
+selection_bg = "#8e684a"
+selection_fg = "#fff8e8"
+match_fg = "#f7e0f7"
+border = "#94765b"
+separator = "#86674f80"
+danger = "#ffdbc1"
+warning = "#ffe29b"
+success = "#e1f0b7"
+info = "#c6e4fc"
+badge_bg = "#86674f"
+badge_fg = "#fff4dc"
+
+[states.selected]
+bg = "#8e684a"
+fg = "#fff8e8"
+[states.hover]
+bg = "#86674f"
+[states.disabled]
+fg = "#d0bda4"
+
+[footer]
+hint_color = "#d0bda4"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Purplepeter" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Purplepeter"
+appearance = "dark"
+
+[palette]
+bg = "#2a1a4a"
+surface = "#1e1335"
+elevated = "#3f315c"
+fg = "#ece7fa"
+fg_muted = "#a89fbc"
+accent = "#79daed"
+accent_fg = "#000000"
+selection_bg = "#8689c2"
+selection_fg = "#271c50"
+match_fg = "#e78fcd"
+border = "#51436d"
+separator = "#3f315c80"
+danger = "#ff796d"
+warning = "#efdfac"
+success = "#99b481"
+info = "#66d9ef"
+badge_bg = "#3f315c"
+badge_fg = "#ece7fa"
+
+[states.selected]
+bg = "#8689c2"
+fg = "#271c50"
+[states.hover]
+bg = "#3f315c"
+[states.disabled]
+fg = "#a89fbc"
+
+[footer]
+hint_color = "#a89fbc"

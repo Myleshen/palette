@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Guezwhoz" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Guezwhoz"
+appearance = "dark"
+
+[palette]
+bg = "#1d1d1d"
+surface = "#151515"
+elevated = "#343434"
+fg = "#d9d9d9"
+fg_muted = "#979797"
+accent = "#64b2ed"
+accent_fg = "#000000"
+selection_bg = "#245354"
+selection_fg = "#58d6ce"
+match_fg = "#a398ed"
+border = "#434343"
+separator = "#34343480"
+danger = "#e85181"
+warning = "#b7d074"
+success = "#7ad694"
+info = "#5aa0d6"
+badge_bg = "#343434"
+badge_fg = "#d9d9d9"
+
+[states.selected]
+bg = "#245354"
+fg = "#58d6ce"
+[states.hover]
+bg = "#343434"
+[states.disabled]
+fg = "#979797"
+
+[footer]
+hint_color = "#979797"

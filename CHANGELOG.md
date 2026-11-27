@@ -1,5 +1,111 @@
 # Changelog
 
+## 2.19.0 — 2026-11-27
+
+### Added
+
+- **Cross-app theming.** A new **Theming** section (its own sidebar group, above
+  Advanced) owns the Palette theme, optional theming of other apps (off by
+  default), and the target list. A palette is generated from the chosen theme or
+  extracted from the wallpaper, written as managed includes under
+  `~/.config/palette/theme/` (kitty, Ghostty, zellij, Neovim, fish, starship,
+  bat, delta, btop, yazi). Includes are installed and removed automatically per
+  target with marker blocks, one original backup and a one-step Revert; Palette
+  never rewrites an app's config beyond its marked block. Wallpaper palettes
+  re-apply automatically when the wallpaper changes; theme palettes apply on
+  demand. Apply reports the truth per app: kitty reloads through remote control
+  when available, and Ghostty/zellij/Neovim/fish/Starship say exactly what they
+  need (restart, new session, source, next prompt).
+- **Chromium browser theming via managed policy.** Installed Chromium browsers
+  (Helium, Chrome, Edge, Brave, Vivaldi, Chromium) can inherit the palette
+  background as `BrowserThemeColor` through a per-browser `.mobileconfig`,
+  installed with one native Touch ID/password prompt, removable the same way.
+  App-wide per browser and approximate by design; Arc is listed as unsupported.
+- **19 Omarchy themes** (`omarchy-*`), MIT, contrast-checked, alongside the 914
+  Ghostty themes in the theme browser.
+- Action-routing contract and store-level wiring tests with mutation checks.
+- **Non-tracking menus.** Every Palette-owned menu and menu-style picker (28
+  surfaces: status panel, engine/browser picker, launcher and Ask context menus,
+  recording options, Ask model, theme override, all font pickers, every Settings
+  dropdown) is a custom panel now. Native menu tracking no longer swallows global
+  hotkeys, so screenshots, clipboard and launcher work while a Palette menu is
+  open. Long lists are lazy and searchable: the 942-row theme menu opens in
+  ~42 ms instead of ~1.4 s and renders ~50 rows.
+- **Annotator selection.** Marks can be selected, text resized from a corner
+  handle (Escape cancels, one undo step), and deleted with Delete or the
+  right-click menu; ⌘Z restores.
+- **Trigger prefix hiding.** Once a provider resolves, its `/trigger` disappears
+  from the field (even with no query) and the provider pill carries the name;
+  Backspace on the empty field drops the binding.
+- **Interaction test harness.** 13 e2e flows cover menus, pickers and the status
+  panel with hotkey probes, plus performance budgets (theme menu, catalog,
+  clipboard snapshot, cached `/neo`, theme apply) and sandbox-HOME theme apply
+  integration tests.
+
+- **914 Ghostty themes** bundled as `ghostty-*` (MIT, contrast-checked; user
+  themes with the same name still win). Rex's palettes are proprietary and were
+  deliberately not ported.
+- **Theme browser** in Settings → Theming: search across Built-in / Ghostty /
+  Omarchy / Custom, per-row colour swatches and a live preview of the launcher.
+  Selecting only previews; **Use Theme** applies and **Revert** restores.
+- **Per-kind clipboard limits**: text, images and files trim independently
+  (defaults 100 / 20 / 20); the old `max_entries` becomes the text limit and is
+  rewritten on the next save.
+- **Preview text size**: 13 pt by default (was hardcoded 11), configurable
+  9–24 under Appearance → Typography, applied to every preview surface.
+- **Action-routing contract** and store-level wiring tests, with mutation checks
+  (reverting the OCR fix or the setup-file creation now fails the suite).
+
+### Changed
+
+- `/clip` is a flat chronological list across text, images and files — no
+  kind grouping or kind filter chips, pins keep their badge without jumping the
+  queue.
+- Provider speed: GitHub caches by repo instead of query (no `gh` per
+  keystroke), `/zj` stops spawning `zellij` on plain keystrokes, emoji fields
+  are pre-folded, `docker ps` and stats are cached, `/port` batches one `lsof`,
+  `/shots` paints immediately with lazy thumbnails, favicon fetches are gated,
+  the theme catalogue is cached, and Bitwarden shows a progress row with a 15 s
+  cap.
+- Global searches race a **300 ms per-provider deadline**, so one slow source
+  cannot hold every result; late sources are reported once.
+- Paste prefers the target's **Edit ▸ Paste** menu via Accessibility; Neovide
+  falls back to "Copied — press ⌘V" instead of typing `<d+v>`. kitty and other
+  terminals keep synthetic ⌘V.
+- Opening files no longer happens after hiding the panel; only setup rows create
+  missing files, everything else reports that the file is gone.
+- Timers, bindings, Docker actions, theme saves, shot copies and eyedropper
+  cancels all report success/failure; a config reload with a parse error now
+  reports the error instead of "reloaded".
+
+### Fixed
+
+- Theme application now changes the other apps: the include blocks are installed
+  with absolute paths where `~` is unreliable, unchecking removes only that
+  block, and a sandbox-HOME test asserts the bytes and markers.
+- Choosing web-app mode in the bang picker no longer crashes (the `Toggle` inside
+  the native menu wrote through a stale array index); the picker shows
+  `Web app · Helium` and explains that it opens a Palette-managed app window.
+- Browser-tab opens report failures instead of doing nothing; an unresolved
+  browser falls back to the default with a visible status.
+- Stale zellij sessions are dropped and recreated with `zellij --session <name>`.
+- The launcher centres on the full display rather than `visibleFrame` (a Dock on
+  either side no longer shifts it), and the status panel renders all its rows.
+- Main-thread freezes removed: recording options show instantly (AVFoundation
+  discovery moved off-main), theme parsing moved out of row bodies and off the
+  apply path, screenshot thumbnails decode at target size off-main, font/mic/
+  display lists are cached, and backup export runs in the background.
+- Palette screenshots and recordings now appear in `/clip`: the capture,
+  recording and annotator copies record the bytes explicitly (deduped by hash)
+  while the monitor still ignores the duplicate pasteboard poll.
+- Capture storage reuses the already-captured bytes and thumbnail and does the
+  hash/write/insert off the main actor (store hold time 73 ms → 8 ms; pasteboard
+  write 41 ms → ~0 ms).
+- Atlas 1.8.0: tool resolution goes through `ToolLocator` (no dot-files
+  fallback), and missing/review paths report instead of failing silently.
+- Return on a row with no action says so; missing clipboard images say so; paste
+  failure keeps the panel and tells you to press ⌘V.
+
 ## 2.18.2 — 2026-11-24
 
 ### Changed

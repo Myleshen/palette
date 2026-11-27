@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Everforest Dark Soft" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Everforest Dark Soft"
+appearance = "dark"
+
+[palette]
+bg = "#293136"
+surface = "#1e2327"
+elevated = "#3e464a"
+fg = "#d3c6aa"
+fg_muted = "#9d9785"
+accent = "#80bdb4"
+accent_fg = "#000000"
+selection_bg = "#5c3f4f"
+selection_fg = "#d3c6aa"
+match_fg = "#d699b6"
+border = "#4b4f4d"
+separator = "#3e464a80"
+danger = "#e67e80"
+warning = "#dbbc7f"
+success = "#a7c080"
+info = "#7fbbb3"
+badge_bg = "#3e464a"
+badge_fg = "#d3c6aa"
+
+[states.selected]
+bg = "#5c3f4f"
+fg = "#d3c6aa"
+[states.hover]
+bg = "#3e464a"
+[states.disabled]
+fg = "#989281"
+
+[footer]
+hint_color = "#989281"

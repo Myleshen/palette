@@ -119,6 +119,33 @@ run_flow launcher-tab \
   'settings; wait=0.8; settings_tab=1; wait=0.9; settings_snapshot=%DIR%/settings-launcher.png; exit' \
   '%DIR%/settings-launcher.png'
 
+# The status item's panel replaces an NSMenu: it must open without activating
+# the app, render rows, and close on Esc.
+run_flow status-panel-interaction \
+  'show; wait=0.6; statuspanel; wait=0.6; assert=statusPanelOpen=true; assert=statusPanelRows>0; assert=appActive=false; assert=panelVisible=true; key=esc; wait=0.3; assert=statusPanelOpen=false; assert=appActive=false; exit'
+
+# A non-tracking Palette menu keeps the app inactive and its keys alive. The
+# probe stands in for a global hotkey callback; a native NSMenu would hold it.
+run_flow palette-menu-probe \
+  'show; wait=0.6; palette_menu=probe; wait=0.4; assert=paletteMenuOpen=true; assert=paletteMenuRows=5; assert=paletteMenuHighlight=probe-one; assert=appActive=false; palettemenu_probe; assert=paletteMenuProbe=1; key=down; wait=0.2; assert=paletteMenuHighlight=probe-two; key=down; wait=0.2; assert=paletteMenuHighlight=probe-three; key=down; wait=0.2; assert=paletteMenuHighlight=probe-one; key=esc; wait=0.3; assert=paletteMenuOpen=false; assert=appActive=false; dump=%DIR%/state.json; exit' \
+  '%DIR%/state.json'
+
+# The picker rows are built by the same helper PaletteMenuPicker uses, so the
+# count and the choice round-trip cover the real control.
+run_flow palette-menu-picker \
+  'show; wait=0.6; palette_menu=picker; wait=0.4; assert=paletteMenuOpen=true; assert=paletteMenuRows=4; assert=paletteMenuHighlight=choice:0; key=down; wait=0.2; assert=paletteMenuHighlight=choice:1; key=up; wait=0.2; assert=paletteMenuHighlight=choice:0; key=esc; wait=0.3; assert=paletteMenuOpen=false; exit'
+
+# The web-search engine browser picker from Settings: default row, installed
+# browsers, separator, the two mode rows.
+run_flow engine-browser-picker \
+  'show; wait=0.6; palette_menu=engine_browser; wait=0.4; assert=paletteMenuOpen=true; assert=paletteMenuRows>4; assert=paletteMenuHighlight=default-browser; assert=appActive=false; palettemenu_probe; assert=paletteMenuProbe=1; key=down; wait=0.2; assert=paletteMenuHighlight!=default-browser; key=esc; wait=0.3; assert=paletteMenuOpen=false; exit'
+
+# Opening the 942-row theme browser must stay lazy: only the rows that fit the
+# 430 pt list pane appear, not all 900+ TOML files.
+run_flow theme-menu-lazy \
+  'settings; wait=0.8; settings_tab=19; wait_until=themeMenuRendered>0;timeout=15; assert=themeMenuRows>900; assert=themeMenuRendered<45; assert=appActive=false; dump=%DIR%/state.json; exit' \
+  '%DIR%/state.json'
+
 # The scratchpad, ask, terminal and preview panels share one content area:
 # opening a mode must close the previous one.
 # Ask lives in its own window now: opening it must not tear down the panel's

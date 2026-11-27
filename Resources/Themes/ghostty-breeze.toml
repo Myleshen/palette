@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Breeze" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Breeze"
+appearance = "dark"
+
+[palette]
+bg = "#31363b"
+surface = "#23272a"
+elevated = "#464a4f"
+fg = "#eff0f1"
+fg_muted = "#acafb1"
+accent = "#55c3ff"
+accent_fg = "#000000"
+selection_bg = "#eff0f1"
+selection_fg = "#31363b"
+match_fg = "#9b59b6"
+border = "#575b5f"
+separator = "#464a4f80"
+danger = "#f5251f"
+warning = "#f67400"
+success = "#11d116"
+info = "#1d99f3"
+badge_bg = "#464a4f"
+badge_fg = "#eff0f1"
+
+[states.selected]
+bg = "#eff0f1"
+fg = "#31363b"
+[states.hover]
+bg = "#464a4f"
+[states.disabled]
+fg = "#acafb1"
+
+[footer]
+hint_color = "#acafb1"

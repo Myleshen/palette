@@ -16,6 +16,8 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
     )
 
     private let bridge: HostBridge
+    /// Five shell calls per search; a few seconds of reuse keeps typing cheap.
+    private let rowsCache = ShortCache<[PaletteItem]>(ttl: 3)
 
     public init(bridge: HostBridge) {
         self.bridge = bridge
@@ -38,7 +40,8 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private func rows() async -> [PaletteItem] {
-        await withTaskGroup(of: PaletteItem?.self) { group in
+        if let cached = await rowsCache.get("rows") { return cached }
+        let items = await withTaskGroup(of: PaletteItem?.self) { group in
             group.addTask { await Self.diskRow() }
             group.addTask { await Self.memoryRow() }
             group.addTask { await Self.loadRow() }
@@ -50,6 +53,8 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
             }
             return items.sorted { $0.score > $1.score }
         }
+        await rowsCache.set(items, key: "rows")
+        return items
     }
 
     // MARK: - Rows

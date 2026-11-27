@@ -17,10 +17,12 @@ public final class TimerProvider: PaletteProvider, @unchecked Sendable {
 
     private let service: TimerService
     private let presets: [Double]
+    private let bridge: HostBridge?
 
-    public init(service: TimerService, presetMinutes: [Int]) {
+    public init(service: TimerService, presetMinutes: [Int], bridge: HostBridge? = nil) {
         self.service = service
         self.presets = presetMinutes.map { Double($0) * 60 }
+        self.bridge = bridge
     }
 
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
@@ -69,6 +71,19 @@ public final class TimerProvider: PaletteProvider, @unchecked Sendable {
         } else if raw == "stop" {
             await service.stop()
         }
+        if let message = Self.feedback(for: raw) {
+            await bridge?.notify(message)
+        }
+    }
+
+    /// Status line for one timer action; nil when the action does nothing.
+    static func feedback(for raw: String) -> String? {
+        if raw.hasPrefix("start:"),
+           let seconds = TimeInterval(raw.dropFirst("start:".count)), seconds > 0 {
+            return "Timer started · \(TimerDuration.label(seconds))"
+        }
+        if raw == "stop" { return "Timer stopped" }
+        return nil
     }
 
     private func statusRow(_ snapshot: TimerSnapshot) -> PaletteItem {

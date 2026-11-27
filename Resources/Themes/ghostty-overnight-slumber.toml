@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Overnight Slumber" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Overnight Slumber"
+appearance = "dark"
+
+[palette]
+bg = "#0e1729"
+surface = "#0a111e"
+elevated = "#262e3e"
+fg = "#ced2d6"
+fg_muted = "#8b9199"
+accent = "#8dabe1"
+accent_fg = "#000000"
+selection_bg = "#1f2b41"
+selection_fg = "#ced2d6"
+match_fg = "#c792eb"
+border = "#343c4c"
+separator = "#262e3e80"
+danger = "#ffa7c4"
+warning = "#ffcb8b"
+success = "#85cc95"
+info = "#8dabe1"
+badge_bg = "#262e3e"
+badge_fg = "#ced2d6"
+
+[states.selected]
+bg = "#1f2b41"
+fg = "#ced2d6"
+[states.hover]
+bg = "#262e3e"
+[states.disabled]
+fg = "#8b9199"
+
+[footer]
+hint_color = "#8b9199"

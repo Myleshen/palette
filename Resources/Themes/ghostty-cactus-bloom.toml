@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Cactus Bloom" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Cactus Bloom"
+appearance = "light"
+
+[palette]
+bg = "#fff9f0"
+surface = "#f2ede4"
+elevated = "#fffcf8"
+fg = "#111a11"
+fg_muted = "#64685f"
+accent = "#123a78"
+accent_fg = "#ffffff"
+selection_bg = "#f1dcc4"
+selection_fg = "#111a11"
+match_fg = "#612d8e"
+border = "#cfccc3"
+separator = "#fffcf880"
+danger = "#8c1b1b"
+warning = "#684b00"
+success = "#0d5b30"
+info = "#174b9a"
+badge_bg = "#fffcf8"
+badge_fg = "#111a11"
+
+[states.selected]
+bg = "#f1dcc4"
+fg = "#111a11"
+[states.hover]
+bg = "#fffcf8"
+[states.disabled]
+fg = "#64685f"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#64685f"

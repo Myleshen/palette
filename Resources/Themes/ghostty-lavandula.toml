@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Lavandula" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Lavandula"
+appearance = "dark"
+
+[palette]
+bg = "#050014"
+surface = "#04000e"
+elevated = "#1e1a2c"
+fg = "#9994a3"
+fg_muted = "#787383"
+accent = "#8e87e0"
+accent_fg = "#000000"
+selection_bg = "#37323c"
+selection_fg = "#9195fa"
+match_fg = "#a776e0"
+border = "#1c172a"
+separator = "#1e1a2c80"
+danger = "#9d373f"
+warning = "#7f6f49"
+success = "#337e6f"
+info = "#58548a"
+badge_bg = "#1e1a2c"
+badge_fg = "#898591"
+
+[states.selected]
+bg = "#37323c"
+fg = "#9195fa"
+[states.hover]
+bg = "#1e1a2c"
+[states.disabled]
+fg = "#5d5867"
+
+[footer]
+hint_color = "#5d5867"

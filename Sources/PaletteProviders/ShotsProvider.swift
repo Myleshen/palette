@@ -6,7 +6,7 @@ import PalettePlatform
 
 /// Browse what the capture directory holds: screenshots and recordings, newest
 /// first, with a thumbnail preview, open, annotate, copy and reveal.
-public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
+public final class ShotsProvider: PaletteProvider, AsyncPreviewProviding, @unchecked Sendable {
     public let descriptor = ProviderDescriptor(
         id: "shots",
         name: "Captures",
@@ -70,14 +70,20 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
             guard request.isBound else { return [] }
             return [emptyRow(title: "No captures match \"\(query)\"", subtitle: "\(entries.count) captures in \(directory)")]
         }
-        var items: [PaletteItem] = []
-        for entry in filtered.prefix(60) {
-            items.append(await row(for: entry))
+        // Rows come back at once with the file's own icon. The first ten warm
+        // their thumbnails in the background, and the selected row is filled by
+        // the host through `AsyncPreviewProviding`. Everything hits the cache.
+        let items = filtered.prefix(60).map { row(for: $0) }
+        let warm = filtered.prefix(10).filter { Self.cachedPreview(for: $0) == nil }
+        if !warm.isEmpty {
+            Task.detached(priority: .utility) {
+                for entry in warm { _ = await Self.preview(for: entry) }
+            }
         }
         return items
     }
 
-    private func row(for entry: Entry) async -> PaletteItem {
+    private func row(for entry: Entry) -> PaletteItem {
         let name = entry.url.lastPathComponent
         var actions: [PaletteAction] = [
             PaletteAction(id: "open", title: "Open \(name)", kind: .openPath, value: .text(entry.url.path)),
@@ -90,7 +96,8 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         }
         actions.append(PaletteAction(id: "reveal", title: "Reveal in Finder", kind: .reveal, value: .text(entry.url.path)))
 
-        let preview = await Self.preview(for: entry)
+        let preview = Self.cachedPreview(for: entry)
+            ?? .text("\(entry.url.path)\n\n\(Self.age(entry.date)) · \(Self.size(entry.bytes))")
         var icon = IconSpec.file(entry.url.path)
         if case let .image(base64, _, _) = preview { icon = .base64(base64) }
 
@@ -111,6 +118,21 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         )
     }
 
+    /// The host asks for the selected row's preview after the list is on screen.
+    public func preview(for item: PaletteItem) async -> ItemPreview? {
+        guard item.id.hasPrefix("shot:") else { return nil }
+        let url = URL(fileURLWithPath: String(item.id.dropFirst("shot:".count)))
+        guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
+              let date = values.contentModificationDate else { return nil }
+        let entry = Entry(
+            url: url,
+            date: date,
+            bytes: values.fileSize ?? 0,
+            isVideo: ["mov", "mp4"].contains(url.pathExtension.lowercased())
+        )
+        return await Self.preview(for: entry)
+    }
+
     public func activate(_ item: PaletteItem, action: PaletteAction) async throws {
         guard let raw = action.value.text else { return }
         if raw.hasPrefix("pin:") {
@@ -129,7 +151,10 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
         }
         if raw.hasPrefix("copy:") {
             let path = String(raw.dropFirst("copy:".count))
-            guard let image = NSImage(contentsOfFile: path) else { return }
+            guard let image = NSImage(contentsOfFile: path) else {
+                await bridge.notify("Could not read that screenshot")
+                return
+            }
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.writeObjects([image])
@@ -158,15 +183,24 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
     // MARK: - Thumbnails
 
     private static var thumbnails: [String: (base64: String, width: Int, height: Int)] = [:]
+    /// Background warming made the dictionary shared between tasks.
+    private static let thumbnailLock = NSLock()
+
+    private static func thumbnailKey(_ entry: Entry) -> String {
+        "\(entry.url.path)|\(entry.date.timeIntervalSince1970)|\(entry.bytes)"
+    }
+
+    private static func cachedPreview(for entry: Entry) -> ItemPreview? {
+        let cached = thumbnailLock.withLock { thumbnails[thumbnailKey(entry)] }
+        guard let cached else { return nil }
+        return .image(base64: cached.base64, width: cached.width, height: cached.height)
+    }
 
     /// A downscaled thumbnail per capture, cached by path and modification
     /// date. Videos get a poster frame, so the pane previews without relying
     /// on QuickLook.
     private static func preview(for entry: Entry) async -> ItemPreview {
-        let key = "\(entry.url.path)|\(entry.date.timeIntervalSince1970)|\(entry.bytes)"
-        if let cached = thumbnails[key] {
-            return .image(base64: cached.base64, width: cached.width, height: cached.height)
-        }
+        if let cached = cachedPreview(for: entry) { return cached }
         let image: NSImage?
         if entry.isVideo {
             image = await posterFrame(for: entry.url)
@@ -182,8 +216,10 @@ public final class ShotsProvider: PaletteProvider, @unchecked Sendable {
             width: Int(image.size.width),
             height: Int(image.size.height)
         )
-        if thumbnails.count > 120 { thumbnails.removeAll() }
-        thumbnails[key] = value
+        thumbnailLock.withLock {
+            if thumbnails.count > 120 { thumbnails.removeAll() }
+            thumbnails[thumbnailKey(entry)] = value
+        }
         return .image(base64: value.base64, width: value.width, height: value.height)
     }
 

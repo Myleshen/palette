@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Tearout" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Tearout"
+appearance = "dark"
+
+[palette]
+bg = "#34392d"
+surface = "#252920"
+elevated = "#484d42"
+fg = "#f4d2ae"
+fg_muted = "#b29c81"
+accent = "#d7b67e"
+accent_fg = "#000000"
+selection_bg = "#e4c47a"
+selection_fg = "#000000"
+match_fg = "#c9a554"
+border = "#5a5847"
+separator = "#484d4280"
+danger = "#cc967b"
+warning = "#6c9861"
+success = "#97976d"
+info = "#b5955e"
+badge_bg = "#484d42"
+badge_fg = "#f4d2ae"
+
+[states.selected]
+bg = "#e4c47a"
+fg = "#000000"
+[states.hover]
+bg = "#484d42"
+[states.disabled]
+fg = "#b19c81"
+
+[footer]
+hint_color = "#b19c81"

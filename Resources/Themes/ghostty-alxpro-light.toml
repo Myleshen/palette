@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "AlxPro Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · AlxPro Light"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#171717"
+fg_muted = "#686868"
+accent = "#0068d6"
+accent_fg = "#ffffff"
+selection_bg = "#d9e8f9"
+selection_fg = "#171717"
+match_fg = "#781fbb"
+border = "#d1d1d1"
+separator = "#ffffff80"
+danger = "#cb2a2e"
+warning = "#a35200"
+success = "#287a3a"
+info = "#0068d6"
+badge_bg = "#ffffff"
+badge_fg = "#171717"
+
+[states.selected]
+bg = "#d9e8f9"
+fg = "#171717"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#686868"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#686868"

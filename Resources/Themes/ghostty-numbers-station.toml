@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Numbers Station" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Numbers Station"
+appearance = "dark"
+
+[palette]
+bg = "#0d0b12"
+surface = "#09080d"
+elevated = "#25232a"
+fg = "#f0edf6"
+fg_muted = "#a19ea6"
+accent = "#a7c8f0"
+accent_fg = "#000000"
+selection_bg = "#30283b"
+selection_fg = "#fbf8ff"
+match_fg = "#e3baed"
+border = "#3a3840"
+separator = "#25232a80"
+danger = "#f08188"
+warning = "#e9cb69"
+success = "#79d0a1"
+info = "#88b3e9"
+badge_bg = "#25232a"
+badge_fg = "#f0edf6"
+
+[states.selected]
+bg = "#30283b"
+fg = "#fbf8ff"
+[states.hover]
+bg = "#25232a"
+[states.disabled]
+fg = "#a19ea6"
+
+[footer]
+hint_color = "#a19ea6"

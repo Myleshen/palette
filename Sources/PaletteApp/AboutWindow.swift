@@ -58,14 +58,14 @@ struct AboutInfo {
     }
 
     /// The bundle's .icns keeps every size; the window renders whichever
-    /// representation fits its 88-point frame.
-    static var icon: NSImage? {
+    /// representation fits its 88-point frame. Loaded once, not per body pass.
+    static let icon: NSImage? = {
         if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
            let image = NSImage(contentsOf: url) {
             return image
         }
         return NSApp.applicationIconImage ?? NSImage(named: NSImage.applicationIconName)
-    }
+    }()
 
     private static var osBuild: String {
         var size = 0

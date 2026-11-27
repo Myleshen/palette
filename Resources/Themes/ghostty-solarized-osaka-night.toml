@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Solarized Osaka Night" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Solarized Osaka Night"
+appearance = "dark"
+
+[palette]
+bg = "#1a1b26"
+surface = "#13131b"
+elevated = "#31323c"
+fg = "#c0caf5"
+fg_muted = "#868dad"
+accent = "#7aa2f7"
+accent_fg = "#000000"
+selection_bg = "#283457"
+selection_fg = "#c0caf5"
+match_fg = "#bb9af7"
+border = "#3b3e4f"
+separator = "#31323c80"
+danger = "#f7768e"
+warning = "#e0af68"
+success = "#9ece6a"
+info = "#7aa2f7"
+badge_bg = "#31323c"
+badge_fg = "#c0caf5"
+
+[states.selected]
+bg = "#283457"
+fg = "#c0caf5"
+[states.hover]
+bg = "#31323c"
+[states.disabled]
+fg = "#868dad"
+
+[footer]
+hint_color = "#868dad"

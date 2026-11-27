@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Emerald Synth" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Emerald Synth"
+appearance = "dark"
+
+[palette]
+bg = "#0d0221"
+surface = "#090118"
+elevated = "#251b37"
+fg = "#00ffcc"
+fg_muted = "#05a690"
+accent = "#b0b8fc"
+accent_fg = "#000000"
+selection_bg = "#2e6b5f"
+selection_fg = "#00ffcc"
+match_fg = "#ff9ed0"
+border = "#0a3543"
+separator = "#251b3780"
+danger = "#ff2a6d"
+warning = "#ffcc66"
+success = "#00e67e"
+info = "#8b9cf7"
+badge_bg = "#251b37"
+badge_fg = "#00ffcc"
+
+[states.selected]
+bg = "#2e6b5f"
+fg = "#00ffcc"
+[states.hover]
+bg = "#251b37"
+[states.disabled]
+fg = "#05a690"
+
+[footer]
+hint_color = "#05a690"

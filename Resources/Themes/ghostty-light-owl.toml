@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Light Owl" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Light Owl"
+appearance = "light"
+
+[palette]
+bg = "#fbfbfb"
+surface = "#eeeeee"
+elevated = "#fdfdfd"
+fg = "#403f53"
+fg_muted = "#747380"
+accent = "#0071b4"
+accent_fg = "#eeeeee"
+selection_bg = "#e0e0e0"
+selection_fg = "#403f53"
+match_fg = "#d6438a"
+border = "#d6d5d9"
+separator = "#fdfdfd80"
+danger = "#de3d3b"
+warning = "#b58c00"
+success = "#08916a"
+info = "#288ed7"
+badge_bg = "#fdfdfd"
+badge_fg = "#403f53"
+
+[states.selected]
+bg = "#e0e0e0"
+fg = "#403f53"
+[states.hover]
+bg = "#fdfdfd"
+[states.disabled]
+fg = "#81818e"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#81818e"

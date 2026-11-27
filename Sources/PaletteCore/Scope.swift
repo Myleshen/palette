@@ -9,6 +9,87 @@ public enum PathExpansion {
         }
         return (value as NSString).standardizingPath
     }
+
+    /// Setup rows point at files that may not exist yet; create an empty one so
+    /// the editor opens instead of the panel silently closing.
+    public static func ensureFileExists(at path: String) {
+        let expanded = expand(path)
+        guard !FileManager.default.fileExists(atPath: expanded) else { return }
+        let url = URL(fileURLWithPath: expanded)
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: expanded, contents: Data())
+    }
+}
+
+/// What an open action does before it launches. Setup rows opt in with
+/// `"create": "true"`; every other missing file is reported, never fabricated.
+public enum OpenPathPlan: Equatable, Sendable {
+    case open
+    case createAndOpen
+    case missing(String)
+
+    public static func plan(path: String, exists: Bool, create: Bool) -> OpenPathPlan {
+        if exists { return .open }
+        if create { return .createAndOpen }
+        return .missing("No longer exists at \(path)")
+    }
+
+    public var createsFile: Bool { self == .createAndOpen }
+}
+
+/// Hiding the panel is only safe once the launch call returned, so a thrown
+/// error keeps the panel and its message on screen.
+public enum OpenAttempt: Equatable, Sendable {
+    case succeeded
+    case failed(String)
+
+    public var hidesPanel: Bool { self == .succeeded }
+}
+
+/// Which browser an `.openURL` action should use. Decided before AppKit is
+/// touched so an uninstalled browser falls back to the default instead of
+/// closing the panel and doing nothing.
+public enum BrowserOpenPlan: Equatable, Sendable {
+    case systemDefault
+    case browser(String)
+    /// The configured browser is not installed; open in the default and say so.
+    case fallback(String)
+
+    public static func plan(browser: String?, installed: Bool) -> BrowserOpenPlan {
+        guard let name = browser?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty else { return .systemDefault }
+        return installed ? .browser(name) : .fallback(name)
+    }
+}
+
+/// What happened after trying to open a link in a browser. The panel only hides
+/// on `.opened`; every other outcome has a status line the user can read.
+public enum URLOpenOutcome: Equatable, Sendable {
+    case opened
+    /// The requested browser could not take the link; the default opened it.
+    case openedInDefault(requested: String)
+    /// A web-app window failed; the link opened as a normal browser tab.
+    case openedAsTab(browser: String)
+    /// Nothing opened. `reason` completes "Could not open the link — …".
+    case failed(String)
+
+    public var hidesPanel: Bool { self == .opened }
+
+    public var status: String? {
+        switch self {
+        case .opened:
+            return nil
+        case .openedInDefault(let name):
+            return "Could not open the link in \(name) — opened in your default browser"
+        case .openedAsTab(let browser):
+            return "Could not open a web-app window in \(browser) — opened a browser tab instead"
+        case .failed(let reason):
+            return "Could not open the link — \(reason)"
+        }
+    }
 }
 
 public struct Scope: Equatable, Sendable {

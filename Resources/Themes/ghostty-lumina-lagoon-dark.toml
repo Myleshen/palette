@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lumina Lagoon Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Lagoon Dark"
+appearance = "dark"
+
+[palette]
+bg = "#042930"
+surface = "#031e23"
+elevated = "#1d3e45"
+fg = "#d7e6e7"
+fg_muted = "#8da4a7"
+accent = "#badcff"
+accent_fg = "#000000"
+selection_bg = "#0e535a"
+selection_fg = "#d7e6e7"
+match_fg = "#ffcaf9"
+border = "#2e4f55"
+separator = "#1d3e4580"
+danger = "#d3726a"
+warning = "#e7cf94"
+success = "#9fd4a9"
+info = "#8ec3f9"
+badge_bg = "#1d3e45"
+badge_fg = "#d7e6e7"
+
+[states.selected]
+bg = "#0e535a"
+fg = "#d7e6e7"
+[states.hover]
+bg = "#1d3e45"
+[states.disabled]
+fg = "#8da4a7"
+
+[footer]
+hint_color = "#8da4a7"

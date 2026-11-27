@@ -5,11 +5,44 @@ public struct RegistrySearchResult: Sendable {
     public var items: [PaletteItem]
     public var diagnostics: [Diagnostic]
     public var parsed: ParsedQuery
+    /// Providers that missed the global deadline, in registration order.
+    public var timedOutProviders: [String]
 
-    public init(items: [PaletteItem], diagnostics: [Diagnostic], parsed: ParsedQuery) {
+    public init(
+        items: [PaletteItem],
+        diagnostics: [Diagnostic],
+        parsed: ParsedQuery,
+        timedOutProviders: [String] = []
+    ) {
         self.items = items
         self.diagnostics = diagnostics
         self.parsed = parsed
+        self.timedOutProviders = timedOutProviders
+    }
+}
+
+/// Runs one provider alongside a sleep and returns whichever finishes first,
+/// so a single slow source cannot hold the whole list.
+enum ProviderDeadline {
+    enum Outcome<Value: Sendable>: Sendable {
+        case finished(Value)
+        case timedOut
+    }
+
+    static func race<Value: Sendable>(
+        timeout: Duration,
+        operation: @escaping @Sendable () async -> Value
+    ) async -> Outcome<Value> {
+        await withTaskGroup(of: Outcome<Value>.self) { group in
+            group.addTask { .finished(await operation()) }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+                return .timedOut
+            }
+            let first = await group.next() ?? .timedOut
+            group.cancelAll()
+            return first
+        }
     }
 }
 
@@ -20,6 +53,7 @@ public final class ProviderRegistry: @unchecked Sendable {
 
     private let byID: [String: any PaletteProvider]
     private let globalProviders: [any PaletteProvider]
+    private let globalDeadline: Duration
 
     public init(
         providers: [any PaletteProvider],
@@ -28,9 +62,11 @@ public final class ProviderRegistry: @unchecked Sendable {
         order: [String] = [],
         disabled: [String] = [],
         global: [String] = [],
-        diagnostics initialDiagnostics: [Diagnostic] = []
+        diagnostics initialDiagnostics: [Diagnostic] = [],
+        globalDeadline: Duration = .milliseconds(300)
     ) {
         var diagnostics = initialDiagnostics
+        self.globalDeadline = globalDeadline
         let disabledIDs = Set(disabled.map { $0.lowercased() })
         var byID: [String: any PaletteProvider] = [:]
         for provider in providers {
@@ -123,38 +159,54 @@ public final class ProviderRegistry: @unchecked Sendable {
                 return RegistrySearchResult(items: [], diagnostics: diagnostics, parsed: parsed)
             }
             let providerLimit = parsed.text.isEmpty ? 500 : 8
+            let deadline = globalDeadline
 
-            let collected = await withTaskGroup(of: (Int, [PaletteItem], Diagnostic?).self) { group in
+            let collected = await withTaskGroup(of: (Int, [PaletteItem], Diagnostic?, Bool).self) { group in
                 for (index, provider) in providers.enumerated() {
                     group.addTask {
-                        do {
-                            let items = try await provider.search(SearchRequest(text: parsed.text, limit: providerLimit, isBound: false))
-                            return (index, Array(items.prefix(providerLimit)), nil)
-                        } catch is CancellationError {
-                            return (index, [], nil)
-                        } catch ProviderError.cancelled {
-                            return (index, [], nil)
-                        } catch {
-                            let diagnostic = Diagnostic(
-                                .warning,
-                                "\(provider.descriptor.name): \(error.localizedDescription)",
-                                source: provider.descriptor.id
-                            )
-                            return (index, [], diagnostic)
+                        let outcome = await ProviderDeadline.race(timeout: deadline) {
+                            do {
+                                let items = try await provider.search(SearchRequest(text: parsed.text, limit: providerLimit, isBound: false))
+                                return (Array(items.prefix(providerLimit)), Diagnostic?.none)
+                            } catch is CancellationError {
+                                return ([], Diagnostic?.none)
+                            } catch ProviderError.cancelled {
+                                return ([], Diagnostic?.none)
+                            } catch {
+                                let diagnostic = Diagnostic(
+                                    .warning,
+                                    "\(provider.descriptor.name): \(error.localizedDescription)",
+                                    source: provider.descriptor.id
+                                )
+                                return ([], Diagnostic?.some(diagnostic))
+                            }
+                        }
+                        switch outcome {
+                        case .finished(let (items, diagnostic)):
+                            return (index, items, diagnostic, false)
+                        case .timedOut:
+                            return (index, [], nil, true)
                         }
                     }
                 }
-                var results: [(Int, [PaletteItem], Diagnostic?)] = []
+                var results: [(Int, [PaletteItem], Diagnostic?, Bool)] = []
                 for await result in group { results.append(result) }
                 return results
             }
 
             var items: [PaletteItem] = []
-            for (_, providerItems, diagnostic) in collected.sorted(by: { $0.0 < $1.0 }) {
+            var timedOutProviders: [String] = []
+            for (index, providerItems, diagnostic, timedOut) in collected.sorted(by: { $0.0 < $1.0 }) {
                 items.append(contentsOf: providerItems)
                 if let diagnostic { diagnostics.append(diagnostic) }
+                if timedOut { timedOutProviders.append(providers[index].descriptor.id) }
             }
-            return RegistrySearchResult(items: items, diagnostics: diagnostics, parsed: parsed)
+            return RegistrySearchResult(
+                items: items,
+                diagnostics: diagnostics,
+                parsed: parsed,
+                timedOutProviders: timedOutProviders
+            )
         }
     }
 

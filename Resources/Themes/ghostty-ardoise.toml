@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Ardoise" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Ardoise"
+appearance = "dark"
+
+[palette]
+bg = "#1e1e1e"
+surface = "#161616"
+elevated = "#343434"
+fg = "#eaeaea"
+fg_muted = "#a3a3a3"
+accent = "#6ab5f8"
+accent_fg = "#000000"
+selection_bg = "#46515e"
+selection_fg = "#f1f3f5"
+match_fg = "#be68ca"
+border = "#474747"
+separator = "#34343480"
+danger = "#d3322d"
+warning = "#fca93a"
+success = "#588b35"
+info = "#2666c4"
+badge_bg = "#343434"
+badge_fg = "#eaeaea"
+
+[states.selected]
+bg = "#46515e"
+fg = "#f1f3f5"
+[states.hover]
+bg = "#343434"
+[states.disabled]
+fg = "#a3a3a3"
+
+[footer]
+hint_color = "#a3a3a3"

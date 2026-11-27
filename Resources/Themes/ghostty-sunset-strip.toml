@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Sunset Strip" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Sunset Strip"
+appearance = "dark"
+
+[palette]
+bg = "#1c1832"
+surface = "#141124"
+elevated = "#332f46"
+fg = "#fce9dd"
+fg_muted = "#aea0a1"
+accent = "#f6cb7e"
+accent_fg = "#000000"
+selection_bg = "#47374f"
+selection_fg = "#fce9dd"
+match_fg = "#e89cd1"
+border = "#494254"
+separator = "#332f4680"
+danger = "#f07880"
+warning = "#f5c46c"
+success = "#8ec9a0"
+info = "#83b7e7"
+badge_bg = "#332f46"
+badge_fg = "#fce9dd"
+
+[states.selected]
+bg = "#47374f"
+fg = "#fce9dd"
+[states.hover]
+bg = "#332f46"
+[states.disabled]
+fg = "#aea0a1"
+
+[footer]
+hint_color = "#aea0a1"

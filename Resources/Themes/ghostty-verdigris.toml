@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Verdigris" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Verdigris"
+appearance = "dark"
+
+[palette]
+bg = "#14110b"
+surface = "#0e0c08"
+elevated = "#2c2923"
+fg = "#e8dcc6"
+fg_muted = "#9e9585"
+accent = "#5fbfb0"
+accent_fg = "#000000"
+selection_bg = "#2a2417"
+selection_fg = "#92908c"
+match_fg = "#b98fb0"
+border = "#3e3a30"
+separator = "#2c292380"
+danger = "#d9604f"
+warning = "#d9a441"
+success = "#a8b86a"
+info = "#5fbfb0"
+badge_bg = "#2c2923"
+badge_fg = "#e8dcc6"
+
+[states.selected]
+bg = "#2a2417"
+fg = "#92908c"
+[states.hover]
+bg = "#2c2923"
+[states.disabled]
+fg = "#9e9585"
+
+[footer]
+hint_color = "#9e9585"

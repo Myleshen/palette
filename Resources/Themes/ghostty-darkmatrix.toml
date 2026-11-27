@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Darkmatrix" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Darkmatrix"
+appearance = "dark"
+
+[palette]
+bg = "#070c0e"
+surface = "#05090a"
+elevated = "#202426"
+fg = "#8ea170"
+fg_muted = "#6f7e5a"
+accent = "#46d8b8"
+accent_fg = "#000000"
+selection_bg = "#202426"
+selection_fg = "#00ff87"
+match_fg = "#573d66"
+border = "#1d241d"
+separator = "#20242680"
+danger = "#0f6c3c"
+warning = "#7e8000"
+success = "#6fa64c"
+info = "#2c9a84"
+badge_bg = "#202426"
+badge_fg = "#7f9064"
+
+[states.selected]
+bg = "#202426"
+fg = "#00ff87"
+[states.hover]
+bg = "#202426"
+[states.disabled]
+fg = "#566442"
+
+[footer]
+hint_color = "#566442"

@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Belafonte Night" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Belafonte Night"
+appearance = "dark"
+
+[palette]
+bg = "#20111b"
+surface = "#170c13"
+elevated = "#362932"
+fg = "#aa9f96"
+fg_muted = "#887c7a"
+accent = "#709aa9"
+accent_fg = "#2e2d2d"
+selection_bg = "#45373c"
+selection_fg = "#aba39c"
+match_fg = "#97522c"
+border = "#382a30"
+separator = "#36293280"
+danger = "#c31a15"
+warning = "#eaa549"
+success = "#858162"
+info = "#426a79"
+badge_bg = "#362932"
+badge_fg = "#9e958d"
+
+[states.selected]
+bg = "#45373c"
+fg = "#aba39c"
+[states.hover]
+bg = "#362932"
+[states.disabled]
+fg = "#6d615f"
+
+[footer]
+hint_color = "#6d615f"

@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Prince of Barkness" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Prince of Barkness"
+appearance = "dark"
+
+[palette]
+bg = "#100e17"
+surface = "#0c0a11"
+elevated = "#28262e"
+fg = "#f1dfbf"
+fg_muted = "#a29684"
+accent = "#f6c85a"
+accent_fg = "#000000"
+selection_bg = "#4c376a"
+selection_fg = "#fff4de"
+match_fg = "#e7b8ff"
+border = "#3d3839"
+separator = "#28262e80"
+danger = "#f16b77"
+warning = "#f6c85a"
+success = "#6fe0a2"
+info = "#8eaeff"
+badge_bg = "#28262e"
+badge_fg = "#f1dfbf"
+
+[states.selected]
+bg = "#4c376a"
+fg = "#fff4de"
+[states.hover]
+bg = "#28262e"
+[states.disabled]
+fg = "#a29684"
+
+[footer]
+hint_color = "#a29684"

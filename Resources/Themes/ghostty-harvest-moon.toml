@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Harvest Moon" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Harvest Moon"
+appearance = "dark"
+
+[palette]
+bg = "#0d3557"
+surface = "#09263f"
+elevated = "#254968"
+fg = "#fff1d2"
+fg_muted = "#aaafa7"
+accent = "#aad1e7"
+accent_fg = "#000000"
+selection_bg = "#2a5371"
+selection_fg = "#fff8e8"
+match_fg = "#d4b8d5"
+border = "#3d5b70"
+separator = "#25496880"
+danger = "#ee997d"
+warning = "#edc667"
+success = "#9bca8e"
+info = "#8fc1dd"
+badge_bg = "#254968"
+badge_fg = "#fff1d2"
+
+[states.selected]
+bg = "#2a5371"
+fg = "#fff8e8"
+[states.hover]
+bg = "#254968"
+[states.disabled]
+fg = "#aaafa7"
+
+[footer]
+hint_color = "#aaafa7"

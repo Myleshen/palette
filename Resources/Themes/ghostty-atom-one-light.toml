@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Atom One Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Atom One Light"
+appearance = "light"
+
+[palette]
+bg = "#f9f9f9"
+surface = "#ededed"
+elevated = "#fcfcfc"
+fg = "#2a2c33"
+fg_muted = "#717377"
+accent = "#2f5af3"
+accent_fg = "#ffffff"
+selection_bg = "#d0dffc"
+selection_fg = "#2a2c33"
+match_fg = "#950095"
+border = "#d0d0d1"
+separator = "#fcfcfc80"
+danger = "#de3e35"
+warning = "#a88d55"
+success = "#3f953a"
+info = "#2f5af3"
+badge_bg = "#fcfcfc"
+badge_fg = "#2a2c33"
+
+[states.selected]
+bg = "#d0dffc"
+fg = "#2a2c33"
+[states.hover]
+bg = "#fcfcfc"
+[states.disabled]
+fg = "#727478"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#727478"

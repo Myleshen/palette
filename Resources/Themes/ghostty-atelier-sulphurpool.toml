@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Atelier Sulphurpool" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Atelier Sulphurpool"
+appearance = "dark"
+
+[palette]
+bg = "#202746"
+surface = "#171c32"
+elevated = "#363d59"
+fg = "#adb3cb"
+fg_muted = "#878fa9"
+accent = "#a2a8be"
+accent_fg = "#000000"
+selection_bg = "#5e6687"
+selection_fg = "#e6e7ed"
+match_fg = "#dfe2f1"
+border = "#383f5c"
+separator = "#363d5980"
+danger = "#c94922"
+warning = "#c08b30"
+success = "#ac9739"
+info = "#3d8fd1"
+badge_bg = "#363d59"
+badge_fg = "#a3a9bd"
+
+[states.selected]
+bg = "#5e6687"
+fg = "#e6e7ed"
+[states.hover]
+bg = "#363d59"
+[states.disabled]
+fg = "#6d748e"
+
+[footer]
+hint_color = "#6d748e"

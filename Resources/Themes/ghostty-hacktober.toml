@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Hacktober" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Hacktober"
+appearance = "dark"
+
+[palette]
+bg = "#141414"
+surface = "#0e0e0e"
+elevated = "#2c2c2c"
+fg = "#c9c9c9"
+fg_muted = "#8a8a8a"
+accent = "#5f96d2"
+accent_fg = "#000000"
+selection_bg = "#2c2c2c"
+selection_fg = "#c9c9c9"
+match_fg = "#e795a5"
+border = "#383838"
+separator = "#2c2c2c80"
+danger = "#b34538"
+warning = "#d08949"
+success = "#587744"
+info = "#206ec5"
+badge_bg = "#2c2c2c"
+badge_fg = "#c9c9c9"
+
+[states.selected]
+bg = "#2c2c2c"
+fg = "#c9c9c9"
+[states.hover]
+bg = "#2c2c2c"
+[states.disabled]
+fg = "#8a8a8a"
+
+[footer]
+hint_color = "#8a8a8a"

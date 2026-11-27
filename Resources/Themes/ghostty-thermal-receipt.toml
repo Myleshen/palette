@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Thermal Receipt" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Thermal Receipt"
+appearance = "light"
+
+[palette]
+bg = "#fffdf7"
+surface = "#f2f0eb"
+elevated = "#fffefb"
+fg = "#191919"
+fg_muted = "#6a6967"
+accent = "#123a78"
+accent_fg = "#ffffff"
+selection_bg = "#e7e3da"
+selection_fg = "#191919"
+match_fg = "#5e2f86"
+border = "#d1cfcb"
+separator = "#fffefb80"
+danger = "#821f1f"
+warning = "#654b00"
+success = "#125a31"
+info = "#17458c"
+badge_bg = "#fffefb"
+badge_fg = "#191919"
+
+[states.selected]
+bg = "#e7e3da"
+fg = "#191919"
+[states.hover]
+bg = "#fffefb"
+[states.disabled]
+fg = "#6a6967"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#6a6967"

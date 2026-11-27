@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Bluloco Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Bluloco Light"
+appearance = "light"
+
+[palette]
+bg = "#f9f9f9"
+surface = "#ededed"
+elevated = "#fcfcfc"
+fg = "#373a41"
+fg_muted = "#717377"
+accent = "#275fe4"
+accent_fg = "#ffffff"
+selection_bg = "#fcfcfc"
+selection_fg = "#373a41"
+match_fg = "#823ff1"
+border = "#d2d3d4"
+separator = "#fcfcfc80"
+danger = "#d52753"
+warning = "#df631c"
+success = "#23974a"
+info = "#275fe4"
+badge_bg = "#fcfcfc"
+badge_fg = "#373a41"
+
+[states.selected]
+bg = "#fcfcfc"
+fg = "#373a41"
+[states.hover]
+bg = "#fcfcfc"
+[states.disabled]
+fg = "#7b7d81"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#7b7d81"

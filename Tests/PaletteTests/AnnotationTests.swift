@@ -251,6 +251,112 @@ extension AnnotationTests {
         XCTAssertEqual(editor.shapes.count, 1)
     }
 
+    func testHitTestSelectsTheTopMostMarkUnderThePointer() {
+        let editor = AnnotationEditor(image: solidImage(width: 400, height: 200, color: .white), url: nil)
+        editor.add(.rectangle(rect: CGRect(x: 0.1, y: 0.1, width: 0.5, height: 0.5), color: .blue, width: 0.004))
+        editor.textSize = 0.1
+        editor.addText(at: CGPoint(x: 0.2, y: 0.2), text: "Over")
+        let insideText = CGPoint(x: 0.25, y: 0.25)
+        XCTAssertEqual(editor.hitTest(insideText), 1, "the newer text wins over the rectangle beneath it")
+        XCTAssertEqual(editor.hitTest(CGPoint(x: 0.55, y: 0.55)), 0, "the rectangle is still picked elsewhere")
+        XCTAssertNil(editor.hitTest(CGPoint(x: 0.9, y: 0.1)))
+    }
+
+    func testResizeClampsTextToTheLegibleRange() throws {
+        let editor = AnnotationEditor(image: solidImage(width: 400, height: 200, color: .white), url: nil)
+        editor.addText(at: .zero, text: "A")
+        guard case let .text(_, _, start, _, _) = editor.shapes[0] else { return XCTFail("text expected") }
+        XCTAssertEqual(start, 0.05, accuracy: 0.0001)
+
+        guard case let .text(_, _, tinySize, _, _) = try XCTUnwrap(editor.resizedText(at: 0, to: 0.0001)) else {
+            return XCTFail("text expected")
+        }
+        XCTAssertEqual(tinySize, AnnotationEditor.minTextSize, accuracy: 0.0001)
+
+        guard case let .text(_, _, hugeSize, _, _) = try XCTUnwrap(editor.resizedText(at: 0, to: 5)) else {
+            return XCTFail("text expected")
+        }
+        XCTAssertEqual(hugeSize, AnnotationEditor.maxTextSize, accuracy: 0.0001)
+
+        XCTAssertNil(editor.resizedText(at: 9, to: 0.1), "an out-of-range index resizes nothing")
+    }
+
+    func testResizeRemeasuresTheBoxSoHitTestingFollows() throws {
+        let editor = AnnotationEditor(image: solidImage(width: 600, height: 200, color: .white), url: nil)
+        editor.textSize = 0.05
+        editor.addText(at: CGPoint(x: 0.05, y: 0.2), text: "WWW")
+        guard case let .text(_, _, _, _, small) = editor.shapes[0] else { return XCTFail("text expected") }
+        let doubled = try XCTUnwrap(editor.resizedText(at: 0, to: 0.1))
+        guard case let .text(_, _, doubledSize, _, doubledBox) = doubled else { return XCTFail("text expected") }
+        XCTAssertEqual(doubledSize, 0.1, accuracy: 0.0001)
+        // Font metrics do not scale perfectly linearly, so the box only has to
+        // grow with the glyphs, not match two times to the pixel.
+        XCTAssertEqual(doubledBox.width, small.width * 2, accuracy: small.width * 0.25)
+        XCTAssertEqual(doubledBox.height, small.height * 2, accuracy: small.height * 0.25)
+
+        // Far right of the old, smaller box: empty then, inside the resized glyphs now.
+        let pastSmall = CGPoint(x: 0.05 + small.width * 1.2, y: 0.2 + small.height / 2)
+        XCTAssertNil(editor.hitTest(pastSmall))
+        editor.replace(0, with: doubled)
+        XCTAssertEqual(editor.hitTest(pastSmall), 0)
+    }
+
+    func testDeleteRemovesOnlyTheSelectedMark() {
+        let editor = AnnotationEditor(image: solidImage(width: 200, height: 100, color: .white), url: nil)
+        editor.add(.arrow(from: CGPoint(x: 0.1, y: 0.1), to: CGPoint(x: 0.3, y: 0.3), color: .red, width: 0.004))
+        editor.add(.rectangle(rect: CGRect(x: 0.5, y: 0.5, width: 0.2, height: 0.2), color: .blue, width: 0.004))
+        editor.selected = 0
+        editor.removeSelected()
+        XCTAssertEqual(editor.shapes.count, 1)
+        guard case .rectangle = editor.shapes[0] else { return XCTFail("the rectangle must survive") }
+        XCTAssertNil(editor.selected)
+    }
+
+    func testResizedTextSurvivesSaveAndReopen() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-annotate-resize-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let editor = AnnotationEditor(image: solidImage(width: 800, height: 300, color: .white), url: nil)
+        editor.textSize = 0.05
+        editor.addText(at: CGPoint(x: 0.05, y: 0.1), text: "WWWW")
+        let small = directory.appendingPathComponent("small.png")
+        _ = try editor.save(to: small)
+        let smallImage = try XCTUnwrap(NSImage(contentsOf: small))
+        let smallInk = try XCTUnwrap(inkBounds(in: smallImage))
+
+        guard let resized = editor.resizedText(at: 0, to: 0.1) else { return XCTFail("text expected") }
+        editor.replace(0, with: resized)
+        let large = directory.appendingPathComponent("large.png")
+        _ = try editor.save(to: large)
+        let largeImage = try XCTUnwrap(NSImage(contentsOf: large))
+        let largeInk = try XCTUnwrap(inkBounds(in: largeImage))
+
+        // The saved file is the document: reopening it shows the resized glyphs,
+        // roughly twice as tall and anchored at the same left edge.
+        XCTAssertGreaterThan(largeInk.height, smallInk.height * 1.5)
+        XCTAssertLessThan(largeInk.height, smallInk.height * 2.5)
+        XCTAssertEqual(largeInk.minX, smallInk.minX, accuracy: 2)
+        XCTAssertGreaterThan(largeInk.width, smallInk.width)
+    }
+
+    /// Bounding box of red-ish ink in a rendered image, in pixels.
+    private func inkBounds(in image: NSImage) -> CGRect? {
+        guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        var minX = rep.pixelsWide, minY = rep.pixelsHigh, maxX = -1, maxY = -1
+        for y in 0..<rep.pixelsHigh {
+            for x in 0..<rep.pixelsWide {
+                guard let colour = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
+                      colour.redComponent - colour.greenComponent > 0.3 else { continue }
+                minX = min(minX, x); maxX = max(maxX, x)
+                minY = min(minY, y); maxY = max(maxY, y)
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
+        return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
     func testSaveAsWritesANewFile() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("palette-save-as-\(UUID().uuidString)")

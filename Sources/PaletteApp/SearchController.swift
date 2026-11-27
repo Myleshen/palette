@@ -25,6 +25,8 @@ public final class SearchController: ObservableObject, HostBridge {
     @Published public private(set) var highlightTerms: [String] = []
     @Published public private(set) var isSearching = false
     @Published public private(set) var statusMessage: String?
+    /// The global deadline hint is shown once per session, not on every keystroke.
+    private var reportedSlowProviders = false
     @Published public private(set) var actionsMode = false
     @Published public private(set) var actionItems: [PaletteAction] = []
     private var actionsOwnerID: String?
@@ -71,7 +73,6 @@ public final class SearchController: ObservableObject, HostBridge {
     /// Bumped by Restart; the pane starts a fresh process when it changes.
     @Published public private(set) var terminalRestartToken = 0
     @Published public var scratchpadText = ""
-    @Published public var clipboardFilter: String?
     public var searchPosition: SearchPosition { configuration.searchPosition }
     /// Per-invocation multiplexer session name (e.g. `ssh-host`); nil uses the
     /// configured session.
@@ -144,6 +145,37 @@ public final class SearchController: ObservableObject, HostBridge {
         scheduleSearch(debounce: false)
     }
 
+    /// The text field's contents: `query` minus the `"/trigger "` token when
+    /// the user is already typing inside a provider.
+    public var visibleQuery: String {
+        QueryDisplay(parser: registry.parser).visible(for: query)
+    }
+
+    /// True while the field is showing a resolved provider without its prefix.
+    public var queryIsBound: Bool {
+        registry.parser.parse(query).isBound
+    }
+
+    /// Backspace on the empty visible field drops the provider binding.
+    public func clearBoundTrigger() {
+        guard queryIsBound else { return }
+        resetting = true
+        query = ""
+        resetting = false
+        previewEnabled = false
+        previewFocused = false
+        scopeProviderID = nil
+        scheduleSearch(debounce: false)
+    }
+
+    /// Applies an edit made in the text field to the internal query.
+    public func editVisibleQuery(_ visible: String) {
+        let next = QueryDisplay(parser: registry.parser)
+            .query(forVisible: visible, previous: query)
+        guard next != query else { return }
+        query = next
+    }
+
     public var selectedItem: PaletteItem? {
         guard items.indices.contains(selectionIndex) else { return nil }
         return items[selectionIndex]
@@ -206,7 +238,6 @@ public final class SearchController: ObservableObject, HostBridge {
 
     public func openClipboard() {
         previewEnabled = true
-        clipboardFilter = nil
         actionsMode = false
         actionItems = []
         query = "\(configuration.providerPrefix)clip "
@@ -285,12 +316,11 @@ public final class SearchController: ObservableObject, HostBridge {
             previewEnabled = false
             previewFocused = false
             panel?.suppressAutoHide = false
-            clipboardFilter = nil
         }
         if parsed.isBound {
             // Keep the previous rows visible while the next query runs: clearing
             // on each keystroke made the list (and its preview) blink empty.
-            if items.first?.providerID != parsed.providerID {
+            if !parsed.keepsPreviousRows(previousProviderID: items.first?.providerID) {
                 items = []
                 selectionIndex = 0
                 actionIndex = 0
@@ -427,7 +457,7 @@ public final class SearchController: ObservableObject, HostBridge {
             }
         }
 
-        items = markingPasteTrouble(visible)
+        items = visible
         highlightTerms = result.parsed.text
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
@@ -467,27 +497,11 @@ public final class SearchController: ObservableObject, HostBridge {
         if let diagnostic = result.diagnostics.first(where: { $0.level != .info }) {
             setStatus(diagnostic.message, duration: 6)
         }
-        fillPreview()
-    }
-
-    /// Providers build paste actions without knowing the permission state, so
-    /// the host adds the trouble here: Return then opens Settings → Permissions
-    /// instead of silently falling back to Copy.
-    private func markingPasteTrouble(_ items: [PaletteItem]) -> [PaletteItem] {
-        guard !pasteboard.isAccessibilityTrusted else { return items }
-        return items.map { item in
-            guard item.trouble == nil,
-                  let kind = item.primaryAction?.kind,
-                  kind == .pasteText || kind == .pasteImage || kind == .pasteFiles
-            else { return item }
-            var copy = item
-            copy.trouble = ItemTrouble(
-                title: "Enable Accessibility",
-                detail: "Allow Palette to paste into the previous app",
-                settingsAnchor: "general-permissions"
-            )
-            return copy
+        if !result.timedOutProviders.isEmpty, !reportedSlowProviders {
+            reportedSlowProviders = true
+            setStatus("Some sources are still loading — use a /trigger for the slow one", duration: 5)
         }
+        fillPreview()
     }
 
     /// A preview that costs a process call (git status, a file digest) is
@@ -710,7 +724,6 @@ public final class SearchController: ObservableObject, HostBridge {
                 return true
             default:
                 if let number = Int(characters), (1...9).contains(number) {
-                    if selectModeChip(at: number - 1) { return true }
                     let index = number - 1
                     if items.indices.contains(index) {
                         selectionIndex = index
@@ -842,7 +855,6 @@ public final class SearchController: ObservableObject, HostBridge {
         resetting = false
         previewEnabled = false
         previewFocused = false
-        clipboardFilter = nil
     }
 
     public func moveRail(by delta: Int) {
@@ -860,32 +872,6 @@ public final class SearchController: ObservableObject, HostBridge {
     public var activeProviderID: String {
         if let scopeProviderID { return scopeProviderID }
         return registry.parser.parse(query).providerID ?? "apps"
-    }
-
-    public var effectiveClipboardFilter: String? {
-        let text = registry.parser.parse(query).text.lowercased()
-        if text.hasPrefix("image") { return "image" }
-        if text.hasPrefix("file") { return "files" }
-        if text.hasPrefix("text") { return "text" }
-        return nil
-    }
-
-    public func setClipboardFilter(_ kind: String?) {
-        clipboardFilter = kind
-        query = "/clip" + (kind.map { " " + $0 } ?? " ")
-    }
-
-    /// ⌘1/⌘2 (and ⌘3/⌘4 for clipboard filters) pick a visible mode chip.
-    private func selectModeChip(at index: Int) -> Bool {
-        switch activeTabID {
-        case "clip":
-            let filters: [String?] = [nil, "text", "image", "files"]
-            guard filters.indices.contains(index) else { return false }
-            setClipboardFilter(filters[index])
-            return true
-        default:
-            return false
-        }
     }
 
     private func cycleScope() {
@@ -929,7 +915,7 @@ public final class SearchController: ObservableObject, HostBridge {
         case .action(let action):
             execute(item: item, action: action, learnQuery: learnableQuery)
         case nil:
-            return
+            setStatus(item.noActionHint, duration: 3)
         }
     }
 
@@ -1038,11 +1024,17 @@ public final class SearchController: ObservableObject, HostBridge {
             switch action.kind {
             case .openPath:
                 if let path = action.value.text {
-                    ensureFileExists(at: path)
-                    // Hide first so Enter feels instant; launching the app can
-                    // take longer than the animation.
-                    panel?.hide(activatePrevious: false)
+                    let expanded = PathExpansion.expand(path)
+                    if case let .missing(message) = OpenPathPlan.plan(
+                        path: path,
+                        exists: FileManager.default.fileExists(atPath: expanded),
+                        create: false
+                    ) {
+                        setStatus(message, duration: 5)
+                        return
+                    }
                     launcher.openPath(path)
+                    panel?.hide(activatePrevious: false)
                 }
 
             case .openPathWith:
@@ -1051,19 +1043,54 @@ public final class SearchController: ObservableObject, HostBridge {
                     return
                 }
                 let app = value["app"] ?? configuration.editorOpenWith
-                ensureFileExists(at: path)
-                panel?.hide(activatePrevious: false)
-                try launcher.openPath(path, with: app)
+                let plan = OpenPathPlan.plan(
+                    path: path,
+                    exists: FileManager.default.fileExists(
+                        atPath: PathExpansion.expand(path)
+                    ),
+                    create: value["create"] == "true"
+                )
+                switch plan {
+                case .missing(let message):
+                    setStatus(message, duration: 5)
+                    return
+                case .createAndOpen:
+                    ensureFileExists(at: path)
+                case .open:
+                    break
+                }
+                let attempt: OpenAttempt
+                do {
+                    try launcher.openPath(path, with: app)
+                    attempt = .succeeded
+                } catch {
+                    attempt = .failed(error.localizedDescription)
+                }
+                if attempt.hidesPanel {
+                    panel?.hide(activatePrevious: false)
+                } else if case let .failed(message) = attempt {
+                    setStatus(message, duration: 8)
+                }
 
             case .openURL:
                 let object = action.value.object
                 let url = object?["url"] ?? action.value.text
                 guard let url else { return }
-                panel?.hide(activatePrevious: false)
+                let outcome: URLOpenOutcome
                 if object?["mode"] == "app" {
-                    launcher.openWebApp(url, browser: object?["browser"] ?? configuration.webAppBrowser)
+                    outcome = await launcher.openWebApp(
+                        url,
+                        browser: object?["browser"] ?? configuration.webAppBrowser
+                    )
                 } else {
-                    launcher.openURL(url, with: object?["browser"])
+                    outcome = await launcher.openURL(url, with: object?["browser"])
+                }
+                // Hide only after something opened. A fallback keeps the panel up
+                // long enough to say which browser took the link instead.
+                if outcome.hidesPanel {
+                    panel?.hide(activatePrevious: false)
+                } else if let message = outcome.status {
+                    setStatus(message, duration: 8)
                 }
 
             case .reveal:
@@ -1082,30 +1109,23 @@ public final class SearchController: ObservableObject, HostBridge {
                 if let text = action.value.text {
                     let previous = panel?.previousApplication
                     let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
-                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
-                        pasteboard.write(text: text, concealed: action.concealed, clearAfterMs: clearAfterMs)
-                        setStatus("Copied — paste with ⌘V", duration: 5)
-                        return
+                    performPaste(into: previous) { route in
+                        pasteboard.paste(
+                            text: text,
+                            concealed: action.concealed,
+                            clearAfterMs: clearAfterMs,
+                            into: previous,
+                            route: route
+                        )
                     }
-                    if !pasteboard.isAccessibilityTrusted {
-                        pasteboard.write(text: text, concealed: action.concealed, clearAfterMs: clearAfterMs)
-                        pasteboard.requestAccessibility()
-                        setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
-                        return
-                    }
-                    panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(
-                        text: text,
-                        concealed: action.concealed,
-                        clearAfterMs: clearAfterMs,
-                        into: previous
-                    )
                 }
 
             case .copyImage:
                 if let id = action.value.text, let image = try await store.clipboardImage(id: id) {
                     pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
                     panel?.hide()
+                } else {
+                    setStatus("That image is no longer stored", duration: 4)
                 }
 
             case .pasteImage:
@@ -1113,24 +1133,18 @@ public final class SearchController: ObservableObject, HostBridge {
                 if let id = action.value.text,
                    let image = try await store.clipboardImage(id: id) ?? NSImage(contentsOfFile: id)?.pngData() {
                     let previous = panel?.previousApplication
-                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
-                        pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
-                        setStatus("Copied — paste with ⌘V", duration: 5)
-                        return
+                    let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
+                    performPaste(into: previous, image: true) { route in
+                        pasteboard.paste(
+                            image: image,
+                            concealed: action.concealed,
+                            clearAfterMs: clearAfterMs,
+                            into: previous,
+                            route: route
+                        )
                     }
-                    if !pasteboard.isAccessibilityTrusted {
-                        pasteboard.write(image: image, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
-                        pasteboard.requestAccessibility()
-                        setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
-                        return
-                    }
-                    panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(
-                        image: image,
-                        concealed: action.concealed,
-                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
-                        into: previous
-                    )
+                } else {
+                    setStatus("That image is no longer stored", duration: 4)
                 }
 
             case .copyFiles:
@@ -1142,23 +1156,15 @@ public final class SearchController: ObservableObject, HostBridge {
             case .pasteFiles:
                 if let paths = action.value.list, !paths.isEmpty {
                     let previous = panel?.previousApplication
-                    if !PasteTarget.synthesizesKeystroke(for: previous?.bundleIdentifier) {
-                        pasteboard.write(files: paths, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
-                        setStatus("Copied — paste with ⌘V", duration: 5)
-                        return
+                    let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
+                    performPaste(into: previous) { route in
+                        pasteboard.paste(
+                            files: paths,
+                            clearAfterMs: clearAfterMs,
+                            into: previous,
+                            route: route
+                        )
                     }
-                    if !pasteboard.isAccessibilityTrusted {
-                        pasteboard.write(files: paths, concealed: action.concealed, clearAfterMs: action.clearAfterMs)
-                        pasteboard.requestAccessibility()
-                        setStatus("Copied — enable Accessibility to paste automatically.", duration: 5)
-                        return
-                    }
-                    panel?.hide(activatePrevious: false)
-                    _ = pasteboard.paste(
-                        files: paths,
-                        clearAfterMs: action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil),
-                        into: previous
-                    )
                 }
 
             case .run:
@@ -1333,11 +1339,12 @@ public final class SearchController: ObservableObject, HostBridge {
 
     private func keepsPanelOpen(item: PaletteItem, action: PaletteAction) -> Bool {
         switch item.providerID {
-        case "theme", "clip", "ocr":
+        case "theme", "clip", "ocr", "timer", "color":
             return true
-        case "shot":
-            // OCR results report a character count; capture rows still hide.
-            return action.id.hasPrefix("ocr-")
+        case "shots":
+            // Copy and OCR report their outcome in the status line; capture
+            // rows still hide.
+            return action.id == "copy" || action.id.hasPrefix("ocr-")
         case "awake":
             return true
         case "web":
@@ -1436,17 +1443,10 @@ public final class SearchController: ObservableObject, HostBridge {
         setStatus(message, duration: nil)
     }
 
-    /// Setup rows point at files that may not exist yet; create an empty one so
-    /// the editor opens instead of the panel silently closing.
+    /// Setup rows opt in with `create: true`; create the empty file so the
+    /// editor opens instead of the panel closing on a missing path.
     private func ensureFileExists(at path: String) {
-        let expanded = PathExpansion.expand(path)
-        guard !FileManager.default.fileExists(atPath: expanded) else { return }
-        let url = URL(fileURLWithPath: expanded)
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        FileManager.default.createFile(atPath: expanded, contents: Data())
+        PathExpansion.ensureFileExists(at: path)
     }
 
     public func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {
@@ -1460,11 +1460,36 @@ public final class SearchController: ObservableObject, HostBridge {
         // history too (OCR, preview buttons, copy actions). Concealed copies
         // are deliberately never stored.
         if !concealed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            _ = try? await store.insertClipboard(text: text, maxEntries: configuration.clipboard.maxEntries)
+            _ = try? await store.insertClipboard(text: text, maxEntries: configuration.clipboard.maxText)
         }
     }
 
     // MARK: - Presentation support
+
+    /// Picks the paste route, hides the panel only when the paste is
+    /// automatic, and reports what the user must do otherwise. The panel stays
+    /// up for a copy-only outcome so the status line is visible.
+    private func performPaste(
+        into app: NSRunningApplication?,
+        image: Bool = false,
+        deliver: (PasteTarget.Route?) -> PasteOutcome
+    ) {
+        let route = pasteboard.isAccessibilityTrusted
+            ? PasteTarget.route(
+                bundleID: app?.bundleIdentifier,
+                menuAvailable: pasteboard.canPasteViaMenu(into: app),
+                image: image
+            )
+            : nil
+        let outcome = deliver(route)
+        if let message = outcome.fallbackStatus {
+            // Nothing reached the target: keep the panel up so the user can
+            // see what to do with the copy.
+            setStatus(message, duration: 5)
+        } else {
+            panel?.hide(activatePrevious: false)
+        }
+    }
 
     public func setStatus(_ message: String, duration: TimeInterval? = nil) {
         statusTask?.cancel()

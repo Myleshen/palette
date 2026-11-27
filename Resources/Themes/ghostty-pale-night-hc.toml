@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Pale Night Hc" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Pale Night Hc"
+appearance = "dark"
+
+[palette]
+bg = "#3e4251"
+surface = "#2d303a"
+elevated = "#515562"
+fg = "#d8d8d7"
+fg_muted = "#acaeb4"
+accent = "#b4ccff"
+accent_fg = "#000000"
+selection_bg = "#717cb4"
+selection_fg = "#0f1818"
+match_fg = "#ddbdf2"
+border = "#5a5e6a"
+separator = "#51556280"
+danger = "#f07178"
+warning = "#ffcb6b"
+success = "#c3e88d"
+info = "#82aaff"
+badge_bg = "#515562"
+badge_fg = "#cccccc"
+
+[states.selected]
+bg = "#717cb4"
+fg = "#0f1818"
+[states.hover]
+bg = "#515562"
+[states.disabled]
+fg = "#9a9ca1"
+
+[footer]
+hint_color = "#9a9ca1"

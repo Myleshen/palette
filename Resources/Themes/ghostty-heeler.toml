@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Heeler" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Heeler"
+appearance = "dark"
+
+[palette]
+bg = "#211f46"
+surface = "#181632"
+elevated = "#373559"
+fg = "#fdfdfd"
+fg_muted = "#b0afbd"
+accent = "#5ba6f3"
+accent_fg = "#000000"
+selection_bg = "#373559"
+selection_fg = "#2eff58"
+match_fg = "#ff95c2"
+border = "#4d4b6b"
+separator = "#37355980"
+danger = "#e44c2e"
+warning = "#f4ce65"
+success = "#bdd100"
+info = "#5ba5f2"
+badge_bg = "#373559"
+badge_fg = "#fdfdfd"
+
+[states.selected]
+bg = "#373559"
+fg = "#2eff58"
+[states.hover]
+bg = "#373559"
+[states.disabled]
+fg = "#b0afbd"
+
+[footer]
+hint_color = "#b0afbd"

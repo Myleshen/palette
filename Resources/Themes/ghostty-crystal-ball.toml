@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Crystal Ball" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Crystal Ball"
+appearance = "dark"
+
+[palette]
+bg = "#2b1050"
+surface = "#1f0c3a"
+elevated = "#402862"
+fg = "#f2edff"
+fg_muted = "#aca0c2"
+accent = "#91cff1"
+accent_fg = "#000000"
+selection_bg = "#c0b6cf"
+selection_fg = "#474747"
+match_fg = "#c89bf2"
+border = "#533c73"
+separator = "#40286280"
+danger = "#ef8ca4"
+warning = "#dfc86b"
+success = "#9ed08c"
+info = "#82c8ef"
+badge_bg = "#402862"
+badge_fg = "#f2edff"
+
+[states.selected]
+bg = "#c0b6cf"
+fg = "#474747"
+[states.hover]
+bg = "#402862"
+[states.disabled]
+fg = "#aca0c2"
+
+[footer]
+hint_color = "#aca0c2"

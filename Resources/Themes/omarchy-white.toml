@@ -1,0 +1,41 @@
+# Ported from Omarchy's bundled "White" theme.
+# Source: https://github.com/basecamp/omarchy/blob/master/themes/white/colors.toml
+# Omarchy is MIT-licensed; colour values only, no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Omarchy · White"
+appearance = "light"
+
+[palette]
+bg = "#ffffff"
+surface = "#f2f2f2"
+elevated = "#ffffff"
+fg = "#000000"
+fg_muted = "#595959"
+accent = "#6e6e6e"
+accent_fg = "#ffffff"
+selection_bg = "#1a1a1a"
+selection_fg = "#ffffff"
+match_fg = "#2e2e2e"
+border = "#cccccc"
+separator = "#ffffff80"
+danger = "#2a2a2a"
+warning = "#4a4a4a"
+success = "#3a3a3a"
+info = "#1a1a1a"
+badge_bg = "#ffffff"
+badge_fg = "#000000"
+
+[states.selected]
+bg = "#1a1a1a"
+fg = "#ffffff"
+[states.hover]
+bg = "#ffffff"
+[states.disabled]
+fg = "#595959"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#595959"

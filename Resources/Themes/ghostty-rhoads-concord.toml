@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Rhoads Concord" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Rhoads Concord"
+appearance = "light"
+
+[palette]
+bg = "#fdfcf4"
+surface = "#f0efe8"
+elevated = "#fefefa"
+fg = "#1a1a1a"
+fg_muted = "#696966"
+accent = "#2562ea"
+accent_fg = "#ffffff"
+selection_bg = "#b8860b"
+selection_fg = "#2d271a"
+match_fg = "#a855f7"
+border = "#d0cfc8"
+separator = "#fefefa80"
+danger = "#c81e1e"
+warning = "#b28e00"
+success = "#2e7d32"
+info = "#2563eb"
+badge_bg = "#fefefa"
+badge_fg = "#1a1a1a"
+
+[states.selected]
+bg = "#b8860b"
+fg = "#2d271a"
+[states.hover]
+bg = "#fefefa"
+[states.disabled]
+fg = "#696966"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#696966"

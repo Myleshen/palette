@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Monokai Classic" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Monokai Classic"
+appearance = "dark"
+
+[palette]
+bg = "#272822"
+surface = "#1c1d18"
+elevated = "#3d3e38"
+fg = "#fdfff1"
+fg_muted = "#b2b4a9"
+accent = "#fd971f"
+accent_fg = "#000000"
+selection_bg = "#57584f"
+selection_fg = "#fdfff1"
+match_fg = "#ae81ff"
+border = "#52534b"
+separator = "#3d3e3880"
+danger = "#f92672"
+warning = "#e6db74"
+success = "#a6e22e"
+info = "#fd971f"
+badge_bg = "#3d3e38"
+badge_fg = "#fdfff1"
+
+[states.selected]
+bg = "#57584f"
+fg = "#fdfff1"
+[states.hover]
+bg = "#3d3e38"
+[states.disabled]
+fg = "#b2b4a9"
+
+[footer]
+hint_color = "#b2b4a9"

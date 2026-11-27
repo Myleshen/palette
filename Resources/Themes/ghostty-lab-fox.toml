@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lab Fox" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lab Fox"
+appearance = "dark"
+
+[palette]
+bg = "#2e2e2e"
+surface = "#212121"
+elevated = "#434343"
+fg = "#ffffff"
+fg_muted = "#b6b6b6"
+accent = "#ff9270"
+accent_fg = "#000000"
+selection_bg = "#cb392e"
+selection_fg = "#ffffff"
+match_fg = "#6b40a8"
+border = "#585858"
+separator = "#43434380"
+danger = "#fc6d26"
+warning = "#fca121"
+success = "#3eb383"
+info = "#db3b21"
+badge_bg = "#434343"
+badge_fg = "#ffffff"
+
+[states.selected]
+bg = "#cb392e"
+fg = "#ffffff"
+[states.hover]
+bg = "#434343"
+[states.disabled]
+fg = "#b6b6b6"
+
+[footer]
+hint_color = "#b6b6b6"

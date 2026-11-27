@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "SeedFlip Inkwell" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SeedFlip Inkwell"
+appearance = "dark"
+
+[palette]
+bg = "#0a0a0a"
+surface = "#070707"
+elevated = "#232323"
+fg = "#e8e4df"
+fg_muted = "#9a9894"
+accent = "#9fbadf"
+accent_fg = "#000000"
+selection_bg = "#232323"
+selection_fg = "#e8e4df"
+match_fg = "#df9fdf"
+border = "#363635"
+separator = "#23232380"
+danger = "#cc6666"
+warning = "#ccbb66"
+success = "#66cc88"
+info = "#6690cc"
+badge_bg = "#232323"
+badge_fg = "#e8e4df"
+
+[states.selected]
+bg = "#232323"
+fg = "#e8e4df"
+[states.hover]
+bg = "#232323"
+[states.disabled]
+fg = "#9a9894"
+
+[footer]
+hint_color = "#9a9894"

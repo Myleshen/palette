@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Barrel Cactus" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Barrel Cactus"
+appearance = "dark"
+
+[palette]
+bg = "#145039"
+surface = "#0e3a29"
+elevated = "#2c624d"
+fg = "#fff0d3"
+fg_muted = "#adb89d"
+accent = "#a5d6e9"
+accent_fg = "#000000"
+selection_bg = "#326b56"
+selection_fg = "#fff8e6"
+match_fg = "#e4b7cf"
+border = "#437058"
+separator = "#2c624d80"
+danger = "#f5a181"
+warning = "#eac95f"
+success = "#8bd19b"
+info = "#83bfd8"
+badge_bg = "#2c624d"
+badge_fg = "#fff0d3"
+
+[states.selected]
+bg = "#326b56"
+fg = "#fff8e6"
+[states.hover]
+bg = "#2c624d"
+[states.disabled]
+fg = "#adb89d"
+
+[footer]
+hint_color = "#adb89d"

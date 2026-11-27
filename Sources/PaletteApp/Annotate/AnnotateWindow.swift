@@ -21,7 +21,14 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     var onClose: (() -> Void)?
     var shapeCount: Int { editor.shapes.count }
 
-    init(image: NSImage, url: URL?, themeManager: ThemeManager) {
+    init(
+        image: NSImage,
+        url: URL?,
+        themeManager: ThemeManager,
+        /// Copying the annotated image is Palette's own write, which the
+        /// monitor skips; the app records it in history through this.
+        onCopiedToPasteboard: ((PaletteClipboardCopy) -> Void)? = nil
+    ) {
         editor = AnnotationEditor(image: image, url: url)
         let theme = themeManager.theme
 
@@ -62,6 +69,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
             editor: editor,
             draft: draft,
             themeManager: themeManager,
+            onCopiedToPasteboard: onCopiedToPasteboard,
             close: { [weak self] in self?.close() }
         ))
         window.center()
@@ -105,6 +113,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func presentSaveError() {
+        // Native by necessity: an error the user must acknowledge before closing.
         let alert = NSAlert()
         alert.messageText = "Could not save the annotations"
         alert.informativeText = saveError ?? "The file could not be written."
@@ -136,6 +145,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard draft.unsaved else { return true }
         Log.shared.info("Annotator: close prompted with unsaved changes", source: "capture")
+        // Native by necessity: a save/discard/cancel sheet on window close.
         let alert = NSAlert()
         alert.messageText = "Save annotations?"
         alert.informativeText = closePromptText
@@ -233,11 +243,13 @@ struct AnnotateView: View {
     @ObservedObject var editor: AnnotationEditor
     @ObservedObject var draft: AnnotateDraftState
     @ObservedObject var themeManager: ThemeManager
+    var onCopiedToPasteboard: ((PaletteClipboardCopy) -> Void)?
     var close: () -> Void
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
     @State private var moving: Moving?
+    @State private var resizing: Resizing?
     @State private var changeBegun = false
     @State private var textEntry: TextEntry?
     @State private var zoom: CGFloat = 1
@@ -249,6 +261,11 @@ struct AnnotateView: View {
         var index: Int
         var original: AnnotationShape
         var start: CGPoint
+    }
+
+    private struct Resizing {
+        var index: Int
+        var original: AnnotationShape
     }
 
     private struct TextEntry {
@@ -305,7 +322,7 @@ struct AnnotateView: View {
                 textEntry = nil
                 return .handled
             }
-            return .ignored
+            return cancelDrag() ? .handled : .ignored
         }
     }
 
@@ -325,6 +342,11 @@ struct AnnotateView: View {
         }
         .frame(width: size.width, height: size.height)
         .contentShape(Rectangle())
+        .overlay {
+            CanvasRightClick { point, size in
+                showCanvasMenu(at: point, size: size, screen: NSEvent.mouseLocation)
+            }
+        }
         .gesture(drag(in: rect))
         .overlay(alignment: .topLeading) { textFieldOverlay(size) }
     }
@@ -337,7 +359,7 @@ struct AnnotateView: View {
                     set: { textEntry?.value = $0 }
                 ))
                 .textFieldStyle(.roundedBorder)
-                .font(.system(size: 13))
+                .font(theme.font(size: theme.previewTextSize))
                 .frame(width: 180)
                 .focused($textFocused)
                 .onSubmit { commitText() }
@@ -534,6 +556,7 @@ struct AnnotateView: View {
         func point(_ p: CGPoint) -> CGPoint {
             CGPoint(x: fitted.minX + p.x * fitted.width, y: fitted.minY + p.y * fitted.height)
         }
+        let accent = theme.color(theme.palette.accent)
         let box: CGRect
         switch shape {
         case let .arrow(from, to, _, _):
@@ -559,11 +582,46 @@ struct AnnotateView: View {
             )
         }
         let padded = box.insetBy(dx: -4, dy: -4)
-        context.stroke(
-            Path(padded),
-            with: .color(.white.opacity(0.9)),
-            style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+        context.stroke(Path(padded), with: .color(accent), style: StrokeStyle(lineWidth: 1))
+        // Text is single-line and scales by font size, so the only handle is
+        // the bottom-right corner that grows or shrinks it.
+        if case .text = shape {
+            let handle = CGRect(x: padded.maxX - 3.5, y: padded.maxY - 3.5, width: 7, height: 7)
+            context.fill(Path(handle), with: .color(accent))
+        }
+    }
+
+    private func resizeHandle(_ shape: AnnotationShape, in fitted: CGRect) -> CGPoint? {
+        guard case let .text(at, _, _, _, box) = shape else { return nil }
+        // The same 4 pt outset the selection outline uses, so the drawn square
+        // and the grab point are the same spot.
+        return CGPoint(
+            x: fitted.minX + (at.x + box.width) * fitted.width + 4,
+            y: fitted.minY + (at.y + box.height) * fitted.height + 4
         )
+    }
+
+    /// True when a canvas point (image fractions) lands on the selected text's
+    /// bottom-right handle, within a comfortable grab radius in view points.
+    private func isOnResizeHandle(_ point: CGPoint, in fitted: CGRect) -> Bool {
+        guard let selected = editor.selected,
+              editor.shapes.indices.contains(selected),
+              let handle = resizeHandle(editor.shapes[selected], in: fitted) else { return false }
+        let local = CGPoint(x: fitted.minX + point.x * fitted.width, y: fitted.minY + point.y * fitted.height)
+        return hypot(local.x - handle.x, local.y - handle.y) <= 8
+    }
+
+    /// The text size a corner drag asks for: the drag is projected onto the
+    /// box diagonal so the handle follows the corner instead of jumping when
+    /// the pointer wobbles off-axis.
+    private func resizedSize(_ original: AnnotationShape, delta: CGPoint, in fitted: CGRect) -> CGFloat? {
+        guard case let .text(_, _, size, _, box) = original, box.width > 0, box.height > 0 else { return nil }
+        let diagonal = CGPoint(x: box.width * fitted.width, y: box.height * fitted.height)
+        let lengthSquared = diagonal.x * diagonal.x + diagonal.y * diagonal.y
+        guard lengthSquared > 0 else { return nil }
+        let drag = CGPoint(x: delta.x * fitted.width, y: delta.y * fitted.height)
+        let scale = 1 + (drag.x * diagonal.x + drag.y * diagonal.y) / lengthSquared
+        return size * scale
     }
 
     private func drawDragPreview(context: inout GraphicsContext, fitted: CGRect) {
@@ -610,7 +668,9 @@ struct AnnotateView: View {
                     dragStart = value.startLocation
                     let startFraction = fraction(value.startLocation, in: rect)
                     if editor.tool == .pointer {
-                        if let index = editor.hitTest(startFraction) {
+                        if isOnResizeHandle(startFraction, in: rect), let index = editor.selected {
+                            resizing = Resizing(index: index, original: editor.shapes[index])
+                        } else if let index = editor.hitTest(startFraction) {
                             editor.selected = index
                             moving = Moving(index: index, original: editor.shapes[index], start: startFraction)
                             changeBegun = false
@@ -620,6 +680,21 @@ struct AnnotateView: View {
                     }
                 }
                 dragCurrent = value.location
+
+                if let resizing {
+                    let current = fraction(value.location, in: rect)
+                    let start = fraction(value.startLocation, in: rect)
+                    let delta = CGPoint(x: current.x - start.x, y: current.y - start.y)
+                    if delta != .zero, !changeBegun {
+                        editor.beginChange()
+                        changeBegun = true
+                    }
+                    if changeBegun, let size = resizedSize(resizing.original, delta: delta, in: rect),
+                       let shape = editor.resizedText(at: resizing.index, to: size) {
+                        editor.replace(resizing.index, with: shape)
+                    }
+                    return
+                }
 
                 if let moving {
                     let current = fraction(value.location, in: rect)
@@ -640,6 +715,12 @@ struct AnnotateView: View {
                     dragStart = nil
                     dragCurrent = nil
                     changeBegun = false
+                }
+                if self.resizing != nil {
+                    self.resizing = nil
+                    let distance = hypot(value.location.x - value.startLocation.x, value.location.y - value.startLocation.y)
+                    if distance > 1 { draft.unsaved = true }
+                    return
                 }
                 if self.moving != nil {
                     self.moving = nil
@@ -693,6 +774,25 @@ struct AnnotateView: View {
         draft.unsaved = true
     }
 
+    /// Right-click selects the mark under the pointer and offers Delete in the
+    /// non-tracking palette menu, so global hotkeys keep working while it is up.
+    private func showCanvasMenu(at point: CGPoint, size: CGSize, screen: NSPoint) {
+        guard let index = editor.hitTest(fraction(point, in: CGRect(origin: .zero, size: size))) else {
+            editor.selected = nil
+            return
+        }
+        editor.selected = index
+        PaletteMenuController.shared.show(
+            items: [PaletteMenuItem(id: "delete", title: "Delete", shortcut: "⌫")],
+            at: screen,
+            theme: theme
+        ) { [editor, draft] id in
+            guard id == "delete" else { return }
+            editor.removeSelected()
+            draft.unsaved = true
+        }
+    }
+
     // MARK: - Actions
 
     private func notify(_ message: String) {
@@ -706,7 +806,7 @@ struct AnnotateView: View {
     }
 
     private func copyImage() {
-        editor.copy()
+        if let data = editor.copy() { onCopiedToPasteboard?(.image(PaletteClipboardImage(png: data))) }
         draft.unsaved = false
         notify("Copied to the clipboard")
         closeAfterToast()
@@ -771,6 +871,7 @@ struct AnnotateView: View {
             notify("This image has no source to copy from")
             return
         }
+        // Native by necessity: the file browser is macOS-owned.
         let panel = NSSavePanel()
         let base = source.deletingPathExtension().lastPathComponent
         let ext = source.pathExtension.isEmpty ? "png" : source.pathExtension
@@ -789,7 +890,59 @@ struct AnnotateView: View {
     }
 
     private func finish() {
+        // Escape owns a drag in flight before it owns "Done": the Done button
+        // carries the shortcut, so a cancel must be handled here too.
+        if cancelDrag() { return }
         if draft.unsaved, !save() { return }
         close()
+    }
+
+    /// Puts a move or resize still under the mouse back where it started. The
+    /// gesture keeps delivering events until the button is released, so the
+    /// drag state is dropped and the rest of the gesture is ignored.
+    @discardableResult
+    private func cancelDrag() -> Bool {
+        if let resizing {
+            editor.replace(resizing.index, with: resizing.original)
+            self.resizing = nil
+        } else if let moving {
+            editor.replace(moving.index, with: moving.original)
+            self.moving = nil
+        } else {
+            return false
+        }
+        return true
+    }
+}
+
+/// Catches right-clicks on the canvas and reports the point in the view's own
+/// flipped (top-left) space, which is the same space the Canvas draws in. Left
+/// clicks and drags pass straight through to the SwiftUI gesture.
+private struct CanvasRightClick: NSViewRepresentable {
+    let onRightClick: (CGPoint, CGSize) -> Void
+
+    func makeNSView(context: Context) -> CanvasRightClickView {
+        let view = CanvasRightClickView()
+        view.onRightClick = onRightClick
+        return view
+    }
+
+    func updateNSView(_ nsView: CanvasRightClickView, context: Context) {
+        nsView.onRightClick = onRightClick
+    }
+}
+
+private final class CanvasRightClickView: NSView {
+    var onRightClick: ((CGPoint, CGSize) -> Void)?
+
+    override var isFlipped: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard NSApp.currentEvent?.type == .rightMouseDown else { return nil }
+        return super.hitTest(point)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        onRightClick?(convert(event.locationInWindow, from: nil), bounds.size)
     }
 }

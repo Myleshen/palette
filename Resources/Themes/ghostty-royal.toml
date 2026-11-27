@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Royal" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Royal"
+appearance = "dark"
+
+[palette]
+bg = "#100815"
+surface = "#0c060f"
+elevated = "#28212c"
+fg = "#9e97ae"
+fg_muted = "#7d768a"
+accent = "#90baf9"
+accent_fg = "#000000"
+selection_bg = "#1f1d2b"
+selection_fg = "#a593cd"
+match_fg = "#a479e3"
+border = "#271f2e"
+separator = "#28212c80"
+danger = "#a13759"
+warning = "#b49d27"
+success = "#23801c"
+info = "#6580b0"
+badge_bg = "#28212c"
+badge_fg = "#918c9f"
+
+[states.selected]
+bg = "#1f1d2b"
+fg = "#a593cd"
+[states.hover]
+bg = "#28212c"
+[states.disabled]
+fg = "#625b6f"
+
+[footer]
+hint_color = "#625b6f"

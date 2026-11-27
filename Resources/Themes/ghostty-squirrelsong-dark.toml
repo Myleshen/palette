@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "Squirrelsong Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Squirrelsong Dark"
+appearance = "dark"
+
+[palette]
+bg = "#372920"
+surface = "#281e17"
+elevated = "#4b3e36"
+fg = "#cab4a1"
+fg_muted = "#a28f7f"
+accent = "#5cb4ec"
+accent_fg = "#000000"
+selection_bg = "#5b402e"
+selection_fg = "#c4b3a5"
+match_fg = "#9d70da"
+border = "#4f4035"
+separator = "#4b3e3680"
+danger = "#c64c42"
+warning = "#d4b139"
+success = "#468336"
+info = "#4395c6"
+badge_bg = "#4b3e36"
+badge_fg = "#bdab9c"
+
+[states.selected]
+bg = "#5b402e"
+fg = "#c4b3a5"
+[states.hover]
+bg = "#4b3e36"
+[states.disabled]
+fg = "#867364"
+
+[footer]
+hint_color = "#867364"

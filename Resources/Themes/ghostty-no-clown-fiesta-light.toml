@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "No Clown Fiesta Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · No Clown Fiesta Light"
+appearance = "light"
+
+[palette]
+bg = "#e1e1e1"
+surface = "#d6d6d6"
+elevated = "#f2f2f2"
+fg = "#151515"
+fg_muted = "#5c5c5c"
+accent = "#4a5f7a"
+accent_fg = "#d6d6d6"
+selection_bg = "#f2f2f2"
+selection_fg = "#151515"
+match_fg = "#aa759f"
+border = "#b8b8b8"
+separator = "#f2f2f280"
+danger = "#874e42"
+warning = "#a07942"
+success = "#677940"
+info = "#6d829f"
+badge_bg = "#f2f2f2"
+badge_fg = "#151515"
+
+[states.selected]
+bg = "#f2f2f2"
+fg = "#151515"
+[states.hover]
+bg = "#f2f2f2"
+[states.disabled]
+fg = "#5c5c5c"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#5c5c5c"

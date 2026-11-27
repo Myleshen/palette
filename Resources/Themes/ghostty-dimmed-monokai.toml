@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Dimmed Monokai" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Dimmed Monokai"
+appearance = "dark"
+
+[palette]
+bg = "#1f1f1f"
+surface = "#161616"
+elevated = "#353535"
+fg = "#b9bcba"
+fg_muted = "#848785"
+accent = "#ff7155"
+accent_fg = "#000000"
+selection_bg = "#2a2d32"
+selection_fg = "#b9bcba"
+match_fg = "#fb0067"
+border = "#3e3e3e"
+separator = "#35353580"
+danger = "#be3f48"
+warning = "#c5a635"
+success = "#879a3b"
+info = "#4f76a1"
+badge_bg = "#353535"
+badge_fg = "#b9bcba"
+
+[states.selected]
+bg = "#2a2d32"
+fg = "#b9bcba"
+[states.hover]
+bg = "#353535"
+[states.disabled]
+fg = "#838584"
+
+[footer]
+hint_color = "#838584"

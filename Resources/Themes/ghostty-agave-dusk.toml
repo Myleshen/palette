@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Agave Dusk" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Agave Dusk"
+appearance = "dark"
+
+[palette]
+bg = "#145654"
+surface = "#0e3e3c"
+elevated = "#2c6765"
+fg = "#fff0d8"
+fg_muted = "#b4c1b1"
+accent = "#c7e2f5"
+accent_fg = "#000000"
+selection_bg = "#347371"
+selection_fg = "#fff8e9"
+match_fg = "#f3c6df"
+border = "#43756e"
+separator = "#2c676580"
+danger = "#ffad91"
+warning = "#f5d578"
+success = "#a8dfae"
+info = "#afd4f1"
+badge_bg = "#2c6765"
+badge_fg = "#fff0d8"
+
+[states.selected]
+bg = "#347371"
+fg = "#fff8e9"
+[states.hover]
+bg = "#2c6765"
+[states.disabled]
+fg = "#adbaaa"
+
+[footer]
+hint_color = "#adbaaa"

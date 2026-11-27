@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Dawnfox" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Dawnfox"
+appearance = "light"
+
+[palette]
+bg = "#faf4ed"
+surface = "#ede8e1"
+elevated = "#fdfaf7"
+fg = "#544e75"
+fg_muted = "#726d84"
+accent = "#286983"
+accent_fg = "#ffffff"
+selection_bg = "#d0d8d8"
+selection_fg = "#575279"
+match_fg = "#907aa9"
+border = "#d9d4d6"
+separator = "#fdfaf780"
+danger = "#b4637a"
+warning = "#c67e00"
+success = "#618774"
+info = "#286983"
+badge_bg = "#fdfaf7"
+badge_fg = "#575279"
+
+[states.selected]
+bg = "#d0d8d8"
+fg = "#575279"
+[states.hover]
+bg = "#fdfaf7"
+[states.disabled]
+fg = "#908ba2"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#908ba2"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "eyesclosed" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · eyesclosed"
+appearance = "dark"
+
+[palette]
+bg = "#111214"
+surface = "#0c0d0e"
+elevated = "#292a2c"
+fg = "#bbbcc7"
+fg_muted = "#808088"
+accent = "#b7c8cb"
+accent_fg = "#000000"
+selection_bg = "#383b4a"
+selection_fg = "#bbbcc7"
+match_fg = "#9a9dae"
+border = "#333438"
+separator = "#292a2c80"
+danger = "#ffaba2"
+warning = "#ecd8ae"
+success = "#779bb0"
+info = "#b7c8cb"
+badge_bg = "#292a2c"
+badge_fg = "#bbbcc7"
+
+[states.selected]
+bg = "#383b4a"
+fg = "#bbbcc7"
+[states.hover]
+bg = "#292a2c"
+[states.disabled]
+fg = "#808088"
+
+[footer]
+hint_color = "#808088"

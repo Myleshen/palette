@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Paper Crane" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Paper Crane"
+appearance = "light"
+
+[palette]
+bg = "#f5f1e8"
+surface = "#e9e5dc"
+elevated = "#fbf9f5"
+fg = "#353b3a"
+fg_muted = "#6c6f6c"
+accent = "#4c688f"
+accent_fg = "#ffffff"
+selection_bg = "#b8cdb6"
+selection_fg = "#353b3a"
+match_fg = "#805b83"
+border = "#cfcdc5"
+separator = "#fbf9f580"
+danger = "#a74e45"
+warning = "#8a6c2b"
+success = "#53765e"
+info = "#4c688f"
+badge_bg = "#fbf9f5"
+badge_fg = "#353b3a"
+
+[states.selected]
+bg = "#b8cdb6"
+fg = "#353b3a"
+[states.hover]
+bg = "#fbf9f5"
+[states.disabled]
+fg = "#787b77"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#787b77"

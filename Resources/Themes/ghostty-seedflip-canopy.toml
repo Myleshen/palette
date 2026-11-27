@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "SeedFlip Canopy" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · SeedFlip Canopy"
+appearance = "dark"
+
+[palette]
+bg = "#0f1714"
+surface = "#0b110e"
+elevated = "#272e2c"
+fg = "#ededed"
+fg_muted = "#9fa2a1"
+accent = "#99b9e6"
+accent_fg = "#000000"
+selection_bg = "#272e2c"
+selection_fg = "#ededed"
+match_fg = "#e699e6"
+border = "#3b423f"
+separator = "#272e2c80"
+danger = "#d65c5c"
+warning = "#d6c25c"
+success = "#5cd685"
+info = "#5c8fd6"
+badge_bg = "#272e2c"
+badge_fg = "#ededed"
+
+[states.selected]
+bg = "#272e2c"
+fg = "#ededed"
+[states.hover]
+bg = "#272e2c"
+[states.disabled]
+fg = "#9fa2a1"
+
+[footer]
+hint_color = "#9fa2a1"

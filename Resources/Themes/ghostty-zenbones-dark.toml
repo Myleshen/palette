@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Zenbones Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Zenbones Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1c1917"
+surface = "#141211"
+elevated = "#33302e"
+fg = "#b4bdc3"
+fg_muted = "#7f8487"
+accent = "#61abda"
+accent_fg = "#000000"
+selection_bg = "#3d4042"
+selection_fg = "#b4bdc3"
+match_fg = "#cf86c1"
+border = "#3a3a39"
+separator = "#33302e80"
+danger = "#de6e7c"
+warning = "#b77e64"
+success = "#819b69"
+info = "#6099c0"
+badge_bg = "#33302e"
+badge_fg = "#b4bdc3"
+
+[states.selected]
+bg = "#3d4042"
+fg = "#b4bdc3"
+[states.hover]
+bg = "#33302e"
+[states.disabled]
+fg = "#7f8487"
+
+[footer]
+hint_color = "#7f8487"

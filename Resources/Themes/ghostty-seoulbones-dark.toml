@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Seoulbones Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Seoulbones Dark"
+appearance = "dark"
+
+[palette]
+bg = "#4b4b4b"
+surface = "#363636"
+elevated = "#5d5d5d"
+fg = "#e7e6e6"
+fg_muted = "#bbbaba"
+accent = "#b4dafc"
+accent_fg = "#000000"
+selection_bg = "#777777"
+selection_fg = "#000000"
+match_fg = "#b2b3da"
+border = "#686868"
+separator = "#5d5d5d80"
+danger = "#e388a3"
+warning = "#ffdf9b"
+success = "#98bd99"
+info = "#97bdde"
+badge_bg = "#5d5d5d"
+badge_fg = "#dddddd"
+
+[states.selected]
+bg = "#777777"
+fg = "#000000"
+[states.hover]
+bg = "#5d5d5d"
+[states.disabled]
+fg = "#aaaaaa"
+
+[footer]
+hint_color = "#aaaaaa"

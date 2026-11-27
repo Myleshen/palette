@@ -1,0 +1,43 @@
+# Ported from Ghostty's bundled "TokyoNight Day" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · TokyoNight Day"
+appearance = "light"
+
+[palette]
+bg = "#e1e2e7"
+surface = "#d6d7db"
+elevated = "#f2f2f4"
+fg = "#1d419e"
+fg_muted = "#4562aa"
+accent = "#005ac1"
+accent_fg = "#d7d7d7"
+selection_bg = "#99a7df"
+selection_fg = "#213a73"
+match_fg = "#9854f1"
+border = "#bfc8df"
+separator = "#f2f2f480"
+danger = "#f52a65"
+warning = "#8c6c3e"
+success = "#587539"
+info = "#2e7de9"
+badge_bg = "#f2f2f4"
+badge_fg = "#3760bf"
+
+[states.selected]
+bg = "#99a7df"
+fg = "#213a73"
+[states.hover]
+bg = "#f2f2f4"
+[states.disabled]
+fg = "#5f7fc9"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#5f7fc9"

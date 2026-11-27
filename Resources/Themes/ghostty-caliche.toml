@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Caliche" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Caliche"
+appearance = "dark"
+
+[palette]
+bg = "#55452f"
+surface = "#3d3222"
+elevated = "#665844"
+fg = "#fff0d5"
+fg_muted = "#c3b49b"
+accent = "#a9d8eb"
+accent_fg = "#000000"
+selection_bg = "#74634c"
+selection_fg = "#fff8e8"
+match_fg = "#d8b6c8"
+border = "#776750"
+separator = "#66584480"
+danger = "#ebad90"
+warning = "#dfbf68"
+success = "#87c79e"
+info = "#91c1d6"
+badge_bg = "#665844"
+badge_fg = "#fff0d5"
+
+[states.selected]
+bg = "#74634c"
+fg = "#fff8e8"
+[states.hover]
+bg = "#665844"
+[states.disabled]
+fg = "#c3b49b"
+
+[footer]
+hint_color = "#c3b49b"

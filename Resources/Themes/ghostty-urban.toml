@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "urban" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · urban"
+appearance = "dark"
+
+[palette]
+bg = "#312e39"
+surface = "#232129"
+elevated = "#46434d"
+fg = "#d1b7aa"
+fg_muted = "#a4938d"
+accent = "#b7acca"
+accent_fg = "#454444"
+selection_bg = "#c0a79a"
+selection_fg = "#312e39"
+match_fg = "#854b64"
+border = "#4e464c"
+separator = "#46434d80"
+danger = "#ad6270"
+warning = "#ae835a"
+success = "#74934e"
+info = "#7e7390"
+badge_bg = "#46434d"
+badge_fg = "#c5aea2"
+
+[states.selected]
+bg = "#c0a79a"
+fg = "#312e39"
+[states.hover]
+bg = "#46434d"
+[states.disabled]
+fg = "#8e7d78"
+
+[footer]
+hint_color = "#8e7d78"

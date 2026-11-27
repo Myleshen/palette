@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Jute Espresso" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Jute Espresso"
+appearance = "dark"
+
+[palette]
+bg = "#604331"
+surface = "#453023"
+elevated = "#705646"
+fg = "#fff0d7"
+fg_muted = "#c9b59e"
+accent = "#c2ddf7"
+accent_fg = "#000000"
+selection_bg = "#8e684a"
+selection_fg = "#fff8e8"
+match_fg = "#e9cdea"
+border = "#806652"
+separator = "#70564680"
+danger = "#ffc0a1"
+warning = "#fbd18a"
+success = "#c4ddad"
+info = "#a9cbea"
+badge_bg = "#705646"
+badge_fg = "#fff0d7"
+
+[states.selected]
+bg = "#8e684a"
+fg = "#fff8e8"
+[states.hover]
+bg = "#705646"
+[states.disabled]
+fg = "#c7b39d"
+
+[footer]
+hint_color = "#c7b39d"

@@ -1,0 +1,38 @@
+# Ported from Omarchy's bundled "Everforest" theme.
+# Source: https://github.com/basecamp/omarchy/blob/master/themes/everforest/colors.toml
+# Omarchy is MIT-licensed; colour values only, no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Omarchy · Everforest"
+appearance = "dark"
+
+[palette]
+bg = "#2d353b"
+surface = "#20262a"
+elevated = "#42494f"
+fg = "#d3c6aa"
+fg_muted = "#a29b8b"
+accent = "#85c2b9"
+accent_fg = "#000000"
+selection_bg = "#d3c6aa"
+selection_fg = "#2d353b"
+match_fg = "#d699b6"
+border = "#4e5251"
+separator = "#42494f80"
+danger = "#e67e80"
+warning = "#dbbc7f"
+success = "#a7c080"
+info = "#7fbbb3"
+badge_bg = "#42494f"
+badge_fg = "#d3c6aa"
+
+[states.selected]
+bg = "#d3c6aa"
+fg = "#2d353b"
+[states.hover]
+bg = "#42494f"
+[states.disabled]
+fg = "#999383"
+
+[footer]
+hint_color = "#999383"

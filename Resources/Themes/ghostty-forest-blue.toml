@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Forest Blue" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Forest Blue"
+appearance = "dark"
+
+[palette]
+bg = "#051519"
+surface = "#040f12"
+elevated = "#1e2c30"
+fg = "#e2d8cd"
+fg_muted = "#95948e"
+accent = "#8ed0ce"
+accent_fg = "#000000"
+selection_bg = "#4d4d4d"
+selection_fg = "#ffffff"
+match_fg = "#7e62b3"
+border = "#313c3d"
+separator = "#1e2c3080"
+danger = "#f8818e"
+warning = "#1a8e63"
+success = "#92d3a2"
+info = "#8ed0ce"
+badge_bg = "#1e2c30"
+badge_fg = "#e2d8cd"
+
+[states.selected]
+bg = "#4d4d4d"
+fg = "#ffffff"
+[states.hover]
+bg = "#1e2c30"
+[states.disabled]
+fg = "#95948e"
+
+[footer]
+hint_color = "#95948e"

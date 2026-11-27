@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Sonoran Dusk" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Sonoran Dusk"
+appearance = "dark"
+
+[palette]
+bg = "#1a0f24"
+surface = "#130b1a"
+elevated = "#31273a"
+fg = "#e8e1d9"
+fg_muted = "#a0989a"
+accent = "#7ec8f8"
+accent_fg = "#000000"
+selection_bg = "#3a2a45"
+selection_fg = "#e8e1d9"
+match_fg = "#d48cff"
+border = "#433948"
+separator = "#31273a80"
+danger = "#e76f51"
+warning = "#e9c46a"
+success = "#8abf7f"
+info = "#5dade2"
+badge_bg = "#31273a"
+badge_fg = "#e8e1d9"
+
+[states.selected]
+bg = "#3a2a45"
+fg = "#e8e1d9"
+[states.hover]
+bg = "#31273a"
+[states.disabled]
+fg = "#a0989a"
+
+[footer]
+hint_color = "#a0989a"

@@ -61,11 +61,14 @@ final class HostBridgeProxy: HostBridge, @unchecked Sendable {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var paths: PalettePaths!
     private var configuration: PaletteConfig!
     private var store: PaletteStore!
     private var themeManager: ThemeManager!
+    private var themingEngine: ThemingEngine!
+    private var themingTimer: Timer?
+    private var lastWallpaperSignature = ""
     private var launcher: LauncherService!
     private var pasteboard: PasteboardService!
     private var clipboardMonitor: ClipboardMonitor?
@@ -85,17 +88,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentHotKey: HotKeySpec?
     private var hotKeyInstallTask: Task<Void, Never>?
     private var statusItem: NSStatusItem!
+    private var statusPanel: StatusPanelController!
+    /// Cached so a panel render is synchronous; the countdown itself is
+    /// computed from `endsAt`, and every panel open re-reads the service.
+    private var keepAwakeStatus = KeepAwakeStatus()
     private var hostProxy: HostBridgeProxy!
     private var appIndex: AppIndex!
     /// Bindable catalogue, rebuilt with the registry so provider ids never lie.
     private var catalogCommands: [CatalogCommand] = []
-    private var recordingTicker: Timer?
     private var recordingOptionsPanel: RecordingOptionsPanelController?
-    private var captureMenuItems: [CaptureMenuCommand: NSMenuItem] = [:]
+    /// Last device lists handed to the options panel. AVFoundation discovery is
+    /// what makes the first press slow, so a recent list is reused for a few
+    /// seconds and a stale one is filled in off-main.
+    private struct RecordingDeviceSnapshot {
+        var displays: [CaptureDisplay]
+        var microphones: [(id: String, name: String)]
+        var loadedAt: Date
+    }
+    private var recordingDevices: RecordingDeviceSnapshot?
+    private var recordingDevicesTask: Task<Void, Never>?
     private var lastCaptureURL: URL?
     private var lastRecordingURL: URL?
     private var lastScreenshotURL: URL?
     private var menuBarFlashTask: Task<Void, Never>?
+    private var thumbnailTask: Task<Void, Never>?
     private let screenshotHUD = ScreenshotHUD()
     private var annotateWindows: [AnnotateWindowController] = []
     private var mediaPreviews: [MediaPreviewWindowController] = []
@@ -107,6 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var startupDiagnostics: [Diagnostic] = []
     /// Set when config.toml cannot be parsed; auto-apply must not overwrite it.
     private var configErrorMessage: String?
+    /// The last parse error surfaced by a reload, so a watcher burst says it once.
+    private var lastReportedConfigError: String?
     private var themeObserver: NSObjectProtocol?
     private var watcherTimer: Timer?
     private var maintenanceTimer: Timer?
@@ -120,14 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private var shouldShowOnboarding = false
-    private var positionMenu: NSMenu?
-    private var keepAwakeMenu: NSMenu?
-    private var keepAwakeToggleItem: NSMenuItem?
-    private var keepAwakeClamshellItem: NSMenuItem?
-    private var keepAwakeStopItem: NSMenuItem?
     private let updates = UpdateService()
-    private var updateMenuItem: NSMenuItem?
-    private var releaseNotesMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -253,6 +264,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hostProxy = HostBridgeProxy()
 
         themeManager = ThemeManager(paths: paths, selection: configuration.theme, store: store)
+        themingEngine = ThemingEngine(
+            paths: paths,
+            themesDirectory: paths.themesDir,
+            kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty")
+        )
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
         themeManager.searchPlaceholder = configuration.searchPlaceholder
@@ -276,6 +292,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             self.panel?.apply(theme: theme)
             self.applyThemeToCaptureWindows(theme)
+        }
+        themeManager.onSlowApply = { [weak self] _ in
+            self?.searchController?.setStatus("Applying theme…")
         }
 
         let builtRegistry = buildRegistry()
@@ -319,10 +338,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         captureService.onFailure = { [weak self] message in
             guard let self else { return }
             self.captureService.annotateNextCapture = false
-            self.recordingTicker?.invalidate()
-            self.recordingTicker = nil
-            self.updateCaptureMenu()
+            self.statusPanel?.refreshSoon()
             self.captureFeedback(message)
+        }
+        captureService.onCopiedToPasteboard = { [weak self] copy in
+            self?.recordPaletteCopy(copy)
         }
         captureService.onScreenshot = { [weak self] url in
             guard let self else { return }
@@ -366,7 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return }
                 self.searchController.setStatus("Clamshell mode stopped; lid sleep is back on", duration: 6)
                 self.searchController.refreshResults()
-                await self.refreshKeepAwakeMenu()
+                await self.refreshKeepAwakeState()
             }
         }
         wireControllerCallbacks()
@@ -376,11 +396,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         checkDefaultProviderTools()
         configureClipboard()
         buildStatusItem()
-        updates.onAvailabilityChange = { [weak self] in self?.refreshUpdateMenu() }
+        updates.onAvailabilityChange = { [weak self] in self?.statusPanel?.refreshSoon() }
         updates.start(automatic: !isScriptMode && configuration.updates.automatic)
         if case .adopted = recordingAdoption {
-            updateCaptureMenu()
-            startRecordingTicker()
+            statusPanel?.refreshSoon()
             searchController?.setStatus("Recording in progress", duration: nil)
         }
 
@@ -402,10 +421,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             await self?.themeManager.restore()
         }
         // Adopt a caffeinate session and a clamshell guard that outlived the
-        // last run, so Settings and the menu show what is really on.
+        // last run, so Settings and the panel show what is really on.
         Task { [weak self] in
             await self?.keepAwake.restore()
-            await self?.refreshKeepAwakeMenu()
+            await self?.refreshKeepAwakeState()
             self?.searchController.refreshResults()
         }
 
@@ -519,7 +538,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         _ = self.applySettings(updated)
                     }
                 } else if let value = step.dropPrefix("export_backup=") {
-                    if !self.writeBackup(to: URL(fileURLWithPath: value)) {
+                    if !(await self.writeBackup(to: URL(fileURLWithPath: value))) {
                         self.recordScriptFailure("backup export failed")
                     }
                 } else if let value = step.dropPrefix("screen_override=") {
@@ -573,6 +592,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     NSApp.terminate(nil)
                 } else if step == "exit" {
                     self.finishScript()
+                } else if let value = step.dropPrefix("theming_apply=") {
+                    _ = await self.applyPaletteToAppsNow(value)
                 } else if let value = step.dropPrefix("dump=") {
                     self.writeScriptDump(to: value)
                 } else if let value = step.dropPrefix("assert=") {
@@ -634,6 +655,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     } else if let other = NSApp.keyWindow ?? NSApp.windows.last(where: { $0.isVisible }) {
                         self.write(view: other.contentView ?? NSView(), to: value)
                     }
+                } else if step == "statuspanel" {
+                    self.statusPanel.show()
+                } else if step == "statuspanelclose" {
+                    self.statusPanel.hide()
+                } else if let value = step.dropPrefix("statuspanel_snapshot=") {
+                    self.writeStatusPanelSnapshot(to: value)
+                } else if step == "palettemenu" {
+                    self.showPaletteMenuProbe()
+                } else if step == "palettemenu_long" {
+                    self.showPaletteMenuProbe(long: true)
+                } else if let value = step.dropPrefix("palette_menu=") {
+                    self.showScriptedPaletteMenu(value)
+                } else if step == "palettemenu_stress" {
+                    self.showPaletteMenuProbe(rows: 942)
+                } else if let value = step.dropPrefix("palettemenu_rows="), let rows = Int(value) {
+                    self.showPaletteMenuProbe(rows: rows)
+                } else if step == "palettemenu_scroll" {
+                    await PaletteMenuController.shared.scriptScrollPage()
+                } else if step == "palettemenu_scroll_up" {
+                    await PaletteMenuController.shared.scriptScrollPage(up: true)
+                } else if let value = step.dropPrefix("palettemenu_key=") {
+                    PaletteMenuController.shared.scriptKey(value)
+                } else if let value = step.dropPrefix("palettemenu_filter=") {
+                    PaletteMenuController.shared.scriptFilter(value)
+                } else if step == "palettemenuclose" {
+                    PaletteMenuController.shared.hide()
+                } else if step == "palettemenu_probe" {
+                    self.runPaletteMenuHotkeyProbe()
+                } else if let value = step.dropPrefix("palettemenu_snapshot=") {
+                    if let view = PaletteMenuController.shared.window?.contentView {
+                        self.write(view: view, to: value)
+                    }
                 } else if let value = step.dropPrefix("settings_snapshot=") {
                     self.writeSettingsSnapshot(to: value)
                 } else if let value = step.dropPrefix("onboarding_snapshot=") {
@@ -651,7 +704,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 } else if let value = step.dropPrefix("key=") {
                     if let event = self.syntheticKey(value) {
-                        _ = self.searchController.handleKey(event)
+                        // A menu or the status panel owns the keyboard while it
+                        // is open, exactly as the real non-activating panels do.
+                        let handled = (PaletteMenuController.shared.isOpen
+                            && PaletteMenuController.shared.scriptKey(event))
+                            || (self.statusPanel?.isOpen == true
+                                && self.statusPanel.scriptKey(event))
+                        if !handled {
+                            _ = self.searchController.handleKey(event)
+                        }
                     }
                 } else {
                     Log.shared.warn("Unknown script step: \(step)", source: "app")
@@ -663,6 +724,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Script hook: fires a configured binding by its key, through the same
     /// `performBinding` path the Carbon hotkey uses.
+    /// Script-only: opens a menu panel with fixed rows so a run can prove it
+    /// does not activate the app and that work still happens while it is open.
+    /// `rows` builds a stress menu shaped like the 942-theme picker.
+    private func showPaletteMenuProbe(long: Bool = false, rows: Int = 0) {
+        var items: [PaletteMenuItem] = [
+            PaletteMenuItem(id: "one", title: "Probe One", shortcut: "⌘1", checked: true),
+            .separator("probe-separator"),
+            PaletteMenuItem(id: "two", title: "Probe Two"),
+            PaletteMenuItem(id: "off", title: "Disabled", enabled: false),
+        ]
+        if long {
+            items = (1...60).map {
+                PaletteMenuItem(id: "long-\($0)", title: "Font \($0)", checked: $0 == 50)
+            }
+        } else if rows > 0 {
+            items = (1...rows).map {
+                PaletteMenuItem(id: "row-\($0)", title: "Theme \($0)", checked: $0 == rows / 2)
+            }
+        }
+        PaletteMenuController.shared.show(
+            items: items,
+            at: NSEvent.mouseLocation,
+            theme: themeManager.theme
+        ) { id in
+            Log.shared.info("Palette menu probe selected \(id)", source: "app")
+        }
+    }
+
+    /// Stands in for a global hotkey callback: a native menu's tracking loop
+    /// would hold this until the menu closed.
+    private func runPaletteMenuHotkeyProbe() {
+        let open = PaletteMenuController.shared.isOpen
+        paletteMenuProbeRuns += 1
+        Log.shared.info(
+            "Hotkey callback ran while palette menu open=\(open), appActive=\(NSApp.isActive)",
+            source: "app"
+        )
+    }
+
+    /// Script-only: opens the same rows a real control builds, so a flow can
+    /// count them and drive the arrows. Ids: `probe` (fixed rows with a
+    /// separator and a disabled row), `picker` (a PaletteMenuPicker menu) and
+    /// `engine_browser` (the web-search engine's browser picker).
+    private func showScriptedPaletteMenu(_ id: String) {
+        let items: [PaletteMenuItem]
+        switch id {
+        case "picker":
+            items = paletteMenuPickerItems(
+                choices: [
+                    PaletteMenuChoice(value: "png", label: "PNG", heading: "Images"),
+                    PaletteMenuChoice(value: "jpg", label: "JPG"),
+                    PaletteMenuChoice(value: "gif", label: "GIF"),
+                ],
+                selected: "png"
+            )
+        case "engine_browser":
+            items = EngineBrowserMenu.items(
+                browser: "",
+                browsers: BrowserCatalog.activeBrowsers(),
+                appMode: false
+            )
+        case "probe":
+            items = [
+                PaletteMenuItem(id: "probe-one", title: "Probe One", checked: true),
+                .separator("probe-gap"),
+                PaletteMenuItem(id: "probe-off", title: "Disabled", enabled: false),
+                PaletteMenuItem(id: "probe-two", title: "Probe Two"),
+                PaletteMenuItem(id: "probe-three", title: "Probe Three"),
+            ]
+        default:
+            recordScriptFailure("unknown palette menu '\(id)'")
+            return
+        }
+        PaletteMenuController.shared.show(
+            items: items,
+            at: NSEvent.mouseLocation,
+            theme: themeManager.theme
+        ) { selected in
+            Log.shared.info("Palette menu probe selected \(selected)", source: "app")
+        }
+    }
+
     private func fireBinding(keys: String) {
         let normalized = keys.trimmingCharacters(in: .whitespaces).lowercased()
         guard let binding = configuration.bindings.first(where: {
@@ -677,6 +820,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Script assertions
 
     private var scriptProbeResult = ""
+    private var paletteMenuProbeRuns = 0
 
     /// Script hook: run the same availability check a recorder uses against
     /// the configured keys, including the nine built-ins.
@@ -720,8 +864,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var promptTitle: String
         var promptError: String
         var probeResult: String
+        var paletteMenuOpen: Bool
+        var paletteMenuProbe: Int
+        var paletteMenuRows: Int
+        var paletteMenuHighlight: String
+        var statusPanelOpen: Bool
+        var statusPanelRows: Int
+        var statusPanelHighlight: String
+        var themeMenuRows: Int
+        var themeMenuRendered: Int
         var panelHeight: CGFloat
         var panelWidth: CGFloat
+        var panelFrame: CGRect
         var derivedPanelHeight: CGFloat
         var providerCount: Int
         var providerBarMode: String
@@ -739,6 +893,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         "askStreaming", "askTurns", "askChats", "askBadge",
         "firstTitle", "firstProvider", "statusMessage", "probeResult",
         "promptTitle", "promptError",
+        "paletteMenuOpen", "paletteMenuProbe",
+        "paletteMenuRows", "paletteMenuHighlight",
+        "statusPanelOpen", "statusPanelRows", "statusPanelHighlight",
+        "themeMenuRows", "themeMenuRendered",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
     ]
 
@@ -768,8 +926,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             promptTitle: searchController?.prompt?.title ?? "",
             promptError: searchController?.promptValidationMessage ?? "",
             probeResult: scriptProbeResult,
+            paletteMenuOpen: PaletteMenuController.shared.isOpen,
+            paletteMenuProbe: paletteMenuProbeRuns,
+            paletteMenuRows: PaletteMenuController.shared.scriptRowCount,
+            paletteMenuHighlight: PaletteMenuController.shared.scriptHighlightedID ?? "",
+            statusPanelOpen: statusPanel?.isOpen ?? false,
+            statusPanelRows: statusPanel?.scriptRowCount ?? 0,
+            statusPanelHighlight: statusPanel?.scriptHighlightedTitle ?? "",
+            themeMenuRows: ThemeBrowserRenderProbe.catalogSize,
+            themeMenuRendered: ThemeBrowserRenderProbe.rows,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
+            panelFrame: panel?.panel.frame ?? .zero,
             derivedPanelHeight: panel?.panel.frame.height ?? 0,
             providerCount: searchController?.railEntries.count ?? 0,
             providerBarMode: searchController?.providerBar.rawValue ?? "",
@@ -802,6 +970,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "firstTitle": return observation.items.first?.title ?? ""
         case "firstProvider": return observation.items.first?.providerID ?? ""
         case "probeResult": return observation.probeResult
+        case "paletteMenuOpen": return String(observation.paletteMenuOpen)
+        case "paletteMenuProbe": return String(observation.paletteMenuProbe)
+        case "paletteMenuRows": return String(observation.paletteMenuRows)
+        case "paletteMenuHighlight": return observation.paletteMenuHighlight
+        case "statusPanelOpen": return String(observation.statusPanelOpen)
+        case "statusPanelRows": return String(observation.statusPanelRows)
+        case "statusPanelHighlight": return observation.statusPanelHighlight
+        case "themeMenuRows": return String(observation.themeMenuRows)
+        case "themeMenuRendered": return String(observation.themeMenuRendered)
         case "promptTitle": return observation.promptTitle
         case "promptError": return observation.promptError
         case "panelHeight": return String(format: "%.2f", observation.panelHeight)
@@ -828,7 +1005,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited":
+        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen", "statusPanelOpen":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -838,7 +1015,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case "!=": return have != want ? nil : "\(key)=\(actual), expected != \(want)"
             default: return "'\(op)' is not supported for \(key)"
             }
-        case "selectionIndex", "itemCount":
+        case "selectionIndex", "itemCount", "paletteMenuProbe", "paletteMenuRows", "statusPanelRows", "themeMenuRows", "themeMenuRendered":
             guard let want = Int(expected), let have = Int(actual) else {
                 return "\(key) expects a number, got '\(expected)'"
             }
@@ -877,6 +1054,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func writeScriptDump(to destination: String) {
         let observation = scriptObservation()
+        let theming: [String: Any] = themingEngine.lastResult.map { result in
+            [
+                "status": result.status,
+                "error": result.error ?? "",
+                "targets": result.targets.map { target in
+                    [
+                        "id": target.id,
+                        "title": target.title,
+                        "state": target.state.rawValue,
+                        "note": target.note,
+                    ]
+                },
+            ]
+        } ?? [:]
         let dump: [String: Any] = [
             "panelVisible": observation.panelVisible,
             "appActive": observation.appActive,
@@ -901,8 +1092,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "promptTitle": observation.promptTitle,
             "promptError": observation.promptError,
             "probeResult": observation.probeResult,
+            "paletteMenuOpen": observation.paletteMenuOpen,
+            "paletteMenuProbe": observation.paletteMenuProbe,
+            "paletteMenuRows": observation.paletteMenuRows,
+            "paletteMenuHighlight": observation.paletteMenuHighlight,
+            "statusPanelOpen": observation.statusPanelOpen,
+            "statusPanelRows": observation.statusPanelRows,
+            "statusPanelHighlight": observation.statusPanelHighlight,
+            "themeMenuRows": observation.themeMenuRows,
+            "themeMenuRendered": observation.themeMenuRendered,
             "panelHeight": observation.panelHeight,
             "panelWidth": observation.panelWidth,
+            "panelFrame": [
+                "x": observation.panelFrame.origin.x,
+                "y": observation.panelFrame.origin.y,
+                "width": observation.panelFrame.width,
+                "height": observation.panelFrame.height,
+            ],
             "derivedPanelHeight": observation.derivedPanelHeight,
             "providerCount": observation.providerCount,
             "providerBarMode": observation.providerBarMode,
@@ -920,6 +1126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 ]
             },
             "firstTitle": observation.items.first?.title ?? "",
+            "theming": theming,
         ]
         do {
             let data = try JSONSerialization.data(
@@ -954,12 +1161,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         write(view: view, to: destination)
     }
 
-    /// The status menu's capture section as text, so a scripted run can prove
-    /// the enable/disable rules without opening the menu.
+    /// The status panel's capture section as text, so a scripted run can prove
+    /// the enable/disable rules without opening the panel.
     private func writeCaptureMenu(to destination: String) {
-        let lines = CaptureMenuCommand.allCases.compactMap { command -> String? in
-            guard let item = captureMenuItems[command] else { return nil }
-            return "\(item.title)|enabled=\(item.isEnabled)|hidden=\(item.isHidden)"
+        let states = CaptureMenu.items(
+            isRecording: captureService.isRecording,
+            elapsed: captureService.recordingElapsed,
+            lastCapturePath: lastCaptureURL?.path,
+            lastRecordingPath: lastRecordingURL?.path,
+            lastScreenshotPath: lastScreenshotURL?.path
+        )
+        let lines = states.map {
+            "\($0.title)|enabled=\($0.enabled)|hidden=\(!$0.visible)"
         }
         try? (lines.joined(separator: "\n") + "\n")
             .write(toFile: destination, atomically: true, encoding: .utf8)
@@ -979,6 +1192,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // A scripted run stays off the user's screen; the window was never
         // ordered above other apps, so there is nothing to restore.
         if !isScriptMode { settingsWindow?.orderFrontRegardless() }
+    }
+
+    private func writeStatusPanelSnapshot(to destination: String) {
+        guard let window = statusPanel?.window, let view = window.contentView else { return }
+        write(view: view, to: destination)
     }
 
     private func writeOnboardingSnapshot(to destination: String) {
@@ -1105,7 +1323,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         providers.append(ScratchpadProvider(store: store, bridge: hostProxy))
         providers.append(TerminalProvider())
         providers.append(KeepAwakeProvider(service: keepAwake, bridge: hostProxy, launcher: launcher))
-        providers.append(TimerProvider(service: timerService, presetMinutes: configuration.timer.presets))
+        providers.append(TimerProvider(service: timerService, presetMinutes: configuration.timer.presets, bridge: hostProxy))
         providers.append(ColorProvider(bridge: hostProxy))
         providers.append(StatsProvider(bridge: hostProxy))
         providers.append(SSHProvider(launcher: launcher, terminalApp: configuration.terminalApp))
@@ -1177,7 +1395,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             themesDirectory: paths.themesDir,
             launcher: launcher,
             onSelect: { [weak self] name in self?.pickTheme(name) },
-            currentName: { [weak self] in self?.themeManager.currentThemeID ?? "" }
+            currentName: { [weak self] in self?.themeManager.currentThemeID ?? "" },
+            paletteAvailable: { [weak self] in self?.configuration.theming.enabled ?? false },
+            onApplyPalette: { [weak self] name in self?.applyPaletteToApps(name) }
         )
         providers.append(themes)
 
@@ -1346,7 +1566,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let browser = configuration.webAppBrowser
             Log.shared.info("Web app hotkey target: \(app.name) → \(browser.isEmpty ? "system default" : browser)", source: "hotkey")
             desired.append(Desired(id: "web:\(app.id)", label: app.name, keys: raw,
-                                   press: { [weak self] in self?.launcher.openWebApp(app.url, browser: browser) }))
+                                   press: { [weak self] in
+                                       Task { await self?.launcher.openWebApp(app.url, browser: browser) }
+                                   }))
         }
 
         for (index, binding) in configuration.bindings.enumerated() {
@@ -1388,7 +1610,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             let manager = HotKeyManager(hotKeyID: nextID)
             nextID += 1
-            manager.onPressed = item.press
+            manager.onPressed = { item.press() }
             do {
                 let spec = try manager.register(item.keys)
                 hotkeyManagers[item.id] = manager
@@ -1440,8 +1662,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.show()
             searchController.query = trigger
         case .url:
-            launcher.openURL(binding.value)
+            if !launcher.openURL(binding.value) {
+                reportBindingFailure("Binding URL is not valid: \(binding.value)")
+            }
         }
+    }
+
+    /// A hotkey that could not run must not fail silently: the panel status is
+    /// shared with captures and also flashes the menu bar when hidden.
+    private func reportBindingFailure(_ message: String) {
+        Log.shared.warn(message, source: "binding")
+        showFeedback(message, logSource: "binding")
     }
 
     private func launchBindingTarget(_ target: String) {
@@ -1452,14 +1683,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if target.contains("/") {
             let expanded = PathExpansion.expand(target)
             guard FileManager.default.fileExists(atPath: expanded) else {
-                Log.shared.warn("Binding launch target not found: \(target)", source: "binding")
+                reportBindingFailure("Binding target no longer exists: \(target)")
                 return
             }
             launcher.activateApp(path: expanded)
             return
         }
         guard let path = ToolLocator.shared.appPath(named: target) else {
-            Log.shared.warn("Binding launch app not installed: \(target)", source: "binding")
+            reportBindingFailure("Binding app is not installed: \(target)")
             return
         }
         launcher.activateApp(path: path)
@@ -1473,7 +1704,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .appendingPathComponent("palette-binding-\(UUID().uuidString).log")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         guard let errorLog = try? FileHandle(forWritingTo: logURL) else {
-            Log.shared.warn("Binding command could not open its log: \(command)", source: "binding")
+            reportBindingFailure("Binding command could not open its log: \(command)")
             return
         }
         let process = Process()
@@ -1482,7 +1713,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = errorLog
-        process.terminationHandler = { finished in
+        process.terminationHandler = { [weak self] finished in
             try? errorLog.close()
             defer { try? FileManager.default.removeItem(at: logURL) }
             guard finished.terminationStatus != 0 else { return }
@@ -1493,13 +1724,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "Binding command failed (\(finished.terminationStatus)): \(detail)",
                 source: "binding"
             )
+            Task { @MainActor [weak self] in
+                self?.showFeedback(
+                    "Binding command failed (exit \(finished.terminationStatus))",
+                    logSource: "binding"
+                )
+            }
         }
         do {
             try process.run()
         } catch {
             try? errorLog.close()
             try? FileManager.default.removeItem(at: logURL)
-            Log.shared.error("Binding command could not start: \(error.localizedDescription)", source: "binding")
+            reportBindingFailure("Binding command could not start: \(error.localizedDescription)")
         }
     }
 
@@ -1556,6 +1793,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// One place every capture action reports through: the panel when it is
     /// open, a banner and the menu-bar item when it is not.
     private func captureFeedback(_ message: String) {
+        showFeedback(message, logSource: "capture")
+    }
+
+    /// Shared by captures and hotkey failures so nothing visible is log-only.
+    private func showFeedback(_ message: String, logSource: String) {
         guard !message.isEmpty else { return }
         if panel?.isVisible == true {
             searchController.setStatus(message, duration: 4)
@@ -1563,7 +1805,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             SystemNotification.post(title: "Palette", body: message)
             flashMenuBar(message)
         }
-        Log.shared.info("Capture feedback: \(message)", source: "capture")
+        Log.shared.info("Feedback: \(message)", source: logSource)
     }
 
     /// Keeps a short status visible in the menu bar while the panel is closed.
@@ -1596,10 +1838,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             existing.discard()
         }
         let capture = captureService.config
+        let cached = recordingDevices
         let controller = RecordingOptionsPanelController(
             options: RecordingOptions(capture: capture),
-            displays: CaptureDisplays.active(),
-            microphones: CaptureMicrophones.active(),
+            displays: cached?.displays ?? [],
+            microphones: cached?.microphones ?? [],
             format: capture.recordingFormat,
             themeManager: themeManager,
             onRecord: { [weak self] options in self?.beginRecording(options) },
@@ -1612,6 +1855,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // The launcher shares the screen with whatever is about to be recorded.
         panel?.hide(activatePrevious: false)
         controller.show()
+        refreshRecordingDevices(cached: cached)
+    }
+
+    /// Shows the panel first, then fills the device pickers. Displays are cheap
+    /// to read on the main thread; microphone discovery starts AVFoundation and
+    /// is what used to stall the hotkey.
+    private func refreshRecordingDevices(cached: RecordingDeviceSnapshot?) {
+        if let cached, Date().timeIntervalSince(cached.loadedAt) < 5 { return }
+        let displays = CaptureDisplays.active()
+        recordingOptionsPanel?.updateDevices(
+            displays: displays,
+            microphones: cached?.microphones ?? []
+        )
+        recordingDevicesTask?.cancel()
+        recordingDevicesTask = Task { @MainActor [weak self] in
+            let microphones = await Task.detached(priority: .userInitiated, operation: {
+                CaptureMicrophones.active()
+            }).value
+            guard !Task.isCancelled, let self else { return }
+            self.recordingDevices = RecordingDeviceSnapshot(
+                displays: displays,
+                microphones: microphones,
+                loadedAt: Date()
+            )
+            self.recordingOptionsPanel?.updateDevices(displays: displays, microphones: microphones)
+        }
     }
 
     private func beginRecording(_ options: RecordingOptions) {
@@ -1633,12 +1902,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try? await Task.sleep(nanoseconds: 200_000_000)
             do {
                 try self.captureService.startRecording()
-                self.startRecordingTicker()
             } catch {
                 Log.shared.error("Recording failed: \(error.localizedDescription)", source: "capture")
                 self.captureFeedback("Recording failed: \(error.localizedDescription)")
             }
-            self.updateCaptureMenu()
+            self.statusPanel?.refreshSoon()
         }
     }
 
@@ -1659,16 +1927,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 Log.shared.error("Recording failed: \(error.localizedDescription)", source: "capture")
                 self.captureFeedback("Recording failed: \(error.localizedDescription)")
             }
-            self.recordingTicker?.invalidate()
-            self.recordingTicker = nil
-            self.updateCaptureMenu()
-        }
-    }
-
-    private func startRecordingTicker() {
-        recordingTicker?.invalidate()
-        recordingTicker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateCaptureMenu() }
+            self.statusPanel?.refreshSoon()
         }
     }
 
@@ -1681,7 +1940,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             lastScreenshotURL = url
         }
-        updateCaptureMenu()
+        statusPanel?.refreshSoon()
     }
 
     private func copyLastPath() {
@@ -1774,7 +2033,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             captureFeedback("The last screenshot is no longer on disk")
             return nil
         }
-        guard let image = NSImage(contentsOf: url) else {
+        // Decode ImageIO's source off-main; Vision already runs there too.
+        guard let image = await Task.detached(priority: .userInitiated, operation: {
+            ScreenshotThumbnail.cgImage(at: url)
+        }).value else {
             captureFeedback("Could not read \(url.lastPathComponent)")
             return nil
         }
@@ -1810,21 +2072,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func openAnnotator(_ url: URL) {
         Log.shared.info("Annotator: opening \(url.path)", source: "capture")
-        guard let image = NSImage(contentsOf: url) else {
-            Log.shared.error("Annotator: could not read \(url.path)", source: "capture")
-            Task { await searchController.notify("Could not open \(url.lastPathComponent) for editing") }
-            return
-        }
-        let controller = AnnotateWindowController(image: image, url: url, themeManager: themeManager)
-        controller.onClose = { [weak self, weak controller] in
-            guard let self, let controller else { return }
-            self.annotateWindows.removeAll { $0 === controller }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // A full-size screenshot decode belongs on a background thread.
+            let decoded = await Task.detached(priority: .userInitiated, operation: {
+                ScreenshotThumbnail.cgImage(at: url)
+            }).value
+            guard let decoded else {
+                Log.shared.error("Annotator: could not read \(url.path)", source: "capture")
+                await self.searchController.notify("Could not open \(url.lastPathComponent) for editing")
+                return
+            }
+            let image = NSImage(
+                cgImage: decoded,
+                size: NSSize(width: decoded.width, height: decoded.height)
+            )
+            let controller = AnnotateWindowController(
+                image: image,
+                url: url,
+                themeManager: self.themeManager,
+                onCopiedToPasteboard: { [weak self] copy in self?.recordPaletteCopy(copy) }
+            )
+            controller.onClose = { [weak self, weak controller] in
+                guard let self, let controller else { return }
+                self.annotateWindows.removeAll { $0 === controller }
+                self.updateActivationPolicy()
+            }
+            self.annotateWindows.append(controller)
             self.updateActivationPolicy()
+            Log.shared.info("Annotator: window \(self.annotateWindows.count) open", source: "capture")
+            controller.show()
         }
-        annotateWindows.append(controller)
-        updateActivationPolicy()
-        Log.shared.info("Annotator: window \(annotateWindows.count) open", source: "capture")
-        controller.show()
     }
 
     /// Headless check of the annotator: draws every shape, crops, and writes
@@ -1925,10 +2203,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if configuration.capture.captureSound {
             NSSound(named: NSSound.Name("Tink"))?.play()
         }
-        guard configuration.capture.captureThumbnail,
-              let image = NSImage(contentsOf: url) else { return }
-        screenshotHUD.show(image: image, title: url.lastPathComponent, theme: themeManager.theme) { [weak self] in
-            self?.openAnnotator(url)
+        guard configuration.capture.captureThumbnail else { return }
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        let scale = screen?.backingScaleFactor ?? 2
+        thumbnailTask?.cancel()
+        thumbnailTask = Task { @MainActor [weak self] in
+            // ImageIO downsamples while reading, so the HUD never decodes the
+            // full screenshot on the main thread.
+            let image = await Task.detached(priority: .userInitiated, operation: {
+                ScreenshotThumbnail.image(at: url, scale: scale)
+            }).value
+            guard !Task.isCancelled, let self, let image else { return }
+            self.screenshotHUD.show(
+                image: image,
+                title: url.lastPathComponent,
+                theme: self.themeManager.theme
+            ) { [weak self] in
+                self?.openAnnotator(url)
+            }
         }
     }
 
@@ -2063,9 +2355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         aboutWindow?.apply(theme: theme)
     }
 
-    @objc private func captureMenuAction(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let command = CaptureMenuCommand(rawValue: raw) else { return }
+    private func performCapture(_ command: CaptureMenuCommand) {
         switch command {
         case .startRecording:
             presentRecordingOptions()
@@ -2085,24 +2375,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             copyTextFromLastScreenshot()
         case .openLastScreenshotLink:
             openLastScreenshotLink()
-        }
-    }
-
-    /// Keeps the menu bar honest about a running recording and about the last
-    /// capture, using the same rules the tests pin.
-    private func updateCaptureMenu() {
-        let states = CaptureMenu.items(
-            isRecording: captureService.isRecording,
-            elapsed: captureService.recordingElapsed,
-            lastCapturePath: lastCaptureURL?.path,
-            lastRecordingPath: lastRecordingURL?.path,
-            lastScreenshotPath: lastScreenshotURL?.path
-        )
-        for state in states {
-            guard let item = captureMenuItems[state.command] else { continue }
-            item.title = state.title
-            item.isEnabled = state.enabled
-            item.isHidden = !state.visible
         }
     }
 
@@ -2131,6 +2403,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Palette's own copies are skipped by the monitor, so screenshots,
+    /// annotated images and recordings are recorded here instead. Path and
+    /// reveal copies never reach this. The caller only hands over bytes: the
+    /// one decode or icon lookup and the file write happen at utility
+    /// priority, so the panel hide and the capture feedback never wait.
+    private func recordPaletteCopy(_ copy: PaletteClipboardCopy) {
+        guard let store else { return }
+        let limits = configuration.clipboard
+        let handedOver = Date()
+        let controller = searchController
+        Task.detached(priority: .utility) {
+            let prepared = copy.prepared()
+            let inserted = (try? await store.insertPaletteCopy(
+                prepared,
+                maxImages: limits.maxImages,
+                maxFiles: limits.maxFiles
+            )) ?? false
+            let milliseconds = Int(Date().timeIntervalSince(handedOver) * 1000)
+            switch prepared {
+            case .image(let image):
+                Log.shared.info(
+                    "Palette screenshot stored in \(milliseconds) ms (new=\(inserted), \(image.png.count) bytes, \(image.width)x\(image.height), thumb=\(image.thumbnail?.count ?? 0) bytes)",
+                    source: "clipboard"
+                )
+            case .files(let paths, let thumbnail):
+                Log.shared.info(
+                    "Palette file copy stored in \(milliseconds) ms (new=\(inserted), \(paths.count) file(s), thumb=\(thumbnail?.count ?? 0) bytes)",
+                    source: "clipboard"
+                )
+            }
+            await MainActor.run { controller?.clipboardDidChange() }
+        }
+    }
+
     private func configureClipboard() {
         guard !isScriptMode, configuration.clipboard.enabled else {
             clipboardMonitor?.stop()
@@ -2138,7 +2444,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         let store = store!
-        let limit = configuration.clipboard.maxEntries
+        let textLimit = configuration.clipboard.maxText
+        let imageLimit = configuration.clipboard.maxImages
+        let fileLimit = configuration.clipboard.maxFiles
         // A reload (including every Settings keystroke) must not drop a copy
         // that landed while the config was being applied, so an existing
         // monitor keeps its last change count.
@@ -2149,20 +2457,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task {
                 switch capture {
                 case .text(let text):
-                    _ = try? await store.insertClipboard(text: text, maxEntries: limit)
+                    _ = try? await store.insertClipboard(text: text, maxEntries: textLimit)
                 case .image(let png, let thumbnail, let width, let height):
                     _ = try? await store.insertClipboardImage(
                         png: png,
                         thumbnail: thumbnail,
                         width: width,
                         height: height,
-                        maxEntries: limit
+                        maxEntries: imageLimit
                     )
                 case .files(let paths, let thumbnail):
                     _ = try? await store.insertClipboardFiles(
                         paths: paths,
                         thumbnail: thumbnail,
-                        maxEntries: limit
+                        maxEntries: fileLimit
                     )
                 }
                 await MainActor.run {
@@ -2364,6 +2672,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// `lsregister -f` re-associates the bundle id with this copy, which is what
     /// the background-task record follows after a worktree build is deleted.
+    /// Launch-only: this waits for a fast local tool, but it is never on a
+    /// hotkey or Settings path.
     private func refreshLaunchServicesRecord(bundlePath: String) {
         let tool = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
         let process = Process()
@@ -2380,7 +2690,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Reads the path the system has on file. `SMAppService` does not expose it,
-    /// so ask the same tool support uses to diagnose login items.
+    /// so ask the same tool support uses to diagnose login items. Launch-only,
+    /// like `refreshLaunchServicesRecord`.
     private func recordedLoginItemPath() -> String? {
         guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
         let process = Process()
@@ -2422,6 +2733,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return paths.indexesHomeFolder
         }
         guard usesHome, !isScriptMode, !shouldShowOnboarding else { return false }
+        // Native by necessity: a one-time first-run system-modal consent.
         let alert = NSAlert()
         alert.messageText = "Index your home folder for /edit?"
         alert.informativeText = """
@@ -2452,6 +2764,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         guard !pending.isEmpty else { return }
         let commands = pending.flatMap { $0.missing.map(\.install) }
+        // Native by necessity: a one-time first-run system-modal consent.
         let alert = NSAlert()
         alert.messageText = pending.count == 1
             ? "A source needs a tool that is not installed"
@@ -2550,6 +2863,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Native by necessity: the app menu bar (App/Edit/Window/Help) and the
+    /// Services submenu are macOS-owned. The system draws and drives those, and
+    /// they are not opened from Palette's own UI. Every menu Palette itself
+    /// opens uses `PaletteMenuController`, because an `NSMenu` tracking loop
+    /// would block Palette's global hotkeys.
     private func buildMainMenu() {
         let mainMenu = NSMenu()
 
@@ -2663,132 +2981,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             button.image = Self.statusBarIcon()
             button.image?.isTemplate = true
             button.toolTip = statusToolTip
+            button.target = self
+            button.action = #selector(toggleStatusPanelFromButton)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-        let menu = NSMenu()
-        // Capture section first: starting or stopping a recording must never
-        // need a trip through the launcher.
-        for command in CaptureMenuCommand.allCases {
-            let item = NSMenuItem(title: "", action: #selector(captureMenuAction(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = command.rawValue
-            if command == .stopRecording {
-                item.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: nil)
+        statusPanel = StatusPanelController(
+            themeManager: themeManager,
+            snapshot: { [weak self] in self?.statusPanelSnapshot() ?? StatusPanelSnapshot() },
+            perform: { [weak self] command in self?.performStatusPanel(command) },
+            anchor: { [weak self] in
+                guard let button = self?.statusItem.button,
+                      let window = button.window else { return nil }
+                return window.convertToScreen(button.convert(button.bounds, to: nil))
+            },
+            isAnchorEvent: { [weak self] event in
+                guard let window = self?.statusItem.button?.window else { return false }
+                return event.window === window
             }
-            menu.addItem(item)
-            captureMenuItems[command] = item
-        }
-        menu.addItem(.separator())
-        updateCaptureMenu()
-
-        let open = NSMenuItem(title: "Open Palette", action: #selector(togglePalette), keyEquivalent: "")
-        open.target = self
-        menu.addItem(open)
-
-        // Hidden until a check finds something newer; both point at the
-        // release, never at a self-updater.
-        let update = NSMenuItem(
-            title: "Update Palette…",
-            action: #selector(updatePaletteFromMenu),
-            keyEquivalent: ""
         )
-        update.target = self
-        update.isHidden = true
-        menu.addItem(update)
-        updateMenuItem = update
-        let notes = NSMenuItem(
-            title: "Release notes",
-            action: #selector(openReleaseNotesFromMenu),
-            keyEquivalent: ""
+    }
+
+    @objc private func toggleStatusPanelFromButton() {
+        statusPanel?.toggle()
+        if statusPanel?.isOpen == true {
+            Task { @MainActor [weak self] in
+                await self?.refreshKeepAwakeState()
+            }
+        }
+    }
+
+    /// The live facts the panel renders. Built here so the panel itself holds no
+    /// capture, config or sleep logic.
+    private func statusPanelSnapshot() -> StatusPanelSnapshot {
+        StatusPanelSnapshot(
+            isRecording: captureService.isRecording,
+            recordingElapsed: captureService.recordingElapsed,
+            lastCapturePath: lastCaptureURL?.path,
+            lastRecordingPath: lastRecordingURL?.path,
+            lastScreenshotPath: lastScreenshotURL?.path,
+            launcherPosition: configuration.searchPosition,
+            keepAwakeActive: keepAwakeStatus.active,
+            keepAwakeRemaining: keepAwakeStatus.endsAt == nil
+                ? nil
+                : keepAwakeStatus.remainingLabel,
+            keepAwakeClamshell: keepAwakeStatus.clamshell,
+            keepAwakeClamshellRequiresPower: keepAwakeStatus.clamshellRequiresPower,
+            updateVersion: updates.available?.version
         )
-        notes.target = self
-        notes.isHidden = true
-        menu.addItem(notes)
-        releaseNotesMenuItem = notes
-        menu.addItem(.separator())
+    }
 
-        let reload = NSMenuItem(title: "Reload Configuration", action: #selector(reloadFromMenu), keyEquivalent: "r")
-        reload.target = self
-        menu.addItem(reload)
-
-        let positionItem = NSMenuItem(title: "Launcher Position", action: nil, keyEquivalent: "")
-        let positionMenu = NSMenu(title: "Launcher Position")
-        for position in SearchPosition.allCases {
-            let item = NSMenuItem(
-                title: position.rawValue.capitalized,
-                action: #selector(setPositionFromMenu(_:)),
-                keyEquivalent: ""
-            )
-            item.target = self
-            item.representedObject = position.rawValue
-            positionMenu.addItem(item)
+    /// One switch for every panel row. Each case is the same method the old
+    /// menu item called, so there is no second copy of the behaviour.
+    private func performStatusPanel(_ command: StatusPanelCommand) {
+        switch command {
+        case .capture(let capture):
+            performCapture(capture)
+        case .openPalette:
+            togglePalette()
+        case .updatePalette:
+            updatePalette()
+        case .releaseNotes:
+            openReleaseNotes()
+        case .reloadConfig:
+            reload(quiet: false)
+        case .setPosition(let position):
+            setLauncherPosition(position)
+        case .toggleClamshell:
+            toggleClamshell()
+        case .stopKeepAwake:
+            stopKeepAwake()
+        case .startKeepAwake(let seconds):
+            startKeepAwake(seconds)
+        case .refreshBitwarden:
+            refreshBitwarden()
+        case .settings:
+            showSettings()
+        case .openConfig:
+            openConfig()
+        case .openLog:
+            launcher.openPath(paths.logFile.path)
+        case .openProviders:
+            openProviders()
+        case .openThemes:
+            launcher.openPath(paths.themesDir.path)
+        case .exportBackup:
+            exportBackup()
+        case .quit:
+            NSApp.terminate(nil)
         }
-        positionItem.submenu = positionMenu
-        menu.addItem(positionItem)
-        self.positionMenu = positionMenu
-        updatePositionMenu()
-
-        let keepAwakeItem = NSMenuItem(title: "Keep Awake", action: nil, keyEquivalent: "")
-        let keepAwakeSubmenu = NSMenu(title: "Keep Awake")
-        let toggle = NSMenuItem(title: "Keep Mac Awake", action: #selector(toggleKeepAwakeFromMenu), keyEquivalent: "")
-        toggle.target = self
-        keepAwakeSubmenu.addItem(toggle)
-        keepAwakeToggleItem = toggle
-        let keepAwakeDurations: [(Double, String)] = [
-            (15.0 * 60, "For 15 Minutes"),
-            (30.0 * 60, "For 30 Minutes"),
-            (60.0 * 60, "For 1 Hour"),
-            (2.0 * 60 * 60, "For 2 Hours"),
-            (4.0 * 60 * 60, "For 4 Hours"),
-            (8.0 * 60 * 60, "For 8 Hours"),
-        ]
-        for (seconds, title) in keepAwakeDurations {
-            let item = NSMenuItem(title: title, action: #selector(startKeepAwakeFromMenu(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = NSNumber(value: seconds)
-            keepAwakeSubmenu.addItem(item)
-        }
-        keepAwakeSubmenu.addItem(.separator())
-        let clamshell = NSMenuItem(title: "Clamshell (Lid Closed)", action: #selector(toggleClamshellFromMenu), keyEquivalent: "")
-        clamshell.target = self
-        keepAwakeSubmenu.addItem(clamshell)
-        keepAwakeClamshellItem = clamshell
-        let stop = NSMenuItem(title: "Stop Keeping Awake", action: #selector(stopKeepAwakeFromMenu), keyEquivalent: "")
-        stop.target = self
-        keepAwakeSubmenu.addItem(stop)
-        keepAwakeStopItem = stop
-        keepAwakeItem.submenu = keepAwakeSubmenu
-        menu.addItem(keepAwakeItem)
-        self.keepAwakeMenu = keepAwakeSubmenu
-
-        let refresh = NSMenuItem(title: "Refresh Bitwarden Cache", action: #selector(refreshBitwardenFromMenu), keyEquivalent: "")
-        refresh.target = self
-        menu.addItem(refresh)
-
-        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettingsFromMenu), keyEquivalent: "")
-        settings.target = self
-        menu.addItem(settings)
-
-        let advancedItem = NSMenuItem(title: "Advanced", action: nil, keyEquivalent: "")
-        let advancedMenu = NSMenu(title: "Advanced")
-        for (title, action) in [
-            ("Open config.toml", #selector(openConfigFromMenu)),
-            ("Open Providers Folder", #selector(openProvidersFromMenu)),
-            ("Open Themes Folder", #selector(openThemesFromMenu)),
-            ("Open Log", #selector(openLogFromMenu)),
-        ] {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-            item.target = self
-            advancedMenu.addItem(item)
-        }
-        advancedItem.submenu = advancedMenu
-        menu.addItem(advancedItem)
-
-        menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Palette", action: #selector(quitFromMenu), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
-        menu.delegate = self
-        statusItem.menu = menu
     }
 
     private func installThemeObserver() {
@@ -2854,20 +3134,87 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// `/theme` is a real choice: store it in `[theme]` so a relaunch keeps it,
     /// instead of the old meta key that was written and deleted every launch.
     private func pickTheme(_ name: String) {
-        themeManager.select(name)
-        let appearance = themeManager.theme.appearance
-        if appearance == "light" {
-            configuration.theme.mode = .light
-            configuration.theme.light = name
-        } else {
-            configuration.theme.mode = .dark
-            configuration.theme.dark = name
+        // The load is off-main now, so the slot to write comes from the
+        // resolved theme rather than the previous one.
+        themeManager.select(name) { [weak self] theme in
+            guard let self else { return }
+            if theme.appearance == "light" {
+                self.configuration.theme.mode = .light
+                self.configuration.theme.light = name
+            } else {
+                self.configuration.theme.mode = .dark
+                self.configuration.theme.dark = name
+            }
+            self.themeManager.selection = self.configuration.theme
+            do {
+                try self.writeConfig(self.configuration)
+            } catch {
+                Log.shared.warn("Could not save the theme choice: \(error.localizedDescription)", source: "theme")
+                self.searchController?.setStatus(
+                    "Could not save the theme: \(error.localizedDescription)",
+                    duration: 6
+                )
+            }
         }
-        themeManager.selection = configuration.theme
+    }
+
+    /// `/theme` → Apply Palette. It switches the engine to theme mode and
+    /// remembers the pick so the next apply and the Settings pane agree.
+    private func applyPaletteToApps(_ name: String) {
+        Task { @MainActor in
+            let result = await self.applyPaletteToAppsNow(name)
+            self.searchController?.setStatus(result.status, duration: 6)
+        }
+    }
+
+    @discardableResult
+    private func applyPaletteToAppsNow(_ name: String) async -> ThemingEngine.ApplyResult {
+        configuration.theming.enabled = true
+        configuration.theming.source = .theme
+        configuration.theming.theme = name
         do {
             try writeConfig(configuration)
         } catch {
-            Log.shared.warn("Could not save the theme choice: \(error.localizedDescription)", source: "theme")
+            Log.shared.warn("Could not save the palette source: \(error.localizedDescription)", source: "theming")
+        }
+        return await themingEngine.applyTheme(named: name, config: configuration.theming)
+    }
+
+    // MARK: - Wallpaper follow
+
+    /// A five-second URL check, and only while the engine is in wallpaper-follow
+    /// mode. No daemon, no filesystem watcher, no wake-ups otherwise.
+    private func configureThemingPolling() {
+        themingTimer?.invalidate()
+        themingTimer = nil
+        let config = configuration.theming
+        guard config.enabled, config.source == .wallpaper, config.followWallpaper else { return }
+        lastWallpaperSignature = wallpaperSignature()
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.themingWallpaperTick()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        themingTimer = timer
+    }
+
+    private func wallpaperSignature() -> String {
+        themingEngine.wallpaperURLs.map(\.path).joined(separator: "|")
+    }
+
+    private func themingWallpaperTick() {
+        guard ThemingEngine.shouldAutoApply(configuration.theming) else {
+            configureThemingPolling()
+            return
+        }
+        let signature = wallpaperSignature()
+        guard signature != lastWallpaperSignature else { return }
+        lastWallpaperSignature = signature
+        let config = configuration.theming
+        Task { @MainActor in
+            let result = await themingEngine.applyWallpaper(config)
+            searchController?.setStatus(result.status, duration: 5)
         }
     }
 
@@ -2972,7 +3319,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeManager.updateSelection(configuration.theme)
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.windowConfig = configuration.window
-        updatePositionMenu()
+        statusPanel?.refreshSoon()
+        configureThemingPolling()
 
         let oldRegistry = registry
         let newRegistry = buildRegistry()
@@ -2994,8 +3342,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installHotKey()
         configureClipboard()
         if refreshSettings { refreshSettingsWindow() }
-        if !quiet {
-            searchController.setStatus("Configuration reloaded", duration: 2)
+        if let parseError = configErrorMessage {
+            // Never say "reloaded" when defaults were substituted for a file
+            // that did not parse. The watcher reports each new error once.
+            if parseError != lastReportedConfigError {
+                lastReportedConfigError = parseError
+                searchController.setStatus(parseError, duration: 8)
+            }
+        } else {
+            lastReportedConfigError = nil
+            if !quiet {
+                searchController.setStatus("Configuration reloaded", duration: 2)
+            }
         }
         if let oldRegistry {
             Task { await oldRegistry.shutdown() }
@@ -3019,13 +3377,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         searchController.openClipboard()
     }
 
-    @objc private func reloadFromMenu() {
-        reload(quiet: false)
-    }
-
-    @objc private func setPositionFromMenu(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let position = SearchPosition(rawValue: raw) else { return }
+    private func setLauncherPosition(_ position: SearchPosition) {
         configuration.searchPosition = position
         panel?.anchorOverride = position.rawValue
         do {
@@ -3033,17 +3385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             Log.shared.warn("Could not save launcher position: \(error.localizedDescription)", source: "app")
         }
-        updatePositionMenu()
-    }
-
-    private func updatePositionMenu() {
-        for item in positionMenu?.items ?? [] {
-            item.state = (item.representedObject as? String) == configuration.searchPosition.rawValue ? .on : .off
-        }
-    }
-
-    @objc private func openConfigFromMenu() {
-        openConfig()
+        statusPanel?.refreshSoon()
     }
 
     @objc private func openSettingsFromMenu() {
@@ -3061,30 +3403,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         searchController.setStatus("Update command copied", duration: 2)
     }
 
-    /// Shows the nudge only when a check found something newer.
-    private func refreshUpdateMenu() {
-        guard let release = updates.available else {
-            updateMenuItem?.isHidden = true
-            releaseNotesMenuItem?.isHidden = true
-            return
-        }
-        updateMenuItem?.title = "Palette \(release.version) available — Update…"
-        updateMenuItem?.isEnabled = true
-        updateMenuItem?.isHidden = false
-        releaseNotesMenuItem?.isHidden = false
-    }
-
     /// Homebrew does the install; the embedded terminal is where it runs.
-    @objc private func updatePaletteFromMenu() {
+    private func updatePalette() {
         guard let release = updates.available else { return }
         searchController.openTerminalPanel(command: UpdatePolicy.brewCommand)
         searchController.setStatus("Updating Palette to \(release.version)…", duration: 10)
-        updateMenuItem?.title = "Updating…"
-        updateMenuItem?.isEnabled = false
-        releaseNotesMenuItem?.isHidden = true
     }
 
-    @objc private func openReleaseNotesFromMenu() {
+    private func openReleaseNotes() {
         guard let release = updates.available else { return }
         NSWorkspace.shared.open(release.url)
     }
@@ -3143,6 +3469,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func exportBackup() {
+        // Native by necessity: a system-modal confirmation before writing a zip.
         let confirm = NSAlert()
         confirm.messageText = "Export a backup without clipboard text?"
         confirm.informativeText = """
@@ -3154,37 +3481,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         confirm.addButton(withTitle: "Cancel")
         guard confirm.runModal() == .alertFirstButtonReturn else { return }
 
+        // Native by necessity: the file browser is macOS-owned.
         let panel = NSSavePanel()
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         panel.nameFieldStringValue = "Palette-Backup-\(stamp).zip"
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let destination = panel.url else { return }
-        writeBackup(to: destination)
+        // Staging copies the database and zipping shells out to ditto; both
+        // stay off the main thread so Settings never freezes.
+        Task { [weak self] in
+            _ = await self?.writeBackup(to: destination)
+        }
     }
 
     /// The full user state: config, themes, providers, database and the small
     /// TOML files that used to be left out. The ask key files are encrypted.
     @discardableResult
-    private func writeBackup(to destination: URL) -> Bool {
+    private func writeBackup(to destination: URL) async -> Bool {
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("Palette-Backup-\(UUID().uuidString)", isDirectory: true)
         let manager = FileManager.default
         defer { try? manager.removeItem(at: temp) }
+        let paths: PalettePaths = self.paths
+        searchController?.setStatus("Preparing backup…")
         do {
-            _ = try BackupExporter.stage(paths: paths, into: temp)
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", temp.path, destination.path]
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                throw NSError(domain: "PaletteBackup", code: Int(process.terminationStatus))
-            }
-            searchController.setStatus("Backup exported to \(destination.lastPathComponent)", duration: 4)
+            try await Task.detached(priority: .userInitiated) {
+                _ = try BackupExporter.stage(paths: paths, into: temp)
+            }.value
+            searchController?.setStatus("Zipping backup…")
+            try await Task.detached(priority: .userInitiated) {
+                try BackupExporter.zip(temp, to: destination)
+            }.value
+            showFeedback("Backup exported to \(destination.lastPathComponent)", logSource: "backup")
             return true
         } catch {
-            searchController.setStatus("Backup failed: \(error.localizedDescription)", duration: 5)
+            showFeedback("Backup failed: \(error.localizedDescription)", logSource: "backup")
             return false
         }
     }
@@ -3194,6 +3525,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             config: configuration,
             keepAwake: keepAwake,
             themeManager: themeManager,
+            theming: themingEngine,
             themesDirectory: paths.themesDir,
             accessibilityTrusted: pasteboard.isAccessibilityTrusted,
             providers: allProviderInfo,
@@ -3261,19 +3593,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow.backgroundColor = themeManager.theme.nsColor(themeManager.theme.palette.bg)
     }
 
-    @objc private func openProvidersFromMenu() {
-        openProviders()
-    }
-
-    @objc private func openThemesFromMenu() {
-        launcher.openPath(paths.themesDir.path)
-    }
-
-    @objc private func openLogFromMenu() {
-        launcher.openPath(paths.logFile.path)
-    }
-
-    @objc private func refreshBitwardenFromMenu() {
+    private func refreshBitwarden() {
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.bitwardenVault.refresh()
@@ -3282,34 +3602,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    @objc private func toggleKeepAwakeFromMenu() {
+    private func startKeepAwake(_ seconds: TimeInterval?) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let status = await self.keepAwake.snapshot()
-            if status.active {
-                await self.keepAwake.stop()
-                self.searchController.setStatus("Normal sleep restored", duration: 2)
-            } else {
-                try? await self.keepAwake.start(duration: nil)
-                self.searchController.setStatus("Keeping your Mac awake", duration: 2)
-            }
-            await self.refreshKeepAwakeMenu()
+            try? await self.keepAwake.start(duration: seconds)
+            let message = seconds.map { "Keeping your Mac awake for \(TimerDuration.label($0))" }
+                ?? "Keeping your Mac awake"
+            self.searchController.setStatus(message, duration: 2)
+            await self.refreshKeepAwakeState()
             self.searchController.refreshResults()
         }
     }
 
-    @objc private func startKeepAwakeFromMenu(_ sender: NSMenuItem) {
-        let seconds = (sender.representedObject as? NSNumber)?.doubleValue ?? 0
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            try? await self.keepAwake.start(duration: seconds > 0 ? seconds : nil)
-            self.searchController.setStatus("Keeping your Mac awake for \(sender.title.lowercased())", duration: 2)
-            await self.refreshKeepAwakeMenu()
-            self.searchController.refreshResults()
-        }
-    }
-
-    @objc private func toggleClamshellFromMenu() {
+    private func toggleClamshell() {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let status = await self.keepAwake.snapshot()
@@ -3323,42 +3628,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch {
                 self.searchController.setStatus(error.localizedDescription, duration: 5)
             }
-            await self.refreshKeepAwakeMenu()
+            await self.refreshKeepAwakeState()
             self.searchController.refreshResults()
         }
     }
 
-    @objc private func stopKeepAwakeFromMenu() {
+    private func stopKeepAwake() {
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.keepAwake.stop()
-            await self.refreshKeepAwakeMenu()
+            await self.refreshKeepAwakeState()
             self.searchController.setStatus("Normal sleep restored", duration: 2)
             self.searchController.refreshResults()
         }
     }
 
-    func menuWillOpen(_ menu: NSMenu) {
-        guard menu === statusItem.menu else { return }
-        updateCaptureMenu()
-        Task { @MainActor [weak self] in
-            await self?.refreshKeepAwakeMenu()
-        }
-    }
-
-    private func refreshKeepAwakeMenu() async {
-        let status = await keepAwake.snapshot()
-        keepAwakeToggleItem?.title = status.active ? "Stop Keeping Awake" : "Keep Mac Awake (Indefinitely)"
-        keepAwakeToggleItem?.state = status.active ? .on : .off
-        keepAwakeClamshellItem?.title = status.clamshell && status.clamshellRequiresPower
-            ? "Clamshell (Lid Closed) — armed, inactive"
-            : "Clamshell (Lid Closed)"
-        keepAwakeClamshellItem?.state = status.clamshell ? .on : .off
-        keepAwakeStopItem?.isEnabled = status.active
-    }
-
-    @objc private func quitFromMenu() {
-        NSApp.terminate(nil)
+    /// Caches the service snapshot so the panel renders without waiting on the
+    /// actor, then repaints a panel that is already open.
+    private func refreshKeepAwakeState() async {
+        keepAwakeStatus = await keepAwake.snapshot()
+        statusPanel?.refreshSoon()
     }
 
     private func openConfig() {

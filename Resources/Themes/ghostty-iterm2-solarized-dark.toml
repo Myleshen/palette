@@ -1,0 +1,40 @@
+# Ported from Ghostty's bundled "iTerm2 Solarized Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · iTerm2 Solarized Dark"
+appearance = "dark"
+
+[palette]
+bg = "#002b36"
+surface = "#001f27"
+elevated = "#1a404a"
+fg = "#a3b5b7"
+fg_muted = "#789296"
+accent = "#96a8aa"
+accent_fg = "#000000"
+selection_bg = "#073642"
+selection_fg = "#93a1a1"
+match_fg = "#6c71c4"
+border = "#1a4049"
+separator = "#1a404a80"
+danger = "#dc322f"
+warning = "#b58900"
+success = "#859900"
+info = "#268bd2"
+badge_bg = "#1a404a"
+badge_fg = "#9ca9ab"
+
+[states.selected]
+bg = "#073642"
+fg = "#93a1a1"
+[states.hover]
+bg = "#1a404a"
+[states.disabled]
+fg = "#5c7579"
+
+[footer]
+hint_color = "#5c7579"

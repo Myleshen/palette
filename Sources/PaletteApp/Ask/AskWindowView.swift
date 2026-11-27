@@ -476,6 +476,18 @@ struct AskWindowView: View {
         modelChoices.filter { $0.endpoint == endpoint }
     }
 
+    private var modelPickerChoices: [PaletteMenuChoice<String>] {
+        [AskEndpoint.opencodeGo, .nvidia].flatMap { endpoint in
+            modelChoices(for: endpoint).enumerated().map { index, model in
+                PaletteMenuChoice(
+                    value: model.key,
+                    label: model.free ? "\(model.name) · Free" : model.name,
+                    heading: index == 0 ? endpoint.displayName : nil
+                )
+            }
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if showSidebar {
@@ -628,8 +640,16 @@ struct AskWindowView: View {
                 hoveredChat = nil
             }
         }
-        .contextMenu {
-            Button("Delete", role: .destructive) { deletingChat = chat }
+        .overlay {
+            RightClickMenuArea { point in
+                PaletteMenuController.shared.show(
+                    items: [PaletteMenuItem(id: "delete", title: "Delete")],
+                    at: point,
+                    theme: theme
+                ) { _ in
+                    deletingChat = chat
+                }
+            }
         }
     }
 
@@ -658,23 +678,14 @@ struct AskWindowView: View {
             Text("Ask")
                 .font(theme.font(size: theme.typography.size, weight: .semibold))
                 .foregroundStyle(theme.color(theme.palette.fg))
-            Picker("Model", selection: Binding(
-                get: { state.selectedModel.key },
-                set: { state.select(key: $0) }
-            )) {
-                ForEach([AskEndpoint.opencodeGo, .nvidia], id: \.self) { endpoint in
-                    if !modelChoices(for: endpoint).isEmpty {
-                        Section(endpoint.displayName) {
-                            ForEach(modelChoices(for: endpoint)) { model in
-                                Text(model.free ? "\(model.name) · Free" : model.name)
-                                    .tag(model.key)
-                            }
-                        }
-                    }
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
+            PaletteMenuPicker(
+                selection: Binding(
+                    get: { state.selectedModel.key },
+                    set: { state.select(key: $0) }
+                ),
+                choices: modelPickerChoices,
+                theme: theme
+            )
             .frame(minWidth: 180, maxWidth: 300)
             Spacer()
             Button(copiedAll ? "Copied" : "Copy all") { copyAll() }

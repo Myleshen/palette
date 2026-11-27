@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Violet Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: fg was moved toward the readable end of the background to reach 4.5:1.
+# Contrast note: fg_muted was moved toward the foreground to reach 3:1 against the background.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+# Contrast note: badge_fg was corrected to reach 4.5:1 against the badge background.
+name = "Ghostty · Violet Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1c1d1f"
+surface = "#141516"
+elevated = "#333435"
+fg = "#99abad"
+fg_muted = "#7a8789"
+accent = "#48a2e6"
+accent_fg = "#000000"
+selection_bg = "#595ab7"
+selection_fg = "#e4e4e4"
+match_fg = "#d13a82"
+border = "#2f3335"
+separator = "#33343580"
+danger = "#c94c22"
+warning = "#b4881d"
+success = "#85981c"
+info = "#2e8bce"
+badge_bg = "#333435"
+badge_fg = "#909ea0"
+
+[states.selected]
+bg = "#595ab7"
+fg = "#e4e4e4"
+[states.hover]
+bg = "#333435"
+[states.disabled]
+fg = "#5e6a6c"
+
+[footer]
+hint_color = "#5e6a6c"

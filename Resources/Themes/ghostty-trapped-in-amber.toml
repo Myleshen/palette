@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Trapped in Amber" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Trapped in Amber"
+appearance = "dark"
+
+[palette]
+bg = "#0a1017"
+surface = "#070c11"
+elevated = "#23282e"
+fg = "#f0a020"
+fg_muted = "#a47122"
+accent = "#ffc940"
+accent_fg = "#000000"
+selection_bg = "#4a3416"
+selection_fg = "#ffd9a0"
+match_fg = "#ff7fa8"
+border = "#382d19"
+separator = "#23282e80"
+danger = "#e05c1c"
+warning = "#f0a020"
+success = "#7a9c4a"
+info = "#4a7ec9"
+badge_bg = "#23282e"
+badge_fg = "#f0a020"
+
+[states.selected]
+bg = "#4a3416"
+fg = "#ffd9a0"
+[states.hover]
+bg = "#23282e"
+[states.disabled]
+fg = "#a06e1d"
+
+[footer]
+hint_color = "#a06e1d"

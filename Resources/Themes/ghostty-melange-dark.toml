@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Melange Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Melange Dark"
+appearance = "dark"
+
+[palette]
+bg = "#292522"
+surface = "#1e1b18"
+elevated = "#3e3b38"
+fg = "#ece1d7"
+fg_muted = "#a89f98"
+accent = "#a3a9ce"
+accent_fg = "#000000"
+selection_bg = "#ece1d7"
+selection_fg = "#403a36"
+match_fg = "#cf9bc2"
+border = "#504b46"
+separator = "#3e3b3880"
+danger = "#bd8183"
+warning = "#e49b5d"
+success = "#78997a"
+info = "#7f91b2"
+badge_bg = "#3e3b38"
+badge_fg = "#ece1d7"
+
+[states.selected]
+bg = "#ece1d7"
+fg = "#403a36"
+[states.hover]
+bg = "#3e3b38"
+[states.disabled]
+fg = "#a89f98"
+
+[footer]
+hint_color = "#a89f98"

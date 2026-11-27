@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Broadcast" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Broadcast"
+appearance = "dark"
+
+[palette]
+bg = "#2b2b2b"
+surface = "#1f1f1f"
+elevated = "#404040"
+fg = "#e6e1dc"
+fg_muted = "#a5a19e"
+accent = "#9fcef0"
+accent_fg = "#000000"
+selection_bg = "#5a647e"
+selection_fg = "#e6e1dc"
+match_fg = "#ffffff"
+border = "#504f4e"
+separator = "#40404080"
+danger = "#da4939"
+warning = "#ffd24a"
+success = "#519f50"
+info = "#6d9cbe"
+badge_bg = "#404040"
+badge_fg = "#e6e1dc"
+
+[states.selected]
+bg = "#5a647e"
+fg = "#e6e1dc"
+[states.hover]
+bg = "#404040"
+[states.disabled]
+fg = "#a5a19e"
+
+[footer]
+hint_color = "#a5a19e"

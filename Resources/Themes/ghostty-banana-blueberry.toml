@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Banana Blueberry" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Banana Blueberry"
+appearance = "dark"
+
+[palette]
+bg = "#191323"
+surface = "#120e19"
+elevated = "#302b39"
+fg = "#cccccc"
+fg_muted = "#8d8b91"
+accent = "#91fff4"
+accent_fg = "#000000"
+selection_bg = "#302b39"
+selection_fg = "#f4f4f4"
+match_fg = "#da70d6"
+border = "#3d3845"
+separator = "#302b3980"
+danger = "#ff6b7f"
+warning = "#e6c62f"
+success = "#00bd9c"
+info = "#22e8df"
+badge_bg = "#302b39"
+badge_fg = "#cccccc"
+
+[states.selected]
+bg = "#302b39"
+fg = "#f4f4f4"
+[states.hover]
+bg = "#302b39"
+[states.disabled]
+fg = "#8d8b91"
+
+[footer]
+hint_color = "#8d8b91"

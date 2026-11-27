@@ -1,0 +1,41 @@
+# Ported from Ghostty's bundled "Onenord Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Onenord Light"
+appearance = "light"
+
+[palette]
+bg = "#f7f8fa"
+surface = "#ebeced"
+elevated = "#fbfcfd"
+fg = "#2e3440"
+fg_muted = "#6e727a"
+accent = "#1b40a6"
+accent_fg = "#ffffff"
+selection_bg = "#fbfcfd"
+selection_fg = "#000000"
+match_fg = "#9f4aca"
+border = "#cfd1d5"
+separator = "#fbfcfd80"
+danger = "#cb4f53"
+warning = "#ee5e25"
+success = "#46a33b"
+info = "#3879c5"
+badge_bg = "#fbfcfd"
+badge_fg = "#2e3440"
+
+[states.selected]
+bg = "#fbfcfd"
+fg = "#000000"
+[states.hover]
+bg = "#fbfcfd"
+[states.disabled]
+fg = "#747981"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#747981"

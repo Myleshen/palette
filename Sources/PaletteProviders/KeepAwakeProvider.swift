@@ -78,7 +78,7 @@ public final class KeepAwakeProvider: PaletteProvider, @unchecked Sendable {
                 )
             } else if raw == "settings" {
                 await MainActor.run {
-                    launcher.openURL("x-apple.systempreferences:com.apple.settings.Battery")
+                    _ = launcher.openURL("x-apple.systempreferences:com.apple.settings.Battery")
                 }
             }
         } catch {

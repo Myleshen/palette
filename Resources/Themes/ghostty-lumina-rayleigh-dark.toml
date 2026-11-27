@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Lumina Rayleigh Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Lumina Rayleigh Dark"
+appearance = "dark"
+
+[palette]
+bg = "#091d30"
+surface = "#061523"
+elevated = "#223445"
+fg = "#d4dfeb"
+fg_muted = "#8d9baa"
+accent = "#aadaff"
+accent_fg = "#000000"
+selection_bg = "#204360"
+selection_fg = "#d4dfeb"
+match_fg = "#ffc3e0"
+border = "#324455"
+separator = "#22344580"
+danger = "#d96d65"
+warning = "#f1cc79"
+success = "#96d2a2"
+info = "#6fc3ff"
+badge_bg = "#223445"
+badge_fg = "#d4dfeb"
+
+[states.selected]
+bg = "#204360"
+fg = "#d4dfeb"
+[states.hover]
+bg = "#223445"
+[states.disabled]
+fg = "#8d9baa"
+
+[footer]
+hint_color = "#8d9baa"

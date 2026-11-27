@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Srcery" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Srcery"
+appearance = "dark"
+
+[palette]
+bg = "#1c1b19"
+surface = "#141312"
+elevated = "#333230"
+fg = "#fce8c3"
+fg_muted = "#aea088"
+accent = "#fbb829"
+accent_fg = "#000000"
+selection_bg = "#fce8c3"
+selection_fg = "#1c1b19"
+match_fg = "#ff5c8f"
+border = "#49443b"
+separator = "#33323080"
+danger = "#ef2f27"
+warning = "#fbb829"
+success = "#519f50"
+info = "#2c78bf"
+badge_bg = "#333230"
+badge_fg = "#fce8c3"
+
+[states.selected]
+bg = "#fce8c3"
+fg = "#1c1b19"
+[states.hover]
+bg = "#333230"
+[states.disabled]
+fg = "#aea088"
+
+[footer]
+hint_color = "#aea088"

@@ -1,0 +1,38 @@
+# Ported from Ghostty's bundled "Vaporwave Sunset" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+name = "Ghostty · Vaporwave Sunset"
+appearance = "dark"
+
+[palette]
+bg = "#180827"
+surface = "#11061c"
+elevated = "#2f213d"
+fg = "#fff7ed"
+fg_muted = "#aea3a8"
+accent = "#b9a2fb"
+accent_fg = "#000000"
+selection_bg = "#fff7ed"
+selection_fg = "#180827"
+match_fg = "#4edcf1"
+border = "#46384f"
+separator = "#2f213d80"
+danger = "#fb7185"
+warning = "#fb923c"
+success = "#2dd4bf"
+info = "#a78bfa"
+badge_bg = "#2f213d"
+badge_fg = "#fff7ed"
+
+[states.selected]
+bg = "#fff7ed"
+fg = "#180827"
+[states.hover]
+bg = "#2f213d"
+[states.disabled]
+fg = "#aea3a8"
+
+[footer]
+hint_color = "#aea3a8"

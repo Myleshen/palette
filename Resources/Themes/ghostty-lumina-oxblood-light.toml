@@ -1,0 +1,42 @@
+# Ported from Ghostty's bundled "Lumina Oxblood Light" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: accent uses the distinct cursor colour instead of ANSI blue.
+name = "Ghostty · Lumina Oxblood Light"
+appearance = "light"
+
+[palette]
+bg = "#fef2f4"
+surface = "#f1e6e8"
+elevated = "#fff9fa"
+fg = "#42222f"
+fg_muted = "#826a73"
+accent = "#42222f"
+accent_fg = "#ffffff"
+selection_bg = "#e6b8cb"
+selection_fg = "#42222f"
+match_fg = "#683a7d"
+border = "#d8c8cd"
+separator = "#fff9fa80"
+danger = "#9b2827"
+warning = "#a1600a"
+success = "#237742"
+info = "#3166a6"
+badge_bg = "#fff9fa"
+badge_fg = "#42222f"
+
+[states.selected]
+bg = "#e6b8cb"
+fg = "#42222f"
+[states.hover]
+bg = "#fff9fa"
+[states.disabled]
+fg = "#846b74"
+
+[window]
+material = "popover"
+
+[footer]
+hint_color = "#846b74"

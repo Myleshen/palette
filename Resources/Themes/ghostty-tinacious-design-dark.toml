@@ -1,0 +1,39 @@
+# Ported from Ghostty's bundled "Tinacious Design Dark" theme.
+# Source: https://github.com/ghostty-org/ghostty — themes are the MIT-licensed
+# iTerm2-Color-Schemes collection. Colour values only; no code is copied.
+# Palette derives surface, elevated, muted, border, badge and states from the
+# terminal background/foreground/ANSI palette.
+# Contrast note: selection_fg was corrected to reach 4.5:1 against the selection background.
+name = "Ghostty · Tinacious Design Dark"
+appearance = "dark"
+
+[palette]
+bg = "#1d1d26"
+surface = "#15151b"
+elevated = "#34343c"
+fg = "#cbcbf0"
+fg_muted = "#8e8ea9"
+accent = "#00cbff"
+accent_fg = "#000000"
+selection_bg = "#ff3399"
+selection_fg = "#1f1f1f"
+match_fg = "#d783ff"
+border = "#40404e"
+separator = "#34343c80"
+danger = "#ff3399"
+warning = "#ffcc66"
+success = "#00d364"
+info = "#00cbff"
+badge_bg = "#34343c"
+badge_fg = "#cbcbf0"
+
+[states.selected]
+bg = "#ff3399"
+fg = "#1f1f1f"
+[states.hover]
+bg = "#34343c"
+[states.disabled]
+fg = "#8e8ea9"
+
+[footer]
+hint_color = "#8e8ea9"

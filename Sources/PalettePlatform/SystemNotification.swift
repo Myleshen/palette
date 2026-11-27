@@ -30,6 +30,7 @@ public enum SystemNotification {
         // centre throws for those and there is no UI to show anyway.
         guard Bundle.main.bundlePath.hasSuffix(".app") else { return }
         guard claimPermissionRequest() else { return }
+        // Native by necessity: macOS owns the notification permission prompt.
         Task.detached(priority: .utility) {
             let granted = (try? await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound])) ?? false
@@ -47,6 +48,7 @@ public enum SystemNotification {
         Task.detached(priority: .utility) {
             let center = UNUserNotificationCenter.current()
             if claimPermissionRequest() {
+                // Native by necessity: macOS owns the notification permission prompt.
                 let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
                 setAllowed(granted)
                 guard granted else { return }
