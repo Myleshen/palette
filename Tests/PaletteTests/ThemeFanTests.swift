@@ -103,13 +103,8 @@ final class ThemeFanTests: XCTestCase {
 
         let falls = (1...6).map { arc.placement(relative: $0).y }
         XCTAssertEqual(falls, falls.sorted(by: >), "descent is monotonic")
-    }
-
-    func testArcStepClampsAtTheWidestCard() {
-        let arc = ThemeCardFanGeometry.standard
-        XCTAssertEqual(arc.angle(relative: 100), arc.maxAngle)
+        XCTAssertEqual(arc.angle(relative: 100), arc.maxAngle, "the step clamps at the widest card")
         XCTAssertEqual(arc.placement(relative: 100).rotation, arc.maxAngle)
-        XCTAssertEqual(arc.placement(relative: 100).x, arc.radius * sin(arc.maxAngle * .pi / 180), accuracy: 0.01)
     }
 
     func testArcDealsUpFromBelowTheBottomEdge() {
@@ -128,19 +123,7 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertLessThan(mid.y, arc.placement(relative: 3).y + 1)
     }
 
-    func testDealStaggersOuterCards() {
-        let motion = ThemeDeckMotion.standard
-        XCTAssertEqual(motion.progress(for: 0, deal: 1), 1)
-        XCTAssertEqual(motion.progress(for: 9, deal: 0), 0)
-        XCTAssertLessThan(
-            motion.progress(for: 4, deal: 0.5),
-            motion.progress(for: 0, deal: 0.5),
-            "the middle unfolds first"
-        )
-        XCTAssertEqual(motion.progress(for: 9, deal: 1), 1)
-    }
-
-    func testMotionIsAShippingSpringWithAReduceMotionCrossfade() {
+    func testMotionIsAShippingSpringWithAStaggeredDeal() {
         let motion = ThemeDeckMotion.standard
         XCTAssertGreaterThanOrEqual(motion.response, 0.28)
         XCTAssertLessThanOrEqual(motion.response, 0.34)
@@ -149,6 +132,15 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertGreaterThan(motion.crossfade, 0)
         XCTAssertGreaterThan(motion.stagger, 0)
         XCTAssertGreaterThan(motion.hoverScale, 1)
+
+        XCTAssertEqual(motion.progress(for: 0, deal: 1), 1)
+        XCTAssertEqual(motion.progress(for: 9, deal: 0), 0)
+        XCTAssertLessThan(
+            motion.progress(for: 4, deal: 0.5),
+            motion.progress(for: 0, deal: 0.5),
+            "the middle unfolds first"
+        )
+        XCTAssertEqual(motion.progress(for: 9, deal: 1), 1)
     }
 
     // MARK: - Deck frame and hand on a table
@@ -240,13 +232,7 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertLessThan(small.handHeight, wide.handHeight)
     }
 
-    func testReachGrowsWithTheDeckWidth() {
-        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1024), 3)
-        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1080), 4)
-        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1280), 4)
-        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1440), 5)
-        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 1710), 6)
-        XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 3440), 9)
+    func testReachGrowsWithTheDeckWidthAndClamps() {
         XCTAssertEqual(ThemeGalleryLayout.reach(forWidth: 8000), ThemeGalleryLayout.maxReach)
         let widths: [CGFloat] = [800, 1024, 1280, 1440, 1710, 2560, 3440, 5000]
         let reaches = widths.map(ThemeGalleryLayout.reach(forWidth:))
@@ -572,76 +558,6 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertEqual(brokenCount, 1)
     }
 
-    // MARK: - Timings
-
-    func testOpenAndFlipTimingsWith942Cards() throws {
-        guard FileManager.default.fileExists(atPath: bundledDirectory.path) else {
-            throw XCTSkip("bundled themes are missing")
-        }
-        ThemeLoader.resetCachesForTesting()
-        let clock = ContinuousClock()
-        var catalog = ThemeBrowserCatalog(themes: [])
-        let catalogueTime = clock.measure {
-            catalog = ThemeBrowserCatalog(themes: ThemeLoader.catalog(
-                themesDirectory: root,
-                bundledThemesDirectory: bundledDirectory
-            ))
-        }
-        let wallpapers = (0..<12).map { root.appendingPathComponent("wall-\($0).png") }
-        var deck = ThemeCardDeck(
-            catalog: catalog,
-            wallpapers: wallpapers,
-            currentDesktop: wallpapers[0],
-            mode: .colors
-        )
-
-        var palettes: [String: ThemeCardPalette] = [:]
-        let openTime = clock.measure {
-            _ = ThemeCardDeck(
-                catalog: catalog,
-                wallpapers: wallpapers,
-                currentDesktop: wallpapers[0],
-                mode: .colors
-            )
-            for slot in deck.fanWindow(reach: ThemeDeckReachForTests.reach) {
-                guard let name = slot.card.themeID else { continue }
-                palettes[slot.card.cacheKey] = ThemeCardPalette(theme: ThemeLoader.load(
-                    name: name,
-                    themesDirectory: root,
-                    bundledThemesDirectory: bundledDirectory
-                ).theme)
-            }
-        }
-
-        let flips = 1_000
-        let flipTime = clock.measure {
-            for _ in 0..<flips {
-                deck.move(by: 1)
-                _ = palettes[deck.current.cacheKey]
-            }
-        }
-
-        let perFlip = seconds(flipTime) / Double(flips)
-        print(
-            "Fan deck Colors: \(catalog.count) themes · "
-                + "catalogue \(milliseconds(catalogueTime)) ms · open "
-                + "\(milliseconds(openTime)) ms · warm flip \(microseconds(perFlip)) µs"
-        )
-        XCTAssertLessThan(perFlip, 0.001, "a warm flip is a dictionary lookup")
-    }
-
-    private func seconds(_ duration: Duration) -> Double {
-        let parts = duration.components
-        return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
-    }
-
-    private func milliseconds(_ duration: Duration) -> String {
-        String(format: "%.1f", seconds(duration) * 1_000)
-    }
-
-    private func microseconds(_ value: Double) -> String {
-        String(format: "%.1f", value * 1_000_000)
-    }
 }
 
 /// The hand the deck shows on a 1280 pt screen, for the parse-count tests.

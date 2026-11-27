@@ -8,28 +8,24 @@ import TOMLKit
 final class PaletteSourceTests: XCTestCase {
     // MARK: - Source matrix
 
-    func testThemeSourceEnablesTheThemePickerAndDisablesWallpaperControls() {
-        let controls = ThemingSourceControls(source: .theme)
-
-        XCTAssertTrue(controls.themeEnabled)
-        XCTAssertFalse(controls.wallpaperEnabled)
-        XCTAssertNil(controls.themeDisabledReason)
+    func testSourceMatrixEnablesOnlyItsOwnControls() {
+        let theme = ThemingSourceControls(source: .theme)
+        XCTAssertTrue(theme.themeEnabled)
+        XCTAssertFalse(theme.wallpaperEnabled)
+        XCTAssertNil(theme.themeDisabledReason)
         XCTAssertEqual(
-            controls.wallpaperDisabledReason,
+            theme.wallpaperDisabledReason,
             "Theme drives the palette — switch source to follow the wallpaper."
         )
-    }
 
-    func testWallpaperSourceEnablesWallpaperControlsAndDisablesTheThemePicker() {
-        let controls = ThemingSourceControls(source: .wallpaper)
-
-        XCTAssertFalse(controls.themeEnabled)
-        XCTAssertTrue(controls.wallpaperEnabled)
+        let wallpaper = ThemingSourceControls(source: .wallpaper)
+        XCTAssertFalse(wallpaper.themeEnabled)
+        XCTAssertTrue(wallpaper.wallpaperEnabled)
         XCTAssertEqual(
-            controls.themeDisabledReason,
+            wallpaper.themeDisabledReason,
             "Wallpaper drives the palette — switch source to pick a theme."
         )
-        XCTAssertNil(controls.wallpaperDisabledReason)
+        XCTAssertNil(wallpaper.wallpaperDisabledReason)
     }
 
     // MARK: - Persistence
@@ -62,18 +58,11 @@ final class PaletteSourceTests: XCTestCase {
 
     // MARK: - Deck guard
 
-    func testWallpaperSourceBlocksThemeCardsWithTheHint() {
-        let reason = ThemeCardSourceGuard.blockedReason(
-            source: .wallpaper,
-            target: .theme("default-dark")
-        )
+    func testSourceGuardBlocksOnlyThemeCardsUnderWallpaperSource() {
         XCTAssertEqual(
-            reason,
+            ThemeCardSourceGuard.blockedReason(source: .wallpaper, target: .theme("default-dark")),
             "Palette follows the wallpaper — switch source to Theme to pick colours"
         )
-    }
-
-    func testWallpaperSourceLeavesWallpaperCardsAlone() {
         XCTAssertNil(ThemeCardSourceGuard.blockedReason(source: .wallpaper, target: .wallpaper))
         XCTAssertNil(
             ThemeCardSourceGuard.blockedReason(
@@ -81,9 +70,6 @@ final class PaletteSourceTests: XCTestCase {
                 target: .wallpaperFile("/tmp/wallpaper.png")
             )
         )
-    }
-
-    func testThemeSourceDoesNotBlockThemeCards() {
         XCTAssertNil(ThemeCardSourceGuard.blockedReason(source: .theme, target: .theme("default-dark")))
     }
 }

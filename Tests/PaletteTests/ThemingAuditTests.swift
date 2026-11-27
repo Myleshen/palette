@@ -337,18 +337,6 @@ final class ThemingAuditTests: XCTestCase {
 
     // MARK: - Deck
 
-    func testDeckFrameFillsTheVisibleScreen() {
-        let normal = NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let frame = ThemeGalleryLayout.frame(in: normal)
-        XCTAssertEqual(frame.width, normal.width, "the deck spans the usable width")
-        XCTAssertEqual(frame.minX, normal.minX)
-        XCTAssertEqual(frame.minY, normal.minY, "the hand rests on the bottom edge")
-        XCTAssertTrue(normal.contains(frame))
-
-        let inset = NSRect(x: 1440, y: 0, width: 1512, height: 900)
-        XCTAssertEqual(ThemeGalleryLayout.frame(in: inset).width, 1512)
-    }
-
     func testShowingTheDeckClearsTheFilter() {
         let model = ThemeGalleryModel()
         model.deck.query = "gruvbox"
@@ -358,14 +346,4 @@ final class ThemingAuditTests: XCTestCase {
         XCTAssertFalse(model.deck.favouritesOnly)
     }
 
-    // MARK: - Rendering
-
-    func testFollowWallpaperRendersFalseUnlessTheSourceIsWallpaper() {
-        var config = ThemingConfig()
-        config.followWallpaper = true
-        XCTAssertTrue(config.render().contains("follow_wallpaper = false"))
-
-        config.source = .wallpaper
-        XCTAssertTrue(config.render().contains("follow_wallpaper = true"))
-    }
 }

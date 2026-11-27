@@ -6,14 +6,6 @@ import TOMLKit
 final class ThemeCardsTests: XCTestCase {
     private var themesDirectory: URL!
 
-    private var bundledDirectory: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Resources/Themes", isDirectory: true)
-    }
-
     override func setUpWithError() throws {
         themesDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("palette-theme-cards-\(UUID().uuidString)", isDirectory: true)
@@ -172,76 +164,4 @@ final class ThemeCardsTests: XCTestCase {
         XCTAssertEqual(HotKeySpec.parse(config.wallpaperGalleryHotkey)?.prettyDisplay, "⌘⌥W")
     }
 
-    /// The card list is metadata only, and the visible card plus its two
-    /// neighbours are parsed once. A warm flip should not touch the disk.
-    func testWarmFlipCostWithCuratedCards() throws {
-        guard FileManager.default.fileExists(atPath: bundledDirectory.path) else {
-            throw XCTSkip("bundled themes are missing")
-        }
-        ThemeLoader.resetCachesForTesting()
-        let clock = ContinuousClock()
-        var catalog = ThemeBrowserCatalog(themes: [])
-        let catalogTime = clock.measure {
-            catalog = ThemeBrowserCatalog(
-                themes: ThemeLoader.catalog(
-                    themesDirectory: themesDirectory,
-                    bundledThemesDirectory: bundledDirectory
-                )
-            )
-        }
-        XCTAssertGreaterThanOrEqual(catalog.count, 138)
-
-        var deck = ThemeCardDeck(catalog: catalog)
-        let warmCards = [deck.previous, deck.current, deck.next]
-        let coldTime = clock.measure {
-            for card in warmCards {
-                guard let name = card.themeID else { continue }
-                _ = ThemeCardPalette(theme: ThemeLoader.load(
-                    name: name,
-                    themesDirectory: themesDirectory,
-                    bundledThemesDirectory: bundledDirectory
-                ).theme)
-            }
-        }
-
-        let flips = 1_000
-        var palettes: [String: ThemeCardPalette] = [:]
-        for card in warmCards {
-            guard let name = card.themeID else { continue }
-            palettes[card.cacheKey] = ThemeCardPalette(theme: ThemeLoader.load(
-                name: name,
-                themesDirectory: themesDirectory,
-                bundledThemesDirectory: bundledDirectory
-            ).theme)
-        }
-        let flipTime = clock.measure {
-            for _ in 0..<flips {
-                deck.move(by: 1)
-                _ = palettes[deck.current.cacheKey]
-            }
-        }
-
-        let perFlip = seconds(flipTime) / Double(flips)
-        print(
-            "Theme cards: \(catalog.count) cards · catalogue "
-                + "\(milliseconds(catalogTime)) ms · first 3 palettes "
-                + "\(milliseconds(coldTime)) ms · warm flip \(ms(perFlip)) ms"
-        )
-        // 10 ms, not 1 ms: parallel test load makes a micro-timing bound flaky
-        // without proving anything a dictionary lookup does not already show.
-        XCTAssertLessThan(perFlip, 0.010, "a warm flip is a dictionary lookup, not a parse")
-    }
-
-    private func seconds(_ duration: Duration) -> Double {
-        let parts = duration.components
-        return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
-    }
-
-    private func milliseconds(_ duration: Duration) -> String {
-        String(format: "%.1f", seconds(duration) * 1_000)
-    }
-
-    private func ms(_ value: Double) -> String {
-        String(format: "%.4f", value * 1_000)
-    }
 }

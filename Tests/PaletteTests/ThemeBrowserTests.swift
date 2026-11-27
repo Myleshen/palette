@@ -227,23 +227,4 @@ final class ThemeBrowserTests: XCTestCase {
         XCTAssertNotNil(cache.theme(named: "second"))
     }
 
-    func testCatalogueBuildMeasurement() {
-        ThemeLoader.resetCachesForTesting()
-        var catalog: [ThemeInfo] = []
-        let clock = ContinuousClock()
-        let first = clock.measure {
-            catalog = ThemeLoader.catalog(
-                themesDirectory: themesDirectory,
-                bundledThemesDirectory: bundledDirectory
-            )
-        }
-        let second = clock.measure {
-            _ = ThemeLoader.catalog(
-                themesDirectory: themesDirectory,
-                bundledThemesDirectory: bundledDirectory
-            )
-        }
-        print("Theme browser catalogue first build: \(first) for \(catalog.count) themes; cached rebuild: \(second)")
-        XCTAssertGreaterThanOrEqual(catalog.count, 138)
-    }
 }

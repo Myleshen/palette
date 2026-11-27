@@ -62,6 +62,21 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertLessThan(elapsed, 3.5)
     }
 
+    /// The shipped bug was a helper's child surviving after the command
+    /// finished. The shell exits on its own either way, so only a real check
+    /// of the grandchild's pid proves the process group was killed.
+    func testCommandThatExitsLeavesNoGrandchildBehind() async throws {
+        let result = try await ProcessRunner.run(
+            ["/bin/sh", "-c", "sleep 30 & echo $!; exit 0"],
+            timeout: 10
+        )
+        XCTAssertEqual(result.status, 0)
+        let output = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let grandchild = try XCTUnwrap(pid_t(output), "the child did not report its pid: \(output)")
+        XCTAssertEqual(kill(grandchild, 0), -1, "grandchild \(grandchild) survived the command")
+        XCTAssertEqual(errno, ESRCH)
+    }
+
     /// fzf or a provider can close stdin while Palette is still writing. The
     /// helper must stop at the short write instead of spinning; SIGPIPE is
     /// ignored at startup, and the injected writer proves the loop without
