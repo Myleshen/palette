@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.20.0 — 2026-11-27
+
+### Added
+
+- **Theme Cards** — a non-tracking gallery (`⌘⌥G`, configurable, and `/theme
+  cards`) showing one large palette card at a time: background/foreground/
+  accent/selection blocks, ANSI dots, name and section, with the **From
+  wallpaper** card first (desktop picture + extracted palette). ←/→ flip,
+  Return applies to Palette and other apps when theming is on, `W` applies the
+  wallpaper palette, Esc closes. 942 cards flip in under a millisecond once
+  parsed; only visible cards and neighbours are parsed, off-main.
+- **Starship prompt theming** — the generated copy rewrites the values of your
+  active palette table to the nearest Palette colours (OKLab distance), keeping
+  your keys and prompt format, wired through `STARSHIP_CONFIG` in the fish block.
+  Your own `starship.toml` is never edited.
+
+### Fixed
+
+- **Theme ids vs display names** — `[theming] theme` stored `Ghostty · AlxPro
+  Dark`, which the loader could not resolve, so Apply silently used Default Dark.
+  It now stores `ghostty-alxpro-dark`, resolves display names everywhere, and
+  migrates an existing value on launch. Verified with a real apply (kitty palette
+  matches the selected theme).
+- **Browsers card** — the Chromium browsers (Helium always) moved to their own
+  card above Targets, so the policy rows are visible without deep scrolling.
+- Theme override in Settings shows the resolved id instead of a “Custom/missing”
+  entry.
+
 ## 2.19.0 — 2026-11-27
 
 ### Added
