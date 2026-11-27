@@ -412,6 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureWatchers()
         scheduleDatabaseMaintenance()
         showOnboardingIfNeeded()
+        repairStaleThemingOnLaunch()
 
         if let firstError = startupDiagnostics.first(where: { $0.level == .error }) {
             searchController.setStatus(firstError.message, duration: nil)
@@ -3222,6 +3223,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// An upgrading user can have generated files from a build that wrote `#`
+    /// into Lua/KDL. Neovim fails with E5113 on that file, so the launch path
+    /// rebuilds the set once, silently, and logs what it repaired.
+    private var didRepairStaleTheming = false
+
+    private func repairStaleThemingOnLaunch() {
+        guard !isScriptMode, !didRepairStaleTheming else { return }
+        didRepairStaleTheming = true
+        let config = configuration.theming
+        guard config.enabled else { return }
+        let reasons = ThemingStaleness.reasons(themeID: config.theme, themeDir: paths.themeDir)
+        guard !reasons.isEmpty else { return }
+        let name = config.theme.isEmpty ? themeManager.currentThemeID : config.theme
+        Log.shared.info(
+            "Re-applying theming on launch: \(reasons.joined(separator: "; "))",
+            source: "theming"
+        )
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = config.source == .wallpaper
+                ? await self.themingEngine.applyWallpaper(config)
+                : await self.themingEngine.applyTheme(named: name, config: config)
+            if let error = result.error {
+                Log.shared.warn("Could not repair the generated palette: \(error)", source: "theming")
+                self.searchController?.setStatus(error, duration: 8)
+            }
+        }
+    }
+
     @discardableResult
     private func applyPaletteToAppsNow(_ name: String) async -> ThemingEngine.ApplyResult {
         configuration.theming.enabled = true
@@ -3300,6 +3330,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 failed = false
             }
         case .wallpaper:
+            guard ThemingEngine.shouldApplyWallpaperCard(configuration.theming) else {
+                message = "Cross-app theming is off; the palette was not applied."
+                failed = false
+                break
+            }
             let applied = await applyWallpaperPaletteNow()
             message = applied.error ?? applied.status
             failed = applied.error != nil
@@ -3310,7 +3345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 failed = true
                 break
             }
-            if configuration.theming.enabled {
+            if ThemingEngine.shouldApplyWallpaperCard(configuration.theming) {
                 let applied = await applyWallpaperPaletteNow()
                 message = applied.error ?? "\(name): \(applied.status)"
                 failed = applied.error != nil
@@ -3345,10 +3380,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The "From wallpaper" card and the wallpaper-follow timer: the same
-    /// engine and config write, just triggered by a key instead.
+    /// engine and config write, just triggered by a key instead. The engine is
+    /// only reached with cross-app theming already on; a card never enables it.
     @discardableResult
     private func applyWallpaperPaletteNow() async -> ThemingEngine.ApplyResult {
-        configuration.theming.enabled = true
+        guard ThemingEngine.shouldApplyWallpaperCard(configuration.theming) else {
+            return .empty
+        }
         configuration.theming.source = .wallpaper
         do {
             try writeConfig(configuration)
@@ -3500,6 +3538,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel?.windowConfig = configuration.window
         statusPanel?.refreshSoon()
         configureThemingPolling()
+        themeGallery?.updateWallpaperDirectory(
+            WallpaperLibrary.directory(path: configuration.theming.wallpaperDirectory)
+        )
 
         let oldRegistry = registry
         let newRegistry = buildRegistry()

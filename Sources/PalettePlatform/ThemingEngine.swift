@@ -59,15 +59,20 @@ public final class ThemingEngine: ObservableObject {
         public var installed: @Sendable () -> Set<String>
         public var policyInstalled: @Sendable (String) async -> Bool
         public var isRunning: @Sendable (String) async -> Bool
+        /// The `BrowserThemeColor` an installed profile forces, so a profile
+        /// approved for the previous palette can be called stale.
+        public var themeColor: @Sendable (String) async -> String?
 
         public init(
             installed: @escaping @Sendable () -> Set<String>,
             policyInstalled: @escaping @Sendable (String) async -> Bool,
-            isRunning: @escaping @Sendable (String) async -> Bool
+            isRunning: @escaping @Sendable (String) async -> Bool,
+            themeColor: @escaping @Sendable (String) async -> String? = { _ in nil }
         ) {
             self.installed = installed
             self.policyInstalled = policyInstalled
             self.isRunning = isRunning
+            self.themeColor = themeColor
         }
 
         public static let live = ChromiumProbe(
@@ -88,7 +93,12 @@ public final class ThemingEngine: ObservableObject {
                 return ids
             },
             policyInstalled: { bundleID in
-                if FileManager.default.fileExists(atPath: "/Library/Managed Preferences/\(bundleID).plist") {
+                for path in ChromiumPolicy.managedPreferencePaths(bundleID: bundleID)
+                where FileManager.default.fileExists(atPath: path) {
+                    if path.hasSuffix("complete.plist") {
+                        guard let data = FileManager.default.contents(atPath: path),
+                              ChromiumPolicy.carriesDomain(bundleID, in: data) else { continue }
+                    }
                     return true
                 }
                 guard let result = try? await ProcessRunner.run(["profiles", "-P"], timeout: 3) else {
@@ -101,6 +111,14 @@ public final class ThemingEngine: ObservableObject {
                     return false
                 }
                 return result.status == 0
+            },
+            themeColor: { bundleID in
+                for path in ChromiumPolicy.managedPreferencePaths(bundleID: bundleID) {
+                    guard let data = FileManager.default.contents(atPath: path),
+                          let colour = ChromiumPolicy.themeColor(in: data, bundleID: bundleID) else { continue }
+                    return colour
+                }
+                return nil
             }
         )
     }
@@ -199,12 +217,29 @@ public final class ThemingEngine: ObservableObject {
     public static func managedFileNames(targets: [String] = ThemingTarget.allCases.map(\.rawValue)) -> [String] {
         let selected = Set(targets)
         var names = ThemingTarget.allCases
-            .filter { selected.contains($0.rawValue) }
+            .filter { selected.contains($0.rawValue) && $0 != .starship }
             .map(\.fileName)
         if selected.contains(ThemingTarget.starship.rawValue) {
             names += [StarshipTheme.fileName, StarshipTheme.snippetFileName]
         }
         return names
+    }
+
+    /// A wallpaper card may change the desktop picture regardless; the palette
+    /// engine only runs when cross-app theming is already on. Passing through
+    /// here also means a card never writes `enabled = true` behind the user.
+    public static func shouldApplyWallpaperCard(_ config: ThemingConfig) -> Bool {
+        config.enabled
+    }
+
+    /// A desktop picture can point at a file that was moved or deleted. Name
+    /// that path instead of asking the user to "set a desktop picture" they
+    /// already set.
+    public static func missingWallpaperMessage(path: String?) -> String {
+        guard let path, !path.isEmpty else {
+            return "No desktop picture found — choose one."
+        }
+        return "Desktop picture \(path) is missing — choose a new one."
     }
 
     private var managedFileNames: [String] {
@@ -288,7 +323,9 @@ public final class ThemingEngine: ObservableObject {
         value.source = .wallpaper
         let appearance = PalettePalette.appearance(darkMode: value.darkMode)
         guard let palette = await extractWallpaperPalette(appearance: appearance) else {
-            let message = "No wallpaper could be read. Set a desktop picture and try again."
+            let message = Self.missingWallpaperMessage(
+                path: wallpaperURLs.first.map { includes.shortPath($0.path) }
+            )
             status = message
             let result = ApplyResult(
                 status: message, source: "wallpaper", appearance: appearance,
@@ -426,8 +463,10 @@ public final class ThemingEngine: ObservableObject {
     }
 
     public func removePolicies(_ config: ThemingConfig) async -> PolicyResult {
-        let selected = selectedBrowsers(config)
-        let identifiers = selected.map(\.policyIdentifier)
+        // Removal is not scoped to the current selection: unchecking a browser
+        // leaves its installed profile behind, so every browser Palette can
+        // manage is targeted.
+        let identifiers = ChromiumPolicy.allPolicyIdentifiers()
         let command = ChromiumPolicy.removeCommand(identifiers: identifiers)
         guard !identifiers.isEmpty else {
             let message = "Nothing to remove."
@@ -457,7 +496,7 @@ public final class ThemingEngine: ObservableObject {
                 return PolicyResult(status: policyStatus ?? "", error: policyError, command: command, states: policyStates)
             }
             await refreshPolicyStates()
-            let refreshed = await refreshRunningBrowsers(selected)
+            let refreshed = await refreshRunningBrowsers(ChromiumBrowser.catalog.filter(\.supportsThemePolicy))
             policyStatus = "Removed \(identifiers.count) managed polic\(identifiers.count == 1 ? "y" : "ies")."
             if !refreshed.isEmpty {
                 policyStatus = (policyStatus ?? "") + " Restart may still be needed."
@@ -609,6 +648,10 @@ public final class ThemingEngine: ObservableObject {
         let selected = targets.compactMap(ThemingTarget.init(rawValue:))
         let selectedIDs = Set(selected.map(\.rawValue))
 
+        // The pre-2.20 build wrote an unused `starship.toml` palette table next
+        // to the real remapped copy. Remove it on every apply.
+        try? fileManager.removeItem(at: themeDir.appendingPathComponent("starship.toml"))
+
         // Starship's files are written before the per-target loop so the fish
         // block can point at the snippet it just created (one block line).
         var starshipNotice: String?
@@ -683,6 +726,27 @@ public final class ThemingEngine: ObservableObject {
                 ))
                 continue
             }
+            if target == .starship {
+                // Both files were written above; there is no include line and
+                // the user's own starship.toml is never edited.
+                written += [StarshipTheme.fileName, StarshipTheme.snippetFileName]
+                changes.append("Starship theme: \(includes.shortPath(includes.starshipThemeURL.path))")
+                if let starshipNotice { notices.append("Starship: \(starshipNotice)") }
+                if !selectedIDs.contains(ThemingTarget.fish.rawValue) {
+                    notices.append(
+                        "Starship: export STARSHIP_CONFIG=\(includes.shortPath(includes.starshipThemeURL.path)) in your shell, or enable fish to have Palette set it."
+                    )
+                }
+                reports.append(TargetReport(
+                    id: target.rawValue,
+                    title: target.title,
+                    fileName: target.fileName,
+                    includeHint: target.includeHint,
+                    note: ThemingReload.status(for: target).message,
+                    state: .written
+                ))
+                continue
+            }
             guard target.isImplemented,
                   let contents = ThemingRenderer.contents(for: target, palette: palette, metadata: metadata) else {
                 skipped.append(target.fileName)
@@ -702,16 +766,6 @@ public final class ThemingEngine: ObservableObject {
                     options: .atomic
                 )
                 written.append(target.fileName)
-                if target == .starship {
-                    written += [StarshipTheme.fileName, StarshipTheme.snippetFileName]
-                    changes.append("Starship theme: \(includes.shortPath(includes.starshipThemeURL.path))")
-                    if let starshipNotice { notices.append("Starship: \(starshipNotice)") }
-                    if !selectedIDs.contains(ThemingTarget.fish.rawValue) {
-                        notices.append(
-                            "Starship: export STARSHIP_CONFIG=\(includes.shortPath(includes.starshipThemeURL.path)) in your shell, or enable fish to have Palette set it."
-                        )
-                    }
-                }
                 let include = includes.install(target, palette: palette, metadata: metadata)
                 if let error = include.error {
                     failed.append(target.fileName)
@@ -730,6 +784,11 @@ public final class ThemingEngine: ObservableObject {
                 } else {
                     if let path = include.path, target != .starship {
                         changes.append("\(target.title) include: \(includes.shortPath(path))")
+                    }
+                    if target == .bat, let failure = await rebuildBatCache() {
+                        let message = "bat cache --build failed: \(failure). Run it yourself after fixing bat."
+                        notices.append(message)
+                        Log.shared.warn(message, source: "theming")
                     }
                     reports.append(TargetReport(
                         id: target.rawValue,
@@ -782,6 +841,22 @@ public final class ThemingEngine: ObservableObject {
         )
     }
 
+    /// bat only sees a linked theme after its cache is rebuilt. The run is
+    /// awaited (off the main thread inside ProcessRunner) so a failure can be
+    /// reported; it returns nil on a clean build.
+    private func rebuildBatCache() async -> String? {
+        // Sandboxed test homes must not rewrite the real user's bat cache.
+        guard reloadsEnabled else { return nil }
+        do {
+            let result = try await ProcessRunner.run(ThemingIncludes.batCacheArguments, timeout: 60)
+            guard result.status != 0 else { return nil }
+            let message = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
+            return message.isEmpty ? "exit \(result.status)" : message
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     /// Writes the colour-remapped Starship config and the fish snippet that
     /// exports STARSHIP_CONFIG. The user's own starship.toml is only read.
     private func writeStarshipTheme(palette: PalettePalette, metadata: PaletteMetadata) throws -> String? {
@@ -832,20 +907,29 @@ public final class ThemingEngine: ObservableObject {
         }
         let installed = await chromiumProbe.policyInstalled(browser.bundleID)
         policyStates[browser.bundleID] = installed
+        let installedColour = installed ? await chromiumProbe.themeColor(browser.bundleID) : nil
+        let stale = installedColour.map {
+            $0.caseInsensitiveCompare(palette.background) != .orderedSame
+        } ?? false
         if installed, await chromiumProbe.isRunning(browser.processName) {
             _ = try? await ProcessRunner.run(
                 ["open", "-a", browser.appName, "--args", "--refresh-platform-policy", "--no-startup-window"],
                 timeout: 4
             )
         }
-        let note = installed
-            ? "Installed — all \(browser.name) profiles."
-            : "Not installed — open the profile in System Settings."
+        let note: String
+        if stale {
+            note = "Installed — re-approve the updated profile"
+        } else if installed {
+            note = "Installed — all \(browser.name) profiles."
+        } else {
+            note = "Not installed — open the profile in System Settings."
+        }
         let changes = [
             "\(browser.mobileConfigFileName): \(policyURL(for: browser).path)",
             "\(browser.policyIdentifier): BrowserThemeColor = \(palette.background)",
         ]
-        return ChromiumOutcome(state: .written, note: note, changes: changes, needsInstall: !installed)
+        return ChromiumOutcome(state: .written, note: note, changes: changes, needsInstall: !installed || stale)
     }
 
     /// The previous generated set is a plain directory copy. App configs are

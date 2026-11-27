@@ -24,6 +24,20 @@ enum ThemeGalleryLayout {
     /// rotation skirt + air.
     static let handHeight = cardHeight + geometry.selectedLift + geometry.maxDrop
         + rotationAllowance + 16
+    /// Smallest gap kept between the panel and the usable screen edge.
+    static let margin: CGFloat = 12
+
+    /// The panel never grows past the usable screen. On a display smaller than
+    /// 1280×720 an unclamped frame pushed the footer off-screen.
+    static func frame(in visible: NSRect) -> NSRect {
+        let width = max(1, min(panelWidth, visible.width - 2 * margin))
+        let height = max(1, min(panelHeight, visible.height - 2 * margin))
+        let x = min(max(visible.midX - width / 2, visible.minX + margin),
+                    visible.maxX - margin - width)
+        let y = min(max(visible.midY - height / 2, visible.minY + margin),
+                    visible.maxY - margin - height)
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
 }
 
 /// The gallery shows both halves of an apply: what happened, and whether it
@@ -78,7 +92,7 @@ final class ThemeGalleryWindowController: NSWindowController {
     private let model: ThemeGalleryModel
     private let themeManager: ThemeManager
     private let themesDirectory: URL
-    private let wallpaperDirectory: URL
+    private var wallpaperDirectory: URL?
     private let favourites: ThemeCardFavourites
     private let applyTarget: (ThemeCardTarget) async -> ThemeGalleryApplyOutcome
     private let loadWallpaper: () async -> (NSImage?, ThemeCardPalette?)
@@ -101,7 +115,7 @@ final class ThemeGalleryWindowController: NSWindowController {
     init(
         themeManager: ThemeManager,
         themesDirectory: URL,
-        wallpaperDirectory: URL,
+        wallpaperDirectory: URL?,
         favourites: ThemeCardFavourites = ThemeCardFavourites(),
         apply: @escaping (ThemeCardTarget) async -> ThemeGalleryApplyOutcome,
         wallpaper: @escaping () async -> (NSImage?, ThemeCardPalette?)
@@ -230,6 +244,19 @@ final class ThemeGalleryWindowController: NSWindowController {
         }
     }
 
+    /// A config reload can point the cards at a different folder. Rescan now
+    /// instead of waiting for the next launch.
+    func updateWallpaperDirectory(_ url: URL?) {
+        guard url != wallpaperDirectory else { return }
+        wallpaperDirectory = url
+        wallpapers = []
+        guard catalog != nil else { return }
+        // Drop the old folder's cards now; an empty new folder has nothing to
+        // compare against, so waiting for the rescan would keep them.
+        rebuildDeck(keepSelection: false)
+        refreshWallpapers()
+    }
+
     /// A folder can gain files between opens; rescan and only rebuild when the
     /// list actually changed, so an open hand does not jump for nothing.
     private func refreshWallpapers() {
@@ -273,6 +300,7 @@ final class ThemeGalleryWindowController: NSWindowController {
 
     func show() {
         preload()
+        model.showAll()
         refreshWallpapers()
         if catalog != nil {
             rebuildDeck(keepSelection: false)
@@ -287,13 +315,7 @@ final class ThemeGalleryWindowController: NSWindowController {
         installClickMonitors()
         guard let window else { return }
         if let screen = NSScreen.main ?? NSScreen.screens.first {
-            let frame = NSRect(
-                x: screen.visibleFrame.midX - ThemeGalleryLayout.panelWidth / 2,
-                y: screen.visibleFrame.midY - ThemeGalleryLayout.panelHeight / 2,
-                width: ThemeGalleryLayout.panelWidth,
-                height: ThemeGalleryLayout.panelHeight
-            )
-            window.setFrame(frame, display: true)
+            window.setFrame(ThemeGalleryLayout.frame(in: screen.visibleFrame), display: true)
         }
         if WindowPresentation.isScripted {
             // A scripted run must leave focus alone; the panel still renders.

@@ -20,22 +20,28 @@ public struct WallpaperFile: Equatable, Sendable, Identifiable, Hashable {
 /// otherwise. macOS cannot put a video on the desktop, so those cards are for
 /// browsing (the apply path reports that instead of pretending it worked).
 public enum WallpaperLibrary {
-    public static let defaultDirectory = "~/dot-files/wallpapers"
+    /// The folder Palette's own pictures live in on this machine. An empty
+    /// setting still means empty; nothing falls back here silently.
+    public static let defaultDirectory = "~/wallpapers"
 
     public static let imageExtensions: Set<String> = [
         "png", "jpg", "jpeg", "heic", "heif", "gif", "webp", "tif", "tiff", "bmp",
     ]
     public static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "webm"]
 
-    public static func directory(path: String) -> URL {
-        URL(fileURLWithPath: (path.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath)
+    /// nil for an empty setting, so callers never scan the working directory.
+    public static func directory(path: String) -> URL? {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return URL(fileURLWithPath: (trimmed as NSString).expandingTildeInPath)
     }
 
     public static func files(
-        in directory: URL,
+        in directory: URL?,
         fileManager: FileManager = .default
     ) -> [WallpaperFile] {
-        guard let entries = try? fileManager.contentsOfDirectory(
+        guard let directory,
+              let entries = try? fileManager.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]

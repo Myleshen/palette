@@ -45,7 +45,7 @@ final class ThemeFormatTests: XCTestCase {
     // MARK: - Headers
 
     func testHeaderUsesEachTargetsCommentSyntax() throws {
-        for target in ThemingTarget.allCases where target.isImplemented && !target.isBrowser {
+        for target in ThemingTarget.allCases where target.isImplemented && !target.isBrowser && target != .starship {
             let text = try render(target)
             switch target {
             case .zellij:
@@ -191,10 +191,6 @@ final class ThemeFormatTests: XCTestCase {
             palette: palette,
             header: metadata.header
         ).text
-
-        let snippet = try render(.starship)
-        let snippetTable = try TOMLTable(string: snippet)
-        XCTAssertEqual(snippetTable.table("palettes")?.table("palette")?.keys.count, 20)
 
         let table = try TOMLTable(string: themed)
         XCTAssertTrue(themed.hasSuffix("\n"), "TOML file should end with a newline")

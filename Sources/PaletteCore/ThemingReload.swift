@@ -57,20 +57,24 @@ public enum ThemingReload {
         case .starship:
             return Status(
                 state: .action,
-                message: "New shell (or `source ~/.config/palette/theme/starship-palette.fish`)"
+                message: "New shell — fish sets STARSHIP_CONFIG; other shells: "
+                    + "export STARSHIP_CONFIG=~/.config/palette/theme/starship-theme.toml"
             )
         case .bat:
-            return Status(state: .action, message: "Next bat invocation")
+            return Status(state: .action, message: "Next bat invocation (Palette runs bat cache --build)")
         case .btop:
-            return Status(state: .action, message: "Restart btop")
+            return Status(
+                state: .action,
+                message: "Set color_theme = \"palette\" in btop.conf once, then restart btop"
+            )
         case .delta:
             return Status(state: .action, message: "Next git/delta command")
         case .yazi:
             return Status(
                 state: .action,
-                message: "Copy the theme to ~/.config/yazi/theme.toml, then restart yazi"
+                message: "Merge the theme into ~/.config/yazi/theme.toml (copy only if absent), then restart yazi"
             )
-        case .vscode, .zed, .arc, .neovide:
+        case .vscode, .zed, .arc:
             return Status(state: .action, message: target.unavailableReason ?? "Not configured yet.")
         default:
             return Status(state: .action, message: target.unavailableReason ?? "Not configured yet.")

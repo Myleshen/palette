@@ -371,7 +371,9 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertNil(install(includes, .bat).error)
         XCTAssertNil(install(includes, .btop).error)
         XCTAssertTrue(try read(home + "/.config/bat/config").contains("--theme=palette"))
-        XCTAssertTrue(try read(home + "/.config/btop/btop.conf").contains("color_theme = \"palette\""))
+        // btop deletes a marker block when it saves, so Palette never writes
+        // one; the linked theme file is the install.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: home + "/.config/btop/btop.conf"))
         XCTAssertEqual(
             try FileManager.default.destinationOfSymbolicLink(atPath: home + "/.config/bat/themes/palette.tmTheme"),
             home + "/config/theme/bat.tmTheme"
@@ -407,7 +409,7 @@ final class ThemingIncludesTests: XCTestCase {
 
         let status = includes.status(for: .yazi)
         XCTAssertFalse(status.available)
-        XCTAssertTrue(status.note.contains("Unavailable"))
+        XCTAssertTrue(status.note.contains("Manual"))
         XCTAssertEqual(install(includes, .yazi).action, .unchanged)
         XCTAssertEqual(try read(path), original)
     }

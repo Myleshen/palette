@@ -306,6 +306,9 @@ struct SettingsView: View {
     @State private var wallpaperPreviewImage: NSImage?
     @State private var copiedInclude: String?
     @State private var removePoliciesPending = false
+    /// A managed policy outlives unchecking or Revert; the browser keeps the
+    /// Palette colour until it is removed in Device Management.
+    @State private var policyWarning: String?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
@@ -490,7 +493,7 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text(theming.supportsLegacyPolicyCLI
-                    ? "Each selected browser stops using Palette's theme. Running browsers may need a restart."
+                    ? "Every browser Palette can manage stops using its theme. Running browsers may need a restart."
                     : "macOS 27 removed profiles install; remove Palette under System Settings → General → Device Management → Profiles.")
             }
     }
@@ -1103,7 +1106,7 @@ struct SettingsView: View {
             .init(title: "Palette", tab: .theming, anchor: "appearance-theme", keywords: "palette theme browser ghostty search preview dark light catppuccin gruvbox aetheria"),
             .init(title: "Themes", tab: .theming, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
             .init(title: "Theme Cards", tab: .theming, anchor: "appearance-theme", keywords: "cards gallery wallpaper desktop picture swatch flip apply shortcut"),
-            .init(title: "Wallpaper folder", tab: .theming, anchor: "row-Wallpaper folder", keywords: "wallpaper folder directory theme cards pictures wallpapers group"),
+            .init(title: "Wallpaper folder", tab: .theming, anchor: "appearance-theme", keywords: "wallpaper folder directory theme cards pictures wallpapers group"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
@@ -1153,7 +1156,7 @@ struct SettingsView: View {
             .init(title: "Theming", tab: .theming, anchor: "theming-section", keywords: "theming cross app palette terminal editor export managed files"),
             .init(title: "Other apps", tab: .theming, anchor: "theming-section", keywords: "other apps palette source theme wallpaper extract desktop picture follow"),
             .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
-            .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium neovide apps"),
+            .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium apps"),
             .init(title: "Browsers", tab: .theming, anchor: "theming-browsers", keywords: "browsers helium chrome edge brave vivaldi chromium arc managed policy mobileconfig admin all profiles seed install remove"),
             .init(title: "Helium policy", tab: .theming, anchor: "theming-browsers", keywords: "helium managed policy mobileconfig admin all profiles seed install remove profiles"),
             .init(title: "Include lines", tab: .theming, anchor: "theming-targets", keywords: "include line config-file source copy kitty ghostty zellij neovim fish starship bat delta btop yazi"),
@@ -2163,6 +2166,19 @@ struct SettingsView: View {
                         .controlSize(.small)
                         .accessibilityLabel("Open Theme Cards gallery")
                 }
+                pickerRow(
+                    "Wallpaper folder",
+                    help: "Theme Cards reads this folder for its Wallpapers group. Empty shows the desktop picture card only."
+                ) {
+                    TextField("~/wallpapers", text: $config.theming.wallpaperDirectory)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 380)
+                }
+                if wallpaperFolderMissing {
+                    Text("Folder not found")
+                        .font(.caption)
+                        .foregroundStyle(danger)
+                }
                 Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
             } footer: {
                 Text("Theme files use TOML. Browsing previews a theme without changing anything; Use Theme applies it and saves the choice for the current mode. This is Palette's own palette.")
@@ -2184,6 +2200,12 @@ struct SettingsView: View {
                     ),
                     help: "Off by default. Palette always themes itself; this also writes managed palette files for terminals and editors."
                 )
+                if let policyWarning {
+                    Text(policyWarning)
+                        .font(.caption)
+                        .foregroundStyle(danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if !config.theming.enabled {
                     Text("Palette themes itself here and in Appearance; enable this to also theme other apps.")
                         .font(.caption)
@@ -2282,15 +2304,6 @@ struct SettingsView: View {
                             .pickerStyle(.segmented)
                             .frame(maxWidth: 260)
                         }
-                    }
-
-                    pickerRow(
-                        "Wallpaper folder",
-                        help: "Theme Cards reads this folder for its Wallpapers group. Empty shows the desktop picture card only."
-                    ) {
-                        TextField("~/dot-files/wallpapers", text: $config.theming.wallpaperDirectory)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 380)
                     }
 
                     Divider().padding(.vertical, 4)
@@ -2506,10 +2519,17 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(muted)
                 } footer: {
-                    Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Starship is the exception: its config is never edited — Palette writes a remapped copy and fish exports STARSHIP_CONFIG. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path).")
+                    Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Starship is the exception: its config is never edited — Palette writes a remapped copy and fish exports STARSHIP_CONFIG. btop and yazi are manual: the generated theme file is left for you to point the app at. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path). \(themingInstallSummary)")
                 }
             }
         }
+    }
+
+    private var wallpaperFolderMissing: Bool {
+        let path = config.theming.wallpaperDirectory
+        guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let url = WallpaperLibrary.directory(path: path) else { return false }
+        return !FileManager.default.fileExists(atPath: url.path)
     }
 
     private var selectedBrowsers: [ChromiumBrowser] {
@@ -2518,6 +2538,22 @@ struct SettingsView: View {
             return ChromiumBrowser.browser(for: target)
         }
         .filter(\.supportsThemePolicy)
+    }
+
+    /// What the selected targets actually put on disk: a marker block, a
+    /// managed policy, a generated copy or nothing at all.
+    private var themingInstallSummary: String {
+        let selected = config.theming.targets
+            .compactMap(ThemingTarget.init(rawValue:))
+            .filter(\.isImplemented)
+        guard !selected.isEmpty else { return "Nothing selected: no app is changed." }
+        let order: [ThemingTarget.InstallKind] = [.markerBlock, .policy, .generated, .manual]
+        let parts = order.compactMap { kind -> String? in
+            let names = selected.filter { $0.installKind == kind }.map(\.title)
+            guard !names.isEmpty else { return nil }
+            return "\(kind.rawValue): \(names.joined(separator: ", "))"
+        }
+        return "Installed: " + parts.joined(separator: " · ") + "."
     }
 
     private var browserPolicyFiles: [String] {
@@ -2532,7 +2568,7 @@ struct SettingsView: View {
     }
 
     private var browserRemoveCommand: String {
-        ChromiumPolicy.removeCommand(identifiers: selectedBrowsers.map(\.policyIdentifier))
+        ChromiumPolicy.removeCommand(identifiers: ChromiumPolicy.allPolicyIdentifiers())
     }
 
     private func browserPolicyStatus(_ browser: ChromiumBrowser) -> String {
@@ -2613,8 +2649,14 @@ struct SettingsView: View {
                 var targets = config.theming.targets
                 if enabled {
                     if !targets.contains(target.rawValue) { targets.append(target.rawValue) }
+                    policyWarning = nil
                 } else {
                     targets.removeAll { $0 == target.rawValue }
+                    if let browser = target.browser,
+                       theming.policyStates[browser.bundleID] == true {
+                        policyWarning = "\(browser.name) still has Palette's managed policy installed. "
+                            + "Unchecking does not remove it — use Remove Policies."
+                    }
                 }
                 config.theming.targets = targets
             }
@@ -2622,6 +2664,7 @@ struct SettingsView: View {
     }
 
     private func applyTheming() {
+        policyWarning = nil
         let themingConfig = config.theming
         let fallback = themeManager.currentThemeID
         Task { @MainActor in
@@ -2632,6 +2675,15 @@ struct SettingsView: View {
     private func revertTheming() {
         Task { @MainActor in
             _ = await theming.revert()
+            await theming.refreshPolicyStates()
+            let installed = ChromiumBrowser.catalog.filter {
+                theming.policyStates[$0.bundleID] == true
+            }
+            if !installed.isEmpty {
+                policyWarning = "Revert restored the files, but \(installed.map(\.name).joined(separator: ", ")) "
+                    + "still \(installed.count == 1 ? "has" : "have") Palette's managed policy installed. "
+                    + "Use Remove Policies."
+            }
         }
     }
 
@@ -4404,6 +4456,9 @@ struct SettingsView: View {
         case .theming:
             config.theme = ThemeSelection()
             config.theming = ThemingConfig()
+            // Same as the master switch going off: reset must not leave the
+            // marked blocks behind in the apps' configs.
+            Task { @MainActor in _ = theming.removeAllIncludes() }
         case .about, .providerFiles, .configFiles, .diagnostics:
             break
         case .providers:
