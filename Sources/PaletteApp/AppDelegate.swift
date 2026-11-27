@@ -67,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: PaletteStore!
     private var themeManager: ThemeManager!
     private var themingEngine: ThemingEngine!
+    private var restartPromptController: RestartPromptController?
+    private var restartPromptCancellable: AnyCancellable?
     private var themingTimer: Timer?
     private var lastWallpaperSignature = ""
     private var launcher: LauncherService!
@@ -270,6 +272,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             themesDirectory: paths.themesDir,
             kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty")
         )
+        restartPromptController = RestartPromptController(
+            themeManager: themeManager,
+            onRestart: { [weak self] in
+                Task { @MainActor in await self?.themingEngine.restartAppsNow() }
+            },
+            onLater: { [weak self] in self?.themingEngine.dismissRestartPrompt() }
+        )
+        restartPromptCancellable = themingEngine.$restartPrompt
+            .removeDuplicates()
+            .sink { [weak self] prompt in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if let prompt {
+                        self.restartPromptController?.show(prompt)
+                    } else {
+                        self.restartPromptController?.hide()
+                    }
+                }
+            }
         // A display name saved by an older build never loads; rewrite it to the
         // theme file id now and persist so the next apply uses the real theme.
         migrateThemingThemeID()

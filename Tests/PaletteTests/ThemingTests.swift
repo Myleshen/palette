@@ -441,17 +441,28 @@ final class ThemingTests: XCTestCase {
     private func makeBrowserEngine(
         _ paths: PalettePaths,
         installed: Set<String> = ["net.imput.helium"],
-        installedPolicies: Set<String> = [],
-        running: Bool = false
+        silent: Set<String> = [],
+        legacy: Set<String> = [],
+        running: Bool = false,
+        silentCheck: (@Sendable (String) async -> Bool)? = nil,
+        runAdministrator: (@Sendable (String) async throws -> ProcessResult)? = nil
     ) -> ThemingEngine {
-        ThemingEngine(
+        let silentPath: @Sendable (String) -> String = { bundleID in
+            paths.home + "/managed/\(bundleID).plist"
+        }
+        return ThemingEngine(
             paths: paths,
             themesDirectory: paths.themesDir,
             chromiumProbe: ThemingEngine.ChromiumProbe(
                 installed: { installed },
-                policyInstalled: { installedPolicies.contains($0) },
-                isRunning: { _ in running }
-            )
+                isRunning: { _ in running },
+                silentActive: silentCheck ?? { silent.contains($0) },
+                legacyProfile: { legacy.contains($0) },
+                silentPath: silentPath
+            ),
+            runAdministrator: runAdministrator ?? { _ in
+                ProcessResult(status: 0, stdout: Data(), stderr: Data())
+            }
         )
     }
 
@@ -479,7 +490,7 @@ final class ThemingTests: XCTestCase {
             ]
         )
         XCTAssertEqual(ChromiumBrowser.browser(for: .chrome)?.name, "Google Chrome")
-        XCTAssertEqual(ChromiumBrowser.browser(for: .helium)?.targetTitle, "Helium (managed policy)")
+        XCTAssertEqual(ChromiumBrowser.browser(for: .helium)?.targetTitle, "Helium (silent managed theme)")
         XCTAssertEqual(ChromiumBrowser.browser(for: .arc)?.supportsThemePolicy, false)
         XCTAssertEqual(
             ChromiumBrowser.browser(for: .brave)?.policyIdentifier,
@@ -502,52 +513,192 @@ final class ThemingTests: XCTestCase {
         }
     }
 
-    func testPolicyInstallFlowOnMacOS27AndOlder() {
-        XCTAssertEqual(ChromiumPolicy.installFlow(majorVersion: 27), .systemSettings)
-        XCTAssertEqual(ChromiumPolicy.installFlow(majorVersion: 30), .systemSettings)
-        XCTAssertEqual(ChromiumPolicy.installFlow(majorVersion: 26), .legacyProfiles)
-
-        let paths = makePaths()
-        let modern = ThemingEngine(
-            paths: paths,
-            themesDirectory: paths.themesDir,
-            chromiumProbe: .init(
-                installed: { ["net.imput.helium"] },
-                policyInstalled: { _ in true },
-                isRunning: { _ in false }
-            ),
-            macOSMajorVersion: 27
+    func testEnableCommandRemovesOldProfilesBeforeCreatingTheUserPlist() throws {
+        let command = ChromiumPolicy.enableCommand(
+            targets: [
+                .init(bundleID: "net.imput.helium", colour: "#101010"),
+                .init(bundleID: "com.google.Chrome", colour: "#202020"),
+            ],
+            installedIdentifiers: [
+                "dev.myleshen.palette.chromium.net.imput.helium",
+                "dev.myleshen.palette.chromium.com.brave.Browser",
+            ],
+            user: "myleshen"
         )
-        XCTAssertFalse(modern.supportsLegacyPolicyCLI)
-        let legacy = ThemingEngine(
-            paths: paths,
-            themesDirectory: paths.themesDir,
-            chromiumProbe: .init(
-                installed: { ["net.imput.helium"] },
-                policyInstalled: { _ in true },
-                isRunning: { _ in false }
-            ),
-            macOSMajorVersion: 26
-        )
-        XCTAssertTrue(legacy.supportsLegacyPolicyCLI)
+        let helixRemove = try XCTUnwrap(command.range(of: "profiles remove -identifier dev.myleshen.palette.chromium.net.imput.helium"))
+        let braveRemove = try XCTUnwrap(command.range(of: "profiles remove -identifier dev.myleshen.palette.chromium.com.brave.Browser"))
+        let mkdir = try XCTUnwrap(command.range(of: "mkdir -p '/Library/Managed Preferences/myleshen'"))
+        XCTAssertLessThan(helixRemove.lowerBound, mkdir.lowerBound)
+        XCTAssertLessThan(braveRemove.lowerBound, mkdir.lowerBound)
+        let touch = try XCTUnwrap(command.range(of: "touch '/Library/Managed Preferences/myleshen/net.imput.helium.plist'"))
+        let chown = try XCTUnwrap(command.range(of: "chown myleshen '/Library/Managed Preferences/myleshen/net.imput.helium.plist'"))
+        let chmod = try XCTUnwrap(command.range(of: "chmod 644 '/Library/Managed Preferences/myleshen/net.imput.helium.plist'"))
+        let write = try XCTUnwrap(command.range(of: "defaults write '/Library/Managed Preferences/myleshen/net.imput.helium.plist' BrowserThemeColor '#101010'"))
+        XCTAssertLessThan(touch.lowerBound, chown.lowerBound)
+        XCTAssertLessThan(chown.lowerBound, chmod.lowerBound)
+        XCTAssertLessThan(chmod.lowerBound, write.lowerBound)
+        XCTAssertTrue(command.contains("com.google.Chrome.plist"))
+        XCTAssertTrue(command.contains("'#202020'"))
+        XCTAssertFalse(command.contains("profiles install"), "installs are gone; only removal is batched")
     }
 
-    func testBatchedInstallAndRemoveCommands() {
-        let paths = [
-            "/tmp/palette/helium-theme.mobileconfig",
-            "/tmp/palette/chrome-theme.mobileconfig",
-        ]
-        XCTAssertEqual(
-            ChromiumPolicy.installCommand(paths: paths),
-            "sudo profiles install -path /tmp/palette/helium-theme.mobileconfig && sudo profiles install -path /tmp/palette/chrome-theme.mobileconfig"
+    func testEnableCommandSkipsRemovalWhenNoProfileIsInstalled() {
+        let command = ChromiumPolicy.enableCommand(
+            targets: [.init(bundleID: "net.imput.helium", colour: "#101010")],
+            installedIdentifiers: [],
+            user: "myleshen"
         )
-        let identifiers = [
-            "dev.myleshen.palette.chromium.net.imput.helium",
-            "dev.myleshen.palette.chromium.com.google.Chrome",
-        ]
+        XCTAssertFalse(command.contains("profiles remove"))
+        XCTAssertTrue(command.contains("mkdir -p"))
+        XCTAssertTrue(command.contains("defaults write"))
+    }
+
+    func testSilentEnableIsOneAdministratorCallAndVerifiesTheEndState() async throws {
+        let paths = makePaths()
+        let recorder = AdminCalls()
+        let managed = paths.home + "/managed"
+        // Stand in for the privileged script: create the user-owned plists the
+        // verification step checks.
+        let engine = makeBrowserEngine(
+            paths,
+            installed: ["net.imput.helium", "com.google.Chrome"],
+            legacy: ["net.imput.helium"],
+            silentCheck: { bundleID in
+                ChromiumPolicy.silentWritable(path: paths.home + "/managed/\(bundleID).plist")
+            },
+            runAdministrator: { shell in
+                recorder.record(shell)
+                try FileManager.default.createDirectory(
+                    atPath: managed,
+                    withIntermediateDirectories: true
+                )
+                for browser in ["net.imput.helium", "com.google.Chrome"] {
+                    let path = managed + "/\(browser).plist"
+                    try ChromiumPolicy.silentPlistData(colour: "#123456").write(to: URL(fileURLWithPath: path))
+                    try FileManager.default.setAttributes(
+                        [.posixPermissions: 0o644],
+                        ofItemAtPath: path
+                    )
+                }
+                return ProcessResult(status: 0, stdout: Data(), stderr: Data())
+            }
+        )
+
+        let result = await engine.enableSilentTheming(
+            browserConfig(["helium", "chrome"]),
+            background: "#123456"
+        )
+
+        XCTAssertNil(result.error)
+        XCTAssertEqual(recorder.calls.count, 1, "one osascript prompt for every browser")
+        XCTAssertTrue(recorder.calls[0].contains("profiles remove"), "a legacy profile found by the probe is removed first")
+        XCTAssertTrue(result.status.contains("enabled silent theming"))
+        XCTAssertEqual(engine.policyStates["net.imput.helium"], true)
+    }
+
+    func testSilentWriteNeedsNoAdministrator() async throws {
+        let paths = makePaths()
+        let admin = AdminCalls()
+        let engine = makeBrowserEngine(
+            paths,
+            silent: ["net.imput.helium"],
+            runAdministrator: { shell in
+                admin.record(shell)
+                return ProcessResult(status: 0, stdout: Data(), stderr: Data())
+            }
+        )
+        let result = await engine.apply(browserConfig(["helium"]))
+
+        XCTAssertTrue(admin.calls.isEmpty, "a later Apply writes as the user")
+        XCTAssertTrue(result.status.contains("Browser themes update silently"))
+        let helium = try XCTUnwrap(result.targets.first { $0.id == "helium" })
+        XCTAssertEqual(helium.state, .written)
+        XCTAssertEqual(helium.note, "Managed — updates silently.")
+        let plist = paths.home + "/managed/net.imput.helium.plist"
+        let data = try Data(contentsOf: URL(fileURLWithPath: plist))
         XCTAssertEqual(
-            ChromiumPolicy.removeCommand(identifiers: identifiers),
-            "sudo profiles remove -identifier dev.myleshen.palette.chromium.net.imput.helium && sudo profiles remove -identifier dev.myleshen.palette.chromium.com.google.Chrome"
+            ChromiumPolicy.themeColor(in: data, bundleID: "net.imput.helium"),
+            PalettePalette(theme: .defaultDark).background
+        )
+    }
+
+    func testProfilesListingFindsAnyRemainingPaletteProfile() {
+        let output = """
+        _computerlevel[1] attribute: name: Palette Helium theme
+            profileIdentifier: dev.myleshen.palette.chromium.net.imput.helium
+        """
+        XCTAssertEqual(
+            ChromiumPolicy.remainingIdentifiers(in: output),
+            ["dev.myleshen.palette.chromium.net.imput.helium"]
+        )
+        XCTAssertEqual(ChromiumPolicy.remainingIdentifiers(in: "no profiles here"), [])
+    }
+
+    func testSilentWritableDetection() throws {
+        let path = NSTemporaryDirectory() + "palette-silent-\(UUID().uuidString).plist"
+        XCTAssertFalse(ChromiumPolicy.silentWritable(path: path), "a missing file is not silent mode")
+        try Data().write(to: URL(fileURLWithPath: path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: path)
+        XCTAssertTrue(ChromiumPolicy.silentWritable(path: path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: path)
+        XCTAssertFalse(ChromiumPolicy.silentWritable(path: path), "Apply could not rewrite it")
+        try? FileManager.default.removeItem(atPath: path)
+    }
+
+    func testRemovalCommandDeletesOnlyTheUserPlist() {
+        let command = ChromiumPolicy.removalCommand(
+            bundleIDs: ["net.imput.helium", "com.google.Chrome"],
+            user: "myleshen"
+        )
+        XCTAssertEqual(
+            command,
+            "rm -f '/Library/Managed Preferences/myleshen/net.imput.helium.plist'"
+                + " && rm -f '/Library/Managed Preferences/myleshen/com.google.Chrome.plist'"
+        )
+        XCTAssertFalse(command.contains("profiles"), "no profile exists once silent mode is on")
+    }
+
+    func testRefreshArgumentsUseTheBundleBinary() {
+        let args = ChromiumPolicy.refreshArguments(binary: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+        XCTAssertEqual(
+            args,
+            ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+             "--refresh-platform-policy", "--no-startup-window"]
+        )
+        XCTAssertEqual(
+            ChromiumPolicy.appBinary(
+                appName: "Definitely Not Installed",
+                home: NSTemporaryDirectory()
+            ),
+            nil
+        )
+    }
+
+    func testLegacyProfileIsReportedAndNeverOpenedForApproval() async throws {
+        let paths = makePaths()
+        let engine = makeBrowserEngine(paths, legacy: ["net.imput.helium"])
+        let result = await engine.apply(browserConfig(["helium"]))
+
+        XCTAssertTrue(result.status.contains("Enable silent browser theming"))
+        XCTAssertFalse(result.status.contains("Device Management"))
+        let helium = try XCTUnwrap(result.targets.first { $0.id == "helium" })
+        XCTAssertEqual(helium.state, .skipped)
+        XCTAssertTrue(helium.note.contains("old profile will be removed"))
+        XCTAssertTrue(engine.legacyProfiles.contains("net.imput.helium"))
+    }
+
+    func testExportWritesAValidFallbackMobileConfig() async throws {
+        let paths = makePaths()
+        let engine = makeBrowserEngine(paths)
+        let result = await engine.exportPolicyProfiles(browserConfig(["helium"]))
+
+        XCTAssertNil(result.error)
+        let file = paths.home + "/Downloads/helium-theme.mobileconfig"
+        let data = try Data(contentsOf: URL(fileURLWithPath: file))
+        XCTAssertEqual(
+            ChromiumPolicy.themeColor(in: data, bundleID: "net.imput.helium"),
+            PalettePalette(theme: .defaultDark).background,
+            "the fallback profile still carries a valid BrowserThemeColor"
         )
     }
 
@@ -566,7 +717,11 @@ final class ThemingTests: XCTestCase {
 
     func testApplySkipsUninstalledBrowserWithoutFailingTheRest() async throws {
         let paths = makePaths()
-        let engine = makeBrowserEngine(paths, installed: ["net.imput.helium"])
+        let engine = makeBrowserEngine(
+            paths,
+            installed: ["net.imput.helium"],
+            silent: ["net.imput.helium"]
+        )
         let config = browserConfig(["helium", "chrome"])
 
         let result = await engine.apply(config)
@@ -601,32 +756,32 @@ final class ThemingTests: XCTestCase {
 
     func testPolicyStatusWhenMissingAndPresent() async throws {
         let missingPaths = makePaths()
-        let missingEngine = makeBrowserEngine(missingPaths, installedPolicies: [])
+        let missingEngine = makeBrowserEngine(missingPaths)
         let missing = await missingEngine.apply(browserConfig(["helium"]))
-        XCTAssertTrue(missing.status.contains("Awaiting install in System Settings"))
+        XCTAssertTrue(missing.status.contains("Enable silent browser theming"))
         XCTAssertEqual(missingEngine.policyStates["net.imput.helium"], false)
         XCTAssertTrue(
-            missingEngine.lastResult?.targets.first { $0.id == "helium" }?.note.contains("Not installed") == true
+            missingEngine.lastResult?.targets.first { $0.id == "helium" }?.note.contains("Enable silent theming") == true
         )
 
         let installedPaths = makePaths()
         let installedEngine = makeBrowserEngine(
             installedPaths,
-            installedPolicies: ["net.imput.helium"]
+            silent: ["net.imput.helium"]
         )
         let installed = await installedEngine.apply(browserConfig(["helium"]))
-        XCTAssertTrue(installed.status.contains("Managed policies installed"))
+        XCTAssertTrue(installed.status.contains("Browser themes update silently"))
         XCTAssertEqual(installedEngine.policyStates["net.imput.helium"], true)
         XCTAssertEqual(
             installedEngine.lastResult?.targets.first { $0.id == "helium" }?.note,
-            "Installed — all Helium profiles."
+            "Managed — updates silently."
         )
     }
 
     func testOneMobileConfigPerSelectedBrowser() async throws {
         let paths = makePaths()
         let installed = ["net.imput.helium", "com.google.Chrome", "com.brave.Browser"]
-        let engine = makeBrowserEngine(paths, installed: Set(installed), installedPolicies: Set(installed))
+        let engine = makeBrowserEngine(paths, installed: Set(installed), silent: Set(installed))
         let result = await engine.apply(browserConfig(["helium", "chrome", "brave"]))
 
         XCTAssertTrue(result.written.contains("helium-theme.mobileconfig"))
@@ -698,5 +853,23 @@ final class ThemingTests: XCTestCase {
         XCTAssertTrue(kitty.hasPrefix("# generated by Palette"), kitty.prefix(40).description)
         XCTAssertFalse(nvim.contains("\n# generated"), "Lua cannot use a # comment")
         XCTAssertFalse(zellij.contains("\n# generated"), "KDL cannot use a # comment")
+    }
+}
+
+/// Records the one administrator shell a test engine was given.
+private final class AdminCalls: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [String] = []
+
+    var calls: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded
+    }
+
+    func record(_ call: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        recorded.append(call)
     }
 }
