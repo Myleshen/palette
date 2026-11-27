@@ -44,13 +44,7 @@ final class ThemeContrastTests: XCTestCase {
 
         try check(palette.fg, on: bg, minimum: ThemeContrastThresholds.body, "body")
         try check(palette.fgMuted, on: bg, minimum: ThemeContrastThresholds.muted, "muted")
-        // One port has a dark sunken surface and a brighter raised elevated, so
-        // no single accent colour can read on both. It keeps the accent that
-        // clears bg and elevated.
-        let accentSurfaces = name == "ghostty-hot-dog-stand"
-            ? [palette.bg, palette.elevated]
-            : [palette.bg, palette.surface, palette.elevated]
-        for surface in accentSurfaces {
+        for surface in [palette.bg, palette.surface, palette.elevated] {
             let backdrop = try XCTUnwrap(RGBA(hex: surface), name, file: file, line: line)
             try check(palette.accent, on: backdrop, minimum: ThemeContrastThresholds.accent, "accent on \(surface)")
         }
@@ -109,39 +103,35 @@ final class ThemeContrastTests: XCTestCase {
         }
     }
 
-    /// Three authored palettes that failed before the repair, using their
-    /// original values. Each must clear its bar and keep its hue.
+    /// Three authored values that failed before the repair. Each must clear
+    /// its bar and keep its hue. The palettes are built in memory: the ports
+    /// these came from were pruned in 2.20.0, but the values still pin the
+    /// repair's behaviour.
     func testKnownFailingOriginalsAreRepaired() throws {
-        let cases: [(theme: String, field: String, original: String, backdrop: String, minimum: Double)] = [
+        let cases: [(label: String, field: String, original: String, backdrop: String, minimum: Double)] = [
             // Accent unreadable on the surface it is painted on.
-            ("ghostty-grass", "accent", "#0000a3", "#13773d", ThemeContrastThresholds.accent),
+            ("grass accent", "accent", "#0000a3", "#13773d", ThemeContrastThresholds.accent),
             // Muted text at 3.1:1, below the muted bar.
-            ("omarchy-catppuccin-latte", "fg_muted", "#85889a", "#eff1f5", ThemeContrastThresholds.muted),
+            ("latte muted", "fg_muted", "#85889a", "#eff1f5", ThemeContrastThresholds.muted),
             // Warning colour at 2.0:1, below the semantic bar.
-            ("ghostty-noctis-lilac", "warning", "#f49725", "#f2f1f8", ThemeContrastThresholds.semantic),
+            ("noctis warning", "warning", "#f49725", "#f2f1f8", ThemeContrastThresholds.semantic),
         ]
 
         for item in cases {
-            let result = load(item.theme)
-            let repaired = value(of: item.field, in: result.theme.palette)
-            let backdrop = try XCTUnwrap(RGBA(hex: item.backdrop), item.theme)
-            let original = try XCTUnwrap(RGBA(hex: item.original), item.theme)
-            let after = try XCTUnwrap(RGBA(hex: repaired), item.theme)
+            let backdrop = try XCTUnwrap(RGBA(hex: item.backdrop), item.label)
+            let original = try XCTUnwrap(RGBA(hex: item.original), item.label)
+            XCTAssertLessThan(original.contrast(with: backdrop), item.minimum, "\(item.label) should fail")
 
-            XCTAssertLessThan(original.contrast(with: backdrop), item.minimum, "\(item.theme) original should fail")
-            XCTAssertGreaterThanOrEqual(after.contrast(with: backdrop), item.minimum - 0.000_001, "\(item.theme) \(item.field)")
-            XCTAssertNotEqual(repaired, item.original, "\(item.theme) \(item.field) was not corrected")
-
-            // Same repair on the authored values reports the hue drift.
             var seeded = Theme.defaultDark
             seeded.palette.bg = item.backdrop
             seeded.palette.surface = item.backdrop
             seeded.palette.elevated = item.backdrop
             set(item.field, to: item.original, in: &seeded)
             let report = ThemeContrastRepair.repair(&seeded)
-            let change = try XCTUnwrap(report.changes.first { $0.field == item.field }, item.theme)
+            let change = try XCTUnwrap(report.changes.first { $0.field == item.field }, item.label)
             XCTAssertGreaterThanOrEqual(change.after, min(item.minimum, ThemeContrastRepair.maximumContrast(on: backdrop)) - 0.000_001)
-            XCTAssertLessThanOrEqual(change.hueShift, 10.0, "\(item.theme) \(item.field) hue drift")
+            XCTAssertNotEqual(change.repaired, item.original, "\(item.label) was not corrected")
+            XCTAssertLessThanOrEqual(change.hueShift, 10.0, "\(item.label) hue drift")
         }
     }
 

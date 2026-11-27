@@ -388,7 +388,9 @@ sourced from fish's marked block; other shells must export it themselves.
   running browser may need a restart, and **Refresh** re-reads the state.
 - **The themed apps use the wrong theme.** A `theme` value that is a display
   name instead of an id is migrated on launch; re-pick the theme in Settings →
-  Theming if a hand-edited value still looks wrong.
+  Theming if a hand-edited value still looks wrong. An id pruned from the
+  bundled catalogue is replaced by its kept variant, or by the built-in default
+  when the family went away; the status line says which.
 
 ## 7. Sources
 
@@ -396,9 +398,38 @@ Bundled themes ship inside the app as TOML resources; a user theme with the
 same file name in `~/.config/palette/themes` wins. `[theme]` in `config.toml`
 only names the dark and light theme and picks the mode — there is no `source`
 key. The catalogue is the built-in defaults (Default Dark/Light, Catppuccin
-Mocha/Latte, Gruvbox Dark/Light, Aetheria Pink, Siri Silver/Graphite), the
-bundled `ghostty-*` Ghostty themes (914) and `omarchy-*` Omarchy themes (19),
-and your own files.
+Mocha/Latte, Gruvbox Dark/Light, Aetheria Pink, Siri Silver/Graphite), 70
+bundled port families (140 files) and your own files.
+
+### Catalogue
+
+A 2.20.0 audit measured every shipped port with the contrast table above and
+with an OKLab distance between its ANSI slots. The catalogue was cut from 933
+files to 70 families, each shipping one dark and one light variant:
+
+- both variants clear the whole contrast table, so a light counterpart is never
+  a washed-out approximation of the dark one;
+- `danger` / `success` / `warning` / `info` stay four separate hues (no theme
+  whose status colours are one decorative colour), so diffs, git status and
+  errors remain readable;
+- ANSI red and ANSI green are at least 5 ΔE apart, normal and bright, so the
+  two hues a colour-blind user can confuse never collapse;
+- every ANSI text slot clears 2.5:1 on the background.
+
+`PalettePalette.ansi` derives magenta from `accent` and cyan from
+`mix(success, info)`. When a port's accent is its ANSI blue, slots 4/5 (and
+12/13) repeat a hue. That is a limit of the derivation, not of the file: 65 of
+the 140 kept files carry one near-duplicate pair, pinned by
+`ThemeCatalogueTests.testANSINearDuplicateCountDoesNotGrow` so the count cannot
+grow silently.
+
+Families that only ever shipped one appearance were dropped — Dracula, Sonokai,
+Oxocarbon, Vesper and Zenburn have no light port, and the Nightfox set splits
+its dark (`nightfox`, `duskfox`, `nordfox`, `terafox`, `carbonfox`) and light
+(`dayfox`, `dawnfox`) variants across separate files. `ThemeCuration` maps every
+pruned id to the kept variant that replaced it, or to the built-in default when
+the family is gone, and rewrites `config.toml` and card favourites once at
+launch.
 
 Not implemented yet:
 

@@ -196,6 +196,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configuration = configResult.config
         startupDiagnostics = configResult.diagnostics
         configErrorMessage = configResult.parseError
+        // The 2.20.0 catalogue cut pruned 793 theme files. A stored reference
+        // to one is rewritten once here, so a picker choice, a theming theme or
+        // a card favourite never points at a theme that no longer loads.
+        let curationNotes = ThemeCuration.migrate(&configuration, themesDirectory: paths.themesDir)
+        if !curationNotes.isEmpty {
+            for note in curationNotes { Log.shared.warn(note, source: "theme") }
+            pendingLaunchStatus = curationNotes.joined(separator: " ")
+            do {
+                try writeConfig(configuration)
+            } catch {
+                Log.shared.error(
+                    "Could not save the migrated theme choice: \(error.localizedDescription)",
+                    source: "theme"
+                )
+            }
+        }
         captureService.stateFile = paths.stateDir.appendingPathComponent("recording.json")
         let recordingAdoption = captureService.adoptPendingRecording()
         let forceOnboarding = ProcessInfo.processInfo.environment["PALETTE_FORCE_ONBOARDING"] == "1"
