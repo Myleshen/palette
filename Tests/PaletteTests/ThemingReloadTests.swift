@@ -107,7 +107,11 @@ final class ThemingReloadTests: XCTestCase {
 
     func testNoSocketIsReportedAsARestartWithoutSendingACommand() async throws {
         let directory = temporaryDirectory()
-        let kitty = KittyRemoteControl(binary: try fakeKitty(in: directory, lsStatus: 1, setStatus: 0))
+        let kitty = KittyRemoteControl(
+            binary: try fakeKitty(in: directory, lsStatus: 1, setStatus: 0),
+            environment: ["XDG_RUNTIME_DIR": directory + "/empty-run"],
+            runningKittyPIDs: { [] }
+        )
 
         let status = await kitty.reload(themeFile: directory + "/kitty.conf")
 
@@ -133,8 +137,11 @@ final class ThemingReloadTests: XCTestCase {
     }
 
     func testAMissingBinaryIsARestartNotASuccess() async {
-        let status = await KittyRemoteControl(binary: "/nonexistent/kitty")
-            .reload(themeFile: "/tmp/kitty.conf")
+        let status = await KittyRemoteControl(
+            binary: "/nonexistent/kitty",
+            environment: ["XDG_RUNTIME_DIR": "/nonexistent/run"],
+            runningKittyPIDs: { [] }
+        ).reload(themeFile: "/tmp/kitty.conf")
         XCTAssertEqual(status.state, .action)
         XCTAssertEqual(status.message, "Restart kitty (remote control disabled)")
     }
