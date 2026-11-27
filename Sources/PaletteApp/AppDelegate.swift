@@ -272,6 +272,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             themesDirectory: paths.themesDir,
             kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty")
         )
+        themingEngine.onAppliedPalette = { [weak self] palette, metadata in
+            self?.paletteAppliedToOwnTheme(palette, metadata: metadata)
+        }
         restartPromptController = RestartPromptController(
             themeManager: themeManager,
             onRestart: { [weak self] in
@@ -434,6 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scheduleDatabaseMaintenance()
         showOnboardingIfNeeded()
         repairStaleThemingOnLaunch()
+        restoreWallpaperOwnTheme()
 
         if let firstError = startupDiagnostics.first(where: { $0.level == .error }) {
             searchController.setStatus(firstError.message, duration: nil)
@@ -1131,6 +1135,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
             ]
         } ?? [:]
+        // Scripts check the live embedded terminal: these are read back from
+        // the view SwiftTerm is drawing, not recomputed from the theme.
+        let terminalColours = TerminalColorProbe.snapshot()
+        let activeTheme = themeManager.theme
         let dump: [String: Any] = [
             "panelVisible": observation.panelVisible,
             "appActive": observation.appActive,
@@ -1190,6 +1198,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             "firstTitle": observation.items.first?.title ?? "",
             "theming": theming,
+            "theme": [
+                "id": themeManager.currentThemeID,
+                "appearance": activeTheme.appearance,
+                "background": activeTheme.palette.bg,
+                "foreground": activeTheme.palette.fg,
+            ],
+            "terminal": terminalColours,
         ]
         do {
             let data = try JSONSerialization.data(
@@ -3209,13 +3224,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // resolved theme rather than the previous one.
         themeManager.select(name) { [weak self] theme in
             guard let self else { return }
-            if theme.appearance == "light" {
-                self.configuration.theme.mode = .light
-                self.configuration.theme.light = name
-            } else {
-                self.configuration.theme.mode = .dark
-                self.configuration.theme.dark = name
-            }
+            self.configuration.theme = self.configuration.theme.applying(
+                themeID: name,
+                appearance: theme.appearance
+            )
             self.themeManager.selection = self.configuration.theme
             do {
                 try self.writeConfig(self.configuration)
@@ -3226,6 +3238,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     duration: 6
                 )
             }
+        }
+    }
+
+    /// An engine apply also moves Palette's own surfaces, so the launcher and
+    /// the embedded terminal never keep yesterday's palette while other apps
+    /// get the new one. Nothing here calls the engine, so a theme apply cannot
+    /// loop back into a second apply.
+    private func paletteAppliedToOwnTheme(_ palette: PalettePalette, metadata: PaletteMetadata) {
+        if metadata.source == "wallpaper" {
+            // A wallpaper palette has no theme file; its colours become the
+            // launcher theme directly (and survive until the next theme pick).
+            themeManager.applyPalette(palette)
+            return
+        }
+        // A "Theme override" for other apps is deliberate divergence; only a
+        // stale wallpaper look is cleared when Palette's own theme is applied.
+        guard themeManager.hasDerivedPalette,
+              !metadata.themeID.isEmpty,
+              metadata.themeID == themeManager.currentThemeID else { return }
+        themeManager.select(metadata.themeID)
+    }
+
+    /// A wallpaper-sourced palette has no theme file of its own, so a relaunch
+    /// would otherwise show Palette in the config theme while every other app
+    /// keeps the wallpaper colours. Re-extract without touching the files.
+    private func restoreWallpaperOwnTheme() {
+        let config = configuration.theming
+        guard !isScriptMode, config.enabled, config.source == .wallpaper else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let palette = await self.themingEngine.previewWallpaper(darkMode: config.darkMode) else {
+                return
+            }
+            self.themeManager.applyPalette(palette)
         }
     }
 
@@ -3293,6 +3339,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fallback: themeManager.currentThemeID,
             themesDirectory: paths.themesDir
         )
+        // An explicit cross-app apply is also Palette's own choice: record the
+        // resolved id in `[theme]` and show it here, not only in other apps.
+        if themeManager.currentThemeID != configuration.theming.theme {
+            pickTheme(configuration.theming.theme)
+        }
         do {
             try writeConfig(configuration)
         } catch {

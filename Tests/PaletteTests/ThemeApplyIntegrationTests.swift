@@ -117,6 +117,25 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         return config
     }
 
+    /// Every engine apply announces the palette so Palette's own surfaces can
+    /// follow it. This is the hook that keeps the launcher and the embedded
+    /// terminal from keeping an old palette while other apps get the new one.
+    func testApplyPublishesThePaletteForPalettesOwnTheme() async throws {
+        let engine = makeEngine()
+        var seen: (PalettePalette, PaletteMetadata)?
+        engine.onAppliedPalette = { palette, metadata in
+            seen = (palette, metadata)
+        }
+
+        let result = await engine.applyTheme(named: "catppuccin-mocha", config: theming([.kitty]))
+
+        XCTAssertNil(result.error)
+        XCTAssertEqual(seen?.1.source, "theme")
+        XCTAssertEqual(seen?.1.themeID, "catppuccin-mocha")
+        XCTAssertEqual(seen?.0.background, "#1e1e2e")
+        XCTAssertEqual(seen?.0.foreground, "#cdd6f4")
+    }
+
     /// Kitty, Ghostty, Neovim and fish name the generated file; Zellij inlines
     /// its theme block and Starship inlines the palette table. The generated
     /// file is always absolute under the sandbox theme directory; the include

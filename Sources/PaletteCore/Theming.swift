@@ -460,6 +460,43 @@ public struct PalettePalette: Equatable, Sendable {
     }
 }
 
+extension Theme {
+    /// The launcher view of a palette that has no theme file of its own — a
+    /// wallpaper extraction, or the palette another app was just given. Keeps
+    /// the launcher, the embedded terminal and cross-app targets on one palette
+    /// instead of two.
+    public init(palette source: PalettePalette) {
+        self.init()
+        name = source.name.isEmpty ? "Wallpaper" : source.name
+        appearance = source.appearance
+        palette.bg = source.background
+        palette.surface = source.surface
+        palette.elevated = source.elevated
+        palette.fg = source.foreground
+        palette.fgMuted = source.muted
+        palette.accent = source.cursor
+        palette.accentFg = source.cursorText
+        palette.selectionBg = source.selectionBackground
+        palette.selectionFg = source.selectionForeground
+        palette.border = source.border
+        palette.separator = source.border
+        palette.matchFg = source.ansi[5]
+        // ANSI red/green/yellow/blue are the semantic hues every theme uses, so
+        // a theme built here re-renders the same terminal palette.
+        palette.danger = source.ansi[1]
+        palette.success = source.ansi[2]
+        palette.warning = source.ansi[3]
+        palette.info = source.ansi[4]
+        palette.badgeBg = source.elevated
+        palette.badgeFg = source.foreground
+        states.selected = ThemeState(bg: source.selectionBackground, fg: source.selectionForeground)
+        states.hover = ThemeState(bg: source.surface)
+        states.disabled = ThemeState(fg: source.muted)
+        footer.hintColor = source.muted
+        window.material = appearance == "light" ? "popover" : "hudWindow"
+    }
+}
+
 // MARK: - Wallpaper extraction
 
 public struct WallpaperPixels: Sendable, Equatable {

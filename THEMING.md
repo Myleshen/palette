@@ -310,8 +310,13 @@ picture changes and the status line says the palette was left alone. `source =
 "wallpaper"` on its own samples the current desktop picture; `dark_mode` decides
 whether the derived palette is the dark or light variant. `follow_wallpaper =
 true` checks the desktop picture's URL every five seconds and re-applies when it
-changes. The launcher's own theme is not derived from the wallpaper; this path
-only feeds the cross-app targets.
+changes. The launcher follows the same palette: a wallpaper-derived palette
+becomes Palette's own theme while it is applied (there is no theme file to name,
+so it is sampled again at launch), and the embedded terminal recolours in place
+so no shell is restarted. An Apply that uses a Palette theme also records that
+id in `[theme]`, so the launcher, the embedded terminal and the other apps all
+show one palette. A deliberate "Theme override" for other apps is the one place
+they differ.
 
 ### Browser theming
 
