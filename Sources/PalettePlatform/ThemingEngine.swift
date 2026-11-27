@@ -44,6 +44,30 @@ public final class ThemingEngine: ObservableObject {
             targets: [],
             error: nil
         )
+
+        public init(
+            status: String,
+            source: String,
+            appearance: String,
+            written: [String],
+            skipped: [String],
+            includeLines: [String],
+            notices: [String],
+            changes: [String],
+            targets: [TargetReport],
+            error: String? = nil
+        ) {
+            self.status = status
+            self.source = source
+            self.appearance = appearance
+            self.written = written
+            self.skipped = skipped
+            self.includeLines = includeLines
+            self.notices = notices
+            self.changes = changes
+            self.targets = targets
+            self.error = error
+        }
     }
 
     public struct PolicyResult: Sendable, Equatable {
@@ -348,7 +372,6 @@ public final class ThemingEngine: ObservableObject {
     }
 
     public func applyWallpaper(_ config: ThemingConfig) async -> ApplyResult {
-        guard config.enabled else { return disabledResult() }
         busy = true
         defer { busy = false }
         var value = config.normalized()
@@ -372,6 +395,20 @@ public final class ThemingEngine: ObservableObject {
             appearance: appearance,
             targets: value.targets
         )
+        // Pywal parity: the picture owns Palette's colours even when nothing is
+        // generated for other apps. Only the files are gated on the switch.
+        guard value.enabled else {
+            lastPalette = palette
+            let message = "Palette follows the desktop picture. Cross-app theming is off."
+            status = message
+            let result = ApplyResult(
+                status: message, source: "wallpaper", appearance: appearance,
+                written: [], skipped: [], includeLines: [], notices: [], changes: [], targets: [], error: nil
+            )
+            lastResult = result
+            onAppliedPalette?(palette, metadata)
+            return result
+        }
         return await finish(palette: palette, metadata: metadata, config: value)
     }
 
@@ -385,12 +422,17 @@ public final class ThemingEngine: ObservableObject {
     }
 
     public var wallpaperURLs: [URL] {
+        if let wallpaperURLOverride { return [wallpaperURLOverride] }
         var seen = Set<String>()
         return NSScreen.screens.compactMap { screen in
             guard let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return nil }
             return seen.insert(url.path).inserted ? url : nil
         }
     }
+
+    /// Test-only picture, so a wallpaper apply can sample a fixture instead of
+    /// whatever is on the user's desktop.
+    public var wallpaperURLOverride: URL?
 
     // MARK: - Revert
 

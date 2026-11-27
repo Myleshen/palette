@@ -4,14 +4,21 @@
 
 ### Added
 
-- **Theme Cards** — a non-tracking **fanned deck** (`⌘⌥G`, configurable, and
-  `/theme cards`): cards dealt from the centre, rotated ±6°/step, side cards
-  dimmed, the chosen one lifted; ←/→ or scroll flips, type to filter, Tab shows
-  favourites, Ctrl+F favourites a card, Return/Space applies (with a lift
-  animation), Esc closes. **Wallpapers are cards too**, from
-  `[theming] wallpaper_directory` (default `~/dot-files/wallpapers`): thumbnail
-  card per image/video, current desktop marked, Enter sets the picture and
-  applies its palette. 942 themes + wallpapers open in ~4 ms, flips ~0.6 ms.
+- **Theme Cards** — a non-tracking **hand of cards** (`⌘⌥G`, configurable, and
+  `/theme cards`) that fills the usable width of the display under the pointer
+  and rests on its bottom edge, at any resolution or orientation. The cards ride
+  a circular arc: the selection is the apex, neighbours descend and tilt by the
+  tangent, the reach grows with the width, and the whole card scales down on a
+  short screen. It deals in from below with a staggered spring, glides along the
+  arc on ←/→ or scroll, tilts on hover, and honours Reduce Motion; type to
+  filter, Tab shows favourites, Ctrl+F favourites a card, Return/Space applies,
+  Esc closes. Wallpaper cards are **full-bleed pictures** from
+  `[theming] wallpaper_directory` (default `~/dot-files/wallpapers`), the
+  current desktop marked. **Picking a wallpaper picks its colours**: the
+  picture, its palette in Palette itself, the generated app files (when Other
+  apps is on) and `source = "wallpaper"` move together, so a theme card is
+  refused until the source is set back to Theme. 942 themes + wallpapers open in
+  ~4 ms, flips ~0.6 ms.
 - **Starship prompt theming** — the generated copy rewrites the values of your
   active palette table to the nearest Palette colours (OKLab distance), keeping
   your keys and prompt format, wired through `STARSHIP_CONFIG` in the fish block.

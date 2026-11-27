@@ -23,6 +23,9 @@ struct ThemeBrowserView: View {
     @ObservedObject var themeManager: ThemeManager
     @Binding var selection: ThemeSelection
     let themesDirectory: URL
+    /// "Use Theme" also puts the palette source back in theme mode, so a
+    /// wallpaper left in charge never keeps the theme cards blocked.
+    var onUseTheme: () -> Void = {}
 
     @State private var browser: ThemeBrowserSession?
     @State private var previewTheme: Theme?
@@ -403,6 +406,7 @@ struct ThemeBrowserView: View {
         let updated = session.applying(to: selection, activeAppearance: theme.appearance)
         selection = updated
         themeManager.selection = updated
+        onUseTheme()
         status = nil
         requestSwatch(name)
         session.markApplied()
