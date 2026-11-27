@@ -1262,10 +1262,14 @@ public enum ThemingStaleness {
         let paletteJSON = themeDir.appendingPathComponent(ThemingRenderer.paletteJSONName)
         if !themeID.isEmpty,
            let data = fileManager.contents(atPath: paletteJSON.path),
-           let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-           let written = object["theme_id"] as? String,
-           written != themeID {
-            reasons.append("palette.json theme id '\(written)' does not match '\(themeID)'")
+           let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+            // A palette.json without theme_id predates the id fix, so the files
+            // were generated from an unresolvable display name (Default Dark).
+            if let written = object["theme_id"] as? String, written != themeID {
+                reasons.append("palette.json theme id '\(written)' does not match '\(themeID)'")
+            } else if object["theme_id"] == nil {
+                reasons.append("palette.json predates theme ids")
+            }
         }
         for target in [ThemingTarget.nvim, .zellij] {
             let url = themeDir.appendingPathComponent(target.fileName)
