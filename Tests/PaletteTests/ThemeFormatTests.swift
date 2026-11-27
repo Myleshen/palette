@@ -163,11 +163,12 @@ final class ThemeFormatTests: XCTestCase {
     func testNvimLuaReappliesAfterColorschemeAndFileChange() throws {
         let text = try render(.nvim)
         // A colorscheme loaded after init.lua (Lazy) must not win.
-        XCTAssertTrue(text.contains("local function apply()"))
+        XCTAssertTrue(text.contains("_G.palette_theme_apply = function()"))
         XCTAssertTrue(text.contains("vim.api.nvim_create_augroup(\"PaletteTheme\", { clear = true })"))
         XCTAssertTrue(
-            text.contains("vim.api.nvim_create_autocmd(\"ColorScheme\", { group = \"PaletteTheme\", callback = apply })")
+            text.contains("vim.api.nvim_create_autocmd({ \"VimEnter\", \"ColorScheme\", \"UIEnter\" }, {")
         )
+        XCTAssertTrue(text.contains("callback = function() _G.palette_theme_run() end,"))
         // Palette rewrites nvim.lua: watch the directory and debounce.
         XCTAssertTrue(text.contains("uv.new_fs_event()"))
         XCTAssertTrue(text.contains("handle:start(dir, {}, function(err, name)"))
@@ -180,6 +181,48 @@ final class ThemeFormatTests: XCTestCase {
         XCTAssertTrue(text.contains("handle:close()"))
         // colors_name belongs to the direct pass, never to the callback.
         XCTAssertEqual(text.components(separatedBy: "vim.g.colors_name").count - 1, 1)
+    }
+
+    func testNvimLuaDefersASecondPassWithTokenCancellation() throws {
+        let text = try render(.nvim)
+        // A plugin that paints in its own autocmd or vim.schedule() runs after
+        // us, so every trigger applies again on the next tick.
+        XCTAssertTrue(text.contains("vim.defer_fn(function()"))
+        XCTAssertTrue(text.contains("end, 120)"))
+        // A newer trigger bumps the token and cancels the pending pass.
+        XCTAssertTrue(text.contains("_G.palette_theme_token = _G.palette_theme_token + 1"))
+        XCTAssertTrue(text.contains("local token = _G.palette_theme_token"))
+        XCTAssertTrue(text.contains("if token == _G.palette_theme_token then"))
+        // The direct pass is synchronous, for :source.
+        let run = try XCTUnwrap(text.range(of: "_G.palette_theme_run = function()"))
+        let body = String(text[run.upperBound...])
+        XCTAssertLessThan(
+            try XCTUnwrap(body.range(of: "_G.palette_theme_apply()")?.lowerBound),
+            try XCTUnwrap(body.range(of: "vim.defer_fn")?.lowerBound)
+        )
+    }
+
+    func testNvimLuaAppliesTheWholeGroupTableEveryPass() throws {
+        let text = try render(.nvim)
+        // One loop over all 18 groups per pass: no partial clear, no group left
+        // carrying the previous colorscheme.
+        XCTAssertEqual(text.components(separatedBy: "nvim_set_hl").count - 1, 1)
+        XCTAssertTrue(text.contains("for group, colors in pairs(groups) do"))
+        XCTAssertFalse(text.contains("nvim_set_hl(0, group, {})"), "no partial clearing")
+        let entries = text.components(separatedBy: "\n").filter {
+            $0.range(of: #"^  [A-Za-z]+ = \{ (fg|bg) = "#, options: .regularExpression) != nil
+        }
+        XCTAssertEqual(entries.count, 18)
+    }
+
+    func testNvimLuaReloadRunsBothPasses() throws {
+        let text = try render(.nvim)
+        let reload = try XCTUnwrap(text.range(of: "local function reload()"))
+        let body = String(text[reload.upperBound...])
+        XCTAssertTrue(body.contains("pcall(dofile, file)"))
+        // The reloaded file runs _G.palette_theme_run() itself, which is the
+        // immediate pass plus the deferred one.
+        XCTAssertTrue(text.contains("\n_G.palette_theme_run()\nvim.g.colors_name = \"palette\""))
     }
 
     // MARK: - fish
