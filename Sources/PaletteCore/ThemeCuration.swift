@@ -1,7 +1,7 @@
 import Foundation
 
-/// The 2.20.0 catalogue cut. Bundled ports went from 933 files to 70
-/// families with a dark and a light variant each (140 files).
+/// The 2.20.0 catalogue cut. Bundled ports went from 933 files to 69
+/// families with a dark and a light variant each (138 files).
 ///
 /// `replacements` keeps a pruned id loading the theme that replaced it:
 /// the same family's kept variant, or the built-in default for its

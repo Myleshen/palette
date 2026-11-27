@@ -207,19 +207,19 @@ they guard. The numbers below are from a 2026-11-26 run on the development Mac
 
 | What | Threshold | Measured |
 |---|---|---|
-| Opening the 942-row theme menu (warm catalog, building the rows) | < 250 ms | 4.9 ms |
+| Opening the 138-row theme menu (warm catalog, building the rows) | < 250 ms | < 5 ms |
 | `ThemeLoader.catalog` warm | < 400 ms | 21.8 ms |
 | 5k-entry clipboard search snapshot rebuild | < 100 ms | 20.8 ms |
 | Cached `/neo` open (empty query over a 20k-path snapshot) | < 200 ms | 50.9 ms; 101 ms at background QoS |
 | Theme apply file generation (sandbox HOME, 7 files, no reloads) | < 300 ms | 10.1 ms |
 
-Row construction for a 942-row menu is checked in-process: `PaletteMenuLazinessTests`
+Row construction for the catalogue menu is checked in-process: `PaletteMenuLazinessTests`
 hosts the real view and asserts SwiftUI builds only a page of rows, not the whole
 catalogue. The Settings theme browser is not measured; it uses the same
 catalogue budget above.
 
 The fanned deck logs its catalogue build time (`Theme cards catalogue: … in …
-ms`, 942 themes plus the wallpaper folder) but has no hard budget: its cost is
+ms`, the catalogue plus the wallpaper folder) but has no hard budget: its cost is
 dominated by `ThemeLoader.catalog`, which the row above budgets. Card flips and
 thumbnail loads are bounded by drawing only the cards near the selection.
 

@@ -811,7 +811,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `performBinding` path the Carbon hotkey uses.
     /// Script-only: opens a menu panel with fixed rows so a run can prove it
     /// does not activate the app and that work still happens while it is open.
-    /// `rows` builds a stress menu shaped like the 942-theme picker.
+    /// `rows` builds a stress menu larger than the catalogue ever gets.
     private func showPaletteMenuProbe(long: Bool = false, rows: Int = 0) {
         var items: [PaletteMenuItem] = [
             PaletteMenuItem(id: "one", title: "Probe One", shortcut: "⌘1", checked: true),
@@ -3451,7 +3451,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             paletteSource: { [weak self] in self?.configuration.theming.source ?? .theme }
         )
-        // The 942 headers are read once now; a hotkey press only renders cards.
+        // The catalogue headers are read once now; a hotkey press only renders cards.
         themeGallery?.preload()
     }
 

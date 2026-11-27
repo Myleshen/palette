@@ -209,7 +209,7 @@ final class ThemeGalleryWindowController: NSWindowController {
 
     // MARK: - Catalogue
 
-    /// 942 headers and the wallpaper folder, read once at launch so the first
+    /// catalogue headers and the wallpaper folder, read once at launch so the first
     /// hotkey press is instant. No TOML body is parsed here; palettes and
     /// thumbnails load for the cards the fan shows.
     func preload() {

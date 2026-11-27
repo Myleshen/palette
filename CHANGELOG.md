@@ -4,7 +4,15 @@
 
 ### Added
 
-- **Theme Cards** — a non-tracking **hand of cards** (`⌘⌥G`, configurable, and
+- **Wallpaper palettes follow pywal.** Extraction now uses pywal's pipeline —
+  the same 16-slot ordering, dark/light background and foreground rules, and its
+  saturation/contrast adjustments (`[theming] saturation`, `contrast`) — so a
+  light wallpaper no longer gets a saturated mid-tone background and ANSI 1–6
+  are the image's own colours. Validated slot-for-slot against pywal 3.8.15 on
+  real wallpapers. Wallpaper-derived ANSI slots are also separated when two land
+  on the same hue, so a machine-extracted palette can't give you two identical
+  blues.
+- **Theme cards** — a non-tracking **hand of cards** (`⌘⌥G`, configurable, and
   `/theme cards`) that fills the usable width of the display under the pointer
   and rests on its bottom edge, at any resolution or orientation. The cards ride
   a circular arc: the selection is the apex, neighbours descend and tilt by the
@@ -13,12 +21,12 @@
   arc on ←/→ or scroll, tilts on hover, and honours Reduce Motion; type to
   filter, Tab shows favourites, Ctrl+F favourites a card, Return/Space applies,
   Esc closes. Wallpaper cards are **full-bleed pictures** from
-  `[theming] wallpaper_directory` (default `~/dot-files/wallpapers`), the
+  `[theming] wallpaper_directory` (default `~/wallpapers`), the
   current desktop marked. **Picking a wallpaper picks its colours**: the
   picture, its palette in Palette itself, the generated app files (when Other
   apps is on) and `source = "wallpaper"` move together, so a theme card is
-  refused until the source is set back to Theme. 942 themes + wallpapers open in
-  ~4 ms, flips ~0.6 ms.
+  refused until the source is set back to Theme. The curated 138-theme
+  catalogue opens in 17 ms, flips in under a millisecond.
 - **Starship prompt theming** — the generated copy rewrites the values of your
   active palette table to the nearest Palette colours (OKLab distance), keeping
   your keys and prompt format, wired through `STARSHIP_CONFIG` in the fish block.
@@ -26,6 +34,13 @@
 
 ### Removed
 
+- **The catalogue is curated: 69 families, 138 themes.** Every kept family has a
+  dark and a light variant, and every theme was audited for contrast (body 7:1,
+  secondary 4.5:1, semantics 3:1), role separation (main vs secondary text,
+  border, accent), ANSI distinctness and usable red/green for diffs. 795 themes
+  were removed; a saved theme from the old set migrates to its kept sibling on
+  launch, and an unknown id now reports an error instead of silently applying
+  Default Dark.
 - **The `/unit` converter is gone.** It disappeared in 2.18.2 without a
   user-facing note; this entry records it. `/calc` still answers arithmetic,
   and no unit or currency conversion is provided.
@@ -35,6 +50,20 @@
 
 ### Fixed
 
+- **Revert no longer destroys your edits.** It strips only Palette's marked
+  block instead of restoring a first-install snapshot, so settings you added
+  after the first Apply survive; a Palette-created file is deleted only when
+  nothing else is left. Revert is also atomic, and a failed one is retryable.
+- **A broken `config.toml` can no longer be overwritten.** Any non-Settings
+  save (theme pick, launcher position, onboarding) now refuses while the file
+  doesn't parse, keeping both it and the `.bak` the error message points at.
+- **Applying the same palette twice no longer destroys the Revert target**, and
+  Auto appearance keeps following light/dark after a theme pick.
+- **The 300 ms provider deadline is real**: a provider stuck in synchronous work
+  no longer holds the keystroke past the budget.
+- **Failures are visible**: a paste whose target never comes forward says so
+  instead of vanishing, and a scratchpad note that fails to save stays in the
+  editor with a message.
 - **Theme ids vs display names** — `[theming] theme` stored `Ghostty · AlxPro
   Dark`, which the loader could not resolve, so Apply silently used Default Dark.
   It now stores `ghostty-alxpro-dark`, resolves display names everywhere, and
