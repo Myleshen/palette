@@ -50,6 +50,16 @@
 
 ### Fixed
 
+- **Accessibility pass over every theme and surface (WCAG 2.2).** 8,195
+  approved colour pairings across the catalogue and the generated app files now
+  clear their bars: body text 7:1, secondary text, accent, selection and footer
+  hints 4.5:1, semantic ANSI 3:1. 84 theme files had authored failures (worst
+  2.68) and were repaired by the OKLab repair pass, not hand-edited. Selected
+  rows use the selection pair instead of muted text, focus rings are full
+  opacity, status colours come from the theme rather than system red/green, and
+  Increase Contrast now makes launcher cards, search, preview and Settings
+  opaque instead of letting text sit on a desktop-tinted blend. Selected rows
+  and menus also carry a weight/leading-bar cue so state is never colour-only.
 - **Revert no longer destroys your edits.** It strips only Palette's marked
   block instead of restoring a first-install snapshot, so settings you added
   after the first Apply survive; a Palette-created file is deleted only when
