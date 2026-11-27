@@ -306,6 +306,34 @@ public enum ThemeLoader {
         return result
     }
 
+    /// The file id a stored theme reference names. A reference that loads as-is
+    /// is already an id; anything else (the display name an older Settings
+    /// build saved, or a label without its section prefix) is matched against
+    /// the catalogue so the loader gets a name it can find.
+    public static func themeID(
+        for reference: String,
+        themesDirectory: URL,
+        bundledThemesDirectory: URL? = ThemeLoader.bundledThemesDirectory
+    ) -> String? {
+        let value = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        if exists(named: value, themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory) {
+            return value
+        }
+        let themes = catalog(themesDirectory: themesDirectory, bundledThemesDirectory: bundledThemesDirectory)
+        if let match = themes.first(where: { $0.displayName == value }) { return match.name }
+        return themes.first { $0.shortDisplayName == value }?.name
+    }
+
+    private static func exists(named name: String, themesDirectory: URL, bundledThemesDirectory: URL?) -> Bool {
+        if builtinNames.contains(name) { return true }
+        let user = themesDirectory.appendingPathComponent(name).appendingPathExtension("toml")
+        if FileManager.default.fileExists(atPath: user.path) { return true }
+        guard let bundledThemesDirectory else { return false }
+        let bundled = bundledThemesDirectory.appendingPathComponent(name).appendingPathExtension("toml")
+        return FileManager.default.fileExists(atPath: bundled.path)
+    }
+
     // MARK: - Full-parse cache
 
     /// Parsing a theme allocates its whole palette, so the browser keeps only

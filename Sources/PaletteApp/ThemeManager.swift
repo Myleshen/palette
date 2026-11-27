@@ -43,9 +43,21 @@ public final class ThemeManager: ObservableObject {
         self.diagnostics = result.diagnostics
     }
 
-    /// The theme actually on screen: resolves `.auto` to the theme it picked
-    /// and a previewed theme to itself, so `/theme` can mark it.
-    public var currentThemeID: String { theme.name }
+    /// The file id of the theme on screen, not its display name: `.auto` and a
+    /// live preview resolve to the id a config write or another app can load.
+    public var currentThemeID: String {
+        let reference: String
+        if let overrideName {
+            reference = overrideName
+        } else {
+            switch selection.mode {
+            case .dark: reference = selection.dark
+            case .light: reference = selection.light
+            case .auto: reference = Self.appearanceIsDark ? selection.dark : selection.light
+            }
+        }
+        return ThemeLoader.themeID(for: reference, themesDirectory: paths.themesDir) ?? reference
+    }
 
     public func restore() async {
         guard let store else { return }

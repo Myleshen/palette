@@ -1148,8 +1148,8 @@ struct SettingsView: View {
             .init(title: "Other apps", tab: .theming, anchor: "theming-section", keywords: "other apps palette source theme wallpaper extract desktop picture follow"),
             .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
             .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium neovide apps"),
-            .init(title: "Browsers", tab: .theming, anchor: "theming-targets", keywords: "browsers helium chrome edge brave vivaldi chromium arc managed policy mobileconfig admin all profiles seed install remove"),
-            .init(title: "Helium policy", tab: .theming, anchor: "theming-targets", keywords: "helium managed policy mobileconfig admin all profiles seed install remove profiles"),
+            .init(title: "Browsers", tab: .theming, anchor: "theming-browsers", keywords: "browsers helium chrome edge brave vivaldi chromium arc managed policy mobileconfig admin all profiles seed install remove"),
+            .init(title: "Helium policy", tab: .theming, anchor: "theming-browsers", keywords: "helium managed policy mobileconfig admin all profiles seed install remove profiles"),
             .init(title: "Include lines", tab: .theming, anchor: "theming-targets", keywords: "include line config-file source copy kitty ghostty zellij neovim fish starship bat delta btop yazi"),
             .init(title: "Apply", tab: .theming, anchor: "theming-section", keywords: "apply palette revert previous generated files"),
         ]
@@ -2170,7 +2170,7 @@ struct SettingsView: View {
                     if config.theming.source == .theme && !config.theming.theme.isEmpty {
                         pickerRow("Theme override", help: "Empty follows the Palette theme above.") {
                             PaletteMenuPicker(
-                                selection: $config.theming.theme,
+                                selection: otherAppsThemeBinding,
                                 choices: [PaletteMenuChoice(value: "", label: "Use the Palette theme")]
                                     + otherAppsThemeChoices.map { info in
                                         PaletteMenuChoice(
@@ -2296,6 +2296,98 @@ struct SettingsView: View {
             }
 
             if config.theming.enabled {
+                card("Browsers", anchor: "theming-browsers") {
+                    Text("admin once · all profiles of that browser · seed colour, approximate")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                    ForEach(theming.browserRows()) { browser in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if browser.supportsThemePolicy {
+                                toggleRow(
+                                    browser.targetTitle,
+                                    isOn: themingTargetBinding(browser.target),
+                                    help: "Managed policy \(browser.policyIdentifier)"
+                                )
+                            } else {
+                                HStack(spacing: 8) {
+                                    Toggle(browser.targetTitle, isOn: .constant(false))
+                                        .toggleStyle(.checkbox)
+                                        .disabled(true)
+                                        .font(theme.font(size: 13))
+                                    Text("Unsupported — does not implement BrowserThemeColor.")
+                                        .font(.caption)
+                                        .foregroundStyle(muted)
+                                }
+                            }
+                            Text(browserPolicyStatus(browser))
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+                    Text("Profiles install: the generated .mobileconfig opens in System Settings, where you approve it under General → Device Management. No password prompt comes from Palette.")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        Button(theming.policyBusy ? "Opening…" : "Open in System Settings…") {
+                            Task { @MainActor in
+                                await theming.installPolicies(config.theming)
+                            }
+                        }
+                        .disabled(theming.policyBusy || browserPolicyFiles.isEmpty)
+                        .help("Select the browser, press Apply Palette to generate its profile, then open it here.")
+                        Button("Reveal file") { revealPolicyFiles() }
+                            .disabled(browserPolicyFiles.isEmpty)
+                        Button("Refresh") {
+                            Task { @MainActor in await theming.refreshPolicyStates() }
+                        }
+                        .disabled(theming.policyBusy)
+                        Button("Remove Policies…") {
+                            removePoliciesPending = true
+                        }
+                        .disabled(theming.policyBusy)
+                        if theming.policyBusy {
+                            PaletteSpinner()
+                        }
+                    }
+                    if let status = theming.policyStatus {
+                        Text(status)
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let error = theming.policyError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if theming.supportsLegacyPolicyCLI, !browserInstallCommand.isEmpty {
+                        Text("Legacy CLI (still available on this macOS; macOS 27 removed it)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(muted)
+                        ForEach([browserInstallCommand, browserRemoveCommand], id: \.self) { command in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text(command)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 8)
+                                Button(copiedInclude == command ? "Copied" : "Copy") {
+                                    copyInclude(command)
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("Helium is always listed; the other browsers appear when installed. The managed policy seeds the Palette colour for every profile of that browser.")
+                }
+                .task { await theming.refreshPolicyStates() }
+
                 card("Targets", anchor: "theming-targets") {
                     ForEach(ThemingTarget.allCases.filter { !$0.isBrowser }) { target in
                         if target.isImplemented {
@@ -2341,100 +2433,6 @@ struct SettingsView: View {
                     }
 
                     Divider().padding(.vertical, 4)
-                    Text("Browsers")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(muted)
-                    Text("admin once · all profiles of that browser · seed colour, approximate")
-                        .font(.caption)
-                        .foregroundStyle(muted)
-                    ForEach(theming.browserRows()) { browser in
-                        VStack(alignment: .leading, spacing: 2) {
-                            if browser.supportsThemePolicy {
-                                toggleRow(
-                                    browser.targetTitle,
-                                    isOn: themingTargetBinding(browser.target),
-                                    help: "Managed policy \(browser.policyIdentifier)"
-                                )
-                            } else {
-                                HStack(spacing: 8) {
-                                    Toggle(browser.targetTitle, isOn: .constant(false))
-                                        .toggleStyle(.checkbox)
-                                        .disabled(true)
-                                        .font(theme.font(size: 13))
-                                    Text("Unsupported — does not implement BrowserThemeColor.")
-                                        .font(.caption)
-                                        .foregroundStyle(muted)
-                                }
-                            }
-                            Text(browserPolicyStatus(browser))
-                                .font(.caption)
-                                .foregroundStyle(muted)
-                        }
-                    }
-
-                    if !selectedBrowsers.isEmpty {
-                        Divider().padding(.vertical, 4)
-                        Text("Profiles install: the generated .mobileconfig opens in System Settings, where you approve it under General → Device Management. No password prompt comes from Palette.")
-                            .font(.caption)
-                            .foregroundStyle(muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: 8) {
-                            Button(theming.policyBusy ? "Opening…" : "Open in System Settings…") {
-                                Task { @MainActor in
-                                    await theming.installPolicies(config.theming)
-                                }
-                            }
-                            .disabled(theming.policyBusy || browserPolicyFiles.isEmpty)
-                            .help("Press Apply Palette to generate the profile files first.")
-                            Button("Reveal file") { revealPolicyFiles() }
-                                .disabled(browserPolicyFiles.isEmpty)
-                            Button("Refresh") {
-                                Task { @MainActor in await theming.refreshPolicyStates() }
-                            }
-                            .disabled(theming.policyBusy)
-                            Button("Remove Policies…") {
-                                removePoliciesPending = true
-                            }
-                            .disabled(theming.policyBusy)
-                            if theming.policyBusy {
-                                PaletteSpinner()
-                            }
-                        }
-                        if let status = theming.policyStatus {
-                            Text(status)
-                                .font(.caption)
-                                .foregroundStyle(muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if let error = theming.policyError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(danger)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if theming.supportsLegacyPolicyCLI, !browserInstallCommand.isEmpty {
-                            Text("Legacy CLI (still available on this macOS; macOS 27 removed it)")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(muted)
-                            ForEach([browserInstallCommand, browserRemoveCommand], id: \.self) { command in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Text(command)
-                                        .font(.caption.monospaced())
-                                        .textSelection(.enabled)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                    Spacer(minLength: 8)
-                                    Button(copiedInclude == command ? "Copied" : "Copy") {
-                                        copyInclude(command)
-                                    }
-                                    .controlSize(.small)
-                                }
-                            }
-                        }
-                    }
-
-                    Divider().padding(.vertical, 4)
                     let selected = config.theming.targets
                         .compactMap(ThemingTarget.init(rawValue:))
                         .filter(\.isImplemented)
@@ -2468,7 +2466,6 @@ struct SettingsView: View {
                 } footer: {
                     Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path).")
                 }
-                .task { await theming.refreshPolicyStates() }
             }
         }
     }
@@ -2536,9 +2533,19 @@ struct SettingsView: View {
         )
     }
 
+    private var otherAppsThemeBinding: Binding<String> {
+        Binding(
+            get: {
+                ThemeLoader.themeID(for: config.theming.theme, themesDirectory: themesDirectory)
+                    ?? config.theming.theme
+            },
+            set: { config.theming.theme = $0 }
+        )
+    }
+
     private var otherAppsThemeChoices: [ThemeInfo] {
         let themes = themeCatalogThemes
-        let selected = config.theming.theme
+        let selected = otherAppsThemeBinding.wrappedValue
         guard !selected.isEmpty, !themes.contains(where: { $0.name == selected }) else {
             return themes
         }

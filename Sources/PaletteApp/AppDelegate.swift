@@ -269,6 +269,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             themesDirectory: paths.themesDir,
             kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty")
         )
+        // A display name saved by an older build never loads; rewrite it to the
+        // theme file id now and persist so the next apply uses the real theme.
+        migrateThemingThemeID()
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
         themeManager.searchPlaceholder = configuration.searchPlaceholder
@@ -3167,17 +3170,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// One stored id for every reader: a display name from `/theme`, Settings or
+    /// an old config is rewritten to the catalogue id before it is saved.
+    private func migrateThemingThemeID() {
+        let resolved = configuration.theming.resolvingThemeID(
+            fallback: themeManager.currentThemeID,
+            themesDirectory: paths.themesDir
+        )
+        guard resolved.theme != configuration.theming.theme else { return }
+        configuration.theming = resolved
+        do {
+            try writeConfig(configuration)
+            Log.shared.info("Theming theme id migrated to '\(resolved.theme)'.", source: "theming")
+        } catch {
+            Log.shared.warn("Could not save the theming theme id: \(error.localizedDescription)", source: "theming")
+        }
+    }
+
     @discardableResult
     private func applyPaletteToAppsNow(_ name: String) async -> ThemingEngine.ApplyResult {
         configuration.theming.enabled = true
         configuration.theming.source = .theme
         configuration.theming.theme = name
+        configuration.theming = configuration.theming.resolvingThemeID(
+            fallback: themeManager.currentThemeID,
+            themesDirectory: paths.themesDir
+        )
         do {
             try writeConfig(configuration)
         } catch {
             Log.shared.warn("Could not save the palette source: \(error.localizedDescription)", source: "theming")
         }
-        return await themingEngine.applyTheme(named: name, config: configuration.theming)
+        return await themingEngine.applyTheme(named: configuration.theming.theme, config: configuration.theming)
     }
 
     // MARK: - Wallpaper follow
@@ -3317,6 +3341,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.config = configuration.capture
         themeManager.updateSelection(configuration.theme)
+        migrateThemingThemeID()
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.windowConfig = configuration.window
         statusPanel?.refreshSoon()
