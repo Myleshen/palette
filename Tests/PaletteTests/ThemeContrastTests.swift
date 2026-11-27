@@ -44,6 +44,9 @@ final class ThemeContrastTests: XCTestCase {
 
         try check(palette.fg, on: bg, minimum: ThemeContrastThresholds.body, "body")
         try check(palette.fgMuted, on: bg, minimum: ThemeContrastThresholds.muted, "muted")
+        let surface = try XCTUnwrap(RGBA(hex: palette.surface), name, file: file, line: line)
+        try check(palette.fgMuted, on: surface, minimum: ThemeContrastThresholds.muted, "muted on surface")
+        try check(theme.footer.hintColor, on: surface, minimum: ThemeContrastThresholds.muted, "footer hint on surface")
         for surface in [palette.bg, palette.surface, palette.elevated] {
             let backdrop = try XCTUnwrap(RGBA(hex: surface), name, file: file, line: line)
             try check(palette.accent, on: backdrop, minimum: ThemeContrastThresholds.accent, "accent on \(surface)")
@@ -63,6 +66,9 @@ final class ThemeContrastTests: XCTestCase {
         if let selectedBg = theme.states.selected.bg.flatMap(RGBA.init(hex:)),
            let selectedFg = theme.states.selected.fg {
             try check(selectedFg, on: selectedBg, minimum: ThemeContrastThresholds.selectedRow, "selected row")
+        }
+        if let hoverBg = theme.states.hover.bg.flatMap(RGBA.init(hex:)) {
+            try check(palette.fg, on: hoverBg, minimum: ThemeContrastThresholds.muted, "hover row")
         }
     }
 
@@ -244,6 +250,26 @@ final class ThemeContrastTests: XCTestCase {
             let repairedFg = try XCTUnwrap(RGBA(hex: palette.accentFg), item.name)
             XCTAssertGreaterThanOrEqual(repairedAccent.contrast(with: repairedFg), ThemeContrastThresholds.accentFg, item.name)
         }
+    }
+
+    /// Footer copy sits on the surface, not the body background. Both muted
+    /// text and a custom hint colour have to clear the same bar there.
+    func testMutedAndFooterTextClearSurface() throws {
+        var theme = Theme.defaultDark
+        theme.palette.surface = "#303030"
+        theme.palette.fgMuted = "#5a5a5a"
+        theme.footer.hintColor = "#5a5a5a"
+
+        let report = ThemeContrastRepair.repair(&theme)
+        let surface = try XCTUnwrap(RGBA(hex: theme.palette.surface))
+        for value in [theme.palette.fgMuted, theme.footer.hintColor] {
+            let color = try XCTUnwrap(RGBA(hex: value))
+            XCTAssertGreaterThanOrEqual(
+                color.contrast(with: surface),
+                ThemeContrastThresholds.muted - 0.000_001
+            )
+        }
+        XCTAssertTrue(report.changes.contains { $0.field == "footer.hint_color" })
     }
 
     private func value(of field: String, in palette: ThemePalette) -> String {

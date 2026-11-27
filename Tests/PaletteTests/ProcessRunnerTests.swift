@@ -111,13 +111,17 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertTrue(logged.contains("of 1000000 bytes"))
     }
 
+    final class Sink: @unchecked Sendable {
+        var data = Data()
+    }
+
     func testStreamDeliversStdoutChunks() async throws {
-        var received = Data()
+        let sink = Sink()
         let result = try await ProcessRunner.stream(["/bin/sh", "-c", "printf 'a\\0b\\0c'"]) { chunk in
-            received.append(contentsOf: chunk)
+            sink.data.append(contentsOf: chunk)
             return true
         }
         XCTAssertEqual(result.status, 0)
-        XCTAssertEqual(FDEnumerator.splitNUL(received), ["a", "b", "c"])
+        XCTAssertEqual(FDEnumerator.splitNUL(sink.data), ["a", "b", "c"])
     }
 }
