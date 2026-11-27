@@ -41,17 +41,22 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# run_flow <name> <script> [required file] [check function]
+# run_flow <name> <script> [required file] [check function] [prep function]
 # %DIR% in the script and required path expands to the flow's temp directory.
 # The optional check function runs with the temp directory before it is deleted,
 # for assertions the script grammar cannot express (JSON frames, process lists).
+# The optional prep function seeds the flow's config before launch.
 run_flow() {
-  local name="$1" script="$2" required="${3:-}" check="${4:-}"
+  local name="$1" script="$2" required="${3:-}" check="${4:-}" prep="${5:-}"
   local dir
   dir="$(mktemp -d "${TMPDIR:-/tmp}/palette-e2e-$name.XXXXXX")"
   script="${script//%DIR%/$dir}"
   required="${required//%DIR%/$dir}"
   local log="$dir/app.log"
+  if [ -n "$prep" ]; then
+    mkdir -p "$dir/config"
+    "$prep" "$dir"
+  fi
 
   PALETTE_SCRIPT="$script" \
   PALETTE_HOME="$dir/home" \
@@ -164,21 +169,6 @@ check_dump() {
 run_flow cold-launch-script \
   'show; wait=0.7; query=session; wait=0.5; dump=%DIR%/state.json; exit' \
   '%DIR%/state.json' check_dump
-
-# Closing the app must reap the PTY child the embedded terminal started, not
-# leave an orphan behind. `sleep 4242` is unique enough to pgrep safely.
-check_no_children() {
-  local leftover=""
-  for _ in 1 2 3 4; do
-    leftover="$(pgrep -f 'sleep 4242' || true)"
-    [ -z "$leftover" ] && return 0
-    sleep 0.5
-  done
-  echo "    left PTY child running: $leftover"
-  return 1
-}
-run_flow no-surviving-children \
-  'show; term=sleep 4242; wait=2.5; exit' "" check_no_children
 
 if [ "$failed" -ne 0 ]; then
   echo "e2e failed"

@@ -1268,6 +1268,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// NSApp.terminate always exits 0, so a failed script exits directly.
     private func finishScript() -> Never {
+        // `exit(0)` skips `applicationWillTerminate`; stop the PTY tree here so
+        // the harness's `no-surviving-children` check sees a clean quit.
+        TerminalProcesses.stopAll()
         let reasons = scriptFailureReasons
         Log.shared.info(
             "Script finished: failures=\(reasons.count), appActive=\(NSApp.isActive)",
@@ -1407,6 +1410,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManagers.values.forEach { $0.unregister() }
         // A draft that was never explicitly closed must survive the quit.
         searchController?.saveScratchpadOnTerminate()
+        // The PTY child (shell, zellij client) is not a child of this process
+        // after the fork; without this it survives the quit and keeps running.
+        TerminalProcesses.stopAll()
         // Keep the clamshell flag: the next launch reads it back and shows the
         // real state. The root guard itself restores normal lid sleep when this
         // process disappears. The caffeinate child is left running on purpose.

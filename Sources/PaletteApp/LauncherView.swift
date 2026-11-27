@@ -2306,6 +2306,7 @@ struct TerminalSurface: NSViewRepresentable {
         }
 
         private func didStart(_ view: LocalProcessTerminalView) {
+            TerminalProcesses.register(view.process?.shellPid ?? 0)
             view.window?.makeFirstResponder(view)
             if let command = initialCommand, !command.isEmpty {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak view] in
@@ -2333,6 +2334,7 @@ struct TerminalSurface: NSViewRepresentable {
 
         func processTerminated(source: TerminalView, exitCode: Int32?) {
             guard let view else { return }
+            TerminalProcesses.unregister(view.process?.shellPid ?? 0)
             // A stale zellij attach (dead session, resurrect prompt) gets one
             // rebuild; anything else is a real end the user has to see.
             if let name = zellijName, rebuilds == 0, exitCode != 0,
@@ -2390,7 +2392,10 @@ struct TerminalSurface: NSViewRepresentable {
             object: nil,
             queue: .main
         ) { _ in
-            stoppable.view.terminate()
+            // The observer is registered on the main queue.
+            MainActor.assumeIsolated {
+                TerminalProcesses.stop(pid: stoppable.view.process?.shellPid ?? 0)
+            }
         }
         DispatchQueue.main.async {
             context.coordinator.start(restarting: false)
