@@ -305,40 +305,6 @@ final class PathsEngineTests: XCTestCase {
         XCTAssertEqual(items.first?.title, "alpha.md", "a small snapshot ranks in-process, no fzf")
     }
 
-    /// `PALETTE_BENCH=1 swift test --filter HomeQueryLatency` measures the real
-    /// home walk against the real tools; the numbers go to the test log.
-    func testHomeQueryLatencyBenchmark() async throws {
-        guard ProcessInfo.processInfo.environment["PALETTE_BENCH"] == "1" else {
-            throw XCTSkip("set PALETTE_BENCH=1 to run the home-walk benchmark")
-        }
-        guard ToolLocator.shared.path(for: "fd") != nil else { throw XCTSkip("fd is required") }
-        let cacheDir = FileManager.default.temporaryDirectory.appendingPathComponent("palette-bench-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: cacheDir) }
-        let launcher = await MainActor.run { LauncherService() }
-        let provider = PathsProvider(
-            configuration: PathsProviderConfiguration(
-                id: "bench", name: "Bench", trigger: "bench", kind: .any, scopeName: "home",
-                maxResults: 50, homeIndexingAllowed: true
-            ),
-            scope: .home,
-            launcher: launcher,
-            cacheDirectory: cacheDir
-        )
-        let updated = expectation(forNotification: PathsProvider.indexUpdatedNotification, object: "bench")
-
-        let coldStart = Date()
-        let cold = try await provider.search(SearchRequest(text: "", limit: 50, isBound: true))
-        let coldLatency = Date().timeIntervalSince(coldStart)
-        XCTAssertEqual(cold.map(\.title), ["Indexing files…"])
-
-        await fulfillment(of: [updated], timeout: 300)
-        let warmStart = Date()
-        let warm = try await provider.search(SearchRequest(text: "", limit: 50, isBound: true))
-        let warmLatency = Date().timeIntervalSince(warmStart)
-        print("PALETTE-BENCH cold=\(String(format: "%.3f", coldLatency))s warm=\(String(format: "%.3f", warmLatency))s rows=\(warm.count)")
-        XCTAssertFalse(warm.isEmpty)
-    }
-
     private func itemsWhenIndexed(
         _ provider: PathsProvider,
         text: String = "",

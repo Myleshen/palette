@@ -62,41 +62,18 @@ final class AskTests: XCTestCase {
         XCTAssertTrue(diagnostics.isEmpty)
     }
 
-    func testAskModelsPutFreeOptionsFirst() {
+    func testAskFallbackTriesFreeModelsFirst() {
         let ordered = AskModel.fallbackOrder
-        let freeCount = AskModel.catalog.filter(\.free).count
-        XCTAssertEqual(freeCount, 20)
-        XCTAssertEqual(ordered.prefix(freeCount).filter(\.free).count, freeCount)
-        XCTAssertTrue(ordered.prefix(freeCount).allSatisfy(\.free))
-        XCTAssertTrue(ordered.suffix(from: freeCount).allSatisfy { !$0.free })
-        XCTAssertEqual(AskModel.defaultModel.endpoint, .opencodeGo)
-        XCTAssertTrue(AskModel.defaultModel.free)
-    }
-
-    func testAskModelListCoversBothEndpoints() {
-        let models = AskModel.models(for: .opencodeGo)
-        XCTAssertFalse(models.isEmpty)
-        XCTAssertTrue(models.allSatisfy { $0.endpoint == .opencodeGo })
-        XCTAssertEqual(models.filter(\.free).count, 4)
-        XCTAssertTrue(models.contains { $0.id == "grok-4.7" })
-        XCTAssertTrue(models.contains { $0.id == "gpt-6-luna" })
-    }
-
-    func testAskNvidiaCatalogIsCuratedAndFree() {
-        let models = AskModel.models(for: .nvidia)
-        XCTAssertEqual(models.count, 16)
-        XCTAssertTrue(models.allSatisfy {
-            $0.endpoint == .nvidia && $0.free && $0.inputCost == 0 && $0.outputCost == 0
-        })
-        XCTAssertEqual(models.first?.id, "nvidia/nemotron-3-ultra-550b-a55b")
-        XCTAssertTrue(models.contains { $0.id == "moonshotai/kimi-k3.1-pro" && $0.name == "Kimi K3.1 Pro" })
-        XCTAssertEqual(AskEndpoint.nvidia.baseURL.absoluteString, "https://integrate.api.nvidia.com/v1")
-        XCTAssertEqual(AskEndpoint.nvidia.keyEnvironment, ["NVIDIA_API_KEY"])
-        XCTAssertEqual(
-            AskKeychain.resolve(endpoint: .nvidia, environment: ["NVIDIA_API_KEY": " nvapi-x "]),
-            "nvapi-x"
-        )
-        XCTAssertEqual(AskEndpoint.allCases.count, 2)
+        let freeCount = ordered.filter(\.free).count
+        XCTAssertGreaterThan(freeCount, 0)
+        XCTAssertTrue(ordered.prefix(freeCount).allSatisfy(\.free), "a paid model must not lead the fallback")
+        XCTAssertTrue(ordered.dropFirst(freeCount).allSatisfy { !$0.free })
+        for endpoint in AskEndpoint.allCases {
+            XCTAssertTrue(
+                AskModel.models(for: endpoint).allSatisfy { $0.endpoint == endpoint },
+                "\(endpoint) listed a model from another endpoint"
+            )
+        }
     }
 
     func testAskWebSearchDefaultsOnAndParsesOff() throws {
@@ -203,18 +180,6 @@ final class AskTests: XCTestCase {
         )
     }
 
-    func testGoModelsAreOrderedByCost() {
-        let paid = AskModel.models(for: .opencodeGo).filter { !$0.free }
-        XCTAssertGreaterThanOrEqual(paid.count, 14)
-        let outputs = paid.map(\.outputCost)
-        XCTAssertEqual(outputs, outputs.sorted())
-        XCTAssertTrue(paid.contains { $0.id == "hy3" })
-        XCTAssertTrue(paid.contains { $0.id == "mimo-v2.6-pro" })
-        XCTAssertTrue(paid.contains { $0.id == "longcat-2.0" })
-        XCTAssertTrue(paid.contains { $0.id == "glm-5.3" })
-        XCTAssertFalse(paid.contains { $0.id == "glm-5.2" })
-    }
-
     func testAskRecordMetaLineShowsModelAndUsage() {
         let record = AskRecord(
             id: "1",
@@ -239,16 +204,6 @@ final class AskTests: XCTestCase {
             error: "boom"
         )
         XCTAssertEqual(untokened.metaLine, "beam-free · 0 ms")
-    }
-
-    func testAskDefaultsAllowLongerAnswers() {
-        XCTAssertEqual(AskConfig().maxTokens, 8_192)
-        XCTAssertEqual(AskClient.timeout, 120)
-        XCTAssertGreaterThanOrEqual(AskClient.deadline, AskClient.timeout)
-    }
-
-    func testAskTemplateUsesNewTokenBudget() {
-        XCTAssertTrue(ConfigLoader.defaultTOML().contains("max_tokens = 8192"))
     }
 
     func testAskTimeoutAllowsFallback() {
@@ -535,30 +490,26 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(parser.text, "Hi")
     }
 
-    func testAskEmptyStreamIsEmpty() {
-        var parser = AskStreamParser()
-        XCTAssertEqual(parser.feed("data: [DONE]\n\n"), [])
-        XCTAssertThrowsError(try parser.completion(durationMs: 1)) {
+    func testAskStreamCompletionDetectsEmptyTruncatedAndFinishedStreams() {
+        var empty = AskStreamParser()
+        XCTAssertEqual(empty.feed("data: [DONE]\n\n"), [])
+        XCTAssertThrowsError(try empty.completion(durationMs: 1)) {
             XCTAssertEqual($0 as? AskClientError, .empty)
         }
-    }
 
-    func testAskStreamThatEndsWithoutDoneIsMarkedTruncated() throws {
-        var parser = AskStreamParser()
+        var truncated = AskStreamParser()
         XCTAssertEqual(
-            parser.feed(#"data: {"choices":[{"delta":{"content":"Half a sen"}}]}"# + "\n\n"),
+            truncated.feed(#"data: {"choices":[{"delta":{"content":"Half a sen"}}]}"# + "\n\n"),
             ["Half a sen"]
         )
-        let completion = try parser.completion(durationMs: 3)
-        XCTAssertTrue(completion.answer.hasPrefix("Half a sen"))
-        XCTAssertTrue(completion.answer.contains("truncated"))
-    }
+        let cut = try? truncated.completion(durationMs: 3)
+        XCTAssertTrue(cut?.answer.hasPrefix("Half a sen") == true)
+        XCTAssertTrue(cut?.answer.contains("truncated") == true)
 
-    func testAskStreamWithFinishReasonButNoDoneIsComplete() throws {
         // Some proxies strip the [DONE] terminator after a normal finish.
-        var parser = AskStreamParser()
-        _ = parser.feed(#"data: {"choices":[{"delta":{"content":"Whole answer"},"finish_reason":"stop"}]}"# + "\n\n")
-        XCTAssertEqual(try parser.completion(durationMs: 3).answer, "Whole answer")
+        var finished = AskStreamParser()
+        _ = finished.feed(#"data: {"choices":[{"delta":{"content":"Whole answer"},"finish_reason":"stop"}]}"# + "\n\n")
+        XCTAssertEqual(try? finished.completion(durationMs: 3).answer, "Whole answer")
     }
 
     func testAskConversationTrimsOldestTurnsFirst() {

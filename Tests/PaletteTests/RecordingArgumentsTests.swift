@@ -8,106 +8,78 @@ import XCTest
 final class RecordingArgumentsTests: XCTestCase {
     private let path = "/tmp/rec.mov"
 
-    func testWholeScreenHasNoTargetFlags() {
-        var config = CaptureConfig()
-        config.recordingTarget = "screen"
-        XCTAssertEqual(CaptureService.recordingArguments(config: config, path: path), ["-v", path])
-    }
+    func testConfigMapsToScreencaptureFlags() {
+        var screen = CaptureConfig()
+        screen.recordingTarget = "screen"
+        XCTAssertEqual(CaptureService.recordingArguments(config: screen, path: path), ["-v", path])
 
-    func testDisplayTargetPassesOneBasedIndex() {
-        var config = CaptureConfig()
-        config.recordingTarget = "display"
-        config.recordingDisplay = 2
+        var display = CaptureConfig()
+        display.recordingTarget = "display"
+        display.recordingDisplay = 2
         XCTAssertEqual(
-            CaptureService.recordingArguments(config: config, path: path),
+            CaptureService.recordingArguments(config: display, path: path),
             ["-v", "-D", "2", path]
         )
-    }
-
-    func testDisplayIndexIsAtLeastOne() {
-        var config = CaptureConfig()
-        config.recordingTarget = "display"
-        config.recordingDisplay = 0
+        display.recordingDisplay = 0
         XCTAssertEqual(
-            CaptureService.recordingArguments(config: config, path: path),
-            ["-v", "-D", "1", path]
+            CaptureService.recordingArguments(config: display, path: path),
+            ["-v", "-D", "1", path],
+            "the display index is one-based"
         )
-    }
 
-    func testRegionTargetUsesTheConfiguredRectangle() {
-        var config = CaptureConfig()
-        config.recordingTarget = "region"
-        config.recordingRegion = "10,20,300,400"
+        var region = CaptureConfig()
+        region.recordingTarget = "region"
+        region.recordingRegion = "10,20,300,400"
         XCTAssertEqual(
-            CaptureService.recordingArguments(config: config, path: path),
+            CaptureService.recordingArguments(config: region, path: path),
             ["-v", "-R", "10,20,300,400", path]
         )
-    }
-
-    func testEmptyRegionFallsBackToTheWholeScreen() {
-        var config = CaptureConfig()
-        config.recordingTarget = "region"
-        config.recordingRegion = "   "
-        XCTAssertEqual(CaptureService.recordingArguments(config: config, path: path), ["-v", path])
-    }
-
-    func testAudioCursorAndClicksAddTheirFlags() {
-        var config = CaptureConfig()
-        config.recordingAudio = true
-        config.captureCursor = true
-        config.showClicks = true
+        region.recordingRegion = "   "
         XCTAssertEqual(
-            CaptureService.recordingArguments(config: config, path: path),
+            CaptureService.recordingArguments(config: region, path: path),
+            ["-v", path],
+            "an empty region falls back to the whole screen"
+        )
+
+        var extras = CaptureConfig()
+        extras.recordingAudio = true
+        extras.captureCursor = true
+        extras.showClicks = true
+        XCTAssertEqual(
+            CaptureService.recordingArguments(config: extras, path: path),
             ["-v", "-g", "-C", "-k", path]
         )
-    }
 
-    func testConfiguredMicrophoneUsesTheGFlagAndNotTheDefault() {
-        var config = CaptureConfig()
-        config.recordingAudio = true
-        config.recordingMicrophone = "  BuiltInMicrophoneDevice  "
-        let arguments = CaptureService.recordingArguments(config: config, path: path)
-        XCTAssertEqual(arguments, ["-v", "-G", "BuiltInMicrophoneDevice", path])
-        XCTAssertFalse(arguments.contains("-g"))
-    }
-
-    func testEmptyMicrophoneFallsBackToTheSystemDefault() {
-        var config = CaptureConfig()
-        config.recordingAudio = true
-        config.recordingMicrophone = "   "
-        XCTAssertEqual(CaptureService.recordingArguments(config: config, path: path), ["-v", "-g", path])
+        extras.recordingMicrophone = "  BuiltInMicrophoneDevice  "
+        let mic = CaptureService.recordingArguments(config: extras, path: path)
+        XCTAssertEqual(mic, ["-v", "-G", "BuiltInMicrophoneDevice", "-C", "-k", path])
+        XCTAssertFalse(mic.contains("-g"), "a chosen microphone replaces the default")
+        extras.recordingMicrophone = "   "
+        XCTAssertEqual(
+            CaptureService.recordingArguments(config: extras, path: path),
+            ["-v", "-g", "-C", "-k", path]
+        )
     }
 
     // MARK: - The per-recording options panel
 
     func testOptionsMapToTheSameArgumentBuilder() {
-        let options = RecordingOptions(
+        let display = RecordingOptions(
             audio: true,
             microphone: "BuiltInMicrophoneDevice",
             target: .display,
             display: 2
         )
         XCTAssertEqual(
-            options.recordingArguments(path: path),
+            display.recordingArguments(path: path),
             ["-v", "-D", "2", "-G", "BuiltInMicrophoneDevice", path]
         )
-    }
 
-    func testAudioOffDropsTheMicrophoneFlag() {
-        let options = RecordingOptions(
-            audio: false,
-            microphone: "BuiltInMicrophoneDevice",
-            target: .screen
-        )
-        XCTAssertEqual(options.recordingArguments(path: path), ["-v", path])
-    }
+        let region = RecordingOptions(target: .region, region: "10,20,300,400")
+        XCTAssertEqual(region.recordingArguments(path: path), ["-v", "-R", "10,20,300,400", path])
 
-    func testSelectionUsesTheTypedRegion() {
-        let options = RecordingOptions(target: .region, region: "10,20,300,400")
-        XCTAssertEqual(
-            options.recordingArguments(path: path),
-            ["-v", "-R", "10,20,300,400", path]
-        )
+        let muted = RecordingOptions(audio: false, microphone: "BuiltInMicrophoneDevice", target: .screen)
+        XCTAssertEqual(muted.recordingArguments(path: path), ["-v", path])
     }
 
     func testOptionsFromTheConfigAreRememberedAndRoundTrip() {

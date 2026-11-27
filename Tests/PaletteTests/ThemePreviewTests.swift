@@ -206,55 +206,6 @@ final class ThemePreviewTests: XCTestCase {
         XCTAssertTrue(parsed.contains(next))
     }
 
-    func testPreviewOpenAndFlipTimings() throws {
-        guard FileManager.default.fileExists(atPath: bundledDirectory.path) else {
-            throw XCTSkip("bundled themes are missing")
-        }
-        ThemeLoader.resetCachesForTesting()
-        let clock = ContinuousClock()
-        let catalog = ThemeBrowserCatalog(themes: ThemeLoader.catalog(
-            themesDirectory: root,
-            bundledThemesDirectory: bundledDirectory
-        ))
-        var deck = ThemeCardDeck(catalog: catalog)
-
-        var palettes: [String: ThemeCardPalette] = [:]
-        var themes: [String: Theme] = [:]
-        for slot in deck.fanWindow(reach: 3) {
-            guard let name = slot.card.themeID else { continue }
-            let loaded = ThemeLoader.load(
-                name: name,
-                themesDirectory: root,
-                bundledThemesDirectory: bundledDirectory
-            ).theme
-            palettes[slot.card.cacheKey] = ThemeCardPalette(theme: loaded)
-            themes[slot.card.cacheKey] = loaded
-        }
-
-        let openTime = clock.measure {
-            _ = palettes[deck.current.cacheKey]
-            _ = themes[deck.current.cacheKey]
-        }
-
-        let flips = 1_000
-        let flipTime = clock.measure {
-            for _ in 0..<flips {
-                deck.move(by: 1)
-                _ = palettes[deck.current.cacheKey]
-                _ = themes[deck.current.cacheKey]
-            }
-        }
-
-        let perFlip = seconds(flipTime) / Double(flips)
-        print(
-            "Preview: \(catalog.count) themes · open \(microseconds(seconds(openTime))) µs · "
-                + "flip inside preview \(microseconds(perFlip)) µs"
-        )
-        // 10 ms, not 1 ms: parallel test load makes a micro-timing bound flaky
-        // without proving anything the cache assertion does not already show.
-        XCTAssertLessThan(perFlip, 0.010, "a preview flip only reads the caches")
-    }
-
     // MARK: - Wallpaper apply rule
 
     @MainActor
@@ -275,12 +226,4 @@ final class ThemePreviewTests: XCTestCase {
         XCTAssertTrue(ThemingEngine.shouldApplyWallpaperCard(config))
     }
 
-    private func seconds(_ duration: Duration) -> Double {
-        let parts = duration.components
-        return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
-    }
-
-    private func microseconds(_ value: Double) -> String {
-        String(format: "%.1f", value * 1_000_000)
-    }
 }

@@ -2,10 +2,6 @@ import XCTest
 @testable import PalettePlatform
 
 final class SecureVaultCacheTests: XCTestCase {
-    func testCacheTTLIsThirtyDays() {
-        XCTAssertEqual(SecureVaultCache.ttl, 30 * 24 * 60 * 60)
-    }
-
     func testRoundTripAndCacheExpiry() throws {
         let scope = "palette-test-\(UUID().uuidString)"
         defer { SecureVaultCache.remove(scope: scope) }

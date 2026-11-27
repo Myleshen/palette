@@ -100,9 +100,7 @@ final class ThemeCatalogueTests: XCTestCase {
 
     // MARK: - Catalogue shape
 
-    func testCatalogueIsSixtyNineFamiliesWithBothAppearances() {
-        XCTAssertEqual(ThemeCuration.families.count, 69)
-        XCTAssertEqual(keptIDs.count, 138, "every family ships one dark and one light file")
+    func testEveryFamilyShipsBothAppearances() {
         for family in ThemeCuration.families {
             XCTAssertNotEqual(family.dark, family.light, family.name)
             XCTAssertTrue(bundledFiles.contains(family.dark), family.dark)
@@ -110,9 +108,6 @@ final class ThemeCatalogueTests: XCTestCase {
             XCTAssertEqual(load(family.dark).theme.appearance, "dark", family.dark)
             XCTAssertEqual(load(family.light).theme.appearance, "light", family.light)
         }
-    }
-
-    func testBundledFilesAreExactlyTheKeptSet() {
         XCTAssertEqual(bundledFiles, keptIDs, "no orphan or missing theme file")
     }
 

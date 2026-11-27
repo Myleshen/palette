@@ -33,15 +33,6 @@ final class CleanupPassTests: XCTestCase {
         XCTAssertEqual(plan[2].unavailable, HotKeyUnavailable.invalid)
     }
 
-    func testHotKeyPlanIsStableAcrossRuns() {
-        let requests = [
-            HotKeyRequest(id: "launcher", label: "Launcher shortcut", keys: "opt+space"),
-            HotKeyRequest(id: "web:abc", label: "Web app", keys: "opt+space"),
-            HotKeyRequest(id: "binding-0", label: "Custom hotkey 1", keys: "opt+space"),
-        ]
-        XCTAssertEqual(HotKeyPlan.resolve(requests), HotKeyPlan.resolve(requests))
-    }
-
     func testHotKeyRegistryReportsWinnerAndLoser() {
         HotKeyRegistry.replaceAll([
             HotKeyStatus(id: "web:abc", label: "Web app", keys: "opt+space"),

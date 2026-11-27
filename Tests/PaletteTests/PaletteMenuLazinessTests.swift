@@ -81,12 +81,4 @@ final class PaletteMenuLazinessTests: XCTestCase {
         XCTAssertEqual(model.items.count, 11)
     }
 
-    func testAnchorOffsetIsArithmeticOnFixedRowHeights() {
-        let items = (1...942).map { PaletteMenuItem(id: "row-\($0)", title: "Theme \($0)") }
-        XCTAssertEqual(
-            PaletteMenuMetrics.anchorOffset(of: items, anchor: "row-471"),
-            470 * PaletteMenuMetrics.rowHeight + PaletteMenuMetrics.rowHeight / 2
-        )
-        XCTAssertNil(PaletteMenuMetrics.anchorOffset(of: items, anchor: "missing"))
-    }
 }

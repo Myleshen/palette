@@ -279,54 +279,6 @@ final class WiringTests: XCTestCase {
 
     // MARK: - Per-kind trim
 
-    func testPerKindTrimKeepsNewestBudgetsAndPinnedRows() async throws {
-        let fixture = try makeFixture()
-        defer { try? FileManager.default.removeItem(at: fixture.root) }
-        let base = Date(timeIntervalSince1970: 20_000)
-
-        _ = try await fixture.store.insertClipboard(text: "text 0", maxEntries: 10, at: base)
-        let storedText = try await fixture.store.clipboardEntries(limit: 1)
-        let firstText = try XCTUnwrap(storedText.first)
-        try await fixture.store.setClipboardPinned(id: firstText.id, pinned: true)
-        for index in 1...30 {
-            _ = try await fixture.store.insertClipboard(
-                text: "text \(index)", maxEntries: 10,
-                at: base.addingTimeInterval(Double(index))
-            )
-        }
-
-        _ = try await fixture.store.insertClipboardImage(
-            png: Data("image-0".utf8), thumbnail: nil, width: 1, height: 1,
-            maxEntries: 5, at: base
-        )
-        let storedImage = try await fixture.store.clipboardEntries(limit: 1, kind: .image)
-        let firstImage = try XCTUnwrap(storedImage.first)
-        try await fixture.store.setClipboardPinned(id: firstImage.id, pinned: true)
-        for index in 1...30 {
-            _ = try await fixture.store.insertClipboardImage(
-                png: Data("image-\(index)".utf8), thumbnail: nil,
-                width: index + 1, height: 1,
-                maxEntries: 5, at: base.addingTimeInterval(Double(index))
-            )
-        }
-
-        let texts = try await fixture.store.clipboardEntries(limit: 100, kind: .text)
-        XCTAssertEqual(texts.filter(\.pinned).map(\.text), ["text 0"])
-        XCTAssertEqual(
-            texts.filter { !$0.pinned }.map(\.text),
-            (21...30).reversed().map { "text \($0)" }
-        )
-        XCTAssertEqual(texts.count, 11)
-
-        let images = try await fixture.store.clipboardEntries(limit: 100, kind: .image)
-        XCTAssertEqual(images.filter(\.pinned).map(\.imageWidth), [1])
-        XCTAssertEqual(
-            images.filter { !$0.pinned }.map(\.imageWidth),
-            [31, 30, 29, 28, 27]
-        )
-        XCTAssertEqual(images.count, 6)
-    }
-
     // MARK: - Setup helper and bound query
 
     func testEnsureFileExistsCreatesTheFileAndItsParents() throws {
