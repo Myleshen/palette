@@ -354,7 +354,11 @@ public final class ThemingEngine: ObservableObject {
         var value = config.normalized()
         value.source = .wallpaper
         let appearance = PalettePalette.appearance(darkMode: value.darkMode)
-        guard let palette = await extractWallpaperPalette(appearance: appearance) else {
+        guard let palette = await extractWallpaperPalette(
+            appearance: appearance,
+            saturation: value.saturation,
+            contrast: value.contrast
+        ) else {
             let message = Self.missingWallpaperMessage(
                 path: wallpaperURLs.first.map { includes.shortPath($0.path) }
             )
@@ -377,9 +381,14 @@ public final class ThemingEngine: ObservableObject {
 
     /// Extracts without writing, so the Settings pane can show the swatches
     /// before the user commits.
-    public func previewWallpaper(darkMode: String = "auto") async -> PalettePalette? {
-        let appearance = PalettePalette.appearance(darkMode: darkMode)
-        let palette = await extractWallpaperPalette(appearance: appearance)
+    public func previewWallpaper(config: ThemingConfig) async -> PalettePalette? {
+        let value = config.normalized()
+        let appearance = PalettePalette.appearance(darkMode: value.darkMode)
+        let palette = await extractWallpaperPalette(
+            appearance: appearance,
+            saturation: value.saturation,
+            contrast: value.contrast
+        )
         previewPalette = palette
         return palette
     }
@@ -1165,7 +1174,11 @@ public final class ThemingEngine: ObservableObject {
 
     // MARK: - Wallpaper
 
-    private func extractWallpaperPalette(appearance: String) async -> PalettePalette? {
+    private func extractWallpaperPalette(
+        appearance: String,
+        saturation: Double,
+        contrast: Double
+    ) async -> PalettePalette? {
         guard let url = wallpaperURLs.first else { return nil }
         guard let image = NSImage(contentsOf: url) else {
             Log.shared.warn("Could not read wallpaper at \(url.path)", source: "theming")
@@ -1177,7 +1190,12 @@ public final class ThemingEngine: ObservableObject {
             return nil
         }
         let palette = await Task.detached(priority: .userInitiated) {
-            WallpaperPalette.extract(pixels: pixels, appearance: appearance)
+            WallpaperPalette.extract(
+                pixels: pixels,
+                appearance: appearance,
+                saturation: saturation,
+                contrast: contrast
+            )
         }.value
         previewPalette = palette
         return palette

@@ -3268,7 +3268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !isScriptMode, config.enabled, config.source == .wallpaper else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            guard let palette = await self.themingEngine.previewWallpaper(darkMode: config.darkMode) else {
+            guard let palette = await self.themingEngine.previewWallpaper(config: config) else {
                 return
             }
             self.themeManager.applyPalette(palette)
@@ -3372,7 +3372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     urls.first.flatMap { NSImage(contentsOf: $0) }
                 }.value
                 let palette = await self.themingEngine.previewWallpaper(
-                    darkMode: self.configuration.theming.darkMode
+                    config: self.configuration.theming
                 )
                 return (image, palette.map(ThemeCardPalette.init(palette:)))
             },
