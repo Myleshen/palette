@@ -269,6 +269,7 @@ struct SettingsView: View {
     @State private var clipboardRecordToken = 0
     @State private var terminalRecordToken = 0
     @State private var themeGalleryRecordToken = 0
+    @State private var wallpaperGalleryRecordToken = 0
     @State private var scratchpadRecordToken = 0
     @State private var askRecordToken = 0
     @State private var screenshotRecordToken = 0
@@ -1273,6 +1274,9 @@ struct SettingsView: View {
         if hotkeyIssue(config.themeGalleryHotkey, required: false, among: config.themeGalleryHotkey) != nil {
             next.themeGalleryHotkey = savedConfig.themeGalleryHotkey
         }
+        if hotkeyIssue(config.wallpaperGalleryHotkey, required: false, among: config.wallpaperGalleryHotkey) != nil {
+            next.wallpaperGalleryHotkey = savedConfig.wallpaperGalleryHotkey
+        }
         if hotkeyIssue(config.scratchpadHotkey, required: false, among: config.scratchpadHotkey) != nil {
             next.scratchpadHotkey = savedConfig.scratchpadHotkey
         }
@@ -1404,6 +1408,7 @@ struct SettingsView: View {
         [
             config.hotkey, config.clipboardHotkey, config.terminalHotkey,
             config.themeGalleryHotkey,
+            config.wallpaperGalleryHotkey,
             config.scratchpadHotkey, config.askHotkey, config.screenshotHotkey,
             config.regionScreenshotHotkey, config.windowScreenshotHotkey,
             config.recordingHotkey,
@@ -1474,6 +1479,7 @@ struct SettingsView: View {
         if hotkeyIssue(config.clipboardHotkey, required: true, among: "") != nil { count += 1 }
         if hotkeyIssue(config.terminalHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.themeGalleryHotkey, required: false, among: "") != nil { count += 1 }
+        if hotkeyIssue(config.wallpaperGalleryHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.scratchpadHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.askHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.screenshotHotkey, required: false, among: "") != nil { count += 1 }
@@ -2778,6 +2784,9 @@ struct SettingsView: View {
                             token: $terminalRecordToken, label: "Terminal hotkey")
                 shortcutRow("Theme cards shortcut", id: "theme-gallery", value: $config.themeGalleryHotkey,
                             token: $themeGalleryRecordToken, label: "Theme cards hotkey")
+                shortcutRow("Wallpaper cards shortcut", id: "wallpaper-gallery",
+                            value: $config.wallpaperGalleryHotkey,
+                            token: $wallpaperGalleryRecordToken, label: "Wallpaper cards hotkey")
                 shortcutRow("Scratchpad list", id: "scratchpad", value: $config.scratchpadHotkey,
                             token: $scratchpadRecordToken, label: "Scratchpad list hotkey")
                 shortcutRow("Ask shortcut", id: "ask", value: $config.askHotkey,
@@ -2960,6 +2969,7 @@ struct SettingsView: View {
             ("Clipboard", config.clipboardHotkey),
             ("Terminal", config.terminalHotkey),
             ("Theme cards", config.themeGalleryHotkey),
+            ("Wallpaper cards", config.wallpaperGalleryHotkey),
             ("Scratchpad list", config.scratchpadHotkey),
             ("Ask", config.askHotkey),
             ("Screen", config.screenshotHotkey),
@@ -3016,6 +3026,7 @@ struct SettingsView: View {
         [
             ("launcher", config.hotkey), ("clipboard", config.clipboardHotkey),
             ("terminal", config.terminalHotkey), ("theme-gallery", config.themeGalleryHotkey),
+            ("wallpaper-gallery", config.wallpaperGalleryHotkey),
             ("scratchpad", config.scratchpadHotkey), ("ask", config.askHotkey),
             ("screen", config.screenshotHotkey),
             ("region", config.regionScreenshotHotkey), ("window", config.windowScreenshotHotkey),
@@ -4400,6 +4411,7 @@ struct SettingsView: View {
             config.clipboardHotkey = defaults.clipboardHotkey
             config.terminalHotkey = defaults.terminalHotkey
             config.themeGalleryHotkey = defaults.themeGalleryHotkey
+            config.wallpaperGalleryHotkey = defaults.wallpaperGalleryHotkey
             config.scratchpadHotkey = defaults.scratchpadHotkey
             config.askHotkey = defaults.askHotkey
             config.screenshotHotkey = defaults.screenshotHotkey

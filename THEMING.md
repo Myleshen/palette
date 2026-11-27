@@ -297,10 +297,16 @@ Wallpaper cards come from `wallpaper_directory` (default
 `~/dot-files/wallpapers`). It is scanned without recursion: images become
 picture cards, videos become browse-only cards (macOS cannot set a video as the
 desktop picture; the apply path says so rather than pretending). Thumbnails load
-only near the selection, and the desktop picture currently in use is marked.
+only near the selection, the desktop picture currently in use is marked, and
+each visible card's dots come from a small off-main sample of its own picture.
+`⌘⌥W` opens the deck straight into Wallpapers mode; `⌘⌥G` opens Colors mode, and
+filters/favourites stay inside the active mode.
 
-Choosing a picture card sets it on every screen first, then — when cross-app
-theming is enabled — samples it and applies the resulting palette. `source =
+Choosing a picture card sets it on every screen first. Then, only when
+cross-app theming is enabled **and** `source = "wallpaper"`, the new picture is
+sampled and the resulting palette applied, so the "colors from wallpaper" flow
+is one keystroke; with theming off or `source = "theme"`, only the desktop
+picture changes and the status line says the palette was left alone. `source =
 "wallpaper"` on its own samples the current desktop picture; `dark_mode` decides
 whether the derived palette is the dark or light variant. `follow_wallpaper =
 true` checks the desktop picture's URL every five seconds and re-applies when it

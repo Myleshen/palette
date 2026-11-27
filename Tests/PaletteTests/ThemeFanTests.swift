@@ -130,14 +130,15 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertEqual(deck.visible.map(\.themeID), ["ghostty-dracula"])
 
         deck.query = "wallpaper"
-        XCTAssertEqual(deck.count, 1, "the desktop card is findable by name")
+        XCTAssertEqual(deck.count, 0, "Colors mode never shows the desktop card")
 
         deck.query = "no such theme"
         XCTAssertEqual(deck.count, 0)
         XCTAssertEqual(deck.current, .wallpaper, "an empty hand still has a safe current card")
 
         deck.query = ""
-        XCTAssertEqual(deck.count, deck.cards.count)
+        XCTAssertEqual(deck.count, deck.visible.count)
+        XCTAssertEqual(deck.visible.count, 4, "four themes, no wallpapers in Colors mode")
     }
 
     func testFavouritesViewAndToggle() {
@@ -202,7 +203,8 @@ final class ThemeFanTests: XCTestCase {
         let deck = ThemeCardDeck(
             catalog: sampleCatalog,
             wallpapers: [current, other, video],
-            currentDesktop: current
+            currentDesktop: current,
+            mode: .wallpapers
         )
 
         XCTAssertEqual(deck.cards.prefix(4).map(\.sectionTitle), ["Wallpapers", "Wallpapers", "Wallpapers", "Ghostty"])
@@ -210,14 +212,23 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertEqual(deck.cards.first?.target, .wallpaperFile(current.path))
         XCTAssertEqual(deck.cards[1].target, .wallpaperFile(other.path))
         XCTAssertTrue(deck.cards.first?.isWallpaper == true)
+        XCTAssertEqual(deck.count, 3, "Wallpapers mode hides the themes")
 
         var selected = deck
         selected.selected = 0
         XCTAssertEqual(selected.current.target, .wallpaperFile(current.path))
         selected.selected = 1
         XCTAssertEqual(selected.current.target, .wallpaperFile(other.path))
-        selected.selected = 3
-        XCTAssertEqual(selected.current.target, .theme(selected.current.themeID!))
+        selected.selected = 2
+        XCTAssertEqual(selected.current.target, .wallpaperFile(video.path))
+
+        let colors = ThemeCardDeck(
+            catalog: sampleCatalog,
+            wallpapers: [current, other, video],
+            currentDesktop: current
+        )
+        XCTAssertEqual(colors.count, 4)
+        XCTAssertEqual(colors.current.themeID, "ghostty-dracula")
     }
 
     func testWallpaperFallbackCardWhenFolderEmptyOrDesktopMissing() throws {
@@ -241,7 +252,12 @@ final class ThemeFanTests: XCTestCase {
 
     func testWallpaperCardFilesAreSentAsFileRoutes() throws {
         let picture = try writeFile("picture.png")
-        var deck = ThemeCardDeck(catalog: sampleCatalog, wallpapers: [picture], currentDesktop: picture)
+        var deck = ThemeCardDeck(
+            catalog: sampleCatalog,
+            wallpapers: [picture],
+            currentDesktop: picture,
+            mode: .wallpapers
+        )
         deck.selected = 0
         XCTAssertEqual(deck.current.target, .wallpaperFile(picture.path))
 
@@ -288,7 +304,8 @@ final class ThemeFanTests: XCTestCase {
         var deck = ThemeCardDeck(
             catalog: catalog,
             wallpapers: wallpapers,
-            currentDesktop: wallpapers[0]
+            currentDesktop: wallpapers[0],
+            mode: .colors
         )
         let reach = ThemeGalleryReachForTests.reach
         var parsed = Set<String>()
@@ -298,7 +315,7 @@ final class ThemeFanTests: XCTestCase {
 
         parseWindow()
         XCTAssertEqual(deck.fanWindow(reach: reach).count, reach * 2 + 1)
-        XCTAssertEqual(parsed.count, reach * 2 + 1, "942 themes + 2 wallpapers, only the hand parsed")
+        XCTAssertEqual(parsed.count, reach * 2 + 1, "942 themes, only the hand parsed")
 
         deck.move(by: 1)
         parseWindow()
@@ -346,11 +363,21 @@ final class ThemeFanTests: XCTestCase {
             ))
         }
         let wallpapers = (0..<12).map { root.appendingPathComponent("wall-\($0).png") }
-        var deck = ThemeCardDeck(catalog: catalog, wallpapers: wallpapers, currentDesktop: wallpapers[0])
+        var deck = ThemeCardDeck(
+            catalog: catalog,
+            wallpapers: wallpapers,
+            currentDesktop: wallpapers[0],
+            mode: .colors
+        )
 
         var palettes: [String: ThemeCardPalette] = [:]
         let openTime = clock.measure {
-            _ = ThemeCardDeck(catalog: catalog, wallpapers: wallpapers, currentDesktop: wallpapers[0])
+            _ = ThemeCardDeck(
+                catalog: catalog,
+                wallpapers: wallpapers,
+                currentDesktop: wallpapers[0],
+                mode: .colors
+            )
             for slot in deck.fanWindow(reach: ThemeGalleryReachForTests.reach) {
                 guard let name = slot.card.themeID else { continue }
                 palettes[slot.card.cacheKey] = ThemeCardPalette(theme: ThemeLoader.load(
@@ -371,7 +398,7 @@ final class ThemeFanTests: XCTestCase {
 
         let perFlip = seconds(flipTime) / Double(flips)
         print(
-            "Fan deck: \(catalog.count) themes + \(wallpapers.count) wallpapers · "
+            "Fan deck Colors: \(catalog.count) themes · "
                 + "catalogue \(milliseconds(catalogueTime)) ms · open "
                 + "\(milliseconds(openTime)) ms · warm flip \(microseconds(perFlip)) µs"
         )

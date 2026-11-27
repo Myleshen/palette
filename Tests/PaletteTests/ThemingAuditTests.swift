@@ -85,9 +85,16 @@ final class ThemingAuditTests: XCTestCase {
     func testWallpaperCardNeverEnablesTheming() {
         var config = ThemingConfig()
         config.enabled = false
+        config.source = .wallpaper
         XCTAssertFalse(ThemingEngine.shouldApplyWallpaperCard(config))
 
+        // Enabled alone is not enough: the Theme source keeps the picked theme
+        // in charge and a card only changes the desktop picture.
         config.enabled = true
+        config.source = .theme
+        XCTAssertFalse(ThemingEngine.shouldApplyWallpaperCard(config))
+
+        config.source = .wallpaper
         XCTAssertTrue(ThemingEngine.shouldApplyWallpaperCard(config))
     }
 

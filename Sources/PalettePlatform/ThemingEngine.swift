@@ -225,11 +225,12 @@ public final class ThemingEngine: ObservableObject {
         return names
     }
 
-    /// A wallpaper card may change the desktop picture regardless; the palette
-    /// engine only runs when cross-app theming is already on. Passing through
-    /// here also means a card never writes `enabled = true` behind the user.
+    /// A wallpaper card may change the desktop picture regardless; this says
+    /// whether the palette run is allowed too: cross-app theming on **and**
+    /// sampling the wallpaper. With `source = "theme"` a card changes only the
+    /// picture, so the theme the user picked stays in charge.
     public static func shouldApplyWallpaperCard(_ config: ThemingConfig) -> Bool {
-        config.enabled
+        config.enabled && config.source == .wallpaper
     }
 
     /// A desktop picture can point at a file that was moved or deleted. Name

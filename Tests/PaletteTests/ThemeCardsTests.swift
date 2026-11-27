@@ -63,19 +63,19 @@ final class ThemeCardsTests: XCTestCase {
 
     func testMovementWrapsAtBothEnds() {
         var deck = ThemeCardDeck(catalog: sampleCatalog)
-        XCTAssertEqual(deck.current.id, "wallpaper")
+        XCTAssertEqual(deck.current.id, "catppuccin-mocha")
 
         deck.move(by: -1)
         XCTAssertEqual(deck.current.id, "my-blue")
-        XCTAssertEqual(deck.next.id, "wallpaper")
+        XCTAssertEqual(deck.next.id, "catppuccin-mocha")
 
         deck.move(by: 1)
-        XCTAssertEqual(deck.current.id, "wallpaper")
+        XCTAssertEqual(deck.current.id, "catppuccin-mocha")
 
         deck.jumpToLast()
         XCTAssertEqual(deck.current.id, "my-blue")
         deck.move(by: 1)
-        XCTAssertEqual(deck.current.id, "wallpaper")
+        XCTAssertEqual(deck.current.id, "catppuccin-mocha")
 
         deck.move(by: -2)
         XCTAssertEqual(deck.current.id, "omarchy-tokyo-night")
@@ -89,7 +89,11 @@ final class ThemeCardsTests: XCTestCase {
         XCTAssertEqual(idDeck.current.id, "omarchy-nord")
 
         let missing = ThemeCardDeck(catalog: sampleCatalog, currentTheme: "not-in-the-catalogue")
-        XCTAssertEqual(missing.current.id, "wallpaper", "an unknown current theme opens on the wallpaper card")
+        XCTAssertEqual(
+            missing.current.id,
+            "catppuccin-mocha",
+            "an unknown current theme opens on the first theme, never a wallpaper"
+        )
     }
 
     func testDisplayNameResolvesToThemeID() {
@@ -102,7 +106,7 @@ final class ThemeCardsTests: XCTestCase {
         var selected = ThemeCardDeck(catalog: sampleCatalog, currentTheme: "Ghostty · Dracula")
         XCTAssertEqual(selected.current.target, .theme("ghostty-dracula"))
         selected.jumpToFirst()
-        XCTAssertEqual(selected.current.target, .wallpaper)
+        XCTAssertEqual(selected.current.target, .theme("catppuccin-mocha"))
     }
 
     func testEightBrightestANSIDotsKeepANSIOrder() {
@@ -121,11 +125,14 @@ final class ThemeCardsTests: XCTestCase {
 
     func testThemeGalleryHotkeyConfigRoundTrip() throws {
         XCTAssertEqual(PaletteConfig().themeGalleryHotkey, "cmd+opt+g")
+        XCTAssertEqual(PaletteConfig().wallpaperGalleryHotkey, "cmd+opt+w")
 
         var config = PaletteConfig()
         config.themeGalleryHotkey = "ctrl+alt+g"
+        config.wallpaperGalleryHotkey = "ctrl+alt+w"
         let rendered = ConfigWriter.render(config)
         XCTAssertTrue(rendered.contains("theme_gallery_hotkey = \"ctrl+alt+g\""))
+        XCTAssertTrue(rendered.contains("wallpaper_gallery_hotkey = \"ctrl+alt+w\""))
 
         var diagnostics: [Diagnostic] = []
         let parsed = try ConfigLoader.parse(
@@ -133,15 +140,18 @@ final class ThemeCardsTests: XCTestCase {
             diagnostics: &diagnostics
         )
         XCTAssertEqual(parsed.themeGalleryHotkey, "ctrl+alt+g")
+        XCTAssertEqual(parsed.wallpaperGalleryHotkey, "ctrl+alt+w")
         XCTAssertTrue(diagnostics.isEmpty)
 
         var disabled = config
         disabled.themeGalleryHotkey = ""
+        disabled.wallpaperGalleryHotkey = ""
         let disabledParsed = try ConfigLoader.parse(
             TOMLTable(string: ConfigWriter.render(disabled)),
             diagnostics: &diagnostics
         )
         XCTAssertTrue(disabledParsed.themeGalleryHotkey.isEmpty)
+        XCTAssertTrue(disabledParsed.wallpaperGalleryHotkey.isEmpty)
     }
 
     /// The gallery default must not lose to another default in the ordered
@@ -150,7 +160,8 @@ final class ThemeCardsTests: XCTestCase {
         let config = PaletteConfig()
         let keys = [
             config.hotkey, config.clipboardHotkey, config.terminalHotkey,
-            config.themeGalleryHotkey, config.scratchpadHotkey, config.askHotkey,
+            config.themeGalleryHotkey, config.wallpaperGalleryHotkey,
+            config.scratchpadHotkey, config.askHotkey,
             config.screenshotHotkey, config.regionScreenshotHotkey,
             config.windowScreenshotHotkey, config.recordingHotkey,
         ]
@@ -158,6 +169,7 @@ final class ThemeCardsTests: XCTestCase {
         XCTAssertEqual(identities.count, keys.count)
         XCTAssertEqual(Set(identities).count, identities.count)
         XCTAssertEqual(HotKeySpec.parse(config.themeGalleryHotkey)?.prettyDisplay, "⌘⌥G")
+        XCTAssertEqual(HotKeySpec.parse(config.wallpaperGalleryHotkey)?.prettyDisplay, "⌘⌥W")
     }
 
     /// The card list is metadata only, and the visible card plus its two

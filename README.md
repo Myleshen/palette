@@ -196,7 +196,8 @@ Caches live in `~/Library/Caches/Palette`.
 | `⌥Space` | show / hide |
 | `⌥V` | clipboard browser with live preview |
 | `⌘⌥T` | embedded terminal |
-| `⌘⌥G` | theme cards gallery |
+| `⌘⌥G` | theme cards gallery (Colors) |
+| `⌘⌥W` | theme cards gallery (Wallpapers) |
 | `⌘⌥S` | scratchpad list |
 | `⌘⌥A` | Ask |
 | `↑` `↓` | move selection (or the focused rail/strip row) |
@@ -820,11 +821,15 @@ Mocha/Latte, Gruvbox Dark/Light, and **Aetheria Pink** (the pink/violet Noctalia
 palette). Settings can choose the dark/light pair and auto/dark/light mode; theme
 TOML files live in `~/.config/palette/themes`.
 
-**Theme cards** (`⌘⌥G`, or `/theme cards`) open a fanned deck of every theme plus
-the pictures in `[theming] wallpaper_directory`: ←/→ or scroll flips, typing
-filters, Tab shows favourites, ⌃F marks a card, Return applies, Esc closes.
-Choosing a wallpaper card sets it as the desktop picture and, with cross-app
-theming on, applies the palette sampled from it.
+**Theme cards** (`⌘⌥G` for Colors, `⌘⌥W` for Wallpapers, or `/theme cards`) open a
+fanned deck of the active mode: ←/→ or scroll flips, typing filters within that
+mode, Tab shows mode favourites, ⌃F marks a card, Return applies, Esc closes.
+`P` or Space opens a full-screen preview of the card in front (palette blocks,
+all 16 ANSI colours, a live launcher mock; wallpapers fill the panel with their
+palette dots), and Esc collapses it back to the fan. Choosing a wallpaper card
+sets it as the desktop picture and, when cross-app theming is on *and* the
+palette source is Wallpaper, re-samples the new picture and applies that palette;
+otherwise only the picture changes.
 
 **Cross-app theming** (Settings → Theming, off by default) writes the palette into
 kitty, Ghostty, zellij, Neovim, fish, Starship, bat, delta and btop through a
@@ -846,6 +851,7 @@ editor_open_with = "neovide"
 clipboard_hotkey = "opt+v"
 terminal_hotkey = "cmd+option+t"     # empty disables
 theme_gallery_hotkey = "cmd+opt+g"   # empty disables
+wallpaper_gallery_hotkey = "cmd+opt+w" # empty disables
 scratchpad_hotkey = "cmd+option+s"   # empty disables
 ask_hotkey = "cmd+option+a"          # empty disables
 screenshot_hotkey = "cmd+shift+3"
