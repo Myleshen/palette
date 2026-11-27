@@ -512,7 +512,7 @@ public struct PalettePalette: Equatable, Sendable {
         appearance: String,
         colors: [RGBA]
     ) -> [String] {
-        let hues = colors.map { readable($0, on: background, minimum: 2.5) }
+        let hues = colors.map { readable($0, on: background, minimum: 3.0) }
         let bright = hues.map { $0.mixed(with: foreground, amount: 0.3) }
         let black = readable(background.mixed(with: foreground, amount: 0.12), on: background, minimum: 1.4)
         let brightBlack = readable(background.mixed(with: foreground, amount: 0.38), on: background, minimum: 1.7)
@@ -521,7 +521,7 @@ public struct PalettePalette: Equatable, Sendable {
         var values = [black] + hues + [white, brightBlack] + bright + [brightWhite]
         values = values.enumerated().map { index, color in
             // Black slots are supposed to be dim; text slots must stay legible.
-            index == 0 || index == 8 ? color : readable(color, on: background, minimum: 2.5)
+            index == 0 || index == 8 ? color : readable(color, on: background, minimum: 3.0)
         }
         return values.map(hex)
     }
