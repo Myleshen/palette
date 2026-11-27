@@ -243,17 +243,37 @@ public final class ThemingEngine: ObservableObject {
         defer { busy = false }
         var value = config.normalized()
         value.source = .theme
-        value.theme = name
+        // Never trust the caller's spelling: display names resolve to the file
+        // id, and only a genuinely missing theme falls back to Default Dark.
+        let resolvedID = ThemeLoader.themeID(for: name, themesDirectory: themesDirectory)
+        let id = resolvedID ?? "default-dark"
+        value.theme = id
         let fallback = Theme.defaultDark
-        let loaded = ThemeLoader.load(name: name, themesDirectory: themesDirectory, fallback: fallback)
+        let loaded = ThemeLoader.load(name: id, themesDirectory: themesDirectory, fallback: fallback)
         let palette = PalettePalette(theme: loaded.theme)
         let metadata = PaletteMetadata(
             source: "theme",
             theme: loaded.theme.name,
             appearance: palette.appearance,
+            themeID: id,
             targets: value.targets
         )
-        return await finish(palette: palette, metadata: metadata, config: value)
+        Log.shared.info(
+            "Applying '\(loaded.theme.name)' (\(id)) · bg \(palette.background) fg \(palette.foreground)",
+            source: "theming"
+        )
+        var result = await finish(palette: palette, metadata: metadata, config: value)
+        if resolvedID == nil {
+            let message = name.isEmpty
+                ? "No theme name was given; applied Default Dark."
+                : "Theme '\(name)' was not found; applied Default Dark."
+            Log.shared.warn(message, source: "theming")
+            result.notices.insert(message, at: 0)
+            result.status += " · " + message
+            status = result.status
+            lastResult = result
+        }
+        return result
     }
 
     public func applyWallpaper(_ config: ThemingConfig) async -> ApplyResult {
@@ -507,6 +527,10 @@ public final class ThemingEngine: ObservableObject {
                 summary += " · " + reloadMessages.joined(separator: " · ")
             }
             var notes: [String] = []
+            if !metadata.themeID.isEmpty {
+                summary += " · \(metadata.theme) (\(metadata.themeID))"
+                notes.append("Palette source: \(metadata.theme) [\(metadata.themeID)]")
+            }
             if outcome.policySelected {
                 notes.append("Managed policies: open the profile in System Settings and approve it under General → Device Management.")
             }
