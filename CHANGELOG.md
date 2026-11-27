@@ -137,6 +137,27 @@
 
 ### Changed
 
+- **One palette everywhere, live.** Apply now updates Palette's own theme (launcher,
+  panels, embedded terminal) alongside the generated files; a wallpaper-sourced
+  palette recolours Palette too and is re-derived at launch. The embedded
+  terminal applies all 16 ANSI colours and recolours in place.
+- **Theming pane source toggle**: a global `Palette source: Theme | Wallpaper`
+  sits above the per-app controls; the inactive group is visibly disabled.
+- **Running apps update where the app allows it**: Neovim/Neovide through the
+  file watcher plus last-writer `ColorScheme` pass, kitty through its socket
+  (one restart enables it), browsers through a user-owned managed plist
+  (one native-auth enable removes old profiles and then updates silently).
+- **Restart now is reliable**: kitty escalates quit → SIGTERM → SIGKILL and
+  relaunches through the normal terminal path into zellij; editors stay
+  graceful. Zellij gets an “Open themed session” action because it has no
+  runtime theme switch.
+- Longest-match triggers and safe prefix hiding: `/bwn` is no longer captured by
+  `/bw`, and an unspaced ambiguous trigger stays visible until resolved.
+- Clipboard per-kind limits, preview text size, flat `/clip`, non-tracking menus,
+  status panel, annotator selection, and the fanned theme deck are unchanged
+  from earlier 2.20 entry below.
+
+
 - `/clip` is a flat chronological list across text, images and files — no
   kind grouping or kind filter chips, pins keep their badge without jumping the
   queue.
