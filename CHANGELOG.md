@@ -36,6 +36,26 @@
   card above Targets, so the policy rows are visible without deep scrolling.
 - Theme override in Settings shows the resolved id instead of a “Custom/missing”
   entry.
+- Upgrading from an older theming build repairs itself: a stale `palette.json`
+  id or a `#`-prefixed Lua/KDL header triggers one silent re-apply at launch, so
+  Neovim no longer errors `E5113` on old generated files.
+- Wallpaper cards no longer silently enable cross-app theming; with it off they
+  only change the desktop picture. The wallpaper folder defaults to
+  `~/wallpapers`, an empty value stays empty, a missing folder is shown, and an
+  unreadable desktop picture names its path.
+- Chromium policy detection covers the user-scoped profile macOS installs
+  (previously read as "Not installed" while enforcing) and reports a stale
+  colour; removal targets every catalogue browser and warns when one remains
+  installed.
+- bat runs `bat cache --build` after linking its theme, so it actually applies;
+  btop is manual now (btop deletes marker comments, which left the row lying
+  and a dangling `color_theme`).
+- The home file index survives stalls: `~`-rooted scopes exclude the
+  iCloud/TCC folders (Desktop, Documents, Downloads, Library subfolders) whose
+  FileProvider can block `open(2)`, and a timed-out walk returns what it
+  collected instead of discarding 40k entries.
+- Resetting Theming removes the installed include blocks; unknown target ids
+  and invalid `dark_mode` are reported at load.
 - Generated files now follow each format's real syntax: bat's XML declaration
   leads the file (comments after), yazi uses the 26 schema (`[mgr]`,
   `[indicator]`, `[mode]`), btop uses real `download_*`/`upload_*` and meter
