@@ -8,7 +8,7 @@ appearance = "dark"
 
 [palette]
 bg = "#070707"
-surface = "#050505"
+surface = "#0a0a0a"
 elevated = "#202020"
 fg = "#fbfbfb"
 fg_muted = "#a6a6a6"

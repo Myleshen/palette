@@ -186,13 +186,13 @@ public enum ThemeContrastRepair {
 
     // MARK: - OKLab
 
-    private struct OKLab {
+    struct OKLab {
         var l: Double
         var a: Double
         var b: Double
     }
 
-    private static func oklab(_ color: RGBA) -> OKLab {
+    static func oklab(_ color: RGBA) -> OKLab {
         func linear(_ value: Double) -> Double {
             value <= 0.040_45 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
         }
@@ -228,7 +228,7 @@ public enum ThemeContrastRepair {
             && rgb.2 >= -epsilon && rgb.2 <= 1 + epsilon
     }
 
-    private static func gamutMapped(_ lab: OKLab) -> RGBA {
+    static func gamutMapped(_ lab: OKLab) -> RGBA {
         var scale = 1.0
         if !inGamut(lab) {
             var low = 0.0
