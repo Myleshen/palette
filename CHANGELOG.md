@@ -4,13 +4,14 @@
 
 ### Added
 
-- **Theme Cards** — a non-tracking gallery (`⌘⌥G`, configurable, and `/theme
-  cards`) showing one large palette card at a time: background/foreground/
-  accent/selection blocks, ANSI dots, name and section, with the **From
-  wallpaper** card first (desktop picture + extracted palette). ←/→ flip,
-  Return applies to Palette and other apps when theming is on, `W` applies the
-  wallpaper palette, Esc closes. 942 cards flip in under a millisecond once
-  parsed; only visible cards and neighbours are parsed, off-main.
+- **Theme Cards** — a non-tracking **fanned deck** (`⌘⌥G`, configurable, and
+  `/theme cards`): cards dealt from the centre, rotated ±6°/step, side cards
+  dimmed, the chosen one lifted; ←/→ or scroll flips, type to filter, Tab shows
+  favourites, Ctrl+F favourites a card, Return/Space applies (with a lift
+  animation), Esc closes. **Wallpapers are cards too**, from
+  `[theming] wallpaper_directory` (default `~/dot-files/wallpapers`): thumbnail
+  card per image/video, current desktop marked, Enter sets the picture and
+  applies its palette. 942 themes + wallpapers open in ~4 ms, flips ~0.6 ms.
 - **Starship prompt theming** — the generated copy rewrites the values of your
   active palette table to the nearest Palette colours (OKLab distance), keeping
   your keys and prompt format, wired through `STARSHIP_CONFIG` in the fish block.
@@ -27,6 +28,14 @@
   card above Targets, so the policy rows are visible without deep scrolling.
 - Theme override in Settings shows the resolved id instead of a “Custom/missing”
   entry.
+- Generated files now follow each format's real syntax: bat's XML declaration
+  leads the file (comments after), yazi uses the 26 schema (`[mgr]`,
+  `[indicator]`, `[mode]`), btop uses real `download_*`/`upload_*` and meter
+  keys, Lua/KDL headers use `--`/`//`, Starship TOML ends with a newline, and
+  Chromium policy UUIDs are unique per browser. Validated with kitty's config
+  loader, `zellij setup --check`, `nvim --headless luafile`, `fish -n`,
+  `starship prompt`, `xmllint`, `git config -f`, `plutil -lint` and yazi/btop
+  schema checks.
 
 ## 2.19.0 — 2026-11-27
 
