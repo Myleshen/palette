@@ -89,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeyInstallTask: Task<Void, Never>?
     private var statusItem: NSStatusItem!
     private var statusPanel: StatusPanelController!
+    private var themeGallery: ThemeGalleryWindowController?
     /// Cached so a panel render is synchronous; the countdown itself is
     /// computed from `endsAt`, and every panel open re-reads the service.
     private var keepAwakeStatus = KeepAwakeStatus()
@@ -394,6 +395,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         wireControllerCallbacks()
         buildPanel()
+        buildThemeGallery()
         buildMainMenu()
         installHotKey()
         checkDefaultProviderTools()
@@ -664,6 +666,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.statusPanel.hide()
                 } else if let value = step.dropPrefix("statuspanel_snapshot=") {
                     self.writeStatusPanelSnapshot(to: value)
+                } else if step == "themecards" {
+                    self.showThemeGallery()
+                } else if step == "themecardsclose" {
+                    self.themeGallery?.hide()
+                } else if step == "themecards_first" {
+                    self.themeGallery?.scriptJumpToFirst()
+                } else if step == "themecards_last" {
+                    self.themeGallery?.scriptJumpToLast()
+                } else if step == "themecards_next" {
+                    self.themeGallery?.scriptMove(1)
+                } else if step == "themecards_prev" {
+                    self.themeGallery?.scriptMove(-1)
+                } else if let value = step.dropPrefix("themecards_snapshot=") {
+                    if let view = self.themeGallery?.window?.contentView {
+                        self.write(view: view, to: value)
+                    } else {
+                        self.recordScriptFailure("theme cards are not open")
+                    }
                 } else if step == "palettemenu" {
                     self.showPaletteMenuProbe()
                 } else if step == "palettemenu_long" {
@@ -713,6 +733,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             && PaletteMenuController.shared.scriptKey(event))
                             || (self.statusPanel?.isOpen == true
                                 && self.statusPanel.scriptKey(event))
+                            || (self.themeGallery?.isOpen == true
+                                && self.themeGallery?.scriptKey(event) == true)
                         if !handled {
                             _ = self.searchController.handleKey(event)
                         }
@@ -831,7 +853,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let spec = HotKeySpec.parse(keys) else { return "Invalid shortcut" }
         let owned = [
             configuration.hotkey, configuration.clipboardHotkey,
-            configuration.terminalHotkey, configuration.scratchpadHotkey,
+            configuration.terminalHotkey, configuration.themeGalleryHotkey,
+            configuration.scratchpadHotkey,
             configuration.askHotkey, configuration.screenshotHotkey,
             configuration.regionScreenshotHotkey, configuration.windowScreenshotHotkey,
             configuration.recordingHotkey,
@@ -1400,7 +1423,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onSelect: { [weak self] name in self?.pickTheme(name) },
             currentName: { [weak self] in self?.themeManager.currentThemeID ?? "" },
             paletteAvailable: { [weak self] in self?.configuration.theming.enabled ?? false },
-            onApplyPalette: { [weak self] name in self?.applyPaletteToApps(name) }
+            onApplyPalette: { [weak self] name in self?.applyPaletteToApps(name) },
+            onShowCards: { [weak self] in self?.showThemeGallery() }
         )
         providers.append(themes)
 
@@ -1550,6 +1574,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     press: { [weak self] in self?.showClipboard() }),
             Desired(id: "terminal", label: "Terminal shortcut", keys: configuration.terminalHotkey,
                     press: { [weak self] in self?.toggleTerminalPanel() }),
+            Desired(id: "theme-gallery", label: "Theme cards shortcut", keys: configuration.themeGalleryHotkey,
+                    press: { [weak self] in self?.toggleThemeGallery() }),
             Desired(id: "scratchpad", label: "Scratchpad list shortcut", keys: configuration.scratchpadHotkey,
                     press: { [weak self] in self?.toggleScratchpad() }),
             Desired(id: "ask", label: "Ask shortcut", keys: configuration.askHotkey,
@@ -3204,6 +3230,85 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return await themingEngine.applyTheme(named: configuration.theming.theme, config: configuration.theming)
     }
 
+    // MARK: - Theme cards
+
+    private func buildThemeGallery() {
+        themeGallery = ThemeGalleryWindowController(
+            themeManager: themeManager,
+            themesDirectory: paths.themesDir,
+            apply: { [weak self] target in
+                guard let self else { return ThemeGalleryApplyOutcome(message: "", failed: true) }
+                return await self.applyGalleryTarget(target)
+            },
+            wallpaper: { [weak self] in
+                guard let self else { return (nil, nil) }
+                let urls = self.themingEngine.wallpaperURLs
+                let image = await Task.detached(priority: .userInitiated) {
+                    urls.first.flatMap { NSImage(contentsOf: $0) }
+                }.value
+                let palette = await self.themingEngine.previewWallpaper(
+                    darkMode: self.configuration.theming.darkMode
+                )
+                return (image, palette.map(ThemeCardPalette.init(palette:)))
+            }
+        )
+        // The 942 headers are read once now; a hotkey press only renders cards.
+        themeGallery?.preload()
+    }
+
+    private func showThemeGallery() {
+        panel?.hide(activatePrevious: false)
+        themeGallery?.show()
+    }
+
+    private func toggleThemeGallery() {
+        if themeGallery?.isOpen == true {
+            themeGallery?.hide()
+        } else {
+            showThemeGallery()
+        }
+    }
+
+    /// The gallery's apply route. Theme cards take the same two paths as the
+    /// theme browser: the Palette theme write plus the cross-app engine when
+    /// that is enabled. The wallpaper card only has the engine path.
+    private func applyGalleryTarget(_ target: ThemeCardTarget) async -> ThemeGalleryApplyOutcome {
+        let message: String
+        let failed: Bool
+        switch target {
+        case .theme(let name):
+            pickTheme(name)
+            if configuration.theming.enabled {
+                let applied = await applyPaletteToAppsNow(name)
+                message = applied.error ?? applied.status
+                failed = applied.error != nil
+            } else {
+                message = "Theme applied: \(name)"
+                failed = false
+            }
+        case .wallpaper:
+            let applied = await applyWallpaperPaletteNow()
+            message = applied.error ?? applied.status
+            failed = applied.error != nil
+        }
+        searchController?.setStatus(message, duration: 6)
+        return ThemeGalleryApplyOutcome(message: message, failed: failed)
+    }
+
+    /// The gallery's W card: the same engine and config write the wallpaper
+    /// follow path uses, just triggered by a key instead of a timer.
+    @discardableResult
+    private func applyWallpaperPaletteNow() async -> ThemingEngine.ApplyResult {
+        configuration.theming.enabled = true
+        configuration.theming.source = .wallpaper
+        do {
+            try writeConfig(configuration)
+        } catch {
+            Log.shared.warn("Could not save the palette source: \(error.localizedDescription)", source: "theming")
+        }
+        return await themingEngine.applyWallpaper(configuration.theming)
+    }
+
     // MARK: - Wallpaper follow
 
     /// A five-second URL check, and only while the engine is in wallpaper-follow
@@ -3562,6 +3667,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onOpen: { [weak self] url in
                 self?.launcher.openPath(url.path)
+            },
+            onThemeCards: { [weak self] in
+                self?.showThemeGallery()
             },
             onExportBackup: { [weak self] in
                 self?.exportBackup()

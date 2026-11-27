@@ -195,6 +195,7 @@ Caches live in `~/Library/Caches/Palette`.
 | `⌥Space` | show / hide |
 | `⌥V` | clipboard browser with live preview |
 | `⌘⌥T` | embedded terminal |
+| `⌘⌥G` | theme cards gallery |
 | `⌘⌥S` | scratchpad list |
 | `⌘⌥A` | Ask |
 | `↑` `↓` | move selection (or the focused rail/strip row) |
@@ -829,6 +830,7 @@ terminal_app = "kitty"
 editor_open_with = "neovide"
 clipboard_hotkey = "opt+v"
 terminal_hotkey = "cmd+option+t"     # empty disables
+theme_gallery_hotkey = "cmd+opt+g"   # empty disables
 scratchpad_hotkey = "cmd+option+s"   # empty disables
 ask_hotkey = "cmd+option+a"          # empty disables
 screenshot_hotkey = "cmd+shift+3"

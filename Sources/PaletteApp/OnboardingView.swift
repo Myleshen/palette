@@ -252,6 +252,7 @@ struct OnboardingView: View {
         }
         let owned = [
             config.hotkey, config.clipboardHotkey, config.terminalHotkey,
+            config.themeGalleryHotkey,
             config.scratchpadHotkey, config.askHotkey, config.screenshotHotkey,
             config.regionScreenshotHotkey, config.windowScreenshotHotkey,
             config.recordingHotkey,
