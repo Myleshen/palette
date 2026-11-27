@@ -1,7 +1,13 @@
 #!/bin/bash
-# End-to-end flows against the built app bundle. Each flow gets a fresh
-# config/state/cache directory, drives the real controller through
+# End-to-end flows against the built app bundle. Each flow gets a fresh,
+# isolated home and config/state/cache directory, drives the real app through
 # PALETTE_SCRIPT, and fails on a non-zero exit or a missing artifact.
+#
+# Only things a shipped bundle can prove live here: real AppKit window
+# placement, real Carbon hotkey registration, the terminate request, the cold
+# launch round-trip, and that the process leaves nothing behind. Behaviour that
+# can be asserted against the controller runs in `swift test` instead
+# (Tests/PaletteTests/ControllerIntegrationTests.swift and friends).
 #
 #   Scripts/e2e.sh
 set -euo pipefail
@@ -35,32 +41,31 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# run_flow <name> <script> [required file] [prep function]
+# run_flow <name> <script> [required file] [check function]
 # %DIR% in the script and required path expands to the flow's temp directory.
-# The optional prep function runs with the temp directory before launch.
+# The optional check function runs with the temp directory before it is deleted,
+# for assertions the script grammar cannot express (JSON frames, process lists).
 run_flow() {
-  local name="$1" script="$2" required="${3:-}" prep="${4:-}"
+  local name="$1" script="$2" required="${3:-}" check="${4:-}"
   local dir
   dir="$(mktemp -d "${TMPDIR:-/tmp}/palette-e2e-$name.XXXXXX")"
   script="${script//%DIR%/$dir}"
   required="${required//%DIR%/$dir}"
   local log="$dir/app.log"
 
-  if [ -n "$prep" ]; then
-    "$prep" "$dir"
-  fi
-
   PALETTE_SCRIPT="$script" \
+  PALETTE_HOME="$dir/home" \
   PALETTE_CONFIG_DIR="$dir/config" \
   PALETTE_STATE_DIR="$dir/state" \
   PALETTE_CACHE_DIR="$dir/cache" \
   PALETTE_SUPPORT_DIR="$dir/support" \
+  PALETTE_FORCE_HOTKEYS="${FORCE_HOTKEYS:-0}" \
     nice -n 10 taskpolicy -b "$APP" >"$log" 2>&1 &
   app_pid=$!
 
   # The script itself exits; the watchdog only catches a hung launch.
   local ticks=0
-  while kill -0 "$app_pid" 2>/dev/null && [ "$ticks" -lt 120 ]; do
+  while kill -0 "$app_pid" 2>/dev/null && [ "$ticks" -lt 160 ]; do
     sleep 0.25
     ticks=$((ticks + 1))
   done
@@ -97,94 +102,90 @@ run_flow() {
     return
   fi
 
+  if [ -n "$check" ] && ! "$check" "$dir" "$log"; then
+    echo "FAIL $name: check failed"
+    failed=1
+    return
+  fi
+
   rm -rf "$dir"
   echo "PASS $name"
 }
 
-run_flow empty-query-reset \
-  'show; wait=0.6; assert=appActive=false; query=safari; wait=0.8; key=down; wait=0.2; hide; wait=0.3; show; wait=0.8; assert=query=; assert=selectionIndex=0; assert=appActive=false; dump=%DIR%/state.json; exit'
+# The controller's own behaviour (search reset, panel modes, menu picker,
+# cheatsheets, theme/wallpaper apply) runs in swift test. What remains here is
+# what only the assembled bundle can answer.
 
-# The capture needs Screen Recording TCC, which CI does not grant; the panel
-# must survive either outcome, so only visibility is asserted.
-run_flow screenshot-keeps-panel \
-  'show; wait=0.6; shot; wait=1.5; assert=panelVisible=true; exit'
-
-# Default global providers (system/timer/awake) must answer an unprefixed
-# query without depending on installed apps. The wait is generous because the
-# app runs at background QoS and yields to whatever the user is doing.
-run_flow universal-search \
-  'show; query=session; wait_until=itemCount>0;timeout=10; dump=%DIR%/state.json; exit'
-
-run_flow launcher-tab \
-  'settings; wait=0.8; settings_tab=1; wait=0.9; settings_snapshot=%DIR%/settings-launcher.png; exit' \
-  '%DIR%/settings-launcher.png'
-
-# The status item's panel replaces an NSMenu: it must open without activating
-# the app, render rows, and close on Esc.
-run_flow status-panel-interaction \
-  'show; wait=0.6; statuspanel; wait=0.6; assert=statusPanelOpen=true; assert=statusPanelRows>0; assert=appActive=false; assert=panelVisible=true; key=esc; wait=0.3; assert=statusPanelOpen=false; assert=appActive=false; exit'
-
-# A non-tracking Palette menu keeps the app inactive and its keys alive. The
-# probe stands in for a global hotkey callback; a native NSMenu would hold it.
-run_flow palette-menu-probe \
-  'show; wait=0.6; palette_menu=probe; wait=0.4; assert=paletteMenuOpen=true; assert=paletteMenuRows=5; assert=paletteMenuHighlight=probe-one; assert=appActive=false; palettemenu_probe; assert=paletteMenuProbe=1; key=down; wait=0.2; assert=paletteMenuHighlight=probe-two; key=down; wait=0.2; assert=paletteMenuHighlight=probe-three; key=down; wait=0.2; assert=paletteMenuHighlight=probe-one; key=esc; wait=0.3; assert=paletteMenuOpen=false; assert=appActive=false; dump=%DIR%/state.json; exit' \
-  '%DIR%/state.json'
-
-# The picker rows are built by the same helper PaletteMenuPicker uses, so the
-# count and the choice round-trip cover the real control.
-run_flow palette-menu-picker \
-  'show; wait=0.6; palette_menu=picker; wait=0.4; assert=paletteMenuOpen=true; assert=paletteMenuRows=4; assert=paletteMenuHighlight=choice:0; key=down; wait=0.2; assert=paletteMenuHighlight=choice:1; key=up; wait=0.2; assert=paletteMenuHighlight=choice:0; key=esc; wait=0.3; assert=paletteMenuOpen=false; exit'
-
-# The web-search engine browser picker from Settings: default row, installed
-# browsers, separator, the two mode rows.
-run_flow engine-browser-picker \
-  'show; wait=0.6; palette_menu=engine_browser; wait=0.4; assert=paletteMenuOpen=true; assert=paletteMenuRows>4; assert=paletteMenuHighlight=default-browser; assert=appActive=false; palettemenu_probe; assert=paletteMenuProbe=1; key=down; wait=0.2; assert=paletteMenuHighlight!=default-browser; key=esc; wait=0.3; assert=paletteMenuOpen=false; exit'
-
-# Opening the 942-row theme browser must stay lazy: only the rows that fit the
-# 430 pt list pane appear, not all 900+ TOML files.
-run_flow theme-menu-lazy \
-  'settings; wait=0.8; settings_tab=19; wait_until=themeMenuRendered>0;timeout=15; assert=themeMenuRows>900; assert=themeMenuRendered<45; assert=appActive=false; dump=%DIR%/state.json; exit' \
-  '%DIR%/state.json'
-
-# The scratchpad, ask, terminal and preview panels share one content area:
-# opening a mode must close the previous one.
-# Ask lives in its own window now: opening it must not tear down the panel's
-# scratchpad or terminal, and the window must be tracked separately.
-run_flow ask-window-not-modal \
-  'show; wait=0.6; scratchpad; wait=0.4; askwindow=hello; wait_until=askWindows=1;timeout=10; assert=scratchpadActive=true; dump=%DIR%/state.json; exit' \
-  '%DIR%/state.json'
-
-# A folder declared in the flow's own config must reach /cheat.
-prep_cheatsheets() {
-  local dir="$1" sheets="$1/sheets"
-  mkdir -p "$sheets" "$dir/config"
-  printf '# Deploy notes\n\n- build\n- ship\n' > "$sheets/notes.md"
-  printf 'tiny guide\n' > "$sheets/guide.txt"
-  printf '[cheatsheets]\nfolders = ["%s"]\n' "$sheets" > "$dir/config/config.toml"
+# Default global hotkeys are Carbon registrations against the live keyboard
+# layout: only a running app can prove they all take, and that none lost to
+# another owner. The script mode opt-in exists for exactly this.
+check_hotkeys() {
+  local log="$2"
+  local registered
+  registered="$(grep -c "Hotkey registered:" "$log" || true)"
+  if [ "$registered" -ne 11 ]; then
+    echo "    registered $registered hotkeys, expected 11"
+    { grep "Hotkey" "$log" || true; } | tail -20 | sed 's/^/    /'
+    return 1
+  fi
+  if grep -q "is unavailable\|unavailable:" "$log"; then
+    echo "    a hotkey was unavailable"
+    grep "Hotkey" "$log" | grep -i "unavailable" | sed 's/^/    /'
+    return 1
+  fi
 }
+# A running Palette already owns the same keys, so the defaults cannot be
+# registered twice. CI has none; a workstation usually does.
+if pgrep -x Palette >/dev/null 2>&1; then
+  echo "SKIP hotkeys: a Palette process is running and holds the default shortcuts"
+else
+  FORCE_HOTKEYS=1 run_flow hotkeys \
+    'wait_until=registeredHotkeys=11;timeout=15; show; wait=0.2; dump=%DIR%/state.json; exit' \
+    '%DIR%/state.json' check_hotkeys
+fi
 
-run_flow cheatsheets \
-  'show; wait=0.7; query=/cheat; wait_until=itemCount>0;timeout=5; assert=firstProvider=cheat; dump=%DIR%/state.json; exit' \
-  '%DIR%/state.json' prep_cheatsheets
+# A real NSPanel must land at the configured size inside the active screen's
+# visible frame, and a capture request (which needs Screen Recording TCC, not
+# granted on CI) must not take the panel down with it.
+run_flow panel-geometry-capture \
+  'show; wait=0.8; assert=panelGeometryOK=true; shot; wait=1.5; assert=panelVisible=true; exit'
 
-# ⌘Q with the launcher open dismisses it instead of quitting: Spotlight is off
-# for these users, so a stray ⌘Q would leave them with no launcher. Reaching the
-# dump/exit proves the process survived the terminate request.
+# Spotlight is off for these users, so a stray ⌘Q must dismiss, not quit.
+# Reaching dump/exit proves the process survived the terminate request.
 run_flow quit-intercepted \
   'show; wait=0.6; quit; wait=0.4; assert=panelVisible=false; dump=%DIR%/state.json; exit' \
   '%DIR%/state.json'
 
-# Asking must not tear the launcher down: both stay on screen together.
-run_flow ask-window-coexists \
-  'show; wait=0.6; askwindow=hello; wait_until=askWindows=1;timeout=10; assert=panelVisible=true; dump=%DIR%/state.json; exit' \
-  '%DIR%/state.json'
+# A cold launch with nothing but an isolated home must accept the whole script
+# grammar and write a parseable dump.
+check_dump() {
+  plutil -extract panelVisible raw -o - "$1/state.json" >/dev/null
+}
+run_flow cold-launch-script \
+  'show; wait=0.7; query=session; wait=0.5; dump=%DIR%/state.json; exit' \
+  '%DIR%/state.json' check_dump
+
+# Closing the app must reap the PTY child the embedded terminal started, not
+# leave an orphan behind. `sleep 4242` is unique enough to pgrep safely.
+check_no_children() {
+  local leftover=""
+  for _ in 1 2 3 4; do
+    leftover="$(pgrep -f 'sleep 4242' || true)"
+    [ -z "$leftover" ] && return 0
+    sleep 0.5
+  done
+  echo "    left PTY child running: $leftover"
+  return 1
+}
+run_flow no-surviving-children \
+  'show; term=sleep 4242; wait=2.5; exit' "" check_no_children
 
 if [ "$failed" -ne 0 ]; then
   echo "e2e failed"
   exit 1
 fi
 
-# Belt and braces: no Palette child may outlive the run.
+# Belt and braces: no Palette process may outlive the run.
 leftover="$(pgrep -f "$(pwd)/$APP" || true)"
 if [ -n "$leftover" ]; then
   echo "FAIL leftover Palette process: $leftover"

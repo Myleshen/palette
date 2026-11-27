@@ -194,6 +194,8 @@ public final class ThemingEngine: ObservableObject {
     /// Runs the one password-protected shell; injected so a test can count the
     /// single osascript call without asking for a password.
     private let runAdministrator: @Sendable (String) async throws -> ProcessResult
+    /// Injected by tests so a sandbox image stands in for the desktop picture.
+    private let wallpaperOverride: [URL]?
     /// The last applied palette, so the one-time enable can seed the current
     /// BrowserThemeColor and the export can render a profile before an Apply.
     private var lastPalette: PalettePalette?
@@ -205,6 +207,7 @@ public final class ThemingEngine: ObservableObject {
         kitty: KittyRemoteControl = KittyRemoteControl(),
         appRestart: AppRestart = .live,
         reloadsEnabled: Bool = true,
+        wallpaperOverride: [URL]? = nil,
         runAdministrator: @escaping @Sendable (String) async throws -> ProcessResult = { shell in
             try await ThemingEngine.administratorRun(shell)
         }
@@ -216,6 +219,7 @@ public final class ThemingEngine: ObservableObject {
         self.kitty = kitty
         self.appRestart = appRestart
         self.reloadsEnabled = reloadsEnabled
+        self.wallpaperOverride = wallpaperOverride
         self.runAdministrator = runAdministrator
         self.includes = ThemingIncludes(home: paths.home, themeDir: paths.themeDir)
     }
@@ -434,6 +438,7 @@ public final class ThemingEngine: ObservableObject {
 
     public var wallpaperURLs: [URL] {
         if let wallpaperURLOverride { return [wallpaperURLOverride] }
+        if let wallpaperOverride { return wallpaperOverride }
         var seen = Set<String>()
         return NSScreen.screens.compactMap { screen in
             guard let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return nil }

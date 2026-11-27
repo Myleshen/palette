@@ -344,6 +344,58 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         XCTAssertFalse(engine.includeStatus(for: .kitty).installed)
     }
 
+    /// `palette.json` is the handoff other tools read, so it must name the
+    /// source and theme. Applying twice must replace the managed block, not
+    /// append a second copy of it.
+    func testApplyWritesPaletteJSONAndExactlyOneManagedBlock() async throws {
+        guard FileManager.default.fileExists(atPath: bundledThemes.path) else {
+            throw XCTSkip("bundled themes are missing")
+        }
+        let targets: [ThemingTarget] = [.kitty, .zellij, .fish]
+        let engine = makeEngine()
+        let theme = "ghostty-catppuccin-mocha"
+
+        _ = await engine.applyTheme(named: theme, config: theming(targets))
+        _ = await engine.applyTheme(named: theme, config: theming(targets))
+
+        let jsonURL = themeDir.appendingPathComponent(ThemingRenderer.paletteJSONName)
+        let object = try JSONSerialization.jsonObject(with: Data(contentsOf: jsonURL))
+        let json = try XCTUnwrap(object as? [String: Any])
+        XCTAssertEqual(json["source"] as? String, "theme")
+        XCTAssertEqual(json["theme_id"] as? String, theme)
+        XCTAssertEqual(json["theme"] as? String, "Ghostty · Catppuccin Mocha")
+        XCTAssertEqual(json["appearance"] as? String, "dark")
+        XCTAssertEqual((json["ansi"] as? [String])?.count, 16)
+
+        for target in targets {
+            let generated = themeDir.appendingPathComponent(target.fileName)
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: generated.path),
+                "\(target.fileName) was not generated"
+            )
+        }
+
+        let includes = ThemingIncludes(home: home.path, themeDir: themeDir)
+        let blocks: [(String, ThemingIncludes.Format)] = [
+            (".config/kitty/kitty.conf", .hash),
+            (".config/zellij/config.kdl", .kdl),
+            (".config/fish/config.fish", .hash),
+        ]
+        for (relative, format) in blocks {
+            let body = text(relative)
+            XCTAssertEqual(
+                body.components(separatedBy: includes.startMarker(format)).count - 1,
+                1,
+                "\(relative) has more than one start marker"
+            )
+            XCTAssertEqual(
+                body.components(separatedBy: includes.endMarker(format)).count - 1,
+                1,
+                "\(relative) has more than one end marker"
+            )
+        }
+    }
+
     func testStarshipRegeneratesTheRemappedCopyOnThemeChangeWithoutTouchingTheUserFile() async throws {
         guard FileManager.default.fileExists(atPath: bundledThemes.path) else {
             throw XCTSkip("bundled themes are missing")
