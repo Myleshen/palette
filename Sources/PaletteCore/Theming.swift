@@ -1372,6 +1372,19 @@ public struct PaletteMetadata: Sendable, Equatable {
 public enum ThemingRenderer {
     public static let paletteJSONName = "palette.json"
 
+    /// Text for an ANSI-coloured chip or diff emphasis. The softer #111 wins
+    /// when it clears 4.5:1; otherwise pure black/white always can.
+    private static func readableChipText(on background: String) -> String {
+        let color = RGBA(hex: background) ?? RGBA(red: 0, green: 0, blue: 0)
+        let soft = PalettePalette.bestText(on: color)
+        if soft.contrast(with: color) >= 4.5 {
+            return PalettePalette.hex(soft)
+        }
+        let black = RGBA(red: 0, green: 0, blue: 0)
+        let white = RGBA(red: 1, green: 1, blue: 1)
+        return PalettePalette.hex(black.contrast(with: color) >= white.contrast(with: color) ? black : white)
+    }
+
     /// nil for targets that are not configured yet, so phase two cannot
     /// silently write a half-guessed format.
     public static func contents(
@@ -1463,9 +1476,9 @@ public enum ThemingRenderer {
     private static func delta(_ palette: PalettePalette, header: String) -> String {
         var out = [header, "", "[delta]"]
         out.append("    minus-style = syntax \"\(palette.background)\"")
-        out.append("    minus-emph-style = normal \"\(palette.ansi[1])\"")
+        out.append("    minus-emph-style = normal \"\(readableChipText(on: palette.ansi[1]))\" \"\(palette.ansi[1])\"")
         out.append("    plus-style = syntax \"\(palette.background)\"")
-        out.append("    plus-emph-style = normal \"\(palette.ansi[2])\"")
+        out.append("    plus-emph-style = normal \"\(readableChipText(on: palette.ansi[2]))\" \"\(palette.ansi[2])\"")
         out.append("    line-numbers-minus-style = \"\(palette.ansi[1])\"")
         out.append("    line-numbers-plus-style = \"\(palette.ansi[2])\"")
         out.append("    line-numbers-zero-style = \"\(palette.muted)\"")
@@ -1534,6 +1547,12 @@ public enum ThemingRenderer {
     private static func yazi(_ palette: PalettePalette, header: String) -> String {
         // yazi 26 schema: `[mgr]` (not `[manager]`), hover lives in
         // `[indicator]`, modes in `[mode]`, and filetype mime globs need `**/`.
+        /// A chip background that cannot clear 4.5:1 with the softer #111
+        /// foreground takes pure black/white instead; the background keeps its
+        /// meaning either way.
+        let normal = (fg: readableChipText(on: palette.ansi[4]), bg: palette.ansi[4])
+        let select = (fg: readableChipText(on: palette.ansi[3]), bg: palette.ansi[3])
+        let unset = (fg: readableChipText(on: palette.muted), bg: palette.muted)
         var out = [header, ""]
         out.append("[mgr]")
         out.append("cwd = { fg = \"\(palette.ansi[4])\" }")
@@ -1544,9 +1563,9 @@ public enum ThemingRenderer {
         out.append("current = { fg = \"\(palette.selectionForeground)\", bg = \"\(palette.selectionBackground)\" }")
         out.append("")
         out.append("[mode]")
-        out.append("normal_main = { fg = \"\(palette.background)\", bg = \"\(palette.ansi[4])\", bold = true }")
-        out.append("select_main = { fg = \"\(palette.background)\", bg = \"\(palette.ansi[3])\", bold = true }")
-        out.append("unset_main = { fg = \"\(palette.background)\", bg = \"\(palette.muted)\", bold = true }")
+        out.append("normal_main = { fg = \"\(normal.fg)\", bg = \"\(normal.bg)\", bold = true }")
+        out.append("select_main = { fg = \"\(select.fg)\", bg = \"\(select.bg)\", bold = true }")
+        out.append("unset_main = { fg = \"\(unset.fg)\", bg = \"\(unset.bg)\", bold = true }")
         out.append("")
         out.append("[status]")
         out.append("progress_label = { fg = \"\(palette.foreground)\" }")
@@ -1627,12 +1646,15 @@ public enum ThemingRenderer {
     }
 
     private static func nvim(_ palette: PalettePalette, header: String) -> String {
+        let search = (fg: readableChipText(on: palette.ansi[3]), bg: palette.ansi[3])
         var out = [header, ""]
         out.append("local p = {")
         out.append("  bg = \"\(palette.background)\", fg = \"\(palette.foreground)\",")
         out.append("  surface = \"\(palette.surface)\", elevated = \"\(palette.elevated)\",")
         out.append("  border = \"\(palette.border)\", muted = \"\(palette.muted)\",")
-        out.append("  cursor = \"\(palette.cursor)\", selection = \"\(palette.selectionBackground)\",")
+        out.append("  cursor = \"\(palette.cursor)\", cursorText = \"\(palette.cursorText)\",")
+        out.append("  selection = \"\(palette.selectionBackground)\", selectionFg = \"\(palette.selectionForeground)\",")
+        out.append("  searchFg = \"\(search.fg)\", searchBg = \"\(search.bg)\",")
         out.append("  red = \"\(palette.ansi[1])\", green = \"\(palette.ansi[2])\",")
         out.append("  yellow = \"\(palette.ansi[3])\", blue = \"\(palette.ansi[4])\",")
         out.append("  magenta = \"\(palette.ansi[5])\", cyan = \"\(palette.ansi[6])\",")
@@ -1641,14 +1663,14 @@ public enum ThemingRenderer {
         out.append("local groups = {")
         out.append("  Normal = { fg = p.fg, bg = p.bg },")
         out.append("  NormalFloat = { fg = p.fg, bg = p.surface },")
-        out.append("  Cursor = { fg = p.bg, bg = p.cursor },")
+        out.append("  Cursor = { fg = p.cursorText, bg = p.cursor },")
         out.append("  CursorLine = { bg = p.surface },")
         out.append("  LineNr = { fg = p.muted, bg = p.bg },")
-        out.append("  Visual = { fg = p.fg, bg = p.selection },")
-        out.append("  Search = { fg = p.bg, bg = p.yellow },")
+        out.append("  Visual = { fg = p.selectionFg, bg = p.selection },")
+        out.append("  Search = { fg = p.searchFg, bg = p.searchBg },")
         out.append("  StatusLine = { fg = p.fg, bg = p.elevated },")
         out.append("  Pmenu = { fg = p.fg, bg = p.surface },")
-        out.append("  PmenuSel = { fg = p.bg, bg = p.cursor },")
+        out.append("  PmenuSel = { fg = p.cursorText, bg = p.cursor },")
         out.append("  Comment = { fg = p.muted },")
         out.append("  Constant = { fg = p.magenta },")
         out.append("  String = { fg = p.green },")

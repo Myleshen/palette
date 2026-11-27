@@ -331,6 +331,7 @@ struct SettingsView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private let keepAwake: KeepAwakeService
     private let themesDirectory: URL
@@ -440,6 +441,16 @@ struct SettingsView: View {
     private var theme: Theme { themeManager.theme }
     private var muted: Color { theme.color(theme.palette.fgMuted) }
     private var danger: Color { theme.color(theme.palette.danger) }
+    private var success: Color { theme.color(theme.palette.success) }
+    private var warning: Color { theme.color(theme.palette.warning) }
+
+    /// Error copy is body text, so it needs 4.5:1 on the card surface. The
+    /// danger token only guarantees the 3:1 status bar, so lift it for text.
+    private var dangerText: Color {
+        guard let color = RGBA(hex: theme.palette.danger),
+              let surface = RGBA(hex: theme.palette.surface) else { return danger }
+        return theme.color(PalettePalette.hex(PalettePalette.readable(color, on: surface, minimum: 4.5)))
+    }
 
     /// The light palette's accent is only 3.4:1 on the card fill; darken it
     /// just for light mode so links stay readable.
@@ -599,11 +610,13 @@ struct SettingsView: View {
 
     private var settingsBackdrop: some View {
         ZStack {
-            if !reduceTransparency {
+            if !reduceTransparency, contrast != .increased {
                 GlassBackdrop(material: .hudWindow)
             }
             theme.color(theme.palette.bg)
-                .opacity(reduceTransparency ? 1 : (theme.window.glass ? theme.window.glassOpacity : 1))
+                .opacity(reduceTransparency || contrast == .increased
+                    ? 1
+                    : (theme.window.glass ? theme.window.glassOpacity : 1))
         }
     }
 
@@ -635,7 +648,7 @@ struct SettingsView: View {
             .tint(theme.color(theme.palette.accent))
         }
         .background(
-            reduceTransparency
+            reduceTransparency || contrast == .increased
                 ? theme.color(theme.palette.surface).opacity(1)
                 : theme.color(theme.palette.bg).opacity(0.35)
         )
@@ -717,15 +730,15 @@ struct SettingsView: View {
             switch saveState {
             case .failed(let message):
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(danger)
                 Text("Could not save: \(message)")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(dangerText)
             case .pending:
                 PaletteSpinner()
                 Text("Saving…")
             case .saved:
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(success)
                 Text("Saved")
             case .idle:
                 Image(systemName: "checkmark.circle")
@@ -735,7 +748,7 @@ struct SettingsView: View {
             Spacer(minLength: 12)
             if issueCount > 0 {
                 Text("\(issueCount) \(issueCount == 1 ? "value needs" : "values need") attention")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(theme.color(theme.palette.fg))
             }
             Button("Reset \(selectedTab.title)…") { resetPending = true }
                 .controlSize(.small)
@@ -743,7 +756,7 @@ struct SettingsView: View {
         .font(.caption)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(theme.color(theme.palette.surface).opacity(reduceTransparency ? 1 : 0.65))
+        .background(theme.color(theme.palette.surface).opacity(reduceTransparency || contrast == .increased ? 1 : 0.65))
     }
 
     // MARK: - Cards and rows
@@ -814,7 +827,7 @@ struct SettingsView: View {
             if let error {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(danger)
+                    .foregroundStyle(dangerText)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let help {
                 Text(help)
@@ -1505,7 +1518,7 @@ struct SettingsView: View {
             card("Startup", anchor: "general-startup") {
                 toggleRow("Open Palette at login", isOn: $launchAtLogin)
                 if let loginMessage {
-                    Text(loginMessage).font(.caption).foregroundStyle(.red)
+                    Text(loginMessage).font(.caption).foregroundStyle(dangerText)
                 }
             } footer: {
                 Text("Applies immediately. If macOS asks for approval, allow Palette under System Settings › General › Login Items.")
@@ -1514,7 +1527,7 @@ struct SettingsView: View {
             card("Permissions", anchor: "general-permissions") {
                 HStack(spacing: 8) {
                     Image(systemName: accessibilityTrusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(accessibilityTrusted ? .green : .orange)
+                        .foregroundStyle(accessibilityTrusted ? success : warning)
                     Text("Accessibility")
                     Spacer()
                     Text(accessibilityTrusted ? "Enabled" : "Not granted")
@@ -1541,7 +1554,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(muted)
                 if let keepAwakeMessage {
-                    Text(keepAwakeMessage).font(.caption).foregroundStyle(.red)
+                    Text(keepAwakeMessage).font(.caption).foregroundStyle(dangerText)
                 }
             } footer: {
                 Text("Clamshell asks for an administrator password and keeps working with the lid shut on AC power only. Turning it off leaves an active keep-awake timer alone.")
@@ -2836,7 +2849,7 @@ struct SettingsView: View {
 
             Text(shortcutSummary)
                 .font(.caption)
-                .foregroundStyle(hasShortcutConflict ? .red : .secondary)
+                .foregroundStyle(hasShortcutConflict ? dangerText : muted)
         }
     }
 
@@ -3245,7 +3258,7 @@ struct SettingsView: View {
                 if let bookmarksError {
                     Text("\(bookmarksError) The file is left untouched; fix or restore bookmarks.toml, then reopen Settings.")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(dangerText)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     ForEach($bookmarks) { $bookmark in
@@ -3715,7 +3728,7 @@ struct SettingsView: View {
 
                 if askKeyStored {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(success)
                         Text("Key saved locally (encrypted, user-only)")
                         Spacer()
                         Button("Clear key", role: .destructive) {
@@ -4224,7 +4237,7 @@ struct SettingsView: View {
                             .accessibilityLabel("Use alias \(entry.word)")
                         TextField("Alias", text: $entry.word)
                             .settingsField()
-                            .foregroundStyle(aliasIssues[entry.id] == nil ? Color.primary : Color.red)
+                            .foregroundStyle(aliasIssues[entry.id] == nil ? Color.primary : dangerText)
                         Button {
                             deleteAlias(entry.id, from: id)
                         } label: {
@@ -4235,7 +4248,7 @@ struct SettingsView: View {
                         .accessibilityLabel("Delete alias \(entry.word)")
                     }
                     if let issue = aliasIssues[entry.id] {
-                        Text(issue).font(.caption).foregroundStyle(.red)
+                        Text(issue).font(.caption).foregroundStyle(dangerText)
                     }
                 }
             }

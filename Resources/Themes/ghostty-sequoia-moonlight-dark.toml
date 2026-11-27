@@ -38,4 +38,4 @@ bg = "#27282c"
 fg = "#5f6068"
 
 [footer]
-hint_color = "#5f6068"
+hint_color = "#777981"

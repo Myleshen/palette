@@ -676,6 +676,7 @@ private struct PaletteMenuStyle {
     let disabledFg: Color
     let accent: Color
     let selection: Color
+    let selectionFg: Color
     let separator: Color
     let font: Font
 
@@ -685,6 +686,7 @@ private struct PaletteMenuStyle {
         disabledFg = theme.color(theme.states.disabled.fg ?? theme.palette.fgMuted)
         accent = theme.color(theme.palette.accent)
         selection = theme.color(theme.palette.selectionBg)
+        selectionFg = theme.color(theme.palette.selectionFg)
         separator = theme.color(theme.palette.separator)
         font = theme.font(size: 13)
     }
@@ -781,22 +783,31 @@ private struct PaletteMenuRow: View {
     var body: some View {
         // Reading one row's own box is what keeps a highlight change local.
         let highlighted = highlight.isOn && item.enabled
+        let rowFg = highlighted
+            ? style.selectionFg
+            : (item.enabled ? style.fg : style.disabledFg)
         return HStack(spacing: 8) {
+            if highlighted {
+                // Shape cue, so keyboard choice is not background colour only.
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(style.selectionFg)
+                    .frame(width: 3, height: 14)
+            }
             Text(item.title)
                 .font(style.font)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundStyle(item.enabled ? style.fg : style.disabledFg)
+                .foregroundStyle(rowFg)
             Spacer(minLength: 12)
             if item.checked {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(style.accent)
+                    .foregroundStyle(highlighted ? style.selectionFg : style.accent)
             }
             if let shortcut = item.shortcut {
                 Text(shortcut)
                     .font(.system(size: 11))
-                    .foregroundStyle(style.muted)
+                    .foregroundStyle(highlighted ? style.selectionFg : style.muted)
             }
         }
         .padding(.horizontal, 10)
@@ -806,7 +817,7 @@ private struct PaletteMenuRow: View {
         .background {
             if highlighted {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(style.selection.opacity(0.75))
+                    .fill(style.selection)
                     .padding(.horizontal, 4)
             }
         }

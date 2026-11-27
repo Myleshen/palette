@@ -754,6 +754,8 @@ public enum ThemeLoader {
         let bg = theme.palette.bg
         check(theme.palette.fg, on: bg, minimum: ThemeContrastThresholds.body, "body text")
         check(theme.palette.fgMuted, on: bg, minimum: ThemeContrastThresholds.muted, "muted text")
+        check(theme.palette.fgMuted, on: theme.palette.surface, minimum: ThemeContrastThresholds.muted, "muted text on surface")
+        check(theme.footer.hintColor, on: theme.palette.surface, minimum: ThemeContrastThresholds.muted, "footer text on surface")
         // Accent is repaired against bg, surface and elevated where one colour
         // can clear all three. The hard bar is the body background; a port with
         // opposite-side surfaces cannot satisfy both and is left at its best.
@@ -821,7 +823,7 @@ public enum ThemeLoader {
             surface = "#e6e9ef"
             elevated = "#ffffff"
             fg = "#4c4f69"
-            fg_muted = "#6a6d82"
+            fg_muted = "#65687d"
             accent = "#8738ee"
             accent_fg = "#ffffff"
             selection_bg = "#ccd0da"
@@ -891,7 +893,7 @@ public enum ThemeLoader {
             surface = "#f2e5bc"
             elevated = "#fff7d6"
             fg = "#3c3836"
-            fg_muted = "#786b61"
+            fg_muted = "#71645b"
             accent = "#905b00"
             accent_fg = "#fbf1c7"
             selection_bg = "#d5c4a1"

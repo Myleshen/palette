@@ -269,9 +269,13 @@ final class StatusPanelController: NSWindowController {
     private func updateAppearance() {
         let theme = themeManager.theme
         window?.appearance = theme.nsAppearance
-        let reduceTransparency = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
-        backdrop.isHidden = reduceTransparency
-        solid.isHidden = !reduceTransparency
+        // Increase Contrast opts out of the translucent menu material for the
+        // same reason Reduce Transparency does: the palette's text pairs were
+        // validated against an opaque surface, not a desktop-tinted blend.
+        let opaque = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+            || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        backdrop.isHidden = opaque
+        solid.isHidden = !opaque
         solid.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
         for layer in [backdrop.layer, solid.layer] {
             layer?.borderWidth = 1
@@ -430,29 +434,37 @@ private struct StatusPanelView: View {
 
     private func rowView(_ row: StatusPanelRow) -> some View {
         let highlighted = model.highlighted == row.command && row.enabled
+        let selectedFg = theme.color(theme.palette.selectionFg)
+        let rowFg = highlighted
+            ? selectedFg
+            : (row.enabled ? theme.color(theme.palette.fg)
+                           : theme.color(theme.states.disabled.fg ?? theme.palette.fgMuted))
         return Button {
             activate(row.command)
         } label: {
             HStack(spacing: 8) {
+                if highlighted {
+                    // A shape cue, so the keyboard row is not told apart by
+                    // background colour alone.
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(selectedFg)
+                        .frame(width: 3, height: 14)
+                }
                 Text(row.title)
-                    .font(theme.font(size: 13))
+                    .font(theme.font(size: 13, weight: highlighted ? .semibold : .regular))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .foregroundStyle(
-                        row.enabled
-                            ? theme.color(theme.palette.fg)
-                            : theme.color(theme.states.disabled.fg ?? theme.palette.fgMuted)
-                    )
+                    .foregroundStyle(rowFg)
                 Spacer(minLength: 0)
                 if row.checked {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(theme.color(theme.palette.accent))
+                        .foregroundStyle(highlighted ? selectedFg : theme.color(theme.palette.accent))
                 }
                 if let hint = row.keyHint {
                     Text(hint)
                         .font(.system(size: 11))
-                        .foregroundStyle(theme.color(theme.palette.fgMuted))
+                        .foregroundStyle(highlighted ? selectedFg : theme.color(theme.palette.fgMuted))
                 }
             }
             .padding(.horizontal, 12)
@@ -462,7 +474,7 @@ private struct StatusPanelView: View {
             .background {
                 if highlighted {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(theme.color(theme.palette.selectionBg).opacity(0.7))
+                        .fill(theme.color(theme.palette.selectionBg))
                         .padding(.horizontal, 5)
                 }
             }

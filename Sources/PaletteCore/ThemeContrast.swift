@@ -53,7 +53,11 @@ public enum ThemeContrastRepair {
 
         adjust(&theme.palette.fg, field: "fg", backgrounds: [bg],
                minimum: ThemeContrastThresholds.body, theme: name, report: &report)
-        adjust(&theme.palette.fgMuted, field: "fg_muted", backgrounds: [bg],
+        adjust(&theme.palette.fgMuted, field: "fg_muted",
+               backgrounds: [bg, theme.palette.surface],
+               minimum: ThemeContrastThresholds.muted, theme: name, report: &report)
+        adjust(&theme.footer.hintColor, field: "footer.hint_color",
+               backgrounds: [theme.palette.surface],
                minimum: ThemeContrastThresholds.muted, theme: name, report: &report)
         adjust(&theme.palette.accent, field: "accent",
                backgrounds: [bg, theme.palette.surface, theme.palette.elevated],
