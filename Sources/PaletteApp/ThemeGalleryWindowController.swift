@@ -782,9 +782,13 @@ final class ThemeGalleryWindowController: NSWindowController {
     private func updateAppearance() {
         let theme = themeManager.theme
         window?.appearance = theme.nsAppearance
-        let reduceTransparency = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
-        backdrop.isHidden = reduceTransparency
-        solid.isHidden = !reduceTransparency
+        // A themed sheet, not a vibrancy panel: the deck spans the whole
+        // screen width, so a blur would sample the desktop unevenly and the
+        // card colours would sit on a shifting backdrop.
+        // The capture hook renders `contentView`, so the backdrop stays in the
+        // hierarchy; the opaque sheet on top is what the user sees.
+        backdrop.isHidden = false
+        solid.isHidden = false
         solid.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
         for layer in [backdrop.layer, solid.layer] {
             layer?.borderWidth = 1
