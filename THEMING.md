@@ -251,10 +251,10 @@ declaration). `palette.json` carries the same fields as JSON.
 
 | Target | What Palette writes | When it takes effect |
 |---|---|---|
-| kitty | `include` of the generated file in `~/.config/kitty/kitty.conf` | Palette reloads open windows with `kitty @ set-colors` when remote control is on; otherwise restart kitty |
+| kitty | `include` of the generated file plus `allow_remote_control socket-only` in `~/.config/kitty/kitty.conf` | Palette recolours every running kitty over its unix socket; the first apply that adds the block needs one restart |
 | Ghostty | `config-file = <absolute path>` in `~/.config/ghostty/config` | restart Ghostty |
 | zellij | the palette block and `theme "palette"` in `~/.config/zellij/config.kdl` | new zellij session |
-| Neovim | `dofile(...)` in `init.lua` (or `source` in `init.vim`) | `:source` that file or restart Neovim |
+| Neovim | `dofile(...)` in `init.lua` (or `source` in `init.vim`) | `:source` that file, or restart Neovide/Neovim (Neovide keeps the old colours until its nvim restarts) |
 | fish | `source` of the palette snippet in `~/.config/fish/config.fish` | new shell, or `source` the file |
 | Starship | never edits `starship.toml`: writes a remapped copy plus a fish snippet that exports `STARSHIP_CONFIG` | new shell |
 | bat | `--theme=palette` in `~/.config/bat/config` and a symlink at `~/.config/bat/themes/palette.tmTheme` | next `bat` run |

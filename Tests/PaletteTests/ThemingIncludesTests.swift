@@ -143,6 +143,23 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertEqual(twice.components(separatedBy: "# <<< palette theme <<<").count, 2)
     }
 
+    func testKittyBlockOwnsSocketOnlyRemoteControlAndReportsItOnce() throws {
+        let home = makeHome()
+        try write("listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}\n", to: home + "/.config/kitty/kitty.conf")
+        let includes = includes(home)
+
+        let first = install(includes, .kitty)
+        XCTAssertTrue(first.addedRemoteControl, "the first Apply is the one that needs the restart")
+        let text = try read(home + "/.config/kitty/kitty.conf")
+        XCTAssertTrue(text.contains("allow_remote_control socket-only\ninclude ~/config/theme/kitty.conf"))
+        XCTAssertTrue(text.contains("listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}"), "the user's listener stays")
+
+        let second = install(includes, .kitty)
+        XCTAssertEqual(second.action, .unchanged)
+        XCTAssertFalse(second.addedRemoteControl, "the directive is in the config now, so no second restart hint")
+        XCTAssertEqual(try read(home + "/.config/kitty/kitty.conf"), text)
+    }
+
     func testRemovalRestoresTheUnrelatedContentByteForByte() throws {
         let home = makeHome()
         let path = home + "/.config/kitty/kitty.conf"

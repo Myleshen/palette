@@ -47,7 +47,8 @@ public enum ThemingReload {
         case .nvim:
             return Status(
                 state: .action,
-                message: "Run :source ~/.config/palette/theme/nvim.lua or restart Neovim"
+                message: "Run :source ~/.config/palette/theme/nvim.lua or Restart Neovide/Neovim"
+                    + " (Neovide keeps the old colours until its nvim restarts)"
             )
         case .fish:
             return Status(
@@ -91,5 +92,24 @@ public enum ThemingReload {
             return Status(state: .failed, message: "Restart kitty (reload failed)")
         }
         return Status(state: .reloaded, message: "Reloaded open kitty windows")
+    }
+
+    /// The Apply that writes `allow_remote_control` cannot reach the kitty that
+    /// is already running: it starts its socket on the next launch. Said once
+    /// because the directive is already in the config afterwards.
+    public static func kittyAddedRemoteControl() -> Status {
+        Status(
+            state: .action,
+            message: "Added remote control — restart kitty once, then applies recolour it live"
+        )
+    }
+
+    /// One kitty process can have several OS windows; `set-colors -a` painted
+    /// all of them over one socket.
+    public static func kittyLive(windows: Int) -> Status {
+        Status(
+            state: .reloaded,
+            message: windows == 1 ? "Reloaded 1 kitty window" : "Reloaded \(windows) kitty windows"
+        )
     }
 }

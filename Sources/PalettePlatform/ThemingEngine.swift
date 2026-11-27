@@ -148,6 +148,9 @@ public final class ThemingEngine: ObservableObject {
     /// Tests generate files in a sandbox HOME; asking the user's kitty to
     /// reload colours from that sandbox would paint the live terminal.
     private let reloadsEnabled: Bool
+    /// Hands a profile file to System Settings. Injected so a test can count
+    /// the calls without opening anything.
+    private let openProfile: @Sendable (String) async -> Bool
 
     public init(
         paths: PalettePaths,
@@ -155,7 +158,11 @@ public final class ThemingEngine: ObservableObject {
         chromiumProbe: ChromiumProbe = .live,
         kitty: KittyRemoteControl = KittyRemoteControl(),
         macOSMajorVersion: Int = ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
-        reloadsEnabled: Bool = true
+        reloadsEnabled: Bool = true,
+        openProfile: @escaping @Sendable (String) async -> Bool = { path in
+            guard let result = try? await ProcessRunner.run(["open", path], timeout: 10) else { return false }
+            return result.status == 0
+        }
     ) {
         self.themeDir = paths.themeDir
         self.previousDir = paths.themeDir.appendingPathComponent("previous", isDirectory: true)
@@ -164,6 +171,7 @@ public final class ThemingEngine: ObservableObject {
         self.kitty = kitty
         self.macOSMajorVersion = macOSMajorVersion
         self.reloadsEnabled = reloadsEnabled
+        self.openProfile = openProfile
         self.includes = ThemingIncludes(home: paths.home, themeDir: paths.themeDir)
     }
 
@@ -555,7 +563,9 @@ public final class ThemingEngine: ObservableObject {
         do {
             let outcome = try await write(palette: palette, metadata: metadata, targets: config.targets)
             let succeeded = outcome.failed.isEmpty
-            let reloads = succeeded ? await reloadAll(config.targets) : [:]
+            let reloads = succeeded
+                ? await reloadAll(config.targets, kittyRemoteControlAdded: outcome.kittyRemoteControlAdded)
+                : [:]
             var summary: String
             if succeeded {
                 summary = "Applied \(outcome.written.count) file\(outcome.written.count == 1 ? "" : "s") to \(themeDir.path)."
@@ -628,6 +638,9 @@ public final class ThemingEngine: ObservableObject {
         var statusSuffix: String?
         var policySelected: Bool
         var reports: [TargetReport]
+        /// This Apply first added kitty's remote-control directive; the running
+        /// kitty only starts listening after one restart.
+        var kittyRemoteControlAdded: Bool
     }
 
     private struct ChromiumOutcome {
@@ -677,6 +690,7 @@ public final class ThemingEngine: ObservableObject {
         var policySelected = false
         var anyNeedsInstall = false
         var anyPolicyWritten = false
+        var kittyRemoteControlAdded = false
         var reports: [TargetReport] = []
 
         for target in ThemingTarget.allCases {
@@ -782,6 +796,7 @@ public final class ThemingEngine: ObservableObject {
                         state: .failed
                     ))
                 } else {
+                    if include.addedRemoteControl { kittyRemoteControlAdded = true }
                     if let path = include.path, target != .starship {
                         changes.append("\(target.title) include: \(includes.shortPath(path))")
                     }
@@ -837,7 +852,8 @@ public final class ThemingEngine: ObservableObject {
             notices: notices,
             statusSuffix: statusSuffix,
             policySelected: policySelected,
-            reports: reports
+            reports: reports,
+            kittyRemoteControlAdded: kittyRemoteControlAdded
         )
     }
 
@@ -911,6 +927,13 @@ public final class ThemingEngine: ObservableObject {
         let stale = installedColour.map {
             $0.caseInsensitiveCompare(palette.background) != .orderedSame
         } ?? false
+        // An approved profile freezes the old colour until it is replaced, so
+        // hand the updated file to System Settings once, right here. Guarded
+        // by reloadsEnabled for the same reason as kitty: a sandbox test must
+        // not open anything on the real machine.
+        if stale, reloadsEnabled {
+            _ = await openProfile(policyURL(for: browser).path)
+        }
         if installed, await chromiumProbe.isRunning(browser.processName) {
             _ = try? await ProcessRunner.run(
                 ["open", "-a", browser.appName, "--args", "--refresh-platform-policy", "--no-startup-window"],
@@ -919,7 +942,7 @@ public final class ThemingEngine: ObservableObject {
         }
         let note: String
         if stale {
-            note = "Installed — re-approve the updated profile"
+            note = "Re-approve the updated profile in System Settings — \(browser.name) keeps the old colour until then"
         } else if installed {
             note = "Installed — all \(browser.name) profiles."
         } else {
@@ -1034,19 +1057,32 @@ public final class ThemingEngine: ObservableObject {
         reloadStatuses[target.rawValue] ?? ThemingReload.status(for: target)
     }
 
-    private func liveReloadStatus(for target: ThemingTarget) async -> ThemingReload.Status {
+    private func liveReloadStatus(
+        for target: ThemingTarget,
+        addedRemoteControl: Bool = false
+    ) async -> ThemingReload.Status {
         guard ThemingReload.canAttempt(target) else { return ThemingReload.status(for: target) }
-        return await kitty.reload(themeFile: themeDir.appendingPathComponent(target.fileName).path)
+        return await kitty.reload(
+            themeFile: themeDir.appendingPathComponent(target.fileName).path,
+            configPath: includes.plan(for: target)?.path,
+            addedRemoteControl: addedRemoteControl
+        )
     }
 
-    private func reloadAll(_ targets: [String]) async -> [String: ThemingReload.Status] {
+    private func reloadAll(
+        _ targets: [String],
+        kittyRemoteControlAdded: Bool
+    ) async -> [String: ThemingReload.Status] {
         var statuses: [String: ThemingReload.Status] = [:]
         for raw in targets {
             // Browsers report through the managed policy, not a file include.
             guard let target = ThemingTarget(rawValue: raw), target.isImplemented, !target.isBrowser else {
                 continue
             }
-            statuses[raw] = await liveReloadStatus(for: target)
+            statuses[raw] = await liveReloadStatus(
+                for: target,
+                addedRemoteControl: target == .kitty && kittyRemoteControlAdded
+            )
         }
         reloadStatuses = statuses
         return statuses

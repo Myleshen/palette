@@ -47,6 +47,11 @@
   (previously read as "Not installed" while enforcing) and reports a stale
   colour; removal targets every catalogue browser and warns when one remains
   installed.
+- Apply now recolours running kitty windows over their unix sockets: the
+  managed block adds `allow_remote_control socket-only`, the first apply after
+  that asks for the one restart it needs, and later applies are live. A stale
+  browser profile opens in System Settings once per apply, so re-approval is one
+  click, and Neovim's hint names Neovide explicitly.
 - bat runs `bat cache --build` after linking its theme, so it actually applies;
   btop is manual now (btop deletes marker comments, which left the row lying
   and a dangling `color_theme`).

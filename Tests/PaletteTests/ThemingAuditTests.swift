@@ -25,7 +25,9 @@ final class ThemingAuditTests: XCTestCase {
         _ paths: PalettePaths,
         installed: Set<String> = [],
         policyInstalled: Bool = false,
-        themeColor: String? = nil
+        themeColor: String? = nil,
+        reloadsEnabled: Bool = false,
+        openProfile: @escaping @Sendable (String) async -> Bool = { _ in true }
     ) -> ThemingEngine {
         ThemingEngine(
             paths: paths,
@@ -36,7 +38,8 @@ final class ThemingAuditTests: XCTestCase {
                 isRunning: { _ in false },
                 themeColor: { _ in themeColor }
             ),
-            reloadsEnabled: false
+            reloadsEnabled: reloadsEnabled,
+            openProfile: openProfile
         )
     }
 
@@ -155,7 +158,10 @@ final class ThemingAuditTests: XCTestCase {
             ThemingConfig(enabled: true, theme: "default-dark", targets: ["chrome"])
         )
         let staleTarget = try XCTUnwrap(stale.targets.first { $0.id == "chrome" })
-        XCTAssertEqual(staleTarget.note, "Installed — re-approve the updated profile")
+        XCTAssertEqual(
+            staleTarget.note,
+            "Re-approve the updated profile in System Settings — Google Chrome keeps the old colour until then"
+        )
 
         let freshPaths = makePaths()
         let freshEngine = makeEngine(
@@ -169,6 +175,51 @@ final class ThemingAuditTests: XCTestCase {
         )
         let freshTarget = try XCTUnwrap(fresh.targets.first { $0.id == "chrome" })
         XCTAssertEqual(freshTarget.note, "Installed — all Google Chrome profiles.")
+    }
+
+    func testAStaleInstalledProfileOpensOncePerApply() async throws {
+        let paths = makePaths()
+        let browser = try XCTUnwrap(ChromiumBrowser.browser(for: .helium))
+        let recorder = OpenedProfiles()
+        let stale = makeEngine(
+            paths,
+            installed: [browser.bundleID],
+            policyInstalled: true,
+            themeColor: "#000000",
+            reloadsEnabled: true,
+            openProfile: { path in
+                recorder.record(path)
+                return true
+            }
+        )
+        let config = ThemingConfig(enabled: true, theme: "default-dark", targets: ["helium"])
+
+        let applied = await stale.apply(config)
+
+        XCTAssertEqual(recorder.paths, [stale.policyURL(for: browser).path])
+        let target = try XCTUnwrap(applied.targets.first { $0.id == "helium" })
+        XCTAssertEqual(
+            target.note,
+            "Re-approve the updated profile in System Settings — Helium keeps the old colour until then"
+        )
+
+        // A profile already carrying the new colour needs no System Settings
+        // trip, so nothing may open.
+        let freshPaths = makePaths()
+        let untouched = OpenedProfiles()
+        let fresh = makeEngine(
+            freshPaths,
+            installed: [browser.bundleID],
+            policyInstalled: true,
+            themeColor: PalettePalette(theme: .defaultDark).background,
+            reloadsEnabled: true,
+            openProfile: { path in
+                untouched.record(path)
+                return true
+            }
+        )
+        _ = await fresh.apply(config)
+        XCTAssertEqual(untouched.paths, [])
     }
 
     func testRemovalTargetsEveryBrowserNotOnlyTheSelectedOne() {
@@ -320,5 +371,23 @@ final class ThemingAuditTests: XCTestCase {
 
         config.source = .wallpaper
         XCTAssertTrue(config.render().contains("follow_wallpaper = true"))
+    }
+}
+
+/// Counts the profile files Apply hands to System Settings.
+private final class OpenedProfiles: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [String] = []
+
+    var paths: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded
+    }
+
+    func record(_ path: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        recorded.append(path)
     }
 }

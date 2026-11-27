@@ -38,6 +38,10 @@ public struct ThemingIncludes: Sendable {
         public var path: String?
         public var action: Action
         public var error: String?
+        /// True when this install first put kitty's `allow_remote_control` in
+        /// the config, so the running kitty needs one restart to start its
+        /// socket.
+        public var addedRemoteControl: Bool = false
     }
 
     public struct Status: Sendable, Equatable {
@@ -221,6 +225,7 @@ public struct ThemingIncludes: Sendable {
         let resolved = resolve(plan.path)
         let existing = (try? String(contentsOfFile: resolved, encoding: .utf8)) ?? ""
         let existed = fileManager.fileExists(atPath: resolved)
+        let addedRemoteControl = target == .kitty && !hasRemoteControlDirective(existing)
         do {
             try backupIfNeeded(plan, resolved: resolved, existed: existed)
             let updated = appendingBlock(to: removingBlock(from: existing, format: plan.format), format: plan.format, body: body)
@@ -228,7 +233,13 @@ public struct ThemingIncludes: Sendable {
                 try write(updated, to: resolved)
             }
             try installAuxiliary(target)
-            return Outcome(target: target, path: plan.path, action: updated == existing ? .unchanged : .installed, error: nil)
+            return Outcome(
+                target: target,
+                path: plan.path,
+                action: updated == existing ? .unchanged : .installed,
+                error: nil,
+                addedRemoteControl: addedRemoteControl
+            )
         } catch {
             return Outcome(target: target, path: plan.path, action: .failed, error: error.localizedDescription)
         }
@@ -341,7 +352,10 @@ public struct ThemingIncludes: Sendable {
         // expand `~` on every version.
         switch plan.target {
         case .kitty:
-            return "include \(shortPath(themeFile(.kitty).path))"
+            // socket-only keeps remote control on the local unix socket and
+            // off TCP, for every running kitty Palette recolours live. The
+            // block is Palette's, so the directive leaves with it.
+            return "allow_remote_control socket-only\ninclude \(shortPath(themeFile(.kitty).path))"
         case .ghostty:
             return "config-file = \(themeFile(.ghostty).path)"
         case .zellij:
@@ -397,6 +411,16 @@ public struct ThemingIncludes: Sendable {
         // shortcut: a config that did not end with a newline gains one, because
         // the block cannot be separated otherwise. Configs end with newlines.
         return text + "\n" + block + "\n"
+    }
+
+    /// A comment mentioning the directive is not a setting; only a real line
+    /// counts, so the one-restart hint is not silently skipped.
+    private func hasRemoteControlDirective(_ text: String) -> Bool {
+        text.components(separatedBy: .newlines).contains { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("#") else { return false }
+            return trimmed.split(whereSeparator: { $0 == " " || $0 == "\t" }).first == "allow_remote_control"
+        }
     }
 
     private func removingBlock(from text: String, format: Format) -> String {
