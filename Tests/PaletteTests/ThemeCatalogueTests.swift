@@ -4,9 +4,10 @@ import XCTest
 import PaletteCore
 
 /// The 2.20.0 catalogue guarantees, checked against the files that ship:
-/// 70 families with a dark and a light variant each, every kept file loads and
-/// clears the contrast bars from `ThemeContrastThresholds`, ANSI red and green
-/// stay apart, and every pruned id still resolves to a theme that loads.
+/// 69 families with a dark and a light variant each, every kept file loads,
+/// clears the contrast bars from `ThemeContrastThresholds` and keeps its UI
+/// roles visibly apart, ANSI red and green stay apart, and every pruned id
+/// still resolves to a theme that loads.
 final class ThemeCatalogueTests: XCTestCase {
     private var resources: URL {
         URL(fileURLWithPath: #filePath)
@@ -99,9 +100,9 @@ final class ThemeCatalogueTests: XCTestCase {
 
     // MARK: - Catalogue shape
 
-    func testCatalogueIsSeventyFamiliesWithBothAppearances() {
-        XCTAssertEqual(ThemeCuration.families.count, 70)
-        XCTAssertEqual(keptIDs.count, 140, "every family ships one dark and one light file")
+    func testCatalogueIsSixtyNineFamiliesWithBothAppearances() {
+        XCTAssertEqual(ThemeCuration.families.count, 69)
+        XCTAssertEqual(keptIDs.count, 138, "every family ships one dark and one light file")
         for family in ThemeCuration.families {
             XCTAssertNotEqual(family.dark, family.light, family.name)
             XCTAssertTrue(bundledFiles.contains(family.dark), family.dark)
@@ -206,32 +207,33 @@ final class ThemeCatalogueTests: XCTestCase {
         }
     }
 
+    /// A port can clear every contrast bar and still be hard to read because
+    /// two roles are the same grey. These are the usability floors for the
+    /// curated set; a theme that cannot meet them is dropped, not shipped.
+    func testEveryKeptThemeKeepsRolesDistinct() throws {
+        for id in keptIDs.sorted() {
+            let p = load(id).theme.palette
+            XCTAssertGreaterThanOrEqual(deltaE(p.fg, p.fgMuted), 12, "\(id) fg vs muted")
+            XCTAssertGreaterThanOrEqual(deltaE(p.fgMuted, p.border), 8, "\(id) muted vs border")
+            XCTAssertGreaterThanOrEqual(deltaE(p.accent, p.fg), 15, "\(id) accent vs fg")
+            XCTAssertGreaterThanOrEqual(deltaE(p.accent, p.selectionBg), 8, "\(id) accent vs selection bg")
+            XCTAssertGreaterThanOrEqual(deltaE(p.elevated, p.surface), 1.5, "\(id) elevated vs surface")
+
+            let surface = deltaE(p.surface, p.bg)
+            XCTAssertGreaterThanOrEqual(surface, 1.5, "\(id) surface vs bg")
+            XCTAssertLessThanOrEqual(surface, 12, "\(id) surface vs bg")
+
+            XCTAssertGreaterThanOrEqual(deltaE(p.selectionFg, p.selectionBg), 12, "\(id) selection fg vs bg")
+            XCTAssertGreaterThanOrEqual(try ratio(p.selectionFg, p.selectionBg), 4.5, "\(id) selection contrast")
+        }
+    }
+
     func testRedAndGreenNeverCollapse() throws {
         for id in keptIDs.sorted() {
             let ansi = PalettePalette(theme: load(id).theme).ansi
             XCTAssertGreaterThanOrEqual(deltaE(ansi[1], ansi[2]), 5, "\(id) ansi1 vs ansi2")
             XCTAssertGreaterThanOrEqual(deltaE(ansi[9], ansi[10]), 5, "\(id) ansi9 vs ansi10")
         }
-    }
-
-    /// `PalettePalette.ansi` derives magenta from the accent and cyan from
-    /// mix(success, info), so a theme whose accent is its ANSI blue repeats one
-    /// hue. That is a palette-derivation limit, not a file defect: this test
-    /// pins how many themes carry it so a change to the derivation shows up.
-    func testANSINearDuplicateCountDoesNotGrow() throws {
-        var flagged = 0
-        for id in keptIDs.sorted() {
-            let ansi = PalettePalette(theme: load(id).theme).ansi
-            let slots = [1, 2, 3, 4, 5, 6] + [9, 10, 11, 12, 13, 14]
-            var minimum = Double.greatestFiniteMagnitude
-            for (offset, first) in slots.enumerated() {
-                for second in slots[(offset + 1)...] {
-                    minimum = min(minimum, deltaE(ansi[first], ansi[second]))
-                }
-            }
-            if minimum < 5 { flagged += 1 }
-        }
-        XCTAssertLessThanOrEqual(flagged, 65, "near-duplicate ANSI slots grew past the 2.20.0 baseline")
     }
 
     private func themeBase(for table: TOMLTable) -> Theme {

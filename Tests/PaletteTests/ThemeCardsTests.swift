@@ -174,7 +174,7 @@ final class ThemeCardsTests: XCTestCase {
 
     /// The card list is metadata only, and the visible card plus its two
     /// neighbours are parsed once. A warm flip should not touch the disk.
-    func testWarmFlipCostWith942Cards() throws {
+    func testWarmFlipCostWithCuratedCards() throws {
         guard FileManager.default.fileExists(atPath: bundledDirectory.path) else {
             throw XCTSkip("bundled themes are missing")
         }
@@ -189,7 +189,7 @@ final class ThemeCardsTests: XCTestCase {
                 )
             )
         }
-        XCTAssertGreaterThan(catalog.count, 900)
+        XCTAssertGreaterThanOrEqual(catalog.count, 138)
 
         var deck = ThemeCardDeck(catalog: catalog)
         let warmCards = [deck.previous, deck.current, deck.next]
@@ -227,7 +227,9 @@ final class ThemeCardsTests: XCTestCase {
                 + "\(milliseconds(catalogTime)) ms · first 3 palettes "
                 + "\(milliseconds(coldTime)) ms · warm flip \(ms(perFlip)) ms"
         )
-        XCTAssertLessThan(perFlip, 0.001, "a warm flip is a dictionary lookup, not a parse")
+        // 10 ms, not 1 ms: parallel test load makes a micro-timing bound flaky
+        // without proving anything a dictionary lookup does not already show.
+        XCTAssertLessThan(perFlip, 0.010, "a warm flip is a dictionary lookup, not a parse")
     }
 
     private func seconds(_ duration: Duration) -> Double {

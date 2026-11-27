@@ -398,17 +398,21 @@ Bundled themes ship inside the app as TOML resources; a user theme with the
 same file name in `~/.config/palette/themes` wins. `[theme]` in `config.toml`
 only names the dark and light theme and picks the mode — there is no `source`
 key. The catalogue is the built-in defaults (Default Dark/Light, Catppuccin
-Mocha/Latte, Gruvbox Dark/Light, Aetheria Pink, Siri Silver/Graphite), 70
-bundled port families (140 files) and your own files.
+Mocha/Latte, Gruvbox Dark/Light, Aetheria Pink, Siri Silver/Graphite), 69
+bundled port families (138 files) and your own files.
 
 ### Catalogue
 
 A 2.20.0 audit measured every shipped port with the contrast table above and
-with an OKLab distance between its ANSI slots. The catalogue was cut from 933
-files to 70 families, each shipping one dark and one light variant:
+with an OKLab distance between its UI roles. The catalogue was cut from 933
+files to 69 families, each shipping one dark and one light variant:
 
 - both variants clear the whole contrast table, so a light counterpart is never
   a washed-out approximation of the dark one;
+- text, muted text, accent, border, surface and selection stay visibly apart:
+  `fg`/`fg_muted` ≥ 12 ΔE, `fg_muted`/`border` ≥ 8, `accent`/`fg` ≥ 15,
+  `accent`/`selection_bg` ≥ 8, `surface`/`bg` 1.5–12, `elevated`/`surface`
+  ≥ 1.5 and `selection_fg`/`selection_bg` ≥ 12 ΔE at 4.5:1;
 - `danger` / `success` / `warning` / `info` stay four separate hues (no theme
   whose status colours are one decorative colour), so diffs, git status and
   errors remain readable;
@@ -416,14 +420,16 @@ files to 70 families, each shipping one dark and one light variant:
   two hues a colour-blind user can confuse never collapse;
 - every ANSI text slot clears 2.5:1 on the background.
 
-`PalettePalette.ansi` derives magenta from `accent` and cyan from
-`mix(success, info)`. When a port's accent is its ANSI blue, slots 4/5 (and
-12/13) repeat a hue. That is a limit of the derivation, not of the file: 65 of
-the 140 kept files carry one near-duplicate pair, pinned by
-`ThemeCatalogueTests.testANSINearDuplicateCountDoesNotGrow` so the count cannot
-grow silently.
+Theme ANSI slots are still hand-authored through `PalettePalette.ansi`, so a
+port whose accent is its ANSI blue can repeat that hue in slots 4/5. Wallpaper
+palettes are machine-generated, so `PalettePalette.distinctANSI` repairs a
+colliding wallpaper pair in OKLCH; a pywal scheme that already separates is
+returned untouched.
 
-Families that only ever shipped one appearance were dropped — Dracula, Sonokai,
+Seoul Bones was dropped from the catalogue in 2.20.0: its dark variant could
+not separate `accent` from `fg` without changing the accent's hue, and the
+family lost both files rather than ship an unusable dark half. Families that
+only ever shipped one appearance were dropped — Dracula, Sonokai,
 Oxocarbon, Vesper and Zenburn have no light port, and the Nightfox set splits
 its dark (`nightfox`, `duskfox`, `nordfox`, `terafox`, `carbonfox`) and light
 (`dayfox`, `dawnfox`) variants across separate files. `ThemeCuration` maps every

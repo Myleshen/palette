@@ -12,14 +12,16 @@ terminal background, foreground, cursor and ANSI colours onto Palette's palette
 and derives surface, muted, border, badge and row states. A user theme in this
 folder with the same name overrides the bundled copy.
 
-The folder ships 70 curated families, one `-dark` and one `-light` variant each
-(140 files). Everything else was pruned in 2.20.0 after a contrast and ANSI
-audit; `ThemeCuration` in `Sources/PaletteCore` maps a pruned id to the kept
-variant, so an old config or favourite still loads. Families that only ever had
-one appearance (Dracula, Sonokai, Oxocarbon, Vesper, Zenburn) are not here. The
-Omarchy ports are gone too: they repeated families the Ghostty ports already
-cover, and the Ghostty variant is the one kept. See `THEMING.md` → Catalogue for
-the policy.
+The folder ships 69 curated families, one `-dark` and one `-light` variant each
+(138 files). Everything else was pruned in 2.20.0 after a contrast, role-
+separation and ANSI audit; `ThemeCuration` in `Sources/PaletteCore` maps a
+pruned id to the kept variant, so an old config or favourite still loads.
+Seoul Bones was dropped outright: its dark variant could not separate the
+accent from body text without changing the accent's hue. Families that only
+ever had one appearance (Dracula, Sonokai, Oxocarbon, Vesper, Zenburn) are not
+here. The Omarchy ports are gone too: they repeated families the Ghostty ports
+already cover, and the Ghostty variant is the one kept. See `THEMING.md` →
+Catalogue for the policy.
 
 After adding or importing a theme, repair its palette with
 `swift run ThemeRepair Resources/Themes`. The app applies the same contrast

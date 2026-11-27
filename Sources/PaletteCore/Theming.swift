@@ -526,6 +526,70 @@ public struct PalettePalette: Equatable, Sendable {
         return values.map(hex)
     }
 
+    /// Wallpaper palettes come from pywal, which can return the same colour in
+    /// two ANSI slots. Repair only a colliding pair: rotate the later slot in
+    /// OKLCH, keeping its lightness and contrast floor. A scheme that already
+    /// separates is returned untouched, so pywal parity holds.
+    static func distinctANSI(_ colors: [RGBA], background: RGBA) -> [RGBA] {
+        guard colors.count >= 16 else { return colors }
+        let slots = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14]
+        var values = colors
+        for _ in 0..<64 {
+            guard let pair = firstANSICollision(values, slots: slots) else { return values }
+            if let adjusted = rotatedAway(
+                values[pair.1],
+                otherSlots: slots.filter { $0 != pair.1 }.map { values[$0] },
+                background: background
+            ) {
+                values[pair.1] = adjusted
+            } else if let adjusted = rotatedAway(
+                values[pair.0],
+                otherSlots: slots.filter { $0 != pair.0 }.map { values[$0] },
+                background: background
+            ) {
+                values[pair.0] = adjusted
+            } else {
+                return values
+            }
+        }
+        return values
+    }
+
+    private static func firstANSICollision(_ values: [RGBA], slots: [Int]) -> (Int, Int)? {
+        for (offset, first) in slots.enumerated() {
+            for second in slots[(offset + 1)...] where deltaE(values[first], values[second]) < 5 {
+                return (first, second)
+            }
+        }
+        return nil
+    }
+
+    private static func rotatedAway(_ color: RGBA, otherSlots: [RGBA], background: RGBA) -> RGBA? {
+        let lab = ThemeContrastRepair.oklab(color)
+        let chroma = max((lab.a * lab.a + lab.b * lab.b).squareRoot(), 0.04)
+        let hue = atan2(lab.b, lab.a)
+        let floor = min(2.5, color.contrast(with: background))
+        for step in 1...36 {
+            let offset = Double(step) * 5 * Double.pi / 180
+            for direction in [1.0, -1.0] {
+                let angle = hue + offset * direction
+                let mapped = ThemeContrastRepair.gamutMapped(ThemeContrastRepair.OKLab(
+                    l: lab.l, a: cos(angle) * chroma, b: sin(angle) * chroma
+                ))
+                let candidate = RGBA(hex: hex(mapped)) ?? mapped
+                guard candidate.contrast(with: background) >= floor else { continue }
+                if otherSlots.allSatisfy({ deltaE(candidate, $0) >= 5 }) { return candidate }
+            }
+        }
+        return nil
+    }
+
+    private static func deltaE(_ first: RGBA, _ second: RGBA) -> Double {
+        let a = ThemeContrastRepair.oklab(first)
+        let b = ThemeContrastRepair.oklab(second)
+        return 100 * sqrt(pow(a.l - b.l, 2) + pow(a.a - b.a, 2) + pow(a.b - b.b, 2))
+    }
+
     static func sixteen(_ values: [String]) -> [String] {
         var values = values
         while values.count < 16 {
@@ -694,7 +758,7 @@ public enum WallpaperPalette {
             elevated: hex(elevated),
             border: hex(border),
             muted: hex(muted),
-            ansi: scheme.map(hex)
+            ansi: PalettePalette.distinctANSI(scheme, background: background).map(hex)
         )
     }
 
