@@ -678,6 +678,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.themeGallery?.scriptMove(1)
                 } else if step == "themecards_prev" {
                     self.themeGallery?.scriptMove(-1)
+                } else if let value = step.dropPrefix("themecards_filter=") {
+                    self.themeGallery?.scriptFilter(value)
+                } else if step == "themecards_tab" {
+                    self.themeGallery?.scriptToggleFavouritesView()
+                } else if step == "themecards_favourite" {
+                    self.themeGallery?.scriptToggleFavourite()
+                } else if step == "themecards_apply" {
+                    self.themeGallery?.scriptApply()
                 } else if let value = step.dropPrefix("themecards_snapshot=") {
                     if let view = self.themeGallery?.window?.contentView {
                         self.write(view: view, to: value)
@@ -1242,7 +1250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func syntheticKey(_ token: String) -> NSEvent? {
         var flags: NSEvent.ModifierFlags = []
         var name = token.lowercased()
-        for (prefix, flag) in [("cmd+", NSEvent.ModifierFlags.command), ("opt+", .option), ("shift+", .shift)] {
+        for (prefix, flag) in [("ctrl+", NSEvent.ModifierFlags.control), ("cmd+", NSEvent.ModifierFlags.command), ("opt+", .option), ("shift+", .shift)] {
             if name.hasPrefix(prefix) {
                 flags.insert(flag)
                 name = String(name.dropFirst(prefix.count))
@@ -1254,6 +1262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "enter": (36, "\r"), "esc": (53, "\u{1B}"), "tab": (48, "\t"),
             "space": (49, " "), "comma": (43, ","), "k": (40, "k"),
             "r": (15, "r"), "w": (13, "w"), "s": (1, "s"), "o": (31, "o"), "c": (8, "c"),
+            "f": (3, "f"), "backspace": (51, "\u{8}"),
             "1": (18, "1"), "2": (19, "2"), "3": (20, "3"),
             "4": (21, "4"), "5": (23, "5"), "6": (22, "6"),
             "7": (26, "7"), "8": (28, "8"), "9": (25, "9"),
@@ -3236,6 +3245,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themeGallery = ThemeGalleryWindowController(
             themeManager: themeManager,
             themesDirectory: paths.themesDir,
+            wallpaperDirectory: WallpaperLibrary.directory(
+                path: configuration.theming.wallpaperDirectory
+            ),
             apply: { [weak self] target in
                 guard let self else { return ThemeGalleryApplyOutcome(message: "", failed: true) }
                 return await self.applyGalleryTarget(target)
@@ -3271,7 +3283,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The gallery's apply route. Theme cards take the same two paths as the
     /// theme browser: the Palette theme write plus the cross-app engine when
-    /// that is enabled. The wallpaper card only has the engine path.
+    /// that is enabled. A wallpaper card sets the picture first, then takes
+    /// the engine path when cross-app theming is on.
     private func applyGalleryTarget(_ target: ThemeCardTarget) async -> ThemeGalleryApplyOutcome {
         let message: String
         let failed: Bool
@@ -3290,13 +3303,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let applied = await applyWallpaperPaletteNow()
             message = applied.error ?? applied.status
             failed = applied.error != nil
+        case .wallpaperFile(let path):
+            let name = URL(fileURLWithPath: path).lastPathComponent
+            guard setDesktopPicture(path) else {
+                message = "Could not set \(name) as the desktop picture."
+                failed = true
+                break
+            }
+            if configuration.theming.enabled {
+                let applied = await applyWallpaperPaletteNow()
+                message = applied.error ?? "\(name): \(applied.status)"
+                failed = applied.error != nil
+            } else {
+                message = "Desktop picture set: \(name)"
+                failed = false
+            }
         }
         searchController?.setStatus(message, duration: 6)
         return ThemeGalleryApplyOutcome(message: message, failed: failed)
     }
 
-    /// The gallery's W card: the same engine and config write the wallpaper
-    /// follow path uses, just triggered by a key instead of a timer.
+    /// Puts one file on every screen. Returns false when macOS rejects it,
+    /// which it does for video files: those cards say so instead of claiming
+    /// the desktop changed.
+    private func setDesktopPicture(_ path: String) -> Bool {
+        let url = URL(fileURLWithPath: path)
+        var applied = false
+        for screen in NSScreen.screens {
+            do {
+                try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+                applied = true
+            } catch {
+                Log.shared.warn(
+                    "Could not set desktop picture \(url.lastPathComponent) on \(screen.localizedName): "
+                        + error.localizedDescription,
+                    source: "theming"
+                )
+            }
+        }
+        return applied
+    }
+
+    /// The "From wallpaper" card and the wallpaper-follow timer: the same
+    /// engine and config write, just triggered by a key instead.
     @discardableResult
     private func applyWallpaperPaletteNow() async -> ThemingEngine.ApplyResult {
         configuration.theming.enabled = true

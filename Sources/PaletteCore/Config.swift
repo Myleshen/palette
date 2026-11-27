@@ -1344,6 +1344,7 @@ public enum ConfigLoader {
         theme = ""                    # empty uses the theme Palette is showing
         follow_wallpaper = false
         dark_mode = "auto"            # auto | dark | light
+        wallpaper_directory = "~/dot-files/wallpapers"  # theme cards' Wallpapers group
         targets = ["kitty", "ghostty", "zellij", "nvim", "fish", "starship"]
 
         [scopes.projects]

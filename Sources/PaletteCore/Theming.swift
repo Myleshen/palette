@@ -22,6 +22,8 @@ public struct ThemingConfig: Sendable, Equatable {
     public var targets: [String]
     /// auto | dark | light. `auto` follows the system appearance.
     public var darkMode: String
+    /// Pictures the theme cards' leading wallpaper group is built from.
+    public var wallpaperDirectory: String
 
     public init(
         enabled: Bool = false,
@@ -29,7 +31,8 @@ public struct ThemingConfig: Sendable, Equatable {
         theme: String = "",
         followWallpaper: Bool = false,
         targets: [String] = ThemingTarget.phaseOne.map(\.rawValue),
-        darkMode: String = "auto"
+        darkMode: String = "auto",
+        wallpaperDirectory: String = WallpaperLibrary.defaultDirectory
     ) {
         self.enabled = enabled
         self.source = source
@@ -37,6 +40,7 @@ public struct ThemingConfig: Sendable, Equatable {
         self.followWallpaper = followWallpaper
         self.targets = targets
         self.darkMode = darkMode
+        self.wallpaperDirectory = wallpaperDirectory
     }
 
     public static let defaults = ThemingConfig()
@@ -48,6 +52,9 @@ public struct ThemingConfig: Sendable, Equatable {
         value.targets = targets.filter { known.contains($0) && seen.insert($0).inserted }
         if !["auto", "dark", "light"].contains(value.darkMode) {
             value.darkMode = "auto"
+        }
+        if value.wallpaperDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            value.wallpaperDirectory = WallpaperLibrary.defaultDirectory
         }
         return value
     }
@@ -63,6 +70,7 @@ public struct ThemingConfig: Sendable, Equatable {
             config.targets = targets
         }
         config.darkMode = (table.str("dark_mode") ?? config.darkMode).lowercased()
+        config.wallpaperDirectory = table.str("wallpaper_directory") ?? config.wallpaperDirectory
         return config.normalized()
     }
 
@@ -81,6 +89,8 @@ public struct ThemingConfig: Sendable, Equatable {
         out.append("follow_wallpaper = \(value.followWallpaper)")
         out.append("# auto | dark | light")
         out.append("dark_mode = \"\(value.darkMode)\"")
+        out.append("# Pictures the theme cards' Wallpapers group is built from.")
+        out.append("wallpaper_directory = \(ThemingConfig.quote(value.wallpaperDirectory))")
         out.append("targets = [\(value.targets.map(ThemingConfig.quote).joined(separator: ", "))]")
         return out.joined(separator: "\n")
     }
