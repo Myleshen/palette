@@ -55,7 +55,10 @@ public enum ThemingReload {
                 message: "Open a new shell (or `source ~/.config/palette/theme/fish.fish`)"
             )
         case .starship:
-            return Status(state: .action, message: "Next prompt")
+            return Status(
+                state: .action,
+                message: "New shell (or `source ~/.config/palette/theme/starship-palette.fish`)"
+            )
         case .bat:
             return Status(state: .action, message: "Next bat invocation")
         case .btop:

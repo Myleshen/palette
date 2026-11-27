@@ -286,7 +286,10 @@ final class ThemingTests: XCTestCase {
         let generated = try FileManager.default.contentsOfDirectory(atPath: paths.themeDir.path).sorted()
         XCTAssertEqual(
             generated,
-            ["fish.fish", "ghostty.conf", "kitty.conf", "nvim.lua", "palette.json", "previous", "starship.toml", "zellij.kdl"]
+            [
+                "fish.fish", "ghostty.conf", "kitty.conf", "nvim.lua", "palette.json",
+                "previous", "starship-palette.fish", "starship-theme.toml", "starship.toml", "zellij.kdl",
+            ]
         )
     }
 
@@ -390,6 +393,26 @@ final class ThemingTests: XCTestCase {
         let kitty = try read(paths.themeDir.appendingPathComponent("kitty.conf"))
         let mocha = ThemeLoader.load(name: "catppuccin-mocha", themesDirectory: paths.themesDir)
         XCTAssertTrue(kitty.contains("background            \(mocha.theme.palette.bg)"))
+    }
+
+    func testStarshipWithoutFishStillWritesTheCopyAndSaysHowToWireIt() async throws {
+        let paths = makePaths()
+        let engine = makeEngine(paths)
+        var config = ThemingConfig(enabled: true, targets: ["starship"])
+        config.theme = "default-dark"
+        let result = await engine.apply(config)
+
+        XCTAssertNil(result.error)
+        XCTAssertTrue(result.written.contains(StarshipTheme.fileName))
+        XCTAssertTrue(result.written.contains(StarshipTheme.snippetFileName))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: paths.themeDir.appendingPathComponent(StarshipTheme.fileName).path
+        ))
+        XCTAssertTrue(result.notices.contains { $0.contains("STARSHIP_CONFIG") })
+        XCTAssertTrue(
+            result.targets.first { $0.id == "starship" }?.note.contains("STARSHIP_CONFIG") == true
+        )
+        XCTAssertFalse(FileManager.default.fileExists(atPath: paths.home + "/.config/fish/config.fish"))
     }
 
     func testOtherAppsOverrideIsHonoured() async throws {
