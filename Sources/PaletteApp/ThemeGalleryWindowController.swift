@@ -4,6 +4,23 @@ import PaletteCore
 import PalettePlatform
 import SwiftUI
 
+/// The effective alphas the deck draws its labels with. The catalogue repair
+/// only guarantees 4.5:1 at full opacity, so secondary text is never dimmed:
+/// anything on a picture gets a solid scrim instead.
+enum ThemeDeckInk {
+    static let labelAlpha: Double = 1
+    static func label(_ color: Color) -> Color { color.opacity(labelAlpha) }
+    /// `elevated` layered over the deck background.
+    static let fieldFill: Double = 0.65
+    static let chipFill: Double = 0.6
+    /// Black label bar over a wallpaper card or preview image.
+    static let wallpaperScrim: Double = 0.72
+    /// The section/video/counter line on that bar.
+    static let wallpaperSecondary: Double = 0.75
+    /// The preview-wallpaper counter.
+    static let wallpaperCounter: Double = 0.7
+}
+
 /// The gallery shows both halves of an apply: what happened, and whether it
 /// failed, so an error is red instead of looking like success.
 struct ThemeGalleryApplyOutcome: Sendable {
@@ -1029,7 +1046,7 @@ private struct ThemeGalleryView: View {
                 .foregroundStyle(muted)
             Text(model.deck.query.isEmpty ? "Type to filter" : model.deck.query)
                 .font(.system(size: 11))
-                .foregroundStyle(model.deck.query.isEmpty ? muted.opacity(0.75) : theme.color(theme.palette.fg))
+                .foregroundStyle(ThemeDeckInk.label(theme.color(theme.palette.fg)))
                 .lineLimit(1)
         }
         .padding(.horizontal, 9)
@@ -1037,7 +1054,7 @@ private struct ThemeGalleryView: View {
         .frame(minWidth: 180, maxWidth: 360, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(theme.color(theme.palette.elevated).opacity(0.65))
+                .fill(theme.color(theme.palette.elevated).opacity(ThemeDeckInk.fieldFill))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -1064,7 +1081,7 @@ private struct ThemeGalleryView: View {
                     Capsule().fill(
                         lit
                             ? theme.color(theme.palette.accent)
-                            : theme.color(theme.palette.elevated).opacity(0.6)
+                            : theme.color(theme.palette.elevated).opacity(ThemeDeckInk.chipFill)
                     )
                 )
                 .overlay(
@@ -1266,7 +1283,7 @@ private struct ThemeGalleryView: View {
                 if selected {
                     Text(displayAppearance(card, palette: palette))
                         .font(.system(size: 10))
-                        .foregroundStyle(foreground.opacity(0.7))
+                        .foregroundStyle(ThemeDeckInk.label(foreground))
                 }
             }
 
@@ -1283,12 +1300,12 @@ private struct ThemeGalleryView: View {
             if selected {
                 Text(paletteSummary(card, palette: palette))
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(foreground.opacity(0.65))
+                    .foregroundStyle(ThemeDeckInk.label(foreground))
                     .lineLimit(1)
             } else {
                 Text(card.sectionTitle)
                     .font(.system(size: 9))
-                    .foregroundStyle(foreground.opacity(0.55))
+                    .foregroundStyle(ThemeDeckInk.label(foreground))
                     .lineLimit(1)
             }
         }
@@ -1318,9 +1335,15 @@ private struct ThemeGalleryView: View {
                 if !compact {
                     Text("The quick brown fox   #!/bin/sh")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(foreground.opacity(0.9))
+                        .foregroundStyle(ThemeDeckInk.label(foreground))
                         .lineLimit(1)
                         .padding(8)
+                        // The strip is the palette's brightest ANSI colours,
+                        // so the caption needs its own opaque paper.
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(color(palette?.background, fallback: theme.palette.bg))
+                        )
                 }
             }
             .overlay(
@@ -1371,34 +1394,42 @@ private struct ThemeGalleryView: View {
             )
             .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: selected ? 7 : 4) {
+            VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 0)
-                Text(card.displayName)
-                    .font(.system(size: selected ? 16 : 11, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(selected ? 1 : 2)
-                if selected {
-                    HStack(spacing: 5) {
-                        Text(card.sectionTitle.uppercased())
-                            .font(.system(size: 9, weight: .semibold))
-                            .tracking(0.6)
-                            .foregroundStyle(Color.white.opacity(0.75))
-                        if video {
-                            Text("VIDEO")
+                // A solid bar, not the gradient alone: the labels must stay
+                // readable over any picture, including a white one.
+                VStack(alignment: .leading, spacing: selected ? 7 : 4) {
+                    Text(card.displayName)
+                        .font(.system(size: selected ? 16 : 11, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .lineLimit(selected ? 1 : 2)
+                    if selected {
+                        HStack(spacing: 5) {
+                            Text(card.sectionTitle.uppercased())
                                 .font(.system(size: 9, weight: .semibold))
                                 .tracking(0.6)
-                                .foregroundStyle(Color.white.opacity(0.75))
-                        }
-                        Spacer(minLength: 4)
-                        ForEach(Array((palette?.brightestANSI ?? []).prefix(8).enumerated()), id: \.offset) { _, hex in
-                            Circle()
-                                .fill(color(hex, fallback: theme.palette.fgMuted))
-                                .frame(width: 9, height: 9)
+                                .foregroundStyle(Color.white.opacity(ThemeDeckInk.wallpaperSecondary))
+                            if video {
+                                Text("VIDEO")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .tracking(0.6)
+                                    .foregroundStyle(Color.white.opacity(ThemeDeckInk.wallpaperSecondary))
+                            }
+                            Spacer(minLength: 4)
+                            ForEach(Array((palette?.brightestANSI ?? []).prefix(8).enumerated()), id: \.offset) { _, hex in
+                                Circle()
+                                    .fill(color(hex, fallback: theme.palette.fgMuted))
+                                    .frame(width: 9, height: 9)
+                            }
                         }
                     }
                 }
+                .padding(selected ? 15 : 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.black.opacity(ThemeDeckInk.wallpaperScrim))
+                )
             }
-            .padding(selected ? 15 : 11)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1463,7 +1494,7 @@ private struct ThemeGalleryView: View {
             Text("PREVIEW")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(1.4)
-                .foregroundStyle(foreground.opacity(0.6))
+                .foregroundStyle(ThemeDeckInk.label(foreground))
                 .accessibilityHidden(true)
             Text(card.displayName)
                 .font(.system(size: 22, weight: .semibold))
@@ -1482,12 +1513,12 @@ private struct ThemeGalleryView: View {
             Spacer(minLength: 8)
             Text(positionLabel)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(foreground.opacity(0.6))
+                .foregroundStyle(ThemeDeckInk.label(foreground))
                 .monospacedDigit()
                 .accessibilityLabel("Card \(positionLabel)")
             Text("← → flip · ↩ apply · Space/P/esc back")
                 .font(.system(size: 10))
-                .foregroundStyle(foreground.opacity(0.55))
+                .foregroundStyle(ThemeDeckInk.label(foreground))
                 .lineLimit(1)
                 .accessibilityHidden(true)
         }
@@ -1521,7 +1552,7 @@ private struct ThemeGalleryView: View {
                 Text("ANSI 0–15")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(0.8)
-                    .foregroundStyle(foreground.opacity(0.55))
+                    .foregroundStyle(ThemeDeckInk.label(foreground))
                 ForEach(0..<2, id: \.self) { row in
                     HStack(spacing: 8) {
                         ForEach(0..<8, id: \.self) { column in
@@ -1540,7 +1571,7 @@ private struct ThemeGalleryView: View {
                     Text("LIVE LAUNCHER")
                         .font(.system(size: 9, weight: .semibold))
                         .tracking(0.8)
-                        .foregroundStyle(foreground.opacity(0.55))
+                        .foregroundStyle(ThemeDeckInk.label(foreground))
                     LauncherThemeSample(theme: model.previewTheme(for: card, fallback: theme))
                         .frame(width: 600)
                         .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
@@ -1552,7 +1583,7 @@ private struct ThemeGalleryView: View {
             Spacer(minLength: 0)
             Text(paletteSummary(card, palette: palette))
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(foreground.opacity(0.65))
+                .foregroundStyle(ThemeDeckInk.label(foreground))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1573,7 +1604,7 @@ private struct ThemeGalleryView: View {
                 )
             Text(title)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(foreground.opacity(0.65))
+                .foregroundStyle(ThemeDeckInk.label(foreground))
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
@@ -1591,10 +1622,10 @@ private struct ThemeGalleryView: View {
                 )
             Text("\(index)")
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                .foregroundStyle(foreground.opacity(0.7))
+                .foregroundStyle(ThemeDeckInk.label(foreground))
             Text(hex ?? "—")
                 .font(.system(size: 7, design: .monospaced))
-                .foregroundStyle(foreground.opacity(0.45))
+                .foregroundStyle(ThemeDeckInk.label(foreground))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -1642,12 +1673,12 @@ private struct ThemeGalleryView: View {
                         Text(card.sectionTitle.uppercased())
                             .font(.system(size: 9, weight: .semibold))
                             .tracking(0.6)
-                            .foregroundStyle(.white.opacity(0.75))
+                            .foregroundStyle(.white.opacity(ThemeDeckInk.wallpaperSecondary))
                         if video {
                             Text("VIDEO")
                                 .font(.system(size: 9, weight: .semibold))
                                 .tracking(0.6)
-                                .foregroundStyle(.white.opacity(0.75))
+                                .foregroundStyle(.white.opacity(ThemeDeckInk.wallpaperSecondary))
                         }
                         Spacer(minLength: 8)
                         ForEach(Array((palette?.ansi ?? []).enumerated()), id: \.offset) { _, hex in
@@ -1659,11 +1690,15 @@ private struct ThemeGalleryView: View {
                         Spacer(minLength: 8)
                         Text(positionLabel)
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.white.opacity(ThemeDeckInk.wallpaperCounter))
                             .monospacedDigit()
                     }
                 }
                 .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(.black.opacity(ThemeDeckInk.wallpaperScrim))
+                )
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(
                     "\(card.displayName), \(card.sectionTitle), "
@@ -1727,7 +1762,7 @@ private struct ThemeGalleryView: View {
             if tall {
                 Text(title)
                     .font(.system(size: 8, weight: .medium))
-                    .foregroundStyle(foreground.opacity(0.6))
+                    .foregroundStyle(ThemeDeckInk.label(foreground))
             }
         }
         .frame(maxWidth: .infinity)
@@ -1851,7 +1886,7 @@ private struct ThemeGalleryView: View {
     }
 
     private func accentColor(_ palette: ThemeCardPalette?, foreground: Color) -> Color {
-        guard let accent = palette?.accent else { return foreground.opacity(0.8) }
+        guard let accent = palette?.accent else { return foreground }
         return color(accent, fallback: theme.palette.accent)
     }
 
