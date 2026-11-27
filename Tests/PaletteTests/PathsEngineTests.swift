@@ -110,6 +110,72 @@ final class PathsEngineTests: XCTestCase {
         XCTAssertEqual(FDEnumerator.splitNUL(data), ["one", "two", "three"])
     }
 
+    /// A home walk must never enter the iCloud/TCC folders that block in
+    /// `open(2)`, even when the config lists its own excludes.
+    func testHomeScopeExcludesStalledICloudFolders() {
+        let home = NSHomeDirectory()
+        let scope = Scope(roots: ["~"], exclude: [])
+        for name in ["Desktop", "Documents", "Downloads", "Library", ".Trash", "CloudStorage", "Mobile Documents", "Containers"] {
+            XCTAssertTrue(scope.exclude.contains(name), "\(name) must be excluded from a ~ walk")
+            XCTAssertTrue(scope.fdExcludeBasenames.contains(name), "fd must be told to skip \(name)")
+        }
+        XCTAssertFalse(scope.matcher.allows(path: home + "/Desktop/notes.md", isDirectory: false, root: home))
+        XCTAssertFalse(scope.matcher.allows(path: home + "/Library/CloudStorage/iCloud Drive/x.md", isDirectory: false, root: home))
+        XCTAssertTrue(scope.matcher.allows(path: home + "/dev/project/main.swift", isDirectory: false, root: home))
+
+        // Naming the folder as the root is still an explicit opt-in.
+        let explicit = Scope(roots: [home + "/Desktop"])
+        XCTAssertTrue(explicit.matcher.allows(path: home + "/Desktop/notes.md", isDirectory: false, root: home + "/Desktop"))
+        XCTAssertFalse(explicit.exclude.contains("Desktop"))
+    }
+
+    func testPartialWalkWithNoSnapshotIsUsed() async throws {
+        guard ToolLocator.shared.path(for: "fd") != nil else {
+            throw XCTSkip("fd is required for the paths engine")
+        }
+        let cacheDir = FileManager.default.temporaryDirectory.appendingPathComponent("palette-partial-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: cacheDir) }
+        let enumerator = ScriptedEnumerator(results: [
+            PathWalk(entries: [
+                PathEntry(path: "/tmp/alpha.md", isDirectory: false),
+                PathEntry(path: "/tmp/beta.md", isDirectory: false),
+            ], partial: true),
+        ])
+        let provider = await makeProbeProvider(enumerator: enumerator, cacheDir: cacheDir)
+
+        let items = try await itemsWhenIndexed(provider)
+        XCTAssertEqual(Set(items.map(\.title)), ["alpha.md", "beta.md"], "a timed-out walk still feeds the index")
+    }
+
+    func testPartialWalkKeepsTheFullerPreviousSnapshot() async throws {
+        guard ToolLocator.shared.path(for: "fd") != nil else {
+            throw XCTSkip("fd is required for the paths engine")
+        }
+        let cacheDir = FileManager.default.temporaryDirectory.appendingPathComponent("palette-partial-keep-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: cacheDir) }
+        let enumerator = ScriptedEnumerator(results: [
+            PathWalk(entries: [
+                PathEntry(path: "/tmp/alpha.md", isDirectory: false),
+                PathEntry(path: "/tmp/beta.md", isDirectory: false),
+                PathEntry(path: "/tmp/gamma.md", isDirectory: false),
+            ]),
+            PathWalk(entries: [PathEntry(path: "/tmp/alpha.md", isDirectory: false)], partial: true),
+        ])
+        let provider = await makeProbeProvider(enumerator: enumerator, cacheDir: cacheDir, refreshInterval: 0)
+        _ = try await itemsWhenIndexed(provider, text: "alpha")
+        // Zero TTL: this query starts the timed-out refresh.
+        _ = try await provider.search(SearchRequest(text: "", limit: 10, isBound: true))
+        try await waitUntil { await enumerator.walkCount() >= 2 }
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let items = try await provider.search(SearchRequest(text: "", limit: 10, isBound: true))
+        XCTAssertEqual(
+            Set(items.map(\.title)),
+            ["alpha.md", "beta.md", "gamma.md"],
+            "a thinner partial walk must not shrink the index"
+        )
+    }
+
     func testDiskCacheRoundTripAndInvalidation() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("palette-cache-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -399,5 +465,28 @@ private final class CountingEnumerator: PathEnumerating, @unchecked Sendable {
 private struct PrefixRanker: FuzzyPathRanking {
     func rank(paths: [String], query: String, limit: Int) async throws -> [String] {
         Array(paths.prefix(limit))
+    }
+}
+
+/// Returns the walks in order, so a test can follow a good build with a
+/// timed-out one.
+private actor ScriptedEnumerator: PathEnumerating {
+    private let results: [PathWalk]
+    private var walks = 0
+
+    init(results: [PathWalk]) {
+        self.results = results
+    }
+
+    func walkCount() -> Int { walks }
+
+    func enumerate(scope: Scope, kind: PathKind) async throws -> [String] {
+        results.first?.entries.map(\.path) ?? []
+    }
+
+    func walk(scope: Scope, kind: PathKind, maxEntries: Int) async throws -> PathWalk {
+        let index = min(walks, results.count - 1)
+        walks += 1
+        return results[index]
     }
 }

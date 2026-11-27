@@ -390,13 +390,27 @@ public final class PathsProvider: PaletteProvider, @unchecked Sendable {
         Task.detached(priority: .utility) {
             let started = Date()
             do {
-                let entries = try await enumerator.enumerateEntries(scope: scope, kind: kind, maxEntries: cap)
+                let walk = try await enumerator.walk(scope: scope, kind: kind, maxEntries: cap)
                 try Task.checkCancellation()
+                let entries = walk.entries
                 let duration = Date().timeIntervalSince(started)
+                // A timed-out walk is a partial success: use it only if it
+                // learned at least as much as the snapshot already cached.
+                if walk.partial {
+                    let previous = index.current()?.paths.count ?? 0
+                    if entries.isEmpty || entries.count < previous {
+                        index.endRefresh()
+                        Log.shared.warn(
+                            "Index build timed out scope=\(scopeLabel) entries=\(entries.count) after \(String(format: "%.1f", duration))s; kept previous snapshot (\(previous) entries)",
+                            source: "paths"
+                        )
+                        return
+                    }
+                }
                 disk.save(entries, signature: signature)
                 let finished = index.finishRefresh(PathSnapshot(entries: entries, verified: true))
                 Log.shared.info(
-                    "Index build finished scope=\(scopeLabel) entries=\(entries.count) duration=\(String(format: "%.1f", duration))s",
+                    "Index build finished scope=\(scopeLabel) entries=\(entries.count) duration=\(String(format: "%.1f", duration))s\(walk.partial ? " partial=1" : "")",
                     source: "paths"
                 )
                 if finished {

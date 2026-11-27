@@ -1361,11 +1361,14 @@ public enum ConfigLoader {
 
         [scopes.home]
         roots = ["~"]
+        # Desktop/Documents/Downloads are iCloud-managed: a stalled provider
+        # makes walking them hang for minutes. Root one directly to search it.
         exclude = [
           "node_modules", ".git", ".build", "target", ".next", "dist",
           "Library", ".cache", ".venv", "venv", "__pycache__", "DerivedData",
           "*.app", "*.framework", "*.dSYM", ".Trash", "Movies", "Music",
-          "Pictures",
+          "Pictures", "Desktop", "Documents", "Downloads", "Applications",
+          "CloudStorage", "Mobile Documents", "Containers",
         ]
         include = []
         include_hidden = false

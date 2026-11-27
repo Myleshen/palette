@@ -109,11 +109,22 @@ public struct Scope: Equatable, Sendable {
         respectGitignore: Bool = false
     ) {
         self.roots = roots
-        self.exclude = exclude
+        self.exclude = Self.homeFilteredExclude(exclude, roots: roots)
         self.include = include
         self.includeHidden = includeHidden
         self.maxDepth = maxDepth
         self.respectGitignore = respectGitignore
+    }
+
+    /// A home-rooted scope always carries `homeExcludes`, whatever the config
+    /// says: one stalled iCloud folder otherwise outlives the walk timeout and
+    /// leaves the index empty.
+    private static func homeFilteredExclude(_ exclude: [String], roots: [String]) -> [String] {
+        guard roots.contains(where: { PathExpansion.expand($0) == NSHomeDirectory() }) else {
+            return exclude
+        }
+        var present = Set(exclude)
+        return exclude + homeExcludes.filter { present.insert($0).inserted }
     }
 
     public static let defaultExcludes = [
@@ -122,22 +133,29 @@ public struct Scope: Equatable, Sendable {
         "*.app", "*.framework", "*.dSYM",
     ]
 
+    /// Folders a `~` walk never enters by default. Desktop/Documents/Downloads
+    /// are iCloud-managed: when a FileProvider stalls, `open(2)` blocks in the
+    /// kernel for minutes and one folder times out the whole walk. `Library`
+    /// holds the CloudStorage mounts, Containers and the app caches; the bare
+    /// basenames catch them too when a config un-excludes `Library`. A scope
+    /// that explicitly roots one of them still sees it.
+    public static let homeExcludes = [
+        "Library", "CloudStorage", "Mobile Documents", "Containers",
+        "Desktop", "Documents", "Downloads", "Applications",
+        ".Trash", "Movies", "Music", "Pictures",
+    ]
+
     public static let projects = Scope(
         roots: ["~/dev", "~/dot-files"],
         exclude: defaultExcludes,
         maxDepth: 12
     )
 
-    /// The whole home directory, without the noisy, generated or TCC-guarded
-    /// places: walking Desktop/Documents/Downloads/Library triggers a macOS
-    /// folder-access prompt and rarely names something a launcher should offer.
-    /// A scope that explicitly roots one of them still sees it.
+    /// The whole home directory; `init` adds `homeExcludes`, so a config that
+    /// lists its own excludes cannot stall the walk on an iCloud folder.
     public static let home = Scope(
         roots: ["~"],
-        exclude: defaultExcludes + [
-            ".Trash", "Library", "Desktop", "Documents", "Downloads",
-            "Movies", "Music", "Pictures", "Applications",
-        ],
+        exclude: defaultExcludes,
         maxDepth: 12
     )
 
