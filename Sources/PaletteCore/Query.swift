@@ -58,7 +58,12 @@ public struct QueryDisplay: Sendable {
     /// What the text field shows for an internal query.
     public func visible(for query: String) -> String {
         let parsed = parser.parse(query)
-        guard parsed.isBound, parsed.trigger != nil else { return query }
+        guard parsed.isBound, let trigger = parsed.trigger else { return query }
+        // Hiding "bw" while it is still the prefix of "bwn" would turn the next
+        // keystroke into search text and make the longer trigger unreachable.
+        if isPrefixOfLongerTrigger(trigger), !hasSeparator(after: trigger, in: query) {
+            return parsed.raw
+        }
         return parsed.text
     }
 
@@ -66,6 +71,9 @@ public struct QueryDisplay: Sendable {
     public func query(forVisible visible: String, previous: String) -> String {
         let parsed = parser.parse(previous)
         guard parsed.isBound, let trigger = parsed.trigger else { return visible }
+        // The field was showing the raw token so typing could finish a longer
+        // trigger; the edit belongs to that token, not to provider text.
+        if self.visible(for: previous) == previous { return visible }
         let kept = parser.prefix + trigger + " "
         if visible.isEmpty { return kept }
         // Editing while the prefix is shown: strip the kept token instead of
@@ -78,6 +86,25 @@ public struct QueryDisplay: Sendable {
         // unbind or finish a different trigger.
         if kept.hasPrefix(visible) { return visible }
         return kept + visible
+    }
+
+    private func isPrefixOfLongerTrigger(_ trigger: String) -> Bool {
+        let lowered = trigger.lowercased()
+        return parser.triggers.contains {
+            let other = $0.trigger.lowercased()
+            return other != lowered && other.hasPrefix(lowered)
+        }
+    }
+
+    /// True when the trigger is followed by whitespace, so typing has already
+    /// left the trigger token and the provider is safe to hide.
+    private func hasSeparator(after trigger: String, in query: String) -> Bool {
+        guard let start = query.firstIndex(where: { !$0.isWhitespace }) else { return false }
+        let body = query[start...]
+        guard body.hasPrefix(parser.prefix) else { return false }
+        let afterPrefix = body.dropFirst(parser.prefix.count)
+        guard afterPrefix.lowercased().hasPrefix(trigger.lowercased()) else { return false }
+        return afterPrefix.dropFirst(trigger.count).first?.isWhitespace ?? false
     }
 }
 
@@ -121,7 +148,9 @@ public struct QueryParser: Sendable {
         }
 
         let lowered = token.lowercased()
-        for entry in triggers where entry.trigger.lowercased() == lowered {
+        // Triggers arrive longest-first, so an exact token always resolves to
+        // the longest trigger: "/bwn" is Notes, never "/bw" with text "n".
+        if let entry = triggers.first(where: { $0.trigger.lowercased() == lowered }) {
             return ParsedQuery(
                 raw: raw,
                 scope: .provider(entry.providerID),
