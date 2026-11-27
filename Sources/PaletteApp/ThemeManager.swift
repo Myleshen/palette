@@ -20,6 +20,9 @@ public final class ThemeManager: ObservableObject {
     public var typography = TypographyConfig()
     public var searchPlaceholder = ""
     public var onChange: ((Theme) -> Void)?
+    /// Injected so a test can change the system appearance without touching
+    /// the machine's setting.
+    var appearanceIsDark: () -> Bool = { ThemeManager.systemAppearanceIsDark }
 
     private let store: PaletteStore?
     private var applyTask: Task<Void, Never>?
@@ -32,7 +35,7 @@ public final class ThemeManager: ObservableObject {
         self.paths = paths
         self.selection = selection
         self.store = store
-        let appearanceDark = ThemeManager.appearanceIsDark
+        let appearanceDark = ThemeManager.systemAppearanceIsDark
         let fallback = appearanceDark ? Theme.defaultDark : Theme.defaultLight
         let name: String
         switch selection.mode {
@@ -55,7 +58,7 @@ public final class ThemeManager: ObservableObject {
             switch selection.mode {
             case .dark: reference = selection.dark
             case .light: reference = selection.light
-            case .auto: reference = Self.appearanceIsDark ? selection.dark : selection.light
+            case .auto: reference = appearanceIsDark() ? selection.dark : selection.light
             }
         }
         return ThemeLoader.themeID(for: reference, themesDirectory: paths.themesDir) ?? reference
@@ -115,8 +118,27 @@ public final class ThemeManager: ObservableObject {
     }
 
     public func systemAppearanceChanged() {
-        guard overrideName == nil, selection.mode == .auto else { return }
+        guard selection.mode == .auto else { return }
+        // A pick the config also selects is no longer an override; clearing it
+        // lets Auto follow the system again instead of staying pinned.
+        reconcileOverride()
+        guard overrideName == nil else { return }
         apply()
+    }
+
+    private func reconcileOverride() {
+        guard let overrideName else { return }
+        let reference: String
+        switch selection.mode {
+        case .dark: reference = selection.dark
+        case .light: reference = selection.light
+        case .auto: reference = appearanceIsDark() ? selection.dark : selection.light
+        }
+        let referenceID = ThemeLoader.themeID(for: reference, themesDirectory: paths.themesDir) ?? reference
+        let overrideID = ThemeLoader.themeID(for: overrideName, themesDirectory: paths.themesDir) ?? overrideName
+        if referenceID == overrideID {
+            self.overrideName = nil
+        }
     }
 
     /// Parsing runs off the main actor; the resolved theme is applied back on
@@ -136,7 +158,7 @@ public final class ThemeManager: ObservableObject {
             )
             return
         }
-        let appearanceDark = ThemeManager.appearanceIsDark
+        let appearanceDark = appearanceIsDark()
         let name: String
         if let overrideName {
             name = overrideName
@@ -208,6 +230,8 @@ public final class ThemeManager: ObservableObject {
         }
         theme = resolved
         self.diagnostics = diagnostics
+        // The config already names this theme, so the pick needs no override.
+        reconcileOverride()
         // The status-bar and main menus have no palette, so AppKit only gets the
         // theme's light/dark. Panels keep their own per-window appearance.
         NSApp.appearance = NSAppearance(named: resolved.appearance == "light" ? .aqua : .darkAqua)
@@ -227,7 +251,7 @@ public final class ThemeManager: ObservableObject {
 
     /// `apply()` pins `NSApp.appearance` to the theme, so the system pref has to
     /// be read directly or auto mode would freeze on the last applied theme.
-    private static var appearanceIsDark: Bool {
+    private static var systemAppearanceIsDark: Bool {
         UserDefaults.standard.string(forKey: "AppleInterfaceStyle")?.lowercased() == "dark"
     }
 }

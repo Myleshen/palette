@@ -97,12 +97,16 @@ public struct ThemingIncludes: Sendable {
         case .zellij:
             return Plan(target: target, path: homeDir + "/.config/zellij/config.kdl", format: .kdl)
         case .nvim:
-            let lua = homeDir + "/.config/nvim/init.lua"
-            let vim = homeDir + "/.config/nvim/init.vim"
-            if !fileManager.fileExists(atPath: lua), fileManager.fileExists(atPath: vim) {
-                return Plan(target: target, path: vim, format: .vim)
+            let lua = Plan(target: target, path: homeDir + "/.config/nvim/init.lua", format: .lua)
+            let vim = Plan(target: target, path: homeDir + "/.config/nvim/init.vim", format: .vim)
+            // A block Palette installed in init.vim must still be found after
+            // the user creates an init.lua, or Remove/Revert would miss it.
+            if hasMarker(lua) { return lua }
+            if hasMarker(vim) { return vim }
+            if !fileManager.fileExists(atPath: lua.path), fileManager.fileExists(atPath: vim.path) {
+                return vim
             }
-            return Plan(target: target, path: lua, format: .lua)
+            return lua
         case .fish:
             return Plan(target: target, path: homeDir + "/.config/fish/config.fish", format: .hash)
         case .starship:
@@ -302,8 +306,25 @@ public struct ThemingIncludes: Sendable {
             let backup = backupURL(for: plan)
             let created = createdURL(for: plan)
             let resolved = resolve(plan.path)
-            if fileManager.fileExists(atPath: backup.path) {
-                do {
+            let hasBackup = fileManager.fileExists(atPath: backup.path)
+            let hasCreated = fileManager.fileExists(atPath: created.path)
+            guard hasBackup || hasCreated else { continue }
+            do {
+                let current = try? String(contentsOfFile: resolved, encoding: .utf8)
+                if let current, current.contains(startMarker(plan.format)) {
+                    // Strip only Palette's block: settings the user added after
+                    // the first Apply stay. Same rule as `remove()`.
+                    let updated = removingBlock(from: current, format: plan.format)
+                    if hasCreated, updated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        // Palette created the whole file and nothing else is in it.
+                        try fileManager.removeItem(atPath: resolved)
+                        outcomes.append(Outcome(target: target, path: plan.path, action: .removed, error: nil))
+                    } else {
+                        try write(updated, to: resolved)
+                        outcomes.append(Outcome(target: target, path: plan.path, action: .restored, error: nil))
+                    }
+                } else if hasBackup {
+                    // No block left to strip, so the snapshot is the only copy.
                     try fileManager.createDirectory(
                         at: URL(fileURLWithPath: resolved).deletingLastPathComponent(),
                         withIntermediateDirectories: true
@@ -312,22 +333,18 @@ public struct ThemingIncludes: Sendable {
                         try fileManager.removeItem(atPath: resolved)
                     }
                     try fileManager.copyItem(at: backup, to: URL(fileURLWithPath: resolved))
-                    try? fileManager.removeItem(at: backup)
-                    try? fileManager.removeItem(at: created)
                     outcomes.append(Outcome(target: target, path: plan.path, action: .restored, error: nil))
-                } catch {
-                    outcomes.append(Outcome(target: target, path: plan.path, action: .failed, error: error.localizedDescription))
-                }
-            } else if fileManager.fileExists(atPath: created.path) {
-                do {
-                    if fileManager.fileExists(atPath: resolved) {
+                } else {
+                    // Palette created the file; keep whatever the user wrote.
+                    if let current, current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         try fileManager.removeItem(atPath: resolved)
                     }
-                    try? fileManager.removeItem(at: created)
                     outcomes.append(Outcome(target: target, path: plan.path, action: .removed, error: nil))
-                } catch {
-                    outcomes.append(Outcome(target: target, path: plan.path, action: .failed, error: error.localizedDescription))
                 }
+                try? fileManager.removeItem(at: backup)
+                try? fileManager.removeItem(at: created)
+            } catch {
+                outcomes.append(Outcome(target: target, path: plan.path, action: .failed, error: error.localizedDescription))
             }
         }
         return outcomes
@@ -438,6 +455,11 @@ public struct ThemingIncludes: Sendable {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             return trimmed == "listen_on unix:${TMPDIR}\(KittyRemoteControl.managedListenTemplate)"
         }
+    }
+
+    private func hasMarker(_ plan: Plan) -> Bool {
+        guard let text = try? String(contentsOfFile: resolve(plan.path), encoding: .utf8) else { return false }
+        return text.contains(startMarker(plan.format))
     }
 
     private func removingBlock(from text: String, format: Format) -> String {

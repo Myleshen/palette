@@ -282,6 +282,85 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertEqual(backups.filter { $0 == "kitty-kitty.conf.orig" }.count, 1)
     }
 
+    func testRevertKeepsSettingsTheUserAddedAfterTheFirstApply() throws {
+        let home = makeHome()
+        let path = home + "/.config/kitty/kitty.conf"
+        let original = "font_size 13\n"
+        try write(original, to: path)
+        let includes = includes(home)
+
+        XCTAssertNil(install(includes, .kitty).error)
+        // The user keeps editing the file after Palette's block was installed.
+        try write(try read(path) + "background_opacity 0.9\n", to: path)
+
+        let outcomes = includes.revert()
+        XCTAssertEqual(outcomes.first { $0.target == .kitty }?.action, .restored)
+        XCTAssertEqual(try read(path), original + "background_opacity 0.9\n")
+        XCTAssertFalse(includes.hasBackups)
+    }
+
+    func testRevertKeepsUserContentWrittenIntoAPaletteCreatedFile() throws {
+        let home = makeHome()
+        let path = home + "/.config/kitty/kitty.conf"
+        let includes = includes(home)
+
+        XCTAssertNil(install(includes, .kitty).error)
+        try write(try read(path) + "font_size 15\n", to: path)
+
+        XCTAssertEqual(includes.revert().first { $0.target == .kitty }?.action, .restored)
+        XCTAssertEqual(try read(path), "font_size 15\n")
+    }
+
+    func testRevertRestoresTheSnapshotWhenTheBlockWasRemovedByHand() throws {
+        let home = makeHome()
+        let path = home + "/.config/kitty/kitty.conf"
+        let original = "font_size 13\n"
+        try write(original, to: path)
+        let includes = includes(home)
+
+        XCTAssertNil(install(includes, .kitty).error)
+        try write(original, to: path)
+
+        XCTAssertEqual(includes.revert().first { $0.target == .kitty }?.action, .restored)
+        XCTAssertEqual(try read(path), original)
+    }
+
+    // MARK: - Neovim target drift
+
+    func testNvimBlockInInitVimIsStillFoundAfterInitLuaAppears() throws {
+        let home = makeHome()
+        let vim = home + "/.config/nvim/init.vim"
+        let lua = home + "/.config/nvim/init.lua"
+        try write("set number\n", to: vim)
+        let includes = includes(home)
+
+        XCTAssertNil(install(includes, .nvim).error)
+        XCTAssertTrue(try read(vim).contains("\" >>> palette theme >>>"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lua))
+
+        // The user later creates an init.lua; the primary path now points there.
+        try write("vim.opt.number = true\n", to: lua)
+        XCTAssertEqual(includes.plan(for: .nvim)?.path, vim)
+        XCTAssertTrue(includes.status(for: .nvim).installed)
+
+        XCTAssertEqual(includes.revert().first { $0.target == .nvim }?.action, .restored)
+        XCTAssertEqual(try read(vim), "set number\n")
+        XCTAssertEqual(try read(lua), "vim.opt.number = true\n")
+    }
+
+    func testNvimRemoveStripsTheBlockFromTheAlternateFile() throws {
+        let home = makeHome()
+        let vim = home + "/.config/nvim/init.vim"
+        try write("set number\n", to: vim)
+        let includes = includes(home)
+
+        XCTAssertNil(install(includes, .nvim).error)
+        try write("vim.opt.number = true\n", to: home + "/.config/nvim/init.lua")
+
+        XCTAssertEqual(includes.remove(.nvim).action, .removed)
+        XCTAssertEqual(try read(vim), "set number\n")
+    }
+
     // MARK: - Starship TOML
 
     func testStarshipStatusSaysHowToWireItWithoutFish() throws {

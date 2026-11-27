@@ -382,6 +382,93 @@ final class ThemingTests: XCTestCase {
         XCTAssertTrue(engine.hasPrevious)
     }
 
+    func testApplyingTheSamePaletteTwiceKeepsTheFirstRevertTarget() async throws {
+        let paths = makePaths()
+        let kittyPath = paths.home + "/.config/kitty/kitty.conf"
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: kittyPath).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "original kitty\n".write(toFile: kittyPath, atomically: true, encoding: .utf8)
+        let engine = makeEngine(paths)
+        let config = ThemingConfig(enabled: true, theme: "default-dark", targets: ["kitty"])
+
+        _ = await engine.apply(config)
+        _ = await engine.apply(config)
+
+        let reverted = await engine.revert()
+        XCTAssertNil(reverted.error, reverted.error ?? "")
+        XCTAssertEqual(try read(URL(fileURLWithPath: kittyPath)), "original kitty\n")
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: paths.themeDir.appendingPathComponent("kitty.conf").path
+        ))
+    }
+
+    func testRevertFailureLeavesTheAppConfigUntouchedAndRetryable() async throws {
+        let paths = makePaths()
+        let kittyPath = paths.home + "/.config/kitty/kitty.conf"
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: kittyPath).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "original kitty\n".write(toFile: kittyPath, atomically: true, encoding: .utf8)
+        let engine = makeEngine(paths)
+        _ = await engine.apply(ThemingConfig(enabled: true, theme: "default-dark", targets: ["kitty"]))
+        _ = await engine.apply(ThemingConfig(enabled: true, theme: "default-light", targets: ["kitty"]))
+
+        // An unreadable snapshot makes the generated-file swap fail before any
+        // include is reverted.
+        let previous = paths.themeDir.appendingPathComponent("previous/kitty.conf")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: previous.path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: previous.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: previous.path) }
+
+        let failed = await engine.revert()
+        XCTAssertNotNil(failed.error)
+        XCTAssertTrue(failed.status.contains("left unchanged"))
+        XCTAssertTrue(try read(URL(fileURLWithPath: kittyPath)).contains("palette theme"))
+        XCTAssertTrue(engine.hasPrevious)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: previous.path)
+        let retried = await engine.revert()
+        XCTAssertNil(retried.error, retried.error ?? "")
+        XCTAssertEqual(try read(URL(fileURLWithPath: kittyPath)), "original kitty\n")
+    }
+
+    func testFirstRevertDoesNotClaimRestoredFiles() async throws {
+        let paths = makePaths()
+        let kittyPath = paths.home + "/.config/kitty/kitty.conf"
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: kittyPath).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "original kitty\n".write(toFile: kittyPath, atomically: true, encoding: .utf8)
+        let engine = makeEngine(paths)
+        _ = await engine.apply(ThemingConfig(enabled: true, theme: "default-dark", targets: ["kitty"]))
+
+        let reverted = await engine.revert()
+        XCTAssertNil(reverted.error, reverted.error ?? "")
+        XCTAssertFalse(reverted.status.contains("(0 files)"))
+        XCTAssertTrue(reverted.status.contains("app config"))
+        XCTAssertEqual(try read(URL(fileURLWithPath: kittyPath)), "original kitty\n")
+    }
+
+    func testMissingThemeIsAnErrorAndWritesNothing() async throws {
+        let paths = makePaths()
+        let engine = makeEngine(paths)
+        let config = ThemingConfig(enabled: true, source: .theme, theme: "gone-theme", targets: ["kitty"])
+
+        let result = await engine.applyTheme(named: "gone-theme", config: config)
+        XCTAssertNotNil(result.error)
+        XCTAssertTrue(result.status.contains("was not found"))
+        XCTAssertTrue(result.written.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: paths.themeDir.appendingPathComponent("kitty.conf").path
+        ))
+        XCTAssertFalse(engine.includeStatus(for: .kitty).installed)
+        XCTAssertTrue(engine.status.contains("was not found"))
+    }
+
     func testOtherAppsInheritThePaletteThemeByDefault() async throws {
         let paths = makePaths()
         let engine = makeEngine(paths)

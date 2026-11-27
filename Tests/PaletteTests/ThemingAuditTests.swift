@@ -2,7 +2,7 @@ import AppKit
 import TOMLKit
 import XCTest
 import PaletteCore
-import PalettePlatform
+@testable import PalettePlatform
 @testable import PaletteApp
 
 /// Regression cover for the 2.20 theming audit: stale generated files, the
@@ -214,6 +214,57 @@ final class ThemingAuditTests: XCTestCase {
     }
 
     // MARK: - Wallpaper folder
+
+    func testWallpaperDecodeRunsOffTheMainActor() async {
+        final class Recorder: @unchecked Sendable {
+            var wasMainThread = true
+        }
+        let recorder = Recorder()
+        let palette = await ThemingEngine.wallpaperPalette(
+            from: URL(fileURLWithPath: "/tmp/palette-wallpaper.png"),
+            appearance: "dark",
+            saturation: 0,
+            contrast: 0,
+            readPixels: { _ in
+                recorder.wasMainThread = Thread.isMainThread
+                return WallpaperPixels(
+                    width: 2,
+                    height: 1,
+                    pixels: [
+                        RGBA(red: 0.1, green: 0.1, blue: 0.1),
+                        RGBA(red: 0.9, green: 0.9, blue: 0.9),
+                    ]
+                )
+            }
+        )
+        XCTAssertNotNil(palette)
+        XCTAssertFalse(recorder.wasMainThread, "wallpaper decode must not block the main actor")
+    }
+
+    func testWallpaperFollowRetriesAFailedReadAndKeepsAnInFlightChange() {
+        var state = WallpaperFollowState()
+        state.reseed("A")
+        XCTAssertFalse(state.begin("A"), "an unchanged signature does not reapply")
+
+        XCTAssertTrue(state.begin("B"))
+        state.reseed("C") // a config reload while the apply is still running
+        XCTAssertFalse(state.begin("C"), "one apply at a time")
+        XCTAssertFalse(state.begin("D"), "a reseed must not start a second apply")
+
+        state.finish(signature: "B", succeeded: false)
+        XCTAssertTrue(state.begin("B"), "a failed read is retried on the next tick")
+        state.finish(signature: "B", succeeded: true)
+        XCTAssertFalse(state.begin("B"), "a successful read is done")
+    }
+
+    // MARK: - Onboarding flag
+
+    func testOnboardingCompletesOnlyAfterASuccessfulSave() {
+        XCTAssertTrue(AppDelegate.shouldMarkOnboardingComplete(saved: true, isScriptMode: false))
+        XCTAssertFalse(AppDelegate.shouldMarkOnboardingComplete(saved: false, isScriptMode: false))
+        XCTAssertFalse(AppDelegate.shouldMarkOnboardingComplete(saved: true, isScriptMode: true))
+        XCTAssertFalse(AppDelegate.shouldMarkOnboardingComplete(saved: false, isScriptMode: true))
+    }
 
     func testEmptyWallpaperFolderMeansEmpty() {
         XCTAssertNil(WallpaperLibrary.directory(path: ""))

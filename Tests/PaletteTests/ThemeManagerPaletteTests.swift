@@ -63,4 +63,26 @@ final class ThemeManagerPaletteTests: XCTestCase {
         manager.updateSelection(ThemeSelection(mode: .dark, dark: "catppuccin-mocha", light: "default-light"))
         XCTAssertFalse(manager.hasDerivedPalette)
     }
+
+    func testAutoModeFollowsTheSystemAfterAPickTheConfigAlreadyNames() {
+        let manager = manager()
+        manager.selection = ThemeSelection(mode: .auto, dark: "default-dark", light: "default-light")
+        manager.appearanceIsDark = { true }
+
+        let picked = expectation(description: "dark theme applied")
+        manager.select("default-dark") { theme in
+            XCTAssertEqual(theme.appearance, "dark")
+            picked.fulfill()
+        }
+        wait(for: [picked], timeout: 5)
+        XCTAssertNil(manager.overrideName, "the saved config pick must not pin the theme")
+
+        manager.appearanceIsDark = { false }
+        let followed = expectation(description: "auto follows the appearance change")
+        manager.onChange = { theme in
+            if theme.appearance == "light" { followed.fulfill() }
+        }
+        manager.systemAppearanceChanged()
+        wait(for: [followed], timeout: 5)
+    }
 }
