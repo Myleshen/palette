@@ -215,28 +215,175 @@ This boundary is what keeps a launcher coherent. rofi and wofi allow arbitrary
 widget trees and GTK CSS respectively, which is powerful but means every theme
 is a small program. Palette trades that for a smaller surface that always works.
 
-## 6. Sources
+## 6. Cross-app theming
 
-v1 ships `builtin` and `file` sources:
+Palette can carry its palette into the terminal, editor and shell. It is off by
+default and lives in its own Settings section (**Theming**) and in
+`[theming]` in `config.toml`:
 
-- `source = "builtin"` with a bundled theme name. v1.3 includes Default
-  Dark/Light, Catppuccin Mocha/Latte, Gruvbox Dark/Light, and Aetheria Pink
-  (the pink/violet Noctalia palette).
-- `source = "file"` with `dark` / `light` names resolved from the themes folder.
+```toml
+[theming]
+enabled = true
+source = "theme"                     # theme | wallpaper
+theme = "catppuccin-mocha"           # catalogue id; empty = the theme Palette shows
+follow_wallpaper = false             # source = "wallpaper" only
+dark_mode = "auto"                   # auto | dark | light
+wallpaper_directory = "~/dot-files/wallpapers"
+targets = ["kitty", "ghostty", "zellij", "nvim", "fish", "starship"]
+```
 
-Architected for later, behind the same resolver:
+`theme` is a catalogue id (`catppuccin-mocha`, `ghostty-alxpro-dark`), not the
+display name. Older builds saved the display name; the value is migrated on
+launch, and a theme that no longer exists falls back to Default Dark with a
+visible notice.
 
-- `wallpaper` — extract a seed color from the current desktop picture and
-  generate a tonal palette (the Noctalia `m3-content` idea).
+Generated files go under `~/.config/palette/theme/`: `kitty.conf`,
+`ghostty.conf`, `zellij.kdl`, `nvim.lua`, `fish.fish`, `bat.tmTheme`,
+`gitconfig-delta`, `btop.theme`, `yazi.toml`, plus `palette.json` (the machine-
+readable palette: source, theme id, appearance, background, foreground, accent,
+ANSI 0–15) for your own scripts. Starship adds `starship-theme.toml` and
+`starship-palette.fish`. Every generated config opens with a header naming the
+source, theme, appearance and timestamp, written with that format's real comment
+syntax (`#`, `//` for KDL, `--` for Lua, `"` for Vim; bat's follows its XML
+declaration). `palette.json` carries the same fields as JSON.
+
+### Targets
+
+| Target | What Palette writes | When it takes effect |
+|---|---|---|
+| kitty | `include` of the generated file in `~/.config/kitty/kitty.conf` | Palette reloads open windows with `kitty @ set-colors` when remote control is on; otherwise restart kitty |
+| Ghostty | `config-file = <absolute path>` in `~/.config/ghostty/config` | restart Ghostty |
+| zellij | the palette block and `theme "palette"` in `~/.config/zellij/config.kdl` | new zellij session |
+| Neovim | `dofile(...)` in `init.lua` (or `source` in `init.vim`) | `:source` that file or restart Neovim |
+| fish | `source` of the palette snippet in `~/.config/fish/config.fish` | new shell, or `source` the file |
+| Starship | never edits `starship.toml`: writes a remapped copy plus a fish snippet that exports `STARSHIP_CONFIG` | new shell |
+| bat | `--theme=palette` in `~/.config/bat/config` and a symlink under `$(bat --config-dir)/themes/` | next `bat` run |
+| delta | `[include] path` in `~/.gitconfig` (or `~/.config/git/config`) | next git/delta command |
+| btop | `color_theme = "palette"` in `~/.config/btop/btop.conf` and a symlink at `~/.config/btop/themes/palette.theme` | restart btop |
+| yazi | nothing automatic; `yazi.toml` is generated for a manual merge | after you merge it into `~/.config/yazi/theme.toml` and restart yazi |
+| Chromium browsers | `BrowserThemeColor` in a generated `.mobileconfig` | after macOS policy approval and a browser restart |
+
+yazi is manual on purpose: its `theme.toml` is a table-per-section file, so
+appending a second `[mgr]` block would be invalid TOML. Copy the generated file
+over your theme, or merge the values you want, then restart yazi. VS Code, Zed,
+Neovide and Arc are listed but disabled, with the reason shown; Neovide is
+covered by the Neovim palette.
+
+### Marker blocks, backup and Revert
+
+Palette only ever touches an app's config inside a marked block:
+
+```
+# >>> palette theme >>>
+include ~/.config/palette/theme/kitty.conf
+# <<< palette theme <<<
+```
+
+The comment token follows the file (`//` for zellij's KDL, `--` for Lua, `"` for
+Vim). Unchecking one target removes only that block; turning theming off removes
+every block. If Palette had to create a config that did not exist, removing the
+block deletes the file instead of leaving an empty one. Nothing outside the
+block is rewritten.
+
+Before the first change, Palette copies the app's config to
+`~/.config/palette/theme/previous/<target>-<file>.orig` (or drops a `.created`
+marker when it made the file). **Revert to previous** restores those configs and
+swaps the generated palette set back one step, so Revert is one click and cannot
+stack. The next Apply snapshots the current set again.
+
+### Wallpapers
+
+Wallpaper cards come from `wallpaper_directory` (default
+`~/dot-files/wallpapers`). It is scanned without recursion: images become
+picture cards, videos become browse-only cards (macOS cannot set a video as the
+desktop picture; the apply path says so rather than pretending). Thumbnails load
+only near the selection, and the desktop picture currently in use is marked.
+
+Choosing a picture card sets it on every screen first, then — when cross-app
+theming is enabled — samples it and applies the resulting palette. `source =
+"wallpaper"` on its own samples the current desktop picture; `dark_mode` decides
+whether the derived palette is the dark or light variant. `follow_wallpaper =
+true` checks the desktop picture's URL every five seconds and re-applies when it
+changes. The launcher's own theme is not derived from the wallpaper; this path
+only feeds the cross-app targets.
+
+### Browser policy
+
+Chromium browsers (Helium always; Chrome, Edge, Brave, Vivaldi and Chromium when
+installed) get the palette background as `BrowserThemeColor` in a per-browser
+`.mobileconfig` under the theme directory. macOS applies it to every profile of
+that browser at once, so it is app-wide and approximate by design, not a
+per-window theme.
+
+Install is the macOS policy flow: **Open in System Settings…** hands the profile
+files to System Settings, you approve each under **General → Device Management →
+Profiles**, then press **Refresh**. Palette asks for no password or Touch ID at
+that point. On macOS 27 `profiles install` no longer exists, so removal is also
+done in System Settings; older macOS still shows the legacy `sudo profiles`
+install/remove commands as a copyable note. A running browser picks the policy
+up on restart (Palette relaunches it with `--refresh-platform-policy` when the
+policy is already installed).
+
+### Starship
+
+Starship modules embed literal colour names, so selecting a palette is not
+enough. Palette writes `starship-theme.toml`: your `starship.toml` is parsed,
+every colour name in `style`/`format` values is replaced with the palette's hex,
+values in your active `[palettes.<name>]` table are moved to the nearest Palette
+colour in OKLab, and all keys, modules and the prompt format are kept. The TOML
+round-trip drops comments; the header says so. Your `starship.toml` itself is
+never edited, and a missing or invalid file gets a minimal default instead (with
+a notice). `starship-palette.fish` exports `STARSHIP_CONFIG` to that copy and is
+sourced from fish's marked block; other shells must export it themselves.
+
+### Troubleshooting
+
+- **A generated file has a stale header or old syntax.** Apply once. Builds
+  before 2.20.0 wrote `#` comments into Lua and KDL and put bat's XML comment
+  before the declaration, which made those files invalid; a fresh Apply rewrites
+  them. Older files also miss the current theme's id in the header.
+- **Apply says written but the app looks unchanged.** Check the app's reload
+  row: only kitty can be reloaded by Palette; everything else needs the restart
+  or source step in the table above.
+- **A target stays "Not installed" though Apply succeeded.** Its config may be
+  at a nonstandard path (Neovim `init.vim` vs `init.lua`, git's XDG file vs
+  `~/.gitconfig`), or the app's config is unreadable. The row shows the path
+  Palette uses.
+- **bat/btop say the palette is missing.** Their theme files are symlinks into
+  the Palette theme directory; removing or moving that directory breaks them.
+  Apply again to recreate the links.
+- **Revert restored an app config but not the palette.** Revert restores the
+  previous generated set and the app configs, not the launcher's own theme.
+- **A browser policy does not appear.** The profile must be approved in System
+  Settings; the Browsers card shows *Not installed* until it is, and **Refresh**
+  re-reads the state.
+- **Theme cards show the wrong swatch for the palette.** A `theme` value that is
+  a display name instead of an id is migrated on launch; re-pick the theme in
+  Settings → Theming if a hand-edited value still looks wrong.
+
+## 7. Sources
+
+Bundled themes ship inside the app as TOML resources; a user theme with the
+same file name in `~/.config/palette/themes` wins. `[theme]` in `config.toml`
+only names the dark and light theme and picks the mode — there is no `source`
+key. The catalogue is the built-in defaults (Default Dark/Light, Catppuccin
+Mocha/Latte, Gruvbox Dark/Light, Aetheria Pink, Siri Silver/Graphite), the
+bundled `ghostty-*` Ghostty themes (914) and `omarchy-*` Omarchy themes (19),
+and your own files.
+
+Not implemented yet:
+
 - `import` — base16/base24, pywal `colors.json`, iTerm2 `.itermcolors`, and
   Noctalia palette JSON, mapped onto the semantic tokens above.
 - `community` — a local git checkout of shared themes; still no network calls
   from the app.
 
-Importers and wallpaper derivation are roadmap items; the resolver interface and
-token vocabulary are designed so they land without changing themes.
+Wallpaper-derived palettes are implemented, but for the cross-app targets, not as
+a launcher theme source: see section 6. Importers and community sharing remain
+roadmap items; the resolver interface and token vocabulary are designed so they
+land without changing themes.
 
-## 7. Accessibility
+## 8. Accessibility
 
 - Reduce Transparency forces `material = none` and `opacity = 1`.
 - Reduce Motion sets `style = "none"`.
@@ -249,7 +396,7 @@ token vocabulary are designed so they land without changing themes.
 
 These overrides always win over theme values.
 
-## 8. Reference notes
+## 9. Reference notes
 
 **rofi** contributes the idea of a theme as a first-class, composable file with
 global defaults, per-widget sections, and states (`selected`, `alternate`,
@@ -264,12 +411,13 @@ supports the same "swap the palette, keep the layout" workflow.
 
 **Noctalia** contributes the palette source model (`builtin`, `wallpaper`,
 `community`, `custom`), live palette application, light/dark separation, and
-theme export templates with post-hooks. Palette adopts the source vocabulary now
-and the wallpaper/export features on the roadmap.
+theme export templates with post-hooks. Palette implements the wallpaper source
+for its cross-app targets (section 6); template export is still unimplemented.
 
-## 9. Export templates (roadmap)
+## 10. Export templates (roadmap)
 
-The intended shape, borrowed from Noctalia:
+Nothing in this section is read by Palette today. The intended shape, borrowed
+from Noctalia:
 
 ```toml
 [theme.export.kitty]
@@ -279,4 +427,5 @@ post_hook = "kitty @ set-colors --all --configured ~/.config/kitty/theme.conf"
 ```
 
 Switching Palette's palette would then keep kitty, Neovide, zellij, and btop in
-sync. Not in v1.
+sync. Today the generated set under `~/.config/palette/theme/` covers those apps
+without templating; per-template output and post-hooks are not implemented.
