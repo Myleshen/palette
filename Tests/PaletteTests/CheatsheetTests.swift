@@ -62,6 +62,31 @@ final class CheatsheetTests: XCTestCase {
         XCTAssertEqual(boundMiss.map(\.id), ["cheat:empty"])
     }
 
+    /// The folder the user writes into `config.toml` has to survive the real
+    /// loader and reach the provider the app builds from it; a test that hands
+    /// the provider a folder directly never touches that path.
+    func testConfigFileFolderReachesTheProvider() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-cheatsheet-config-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config", isDirectory: true),
+            stateDir: root.appendingPathComponent("state", isDirectory: true),
+            cacheDir: root.appendingPathComponent("cache", isDirectory: true)
+        )
+        try paths.createDirectories()
+        try "[cheatsheets]\nfolders = [\"\(folder.path)\"]\n"
+            .write(to: paths.configFile, atomically: true, encoding: .utf8)
+
+        let loaded = ConfigLoader.load(paths: paths)
+        XCTAssertTrue(loaded.config.cheatsheets.folders.contains(folder.path))
+
+        let provider = CheatsheetProvider(config: loaded.config.cheatsheets)
+        let items = try await provider.search(SearchRequest(text: "", isBound: true))
+        XCTAssertEqual(items.map(\.title).sorted(), ["git.pdf", "vim.md"])
+    }
+
     func testConfigRoundTripsThroughRender() throws {
         var config = PaletteConfig()
         config.cheatsheets.folders = ["~/docs/cheats"]

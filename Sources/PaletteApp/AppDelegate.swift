@@ -943,6 +943,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var panelHeight: CGFloat
         var panelWidth: CGFloat
         var panelFrame: CGRect
+        var panelGeometryOK: Bool
+        var registeredHotkeys: Int
         var derivedPanelHeight: CGFloat
         var providerCount: Int
         var providerBarMode: String
@@ -965,6 +967,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "statusPanelOpen", "statusPanelRows", "statusPanelHighlight",
         "themeMenuRows", "themeMenuRendered",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
+        "panelGeometryOK", "registeredHotkeys",
     ]
 
     private func scriptObservation() -> ScriptObservation {
@@ -1005,11 +1008,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
             panelFrame: panel?.panel.frame ?? .zero,
+            panelGeometryOK: panelGeometryIsCorrect,
+            registeredHotkeys: hotkeyManagers.count,
             derivedPanelHeight: panel?.panel.frame.height ?? 0,
             providerCount: searchController?.railEntries.count ?? 0,
             providerBarMode: searchController?.providerBar.rawValue ?? "",
             items: searchController?.items ?? []
         )
+    }
+
+    /// The unit tests prove the `launcherSize` rule; only a running bundle can
+    /// prove AppKit actually put the window there, inside the active screen.
+    private var panelGeometryIsCorrect: Bool {
+        guard let window = panel?.panel, window.isVisible else { return false }
+        guard let screen = PanelController.screenUnderPointer() ?? window.screen else { return false }
+        let visible = screen.visibleFrame
+        let expected = configuration.window.launcherSize(for: visible.size)
+        let frame = window.frame
+        return abs(frame.width - expected.width) < 0.5
+            && abs(frame.height - expected.height) < 0.5
+            && visible.insetBy(dx: -0.5, dy: -0.5).contains(frame)
     }
 
     private func scriptValue(_ key: String, _ observation: ScriptObservation) -> String {
@@ -1050,6 +1068,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "promptError": return observation.promptError
         case "panelHeight": return String(format: "%.2f", observation.panelHeight)
         case "panelWidth": return String(format: "%.2f", observation.panelWidth)
+        case "panelGeometryOK": return String(observation.panelGeometryOK)
+        case "registeredHotkeys": return String(observation.registeredHotkeys)
         case "derivedPanelHeight": return String(format: "%.2f", observation.derivedPanelHeight)
         case "providerCount": return String(observation.providerCount)
         case "providerBarMode": return observation.providerBarMode
@@ -1072,7 +1092,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen", "statusPanelOpen":
+        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen", "statusPanelOpen", "panelGeometryOK":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -1082,7 +1102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "!=": return have != want ? nil : "\(key)=\(actual), expected != \(want)"
             default: return "'\(op)' is not supported for \(key)"
             }
-        case "selectionIndex", "itemCount", "paletteMenuProbe", "paletteMenuRows", "statusPanelRows", "themeMenuRows", "themeMenuRendered":
+        case "selectionIndex", "itemCount", "paletteMenuProbe", "paletteMenuRows", "statusPanelRows", "themeMenuRows", "themeMenuRendered", "registeredHotkeys":
             guard let want = Int(expected), let have = Int(actual) else {
                 return "\(key) expects a number, got '\(expected)'"
             }
@@ -1139,6 +1159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the view SwiftTerm is drawing, not recomputed from the theme.
         let terminalColours = TerminalColorProbe.snapshot()
         let activeTheme = themeManager.theme
+        let screenFrame = (PanelController.screenUnderPointer() ?? panel?.panel.screen)?.visibleFrame ?? .zero
         let dump: [String: Any] = [
             "panelVisible": observation.panelVisible,
             "appActive": observation.appActive,
@@ -1179,6 +1200,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "y": observation.panelFrame.origin.y,
                 "width": observation.panelFrame.width,
                 "height": observation.panelFrame.height,
+            ],
+            "panelGeometryOK": observation.panelGeometryOK,
+            "registeredHotkeys": observation.registeredHotkeys,
+            "panelScreenFrame": [
+                "x": screenFrame.origin.x,
+                "y": screenFrame.origin.y,
+                "width": screenFrame.width,
+                "height": screenFrame.height,
             ],
             "derivedPanelHeight": observation.derivedPanelHeight,
             "providerCount": observation.providerCount,

@@ -237,6 +237,8 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func openClipboard() {
+        if terminalActive { closeTerminalPanel() }
+        if scratchpadActive { closeScratchpad(save: true) }
         previewEnabled = true
         actionsMode = false
         actionItems = []
@@ -1553,6 +1555,8 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func openTerminalPanel(command: String? = nil, sessionName: String? = nil) {
+        // A half-written note must survive the mode switch, not be dropped.
+        if scratchpadActive { closeScratchpad(save: true) }
         scratchpadGeneration += 1
         terminalInitialCommand = command
         terminalSessionName = sessionName
