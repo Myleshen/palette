@@ -3324,10 +3324,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     darkMode: self.configuration.theming.darkMode
                 )
                 return (image, palette.map(ThemeCardPalette.init(palette:)))
-            }
+            },
+            paletteSource: { [weak self] in self?.configuration.theming.source ?? .theme }
         )
         // The 942 headers are read once now; a hotkey press only renders cards.
         themeGallery?.preload()
+    }
+
+    /// The Theming pane's "Open themed session" button. zellij has no runtime
+    /// theme switch, so the only way to see the new palette now is a new
+    /// session; it goes through the same kitty path as Palette's own terminal
+    /// commands.
+    private func openThemedZellijSession() {
+        let zellij = ToolLocator.shared.path(for: "zellij") ?? "zellij"
+        do {
+            try launcher.openTerminal(
+                command: ZellijLauncher.themedSessionScript(zellij: zellij),
+                app: "kitty"
+            )
+        } catch {
+            searchController?.setStatus(
+                "Could not open the themed zellij session: \(error.localizedDescription)",
+                duration: 8
+            )
+        }
     }
 
     private func showThemeGallery(mode: ThemeCardMode = .colors) {
@@ -3803,6 +3823,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onThemeCards: { [weak self] in
                 self?.showThemeGallery()
+            },
+            onOpenThemedZellij: { [weak self] in
+                self?.openThemedZellijSession()
             },
             onExportBackup: { [weak self] in
                 self?.exportBackup()

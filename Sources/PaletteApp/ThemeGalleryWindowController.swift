@@ -106,6 +106,8 @@ final class ThemeGalleryWindowController: NSWindowController {
     private let favourites: ThemeCardFavourites
     private let applyTarget: (ThemeCardTarget) async -> ThemeGalleryApplyOutcome
     private let loadWallpaper: () async -> (NSImage?, ThemeCardPalette?)
+    /// Read at apply time so the guard sees the source the user last saved.
+    private let paletteSource: @MainActor () -> ThemingSource
 
     private var hostingView: NSHostingView<ThemeGalleryView>!
     private let backdrop = NSVisualEffectView()
@@ -129,7 +131,8 @@ final class ThemeGalleryWindowController: NSWindowController {
         wallpaperDirectory: URL?,
         favourites: ThemeCardFavourites = ThemeCardFavourites(),
         apply: @escaping (ThemeCardTarget) async -> ThemeGalleryApplyOutcome,
-        wallpaper: @escaping () async -> (NSImage?, ThemeCardPalette?)
+        wallpaper: @escaping () async -> (NSImage?, ThemeCardPalette?),
+        paletteSource: @escaping @MainActor () -> ThemingSource
     ) {
         self.model = ThemeGalleryModel()
         self.themeManager = themeManager
@@ -138,6 +141,7 @@ final class ThemeGalleryWindowController: NSWindowController {
         self.favourites = favourites
         self.applyTarget = apply
         self.loadWallpaper = wallpaper
+        self.paletteSource = paletteSource
 
         let panel = ThemeGalleryWindow(
             contentRect: NSRect(
@@ -606,6 +610,14 @@ final class ThemeGalleryWindowController: NSWindowController {
 
     private func apply(_ card: ThemeCard) {
         guard !model.applying else { return }
+        if let reason = ThemeCardSourceGuard.blockedReason(
+            source: paletteSource(),
+            target: card.target
+        ) {
+            model.status = reason
+            model.statusFailed = false
+            return
+        }
         let target = card.target
         model.applying = true
         model.celebration += 1

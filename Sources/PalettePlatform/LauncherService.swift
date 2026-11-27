@@ -190,6 +190,13 @@ public final class LauncherService {
         }
     }
 
+    /// `zsh -lic` receives the command as one raw argv element, so the single
+    /// quotes in a command like `zellij attach --create 'Palette'` are already
+    /// valid and must not be escaped again.
+    public static func kittyTerminalArguments(command: String) -> [String] {
+        ["--detach", "/bin/zsh", "-lic", "\(command); exec /bin/zsh -l"]
+    }
+
     public func openTerminal(command: String, app: String) throws {
         let name = app.lowercased()
         if name.contains("kitty") {
@@ -197,11 +204,7 @@ public final class LauncherService {
                 ?? ToolLocator.shared.appPath(named: app).map({ $0 + "/Contents/MacOS/kitty" }) else {
                 throw ProviderError.toolMissing("kitty")
             }
-            let escaped = command.replacingOccurrences(of: "'", with: "'\\''")
-            try ProcessRunner.launch([
-                kitty, "--detach", "/bin/zsh", "-lic",
-                "\(escaped); exec /bin/zsh -l",
-            ])
+            try ProcessRunner.launch([kitty] + Self.kittyTerminalArguments(command: command))
             return
         }
 

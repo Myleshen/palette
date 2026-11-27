@@ -118,6 +118,20 @@ public struct ThemeCard: Identifiable, Equatable, Sendable {
     }
 }
 
+/// The ⌘⌥G deck offers theme cards even when the wallpaper drives the
+/// cross-app palette. Applying one then would change Palette's own theme but
+/// not the other apps, so say why nothing happened instead of applying
+/// silently.
+public enum ThemeCardSourceGuard {
+    public static let wallpaperHint =
+        "Palette follows the wallpaper — switch source to Theme to pick colours"
+
+    public static func blockedReason(source: ThemingSource, target: ThemeCardTarget) -> String? {
+        guard source == .wallpaper, case .theme = target else { return nil }
+        return wallpaperHint
+    }
+}
+
 /// The deck's two shows: theme cards and wallpaper cards. A hotkey picks one;
 /// filters and the favourites view then stay inside it.
 public enum ThemeCardMode: String, Equatable, Sendable, CaseIterable {

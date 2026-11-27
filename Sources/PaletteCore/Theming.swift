@@ -10,6 +10,27 @@ public enum ThemingSource: String, Sendable, Equatable, CaseIterable {
     case wallpaper
 }
 
+/// Which controls the palette-source toggle leaves live. One place so the
+/// greyed rows in Settings and the tests agree; a source that is off must be
+/// disabled, not merely hidden, or a stale click could still apply it.
+public struct ThemingSourceControls: Sendable, Equatable {
+    public var themeEnabled: Bool
+    public var wallpaperEnabled: Bool
+    public var themeDisabledReason: String?
+    public var wallpaperDisabledReason: String?
+
+    public init(source: ThemingSource) {
+        themeEnabled = source == .theme
+        wallpaperEnabled = source == .wallpaper
+        themeDisabledReason = themeEnabled
+            ? nil
+            : "Wallpaper drives the palette — switch source to pick a theme."
+        wallpaperDisabledReason = wallpaperEnabled
+            ? nil
+            : "Theme drives the palette — switch source to follow the wallpaper."
+    }
+}
+
 /// `[theming]` drives the cross-app palette files under
 /// `~/.config/palette/theme/`. `follow_wallpaper` only means anything when the
 /// source is the wallpaper.
