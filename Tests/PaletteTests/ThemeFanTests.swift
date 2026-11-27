@@ -203,7 +203,9 @@ final class ThemeFanTests: XCTestCase {
             XCTAssertEqual(window.frame.width, visible.width, name)
             XCTAssertEqual(window.frame.minX, visible.minX, name)
             XCTAssertEqual(window.frame.minY, visible.minY, name)
-            XCTAssertEqual(window.frame.height, metrics.frame.height, name)
+            // The panel frame is fractional (60% of 1073 is 643.8); AppKit
+            // rounds it to whole points when it sets the window.
+            XCTAssertEqual(window.frame.height, metrics.frame.height, accuracy: 0.5, name)
             XCTAssertNotEqual(window.frame.size, NSSize(width: 1280, height: 720), name)
             let constrained = window.constrainFrameRect(metrics.frame, to: nil)
             XCTAssertEqual(constrained, metrics.frame, "\(name) must not be constrained")
@@ -513,7 +515,11 @@ final class ThemeFanTests: XCTestCase {
             themesDirectory: root,
             bundledThemesDirectory: bundledDirectory
         ))
-        XCTAssertGreaterThan(catalog.count, 900)
+        let reach = ThemeDeckReachForTests.reach
+        XCTAssertGreaterThan(
+            catalog.count, reach * 2 + 1,
+            "the catalogue must be bigger than a single hand, or the lazy test proves nothing"
+        )
 
         let wallpapers = [try writeFile("one.png"), try writeFile("two.jpg")]
         var deck = ThemeCardDeck(
@@ -522,26 +528,30 @@ final class ThemeFanTests: XCTestCase {
             currentDesktop: wallpapers[0],
             mode: .colors
         )
-        let reach = ThemeDeckReachForTests.reach
         var parsed = Set<String>()
         func parseWindow() {
             for slot in deck.fanWindow(reach: reach) { parsed.insert(slot.card.cacheKey) }
         }
 
+        let firstWindow = Set(deck.fanWindow(reach: reach).map(\.card.cacheKey))
         parseWindow()
         XCTAssertEqual(deck.fanWindow(reach: reach).count, reach * 2 + 1)
-        XCTAssertEqual(parsed.count, reach * 2 + 1, "942 themes, only the hand parsed")
+        XCTAssertEqual(parsed, firstWindow, "\(catalog.count) cards, only the hand parsed")
 
         deck.move(by: 1)
+        let secondWindow = Set(deck.fanWindow(reach: reach).map(\.card.cacheKey))
         parseWindow()
-        XCTAssertEqual(parsed.count, reach * 2 + 2, "a flip parses one new card, not the hand again")
+        XCTAssertEqual(secondWindow.subtracting(firstWindow).count, 1, "a flip reveals one card")
+        XCTAssertEqual(parsed, firstWindow.union(secondWindow), "a flip parses one new card, not the hand again")
 
+        let beforeJump = parsed
         deck.move(by: 300)
+        let landed = Set(deck.fanWindow(reach: reach).map(\.card.cacheKey))
         parseWindow()
-        XCTAssertEqual(
-            parsed.count,
-            (reach * 2 + 2) + reach * 2 + 1,
-            "a jump parses the window it lands on, never the 942-card deck"
+        XCTAssertEqual(parsed, beforeJump.union(landed), "a jump parses the window it lands on")
+        XCTAssertLessThan(
+            parsed.count, catalog.count,
+            "a jump must never parse the \(catalog.count)-card deck"
         )
     }
 

@@ -1,10 +1,14 @@
 import TOMLKit
 import XCTest
-import PaletteCore
+@testable import PaletteCore
 
 /// pywal 3.8.15 (the maintained pywal on PyPI) was run over the same sixteen
 /// input colours with a stub ImageMagick, so these expectations are its real
 /// `colors.json` output, not a hand-written guess.
+///
+/// The base half is pywal byte-for-byte. The bright half deliberately deviates:
+/// pywal emits `color9…14 == color1…6`, and `distinctANSI` separates those
+/// colliding slots, so the tests check the separation instead of equality.
 final class WallpaperPalettePywalTests: XCTestCase {
     /// Sixteen flat blocks, ascending W3 luminance — the order pywal's
     /// ImageMagick backend returns its quantized colours in.
@@ -33,18 +37,61 @@ final class WallpaperPalettePywalTests: XCTestCase {
         _ expected: [String],
         file: StaticString = #filePath,
         line: UInt = #line
-    ) {
+    ) throws {
         XCTAssertEqual(palette.ansi.count, 16, file: file, line: line)
-        for (index, pair) in zip(palette.ansi, expected).enumerated() where pair.0 != pair.1 {
-            XCTFail("color\(index): expected \(pair.1), got \(pair.0)", file: file, line: line)
+        // Base slots, bright black and bright white keep exact pywal parity.
+        for index in [0, 1, 2, 3, 4, 5, 6, 7, 8, 15] {
+            XCTAssertEqual(palette.ansi[index], expected[index], "color\(index)", file: file, line: line)
         }
+
+        // pywal repeats color1…6 in color9…14. `distinctANSI` separates those
+        // collisions on purpose, so a bright slot must either stay byte-equal
+        // or be a distinguishable same-hue variant that still reads.
+        let background = try XCTUnwrap(RGBA(hex: palette.ansi[0]), file: file, line: line)
+        for index in 9...14 where palette.ansi[index] != expected[index] {
+            let bright = try XCTUnwrap(RGBA(hex: palette.ansi[index]), file: file, line: line)
+            let base = try XCTUnwrap(RGBA(hex: palette.ansi[index - 8]), file: file, line: line)
+            XCTAssertGreaterThanOrEqual(
+                deltaE(bright, base), 5,
+                "color\(index) is too close to color\(index - 8)", file: file, line: line
+            )
+            XCTAssertLessThanOrEqual(
+                hueDistance(bright, base), 30,
+                "color\(index) left color\(index - 8)'s hue family", file: file, line: line
+            )
+            XCTAssertGreaterThanOrEqual(
+                bright.contrast(with: background), 2.5,
+                "color\(index) lost its contrast floor", file: file, line: line
+            )
+        }
+    }
+
+    /// OKLab distance x100, the same measure `distinctANSI` uses.
+    private func deltaE(_ first: RGBA, _ second: RGBA) -> Double {
+        let a = ThemeContrastRepair.oklab(first)
+        let b = ThemeContrastRepair.oklab(second)
+        return 100 * sqrt(pow(a.l - b.l, 2) + pow(a.a - b.a, 2) + pow(a.b - b.b, 2))
+    }
+
+    /// Circular OKLab hue distance in degrees; near-neutral slots have no hue
+    /// worth comparing, so they count as the same family.
+    private func hueDistance(_ first: RGBA, _ second: RGBA) -> Double {
+        func hue(_ color: RGBA) -> Double? {
+            let lab = ThemeContrastRepair.oklab(color)
+            guard (lab.a * lab.a + lab.b * lab.b).squareRoot() >= 0.02 else { return nil }
+            let degrees = atan2(lab.b, lab.a) * 180 / .pi
+            return degrees < 0 ? degrees + 360 : degrees
+        }
+        guard let a = hue(first), let b = hue(second) else { return 0 }
+        let difference = abs(a - b).truncatingRemainder(dividingBy: 360)
+        return min(difference, 360 - difference)
     }
 
     // MARK: Golden comparison
 
     func testDarkMatchesPywal() throws {
         let palette = try XCTUnwrap(WallpaperPalette.extract(pixels: pixels(fixture), appearance: "dark"))
-        assertANSI(palette, [
+        try assertANSI(palette, [
             "#0d121e", "#2f6a5a", "#3a6ea5", "#a35a1e",
             "#c05080", "#4f9a5a", "#b0a030", "#c2c3c6",
             "#5c6170", "#2f6a5a", "#3a6ea5", "#a35a1e",
@@ -57,7 +104,7 @@ final class WallpaperPalettePywalTests: XCTestCase {
 
     func testLightMatchesPywal() throws {
         let palette = try XCTUnwrap(WallpaperPalette.extract(pixels: pixels(fixture), appearance: "light"))
-        assertANSI(palette, [
+        try assertANSI(palette, [
             "#f2f2f3", "#2f6a5a", "#3a6ea5", "#a35a1e",
             "#c05080", "#4f9a5a", "#b0a030", "#3c3c3c",
             "#b5b5b6", "#2f6a5a", "#3a6ea5", "#a35a1e",
@@ -67,7 +114,7 @@ final class WallpaperPalettePywalTests: XCTestCase {
 
     func testSaturationMatchesPywal() throws {
         let up = try XCTUnwrap(WallpaperPalette.extract(pixels: pixels(fixture), appearance: "dark", saturation: 0.5))
-        assertANSI(up, [
+        try assertANSI(up, [
             "#020d28", "#08906b", "#026cdc", "#c15700",
             "#fb1477", "#14d430", "#e0c400", "#c2c3c6",
             "#2847a3", "#08906b", "#026cdc", "#c15700",
@@ -75,7 +122,7 @@ final class WallpaperPalettePywalTests: XCTestCase {
         ])
 
         let down = try XCTUnwrap(WallpaperPalette.extract(pixels: pixels(fixture), appearance: "dark", saturation: -0.5))
-        assertANSI(down, [
+        try assertANSI(down, [
             "#171613", "#554348", "#716f6d", "#725e4e",
             "#848b88", "#895f83", "#787668", "#c2c3c6",
             "#8f7a3d", "#554348", "#716f6d", "#725e4e",
@@ -85,7 +132,7 @@ final class WallpaperPalettePywalTests: XCTestCase {
 
     func testContrastMatchesPywal() throws {
         let palette = try XCTUnwrap(WallpaperPalette.extract(pixels: pixels(fixture), appearance: "dark", contrast: 4.5))
-        assertANSI(palette, [
+        try assertANSI(palette, [
             "#0d121e", "#66e7c4", "#aed5ff", "#ffc697",
             "#ffc0db", "#77e988", "#e8d23f", "#cfd0d3",
             "#c6d0f1", "#66e7c4", "#aed5ff", "#ffc697",

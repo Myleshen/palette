@@ -527,16 +527,24 @@ public struct PalettePalette: Equatable, Sendable {
     }
 
     /// Wallpaper palettes come from pywal, which can return the same colour in
-    /// two ANSI slots. Repair only a colliding pair: rotate the later slot in
-    /// OKLCH, keeping its lightness and contrast floor. A scheme that already
-    /// separates is returned untouched, so pywal parity holds.
+    /// two ANSI slots. The bright half repeats the base half in pywal, so a
+    /// colliding bright slot is separated by lightness, keeping its hue. Other
+    /// collisions rotate in OKLCH as before. A scheme that already separates is
+    /// returned untouched, so pywal parity holds.
     static func distinctANSI(_ colors: [RGBA], background: RGBA) -> [RGBA] {
         guard colors.count >= 16 else { return colors }
         let slots = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14]
         var values = colors
         for _ in 0..<64 {
             guard let pair = firstANSICollision(values, slots: slots) else { return values }
-            if let adjusted = rotatedAway(
+            if pair.1 - pair.0 == 8,
+               let adjusted = lightnessAway(
+                values[pair.1],
+                otherSlots: slots.filter { $0 != pair.1 }.map { values[$0] },
+                background: background
+               ) {
+                values[pair.1] = adjusted
+            } else if let adjusted = rotatedAway(
                 values[pair.1],
                 otherSlots: slots.filter { $0 != pair.1 }.map { values[$0] },
                 background: background
@@ -559,6 +567,31 @@ public struct PalettePalette: Equatable, Sendable {
         for (offset, first) in slots.enumerated() {
             for second in slots[(offset + 1)...] where deltaE(values[first], values[second]) < 5 {
                 return (first, second)
+            }
+        }
+        return nil
+    }
+
+    /// Moves a bright slot away from its base by lightness alone. Rotating the
+    /// hue far enough to reach ΔE 5 turns a pastel magenta green; the bright
+    /// half is a brightness variant, not a different colour.
+    private static func lightnessAway(_ color: RGBA, otherSlots: [RGBA], background: RGBA) -> RGBA? {
+        let lab = ThemeContrastRepair.oklab(color)
+        let chroma = (lab.a * lab.a + lab.b * lab.b).squareRoot()
+        let hue = atan2(lab.b, lab.a)
+        let floor = min(2.5, color.contrast(with: background))
+        // Away from the background keeps a dark theme's bright half brighter
+        // and a light theme's darker.
+        let away = lab.l < ThemeContrastRepair.oklab(background).l ? 1.0 : -1.0
+        for step in 1...30 {
+            for direction in [away, -away] {
+                let lightness = min(1, max(0, lab.l + Double(step) * 0.02 * direction))
+                let mapped = ThemeContrastRepair.gamutMapped(ThemeContrastRepair.OKLab(
+                    l: lightness, a: cos(hue) * chroma, b: sin(hue) * chroma
+                ))
+                let candidate = RGBA(hex: hex(mapped)) ?? mapped
+                guard candidate.contrast(with: background) >= floor else { continue }
+                if otherSlots.allSatisfy({ deltaE(candidate, $0) >= 5 }) { return candidate }
             }
         }
         return nil

@@ -37,9 +37,10 @@ final class PerformanceTests: XCTestCase {
 
     // MARK: - Theme menu
 
-    /// Opening `/theme` is a 942-row list, but only the visible rows draw. The
-    /// drawing half is asserted by `theme-menu-lazy` in Scripts/e2e.sh, because
-    /// PaletteTests does not link the app target that owns the view.
+    /// Opening `/theme` is a full-catalogue list, but only the visible rows
+    /// draw. The drawing half is asserted by `theme-menu-lazy` in
+    /// Scripts/e2e.sh, because PaletteTests does not link the app target that
+    /// owns the view.
     func testThemeMenuOpensUnderBudget() async throws {
         guard FileManager.default.fileExists(atPath: bundledThemes.path) else {
             throw XCTSkip("bundled themes are missing")
@@ -56,7 +57,11 @@ final class PerformanceTests: XCTestCase {
         let items = try await provider.search(SearchRequest(text: "", limit: 5_000, isBound: true))
         let measured = milliseconds(since: start)
         print("PALETTE-BENCH theme-menu-open rows=\(items.count) \(String(format: "%.1f", measured))ms")
-        XCTAssertGreaterThan(items.count, 900, "the theme menu should hold the whole catalog")
+        let catalogue = ThemeLoader.catalog(themesDirectory: userThemes, bundledThemesDirectory: bundledThemes)
+        XCTAssertEqual(
+            items.count, catalogue.count + 1,
+            "the theme menu holds the whole catalogue plus the cards row"
+        )
         XCTAssertLessThan(
             measured, 250,
             "theme menu open measured \(String(format: "%.1f", measured)) ms; budget 250 ms"
@@ -75,7 +80,11 @@ final class PerformanceTests: XCTestCase {
         let catalog = ThemeLoader.catalog(themesDirectory: userThemes, bundledThemesDirectory: bundledThemes)
         let measured = milliseconds(since: start)
         print("PALETTE-BENCH theme-catalog-warm rows=\(catalog.count) \(String(format: "%.1f", measured))ms")
-        XCTAssertGreaterThan(catalog.count, 900)
+        XCTAssertEqual(
+            catalog.count,
+            ThemeLoader.builtinNames.count + ThemeLoader.bundledThemeNames(themesDirectory: bundledThemes).count,
+            "the catalogue holds every built-in plus every bundled file"
+        )
         XCTAssertLessThan(
             measured, 400,
             "warm theme catalog measured \(String(format: "%.1f", measured)) ms; budget 400 ms"

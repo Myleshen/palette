@@ -11,6 +11,12 @@ import PaletteRuntime
 /// that only proved "a window opened": the assertions here are on controller
 /// state, so a broken mode switch fails the suite instead of an earlier row
 /// count.
+private actor SilentBridge: HostBridge {
+    func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String? { nil }
+    func notify(_ message: String) async {}
+    func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {}
+}
+
 @MainActor
 final class ControllerIntegrationTests: XCTestCase {
     private var root: URL!
@@ -33,7 +39,12 @@ final class ControllerIntegrationTests: XCTestCase {
         store = try PaletteStore(path: paths.databaseFile.path)
         themeManager = ThemeManager(paths: paths, selection: ThemeSelection(), store: store)
         controller = SearchController(
-            registry: ProviderRegistry(providers: [], prefix: "/"),
+            // The real clipboard provider, so `/clip` is a known prefix and the
+            // controller keeps the preview on the way the app does.
+            registry: ProviderRegistry(
+                providers: [ClipboardProvider(store: store, bridge: SilentBridge())],
+                prefix: "/"
+            ),
             configuration: PaletteConfig(),
             paths: paths,
             store: store,
