@@ -22,7 +22,7 @@ provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
 | `ExternalProviderTests` | NDJSON round-trip against the hello example |
 | `PerformanceTests` | hard budgets for theme menu open, warm catalog, 5k clipboard snapshot, cached `/neo`, and theme apply file generation |
 | `ThemeApplyIntegrationTests` | Apply/uncheck/Revert against a sandbox HOME with real kitty, Ghostty, zellij, Neovim, fish and Starship configs |
-| `ThemeCardsTests`, `ThemeFanTests` | deck order (wallpaper first), filtering, favourites, fan geometry and hit-testing |
+| `ThemeCardsTests`, `ThemeFanTests` | deck order (wallpaper first), filtering, favourites, wallpaper listing, fan geometry, thumbnail cache, open/flip timings |
 | `ThemeFormatTests`, `ThemeIDTests` | per-format generated syntax (Lua/KDL/TOML/XML headers), display-name → id resolution and migration |
 | `ThemingIncludesTests`, `ThemingReloadTests`, `ThemingTests` | marker blocks per format, created-file removal, backup/Revert, per-target reload truth, palette extraction |
 | `AnnotationInteractionTests` | pointer hit-test, delete selected, one-step move undo, crop clamping |

@@ -257,7 +257,7 @@ declaration). `palette.json` carries the same fields as JSON.
 | Neovim | `dofile(...)` in `init.lua` (or `source` in `init.vim`) | `:source` that file or restart Neovim |
 | fish | `source` of the palette snippet in `~/.config/fish/config.fish` | new shell, or `source` the file |
 | Starship | never edits `starship.toml`: writes a remapped copy plus a fish snippet that exports `STARSHIP_CONFIG` | new shell |
-| bat | `--theme=palette` in `~/.config/bat/config` and a symlink under `$(bat --config-dir)/themes/` | next `bat` run |
+| bat | `--theme=palette` in `~/.config/bat/config` and a symlink at `~/.config/bat/themes/palette.tmTheme` | next `bat` run |
 | delta | `[include] path` in `~/.gitconfig` (or `~/.config/git/config`) | next git/delta command |
 | btop | `color_theme = "palette"` in `~/.config/btop/btop.conf` and a symlink at `~/.config/btop/themes/palette.theme` | restart btop |
 | yazi | nothing automatic; `yazi.toml` is generated for a manual merge | after you merge it into `~/.config/yazi/theme.toml` and restart yazi |
@@ -320,9 +320,9 @@ files to System Settings, you approve each under **General → Device Management
 Profiles**, then press **Refresh**. Palette asks for no password or Touch ID at
 that point. On macOS 27 `profiles install` no longer exists, so removal is also
 done in System Settings; older macOS still shows the legacy `sudo profiles`
-install/remove commands as a copyable note. A running browser picks the policy
-up on restart (Palette relaunches it with `--refresh-platform-policy` when the
-policy is already installed).
+install/remove commands as a copyable note. A running browser picks the policy up
+on restart; when the policy is already installed Palette asks it to refresh with
+`--refresh-platform-policy`.
 
 ### Starship
 
@@ -357,9 +357,9 @@ sourced from fish's marked block; other shells must export it themselves.
 - **A browser policy does not appear.** The profile must be approved in System
   Settings; the Browsers card shows *Not installed* until it is, and **Refresh**
   re-reads the state.
-- **Theme cards show the wrong swatch for the palette.** A `theme` value that is
-  a display name instead of an id is migrated on launch; re-pick the theme in
-  Settings → Theming if a hand-edited value still looks wrong.
+- **The themed apps use the wrong theme.** A `theme` value that is a display
+  name instead of an id is migrated on launch; re-pick the theme in Settings →
+  Theming if a hand-edited value still looks wrong.
 
 ## 7. Sources
 
