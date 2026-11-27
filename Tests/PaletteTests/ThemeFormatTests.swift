@@ -146,8 +146,11 @@ final class ThemeFormatTests: XCTestCase {
         }
         XCTAssertTrue(text.contains("vim.g.colors_name = \"palette\""))
         XCTAssertFalse(body.contains { $0.hasPrefix("#") }, "Lua cannot use # comments")
-        XCTAssertEqual(body.filter { $0.hasPrefix("hl(\"") }.count, 18)
-        XCTAssertEqual(text.filter { $0 == "{" }.count, text.filter { $0 == "}" }.count)
+        XCTAssertEqual(body.filter { $0.hasPrefix("hl(\"") }.count, 0)
+        // One table, one loop: every group carries fg and/or bg.
+        let entries = body.filter { $0.range(of: #"^  [A-Za-z]+ = \{ (fg|bg) = "#, options: .regularExpression) != nil }
+        XCTAssertEqual(entries.count, 18)
+        XCTAssertTrue(text.filter { $0 == "{" }.count == text.filter { $0 == "}" }.count)
         // Every colour is a quoted hex string, so no Lua escaping is needed.
         for line in body where line.contains("#") {
             XCTAssertNotNil(
@@ -155,6 +158,28 @@ final class ThemeFormatTests: XCTestCase {
                 line
             )
         }
+    }
+
+    func testNvimLuaReappliesAfterColorschemeAndFileChange() throws {
+        let text = try render(.nvim)
+        // A colorscheme loaded after init.lua (Lazy) must not win.
+        XCTAssertTrue(text.contains("local function apply()"))
+        XCTAssertTrue(text.contains("vim.api.nvim_create_augroup(\"PaletteTheme\", { clear = true })"))
+        XCTAssertTrue(
+            text.contains("vim.api.nvim_create_autocmd(\"ColorScheme\", { group = \"PaletteTheme\", callback = apply })")
+        )
+        // Palette rewrites nvim.lua: watch the directory and debounce.
+        XCTAssertTrue(text.contains("uv.new_fs_event()"))
+        XCTAssertTrue(text.contains("handle:start(dir, {}, function(err, name)"))
+        XCTAssertTrue(text.contains("timer:start(200, 0, vim.schedule_wrap(reload))"))
+        XCTAssertTrue(text.contains("pcall(dofile, file)"))
+        XCTAssertTrue(text.contains("if not _G.palette_theme_watching then"))
+        XCTAssertTrue(text.contains("_G.palette_theme_reloading"))
+        // Stop the watcher on exit.
+        XCTAssertTrue(text.contains("vim.api.nvim_create_autocmd(\"VimLeavePre\", {"))
+        XCTAssertTrue(text.contains("handle:close()"))
+        // colors_name belongs to the direct pass, never to the callback.
+        XCTAssertEqual(text.components(separatedBy: "vim.g.colors_name").count - 1, 1)
     }
 
     // MARK: - fish
