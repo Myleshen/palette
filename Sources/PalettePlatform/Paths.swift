@@ -7,6 +7,8 @@ public protocol PathEnumerating: Sendable {
     func enumerateEntries(scope: Scope, kind: PathKind) async throws -> [PathEntry]
     /// The bounded walk: stops cleanly at `maxEntries`.
     func enumerateEntries(scope: Scope, kind: PathKind, maxEntries: Int) async throws -> [PathEntry]
+    /// Same bounded walk, but says whether the timeout cut it short.
+    func walk(scope: Scope, kind: PathKind, maxEntries: Int) async throws -> PathWalk
 }
 
 public extension PathEnumerating {
@@ -24,6 +26,23 @@ public extension PathEnumerating {
 
     func enumerateEntries(scope: Scope, kind: PathKind, maxEntries: Int) async throws -> [PathEntry] {
         Array(try await enumerateEntries(scope: scope, kind: kind).prefix(max(1, maxEntries)))
+    }
+
+    /// Enumerators without a timeout of their own are never partial.
+    func walk(scope: Scope, kind: PathKind, maxEntries: Int) async throws -> PathWalk {
+        PathWalk(entries: try await enumerateEntries(scope: scope, kind: kind, maxEntries: maxEntries))
+    }
+}
+
+/// One bounded walk's outcome. `partial` means the timeout stopped it early and
+/// `entries` is whatever fd had printed by then.
+public struct PathWalk: Sendable {
+    public let entries: [PathEntry]
+    public let partial: Bool
+
+    public init(entries: [PathEntry], partial: Bool = false) {
+        self.entries = entries
+        self.partial = partial
     }
 }
 
@@ -89,10 +108,10 @@ public final class FDEnumerator: PathEnumerating {
     }
 
     public func enumerateEntries(scope: Scope, kind: PathKind, maxEntries: Int) async throws -> [PathEntry] {
-        try await walk(scope: scope, kind: kind, maxEntries: max(1, maxEntries))
+        try await walk(scope: scope, kind: kind, maxEntries: max(1, maxEntries)).entries
     }
 
-    private func walk(scope: Scope, kind: PathKind, maxEntries: Int) async throws -> [PathEntry] {
+    public func walk(scope: Scope, kind: PathKind, maxEntries: Int) async throws -> PathWalk {
         #if DEBUG
         // The walk blocks in read(2) for seconds: never on the main thread.
         dispatchPrecondition(condition: .notOnQueue(.main))
@@ -105,6 +124,7 @@ public final class FDEnumerator: PathEnumerating {
 
         let matcher = scope.matcher
         let sink = WalkSink(cap: max(1, maxEntries))
+        var partial = false
 
         for root in scope.expandedRoots {
             try Task.checkCancellation()
@@ -134,7 +154,19 @@ public final class FDEnumerator: PathEnumerating {
                 )
                 break
             }
-            if result.timedOut { throw ProviderError.timedOut }
+            if result.timedOut {
+                // A stalled mount or an unreadable subtree must not throw away
+                // the entries already collected: keep them and report partial.
+                splitter.flush { record in
+                    sink.append(record, matcher: matcher, kind: kind, root: canonicalRoot)
+                }
+                partial = true
+                Log.shared.warn(
+                    "fd walk timed out at root=\(canonicalRoot) maxDepth=\(scope.maxDepth) deepest=\(sink.deepest) entries=\(sink.results.count)/\(sink.cap) after \(Int(Self.walkTimeout))s; returning what it collected",
+                    source: "paths"
+                )
+                break
+            }
             // fd exits 1 when nothing matched, which is not an error.
             guard result.status == 0 || result.status == 1 else {
                 throw ProviderError.failed("fd failed: \(result.stderrString)")
@@ -144,7 +176,7 @@ public final class FDEnumerator: PathEnumerating {
             }
         }
 
-        return sink.results
+        return PathWalk(entries: sink.results, partial: partial)
     }
 
     private static func arguments(fd: String, scope: Scope, kind: PathKind) -> [String] {
@@ -205,6 +237,8 @@ private final class WalkSink: @unchecked Sendable {
     let cap: Int
     private(set) var capped = false
     private(set) var results: [PathEntry] = []
+    /// Slash count of the deepest accepted path, for the timeout log.
+    private(set) var deepest = 0
     private var seen = Set<String>()
 
     init(cap: Int) {
@@ -235,6 +269,8 @@ private final class WalkSink: @unchecked Sendable {
             isDirectory = flag
         }
         guard seen.insert(path).inserted else { return true }
+        let depth = path.reduce(into: 0) { if $1 == "/" { $0 += 1 } }
+        if depth > deepest { deepest = depth }
         results.append(PathEntry(path: path, isDirectory: isDirectory))
         return true
     }
