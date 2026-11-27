@@ -66,11 +66,17 @@ final class ThemingIncludesTests: XCTestCase {
 
         XCTAssertNil(install(includes, .fish).error)
         XCTAssertTrue(try read(home + "/.config/fish/config.fish").contains("# >>> palette theme >>>"))
+    }
 
-        XCTAssertNil(install(includes, .starship).error)
-        let starship = try read(home + "/.config/starship.toml")
-        XCTAssertTrue(starship.contains("# >>> palette theme >>>"))
-        XCTAssertTrue(starship.hasPrefix("palette = \"palette\"\n"))
+    func testStarshipInstallNeverWritesTheUserConfig() throws {
+        let home = makeHome()
+        let path = home + "/.config/starship.toml"
+        let original = "# user starship\nadd_newline = false\n\n[character]\nsuccess_symbol = \">\"\n"
+        try write(original, to: path)
+        let includes = includes(home)
+
+        XCTAssertEqual(install(includes, .starship).action, .unchanged)
+        XCTAssertEqual(try read(path), original)
     }
 
     func testVimFallbackUsesVimCommentsAndSource() throws {
@@ -243,35 +249,56 @@ final class ThemingIncludesTests: XCTestCase {
 
     // MARK: - Starship TOML
 
-    func testStarshipInstallIsValidTOMLAndRemovalRestoresTheFile() throws {
+    func testStarshipStatusSaysHowToWireItWithoutFish() throws {
+        let home = makeHome()
+        let theme = home + "/config/theme"
+        try write("set -gx STARSHIP_CONFIG \(theme)/starship-theme.toml\n", to: theme + "/starship-palette.fish")
+        try write("palette = \"palette\"\n", to: theme + "/starship-theme.toml")
+        let includes = includes(home)
+
+        let status = includes.status(for: .starship)
+        XCTAssertTrue(status.installed)
+        XCTAssertTrue(status.note.contains("export STARSHIP_CONFIG"), status.note)
+    }
+
+    func testFishBlockSourcesTheStarshipSnippetAndFallsBackToFishPalette() throws {
+        let home = makeHome()
+        let includes = includes(home)
+        let fishPath = home + "/.config/fish/config.fish"
+        let theme = home + "/config/theme"
+        try write("set -g fish_greeting \"\"\n", to: fishPath)
+        try write("set -gx STARSHIP_CONFIG \(theme)/starship-theme.toml\n", to: theme + "/starship-palette.fish")
+
+        XCTAssertNil(install(includes, .fish).error)
+        let wired = try read(fishPath)
+        let body = wired.components(separatedBy: "\n")
+        let start = try XCTUnwrap(body.firstIndex(of: "# >>> palette theme >>>"))
+        let end = try XCTUnwrap(body.firstIndex(of: "# <<< palette theme <<<"))
+        XCTAssertEqual(Array(body[(start + 1)..<end]), ["source \(theme)/starship-palette.fish"])
+
+        XCTAssertEqual(includes.remove(.starship).action, .removed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: theme + "/starship-palette.fish"))
+        XCTAssertTrue(try read(fishPath).contains("source \(theme)/fish.fish"))
+        XCTAssertFalse(try read(fishPath).contains("starship-palette.fish"))
+    }
+
+    func testStarshipRemoveCleansALegacyInlineBlock() throws {
         let home = makeHome()
         let path = home + "/.config/starship.toml"
-        let original = "# user starship\nadd_newline = false\n\n[character]\nsuccess_symbol = \">\"\n"
+        let original = """
+        add_newline = false
+        palette = "palette"
+        # >>> palette theme >>>
+        [palettes.palette]
+        blue = "#0000ff"
+        # <<< palette theme <<<
+
+        """
         try write(original, to: path)
         let includes = includes(home)
 
-        XCTAssertNil(install(includes, .starship).error)
-        let installed = try read(path)
-        let table = try TOMLTable(string: installed)
-        XCTAssertEqual(table.str("palette"), "palette")
-        XCTAssertNotNil(table.table("palettes")?.table("palette"))
-        XCTAssertNotNil(table.table("character"))
-        XCTAssertEqual(table.bool("add_newline"), false)
-
         XCTAssertEqual(includes.remove(.starship).action, .removed)
-        XCTAssertEqual(try read(path), original)
-    }
-
-    func testStarshipAddsTheScalarBeforeTheFirstTable() throws {
-        let home = makeHome()
-        let path = home + "/.config/starship.toml"
-        try write("[character]\nsuccess_symbol = \">\"\n", to: path)
-        let includes = includes(home)
-
-        XCTAssertNil(install(includes, .starship).error)
-        let table = try TOMLTable(string: try read(path))
-        XCTAssertEqual(table.str("palette"), "palette")
-        XCTAssertNotNil(table.table("character"))
+        XCTAssertEqual(try read(path), "add_newline = false\n")
     }
 
     // MARK: - Mappings and availability

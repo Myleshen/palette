@@ -61,6 +61,16 @@ public struct ThemingIncludes: Sendable {
         themeDir.appendingPathComponent("previous", isDirectory: true)
     }
 
+    /// The colour-remapped copy Starship is pointed at, and the fish snippet
+    /// that exports STARSHIP_CONFIG. Both are generated files owned by Palette.
+    public var starshipThemeURL: URL {
+        themeDir.appendingPathComponent(StarshipTheme.fileName)
+    }
+
+    public var starshipSnippetURL: URL {
+        themeDir.appendingPathComponent(StarshipTheme.snippetFileName)
+    }
+
     // MARK: - Per-target mappings
 
     public func plan(for target: ThemingTarget) -> Plan? {
@@ -105,6 +115,24 @@ public struct ThemingIncludes: Sendable {
     }
 
     public func status(for target: ThemingTarget) -> Status {
+        // Starship has no include directive and Palette never edits its config,
+        // so installed means "the themed copy exists". Whether fish exports
+        // STARSHIP_CONFIG changes the note, not the file itself.
+        if target == .starship, plan(for: target) != nil {
+            let themed = fileManager.fileExists(atPath: starshipThemeURL.path)
+            guard themed else {
+                return Status(available: true, installed: false, path: starshipThemeURL.path, note: "Not installed")
+            }
+            let wired = fishExportsStarship
+            return Status(
+                available: true,
+                installed: true,
+                path: starshipThemeURL.path,
+                note: wired
+                    ? "Installed — fish sets STARSHIP_CONFIG"
+                    : "Generated — export STARSHIP_CONFIG=\(shortPath(starshipThemeURL.path))"
+            )
+        }
         guard let plan = plan(for: target) else {
             let reason = target.unavailableReason ?? target.includeHint
             return Status(available: false, installed: false, path: nil, note: "Unavailable — \(reason)")
@@ -139,6 +167,11 @@ public struct ThemingIncludes: Sendable {
         guard let plan = plan(for: target) else {
             return Outcome(target: target, path: nil, action: .unchanged, error: nil)
         }
+        if target == .starship {
+            // The engine writes the colour-remapped copy; Palette never edits
+            // the user's starship.toml, so there is no include to install.
+            return Outcome(target: target, path: plan.path, action: .unchanged, error: nil)
+        }
         guard let body = blockBody(for: plan, palette: palette, metadata: metadata) else {
             return Outcome(target: target, path: plan.path, action: .failed, error: "No block body for \(target.title).")
         }
@@ -147,12 +180,7 @@ public struct ThemingIncludes: Sendable {
         let existed = fileManager.fileExists(atPath: resolved)
         do {
             try backupIfNeeded(plan, resolved: resolved, existed: existed)
-            let updated: String
-            if target == .starship {
-                updated = starshipInstalling(existing, format: plan.format, body: body)
-            } else {
-                updated = appendingBlock(to: removingBlock(from: existing, format: plan.format), format: plan.format, body: body)
-            }
+            let updated = appendingBlock(to: removingBlock(from: existing, format: plan.format), format: plan.format, body: body)
             if updated != existing {
                 try write(updated, to: resolved)
             }
@@ -168,6 +196,9 @@ public struct ThemingIncludes: Sendable {
     public func remove(_ target: ThemingTarget) -> Outcome {
         guard let plan = plan(for: target) else {
             return Outcome(target: target, path: nil, action: .unchanged, error: nil)
+        }
+        if target == .starship {
+            return removeStarship(plan)
         }
         removeAuxiliary(target)
         let resolved = resolve(plan.path)
@@ -281,14 +312,13 @@ public struct ThemingIncludes: Sendable {
                 ? "source \(path)"
                 : "dofile(\"\(path)\")"
         case .fish:
-            return "source \(themeFile(.fish).path)"
+            // One block line: either the palette snippet, or the wrapper that
+            // also exports STARSHIP_CONFIG for the themed copy.
+            return fishBody()
         case .starship:
-            guard let raw = ThemingRenderer.contents(for: .starship, palette: palette, metadata: metadata) else {
-                return nil
-            }
-            // The `[palettes.palette]` table is the block; the scalar lives
-            // outside it because TOML needs root keys before tables.
-            return stripHeader(raw)
+            // Never inlined: the engine writes the remapped copy and fish
+            // exports STARSHIP_CONFIG. Kept out of the block path on purpose.
+            return nil
         case .bat:
             return "--theme=palette"
         case .delta:
@@ -345,18 +375,66 @@ public struct ThemingIncludes: Sendable {
 
     // MARK: - Starship
 
-    private func starshipInstalling(_ text: String, format: Format, body: String) -> String {
-        var lines = removingBlock(from: text, format: format).components(separatedBy: "\n")
-        if let index = topLevelPaletteIndex(in: lines) {
-            lines[index] = "palette = \"palette\""
-        } else if let table = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[") }) {
-            lines.insert("palette = \"palette\"", at: table)
-        } else if lines.last == "" {
-            lines.insert("palette = \"palette\"", at: lines.count - 1)
-        } else {
-            lines.append("palette = \"palette\"")
+    private func fishBody() -> String {
+        if fileManager.fileExists(atPath: starshipSnippetURL.path) {
+            return "source \(starshipSnippetURL.path)"
         }
-        return appendingBlock(to: lines.joined(separator: "\n"), format: format, body: body)
+        return "source \(themeFile(.fish).path)"
+    }
+
+    /// True when the fish config's managed block points at Palette's starship
+    /// snippet, i.e. STARSHIP_CONFIG will be set in a new shell.
+    private var fishExportsStarship: Bool {
+        guard let plan = plan(for: .fish),
+              let text = try? String(contentsOfFile: resolve(plan.path), encoding: .utf8),
+              text.contains(startMarker(plan.format)) else { return false }
+        return text.contains(starshipSnippetURL.path)
+    }
+
+    private func removeStarship(_ plan: Plan) -> Outcome {
+        var changed = false
+        for url in [starshipThemeURL, starshipSnippetURL] where fileManager.fileExists(atPath: url.path) {
+            try? fileManager.removeItem(at: url)
+            changed = true
+        }
+        let resolved = resolve(plan.path)
+        if let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
+           existing.contains(startMarker(plan.format)) {
+            // Legacy block from the version that inlined the palette table.
+            var updated = removingBlock(from: existing, format: plan.format)
+            updated = starshipRemoving(updated)
+            let created = fileManager.fileExists(atPath: createdURL(for: plan).path)
+            if created, updated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                try? fileManager.removeItem(atPath: resolved)
+            } else {
+                try? write(updated, to: resolved)
+            }
+            changed = true
+        }
+        try? fileManager.removeItem(at: backupURL(for: plan))
+        try? fileManager.removeItem(at: createdURL(for: plan))
+        refreshFishBlock()
+        return Outcome(
+            target: .starship,
+            path: plan.path,
+            action: changed ? .removed : .unchanged,
+            error: nil
+        )
+    }
+
+    /// Keeps a one-line fish block pointing at the right file when the snippet
+    /// disappears outside an Apply (direct remove, Disable).
+    private func refreshFishBlock() {
+        guard let plan = plan(for: .fish) else { return }
+        let resolved = resolve(plan.path)
+        guard let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
+              existing.contains(startMarker(plan.format)) else { return }
+        let updated = appendingBlock(
+            to: removingBlock(from: existing, format: plan.format),
+            format: plan.format,
+            body: fishBody()
+        )
+        if updated != existing { try? write(updated, to: resolved) }
     }
 
     private func starshipRemoving(_ text: String) -> String {
@@ -419,6 +497,11 @@ public struct ThemingIncludes: Sendable {
     }
 
     private func removeAuxiliary(_ target: ThemingTarget) {
+        if target == .starship {
+            try? fileManager.removeItem(at: starshipThemeURL)
+            try? fileManager.removeItem(at: starshipSnippetURL)
+            return
+        }
         let pair: (link: String, source: URL)?
         switch target {
         case .bat:

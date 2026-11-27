@@ -44,7 +44,7 @@ final class ThemingReloadTests: XCTestCase {
             .zellij: "New zellij session",
             .nvim: "Run :source ~/.config/palette/theme/nvim.lua or restart Neovim",
             .fish: "Open a new shell (or `source ~/.config/palette/theme/fish.fish`)",
-            .starship: "Next prompt",
+            .starship: "New shell (or `source ~/.config/palette/theme/starship-palette.fish`)",
             .bat: "Next bat invocation",
             .btop: "Restart btop",
             .delta: "Next git/delta command",

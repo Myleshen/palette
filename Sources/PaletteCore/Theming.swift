@@ -231,7 +231,10 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .fish:
             return "source ~/.config/palette/theme/fish.fish"
         case .starship:
-            return "Copy [palettes.palette] from ~/.config/palette/theme/starship.toml into starship.toml, then set palette = \"palette\""
+            // Palette writes a colour-remapped copy and points Starship at it
+            // through STARSHIP_CONFIG, so the user's starship.toml is never
+            // edited. Fish gets this automatically; other shells set it.
+            return "export STARSHIP_CONFIG=~/.config/palette/theme/starship-theme.toml (Palette does this in fish)"
         case .bat:
             return "Symlink ~/.config/palette/theme/bat.tmTheme into $(bat --config-dir)/themes/ and set BAT_THEME=\"palette\""
         case .delta:

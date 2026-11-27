@@ -198,9 +198,13 @@ public final class ThemingEngine: ObservableObject {
 
     public static func managedFileNames(targets: [String] = ThemingTarget.allCases.map(\.rawValue)) -> [String] {
         let selected = Set(targets)
-        return ThemingTarget.allCases
+        var names = ThemingTarget.allCases
             .filter { selected.contains($0.rawValue) }
             .map(\.fileName)
+        if selected.contains(ThemingTarget.starship.rawValue) {
+            names += [StarshipTheme.fileName, StarshipTheme.snippetFileName]
+        }
+        return names
     }
 
     private var managedFileNames: [String] {
@@ -534,9 +538,14 @@ public final class ThemingEngine: ObservableObject {
             if outcome.policySelected {
                 notes.append("Managed policies: open the profile in System Settings and approve it under General → Device Management.")
             }
+            notes += outcome.notices
             let reports = outcome.reports.map { report -> TargetReport in
                 var report = report
                 if let reload = reloads[report.id] { report.note = reload.message }
+                if report.id == ThemingTarget.starship.rawValue,
+                   !config.targets.contains(ThemingTarget.fish.rawValue) {
+                    report.note = "Set STARSHIP_CONFIG=\(includes.shortPath(includes.starshipThemeURL.path)) in your shell, or enable fish."
+                }
                 return report
             }
             let result = ApplyResult(
@@ -576,6 +585,7 @@ public final class ThemingEngine: ObservableObject {
         var skipped: [String]
         var failed: [String]
         var changed: [String]
+        var notices: [String]
         var statusSuffix: String?
         var policySelected: Bool
         var reports: [TargetReport]
@@ -598,10 +608,28 @@ public final class ThemingEngine: ObservableObject {
 
         let selected = targets.compactMap(ThemingTarget.init(rawValue:))
         let selectedIDs = Set(selected.map(\.rawValue))
+
+        // Starship's files are written before the per-target loop so the fish
+        // block can point at the snippet it just created (one block line).
+        var starshipNotice: String?
+        var starshipFailure: String?
+        if selectedIDs.contains(ThemingTarget.starship.rawValue) {
+            do {
+                starshipNotice = try writeStarshipTheme(palette: palette, metadata: metadata)
+            } catch {
+                starshipFailure = error.localizedDescription
+                Log.shared.warn("Could not write the Starship theme: \(error.localizedDescription)", source: "theming")
+            }
+        } else {
+            try? fileManager.removeItem(at: includes.starshipThemeURL)
+            try? fileManager.removeItem(at: includes.starshipSnippetURL)
+        }
+
         var written: [String] = []
         var skipped: [String] = []
         var failed: [String] = []
         var changes: [String] = []
+        var notices: [String] = []
         var statusSuffix: String?
         var policySelected = false
         var anyNeedsInstall = false
@@ -643,6 +671,18 @@ public final class ThemingEngine: ObservableObject {
                 ))
                 continue
             }
+            if target == .starship, let starshipFailure {
+                failed.append(target.fileName)
+                reports.append(TargetReport(
+                    id: target.rawValue,
+                    title: target.title,
+                    fileName: target.fileName,
+                    includeHint: target.includeHint,
+                    note: starshipFailure,
+                    state: .failed
+                ))
+                continue
+            }
             guard target.isImplemented,
                   let contents = ThemingRenderer.contents(for: target, palette: palette, metadata: metadata) else {
                 skipped.append(target.fileName)
@@ -662,6 +702,16 @@ public final class ThemingEngine: ObservableObject {
                     options: .atomic
                 )
                 written.append(target.fileName)
+                if target == .starship {
+                    written += [StarshipTheme.fileName, StarshipTheme.snippetFileName]
+                    changes.append("Starship theme: \(includes.shortPath(includes.starshipThemeURL.path))")
+                    if let starshipNotice { notices.append("Starship: \(starshipNotice)") }
+                    if !selectedIDs.contains(ThemingTarget.fish.rawValue) {
+                        notices.append(
+                            "Starship: export STARSHIP_CONFIG=\(includes.shortPath(includes.starshipThemeURL.path)) in your shell, or enable fish to have Palette set it."
+                        )
+                    }
+                }
                 let include = includes.install(target, palette: palette, metadata: metadata)
                 if let error = include.error {
                     failed.append(target.fileName)
@@ -678,7 +728,7 @@ public final class ThemingEngine: ObservableObject {
                         state: .failed
                     ))
                 } else {
-                    if let path = include.path {
+                    if let path = include.path, target != .starship {
                         changes.append("\(target.title) include: \(includes.shortPath(path))")
                     }
                     reports.append(TargetReport(
@@ -725,10 +775,28 @@ public final class ThemingEngine: ObservableObject {
             skipped: skipped,
             failed: failed,
             changed: changes,
+            notices: notices,
             statusSuffix: statusSuffix,
             policySelected: policySelected,
             reports: reports
         )
+    }
+
+    /// Writes the colour-remapped Starship config and the fish snippet that
+    /// exports STARSHIP_CONFIG. The user's own starship.toml is only read.
+    private func writeStarshipTheme(palette: PalettePalette, metadata: PaletteMetadata) throws -> String? {
+        let userPath = includes.plan(for: .starship)?.path
+        let userConfig = userPath.flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+        let rendered = StarshipTheme.render(userConfig: userConfig, palette: palette, header: metadata.header)
+        try Data(rendered.text.utf8).write(to: includes.starshipThemeURL, options: .atomic)
+        let fishPath = themeDir.appendingPathComponent(ThemingTarget.fish.fileName).path
+        let snippet = StarshipTheme.fishSnippet(
+            themePath: includes.starshipThemeURL.path,
+            fishPath: fishPath,
+            header: metadata.header
+        )
+        try Data(snippet.utf8).write(to: includes.starshipSnippetURL, options: .atomic)
+        return rendered.notice
     }
 
     private func applyChromiumPolicy(

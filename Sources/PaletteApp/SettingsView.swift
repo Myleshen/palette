@@ -2464,7 +2464,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(muted)
                 } footer: {
-                    Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path).")
+                    Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Starship is the exception: its config is never edited — Palette writes a remapped copy and fish exports STARSHIP_CONFIG. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path).")
                 }
             }
         }
