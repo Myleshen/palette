@@ -21,12 +21,14 @@ final class AppRestartTests: XCTestCase {
 
     // MARK: - Decision
 
-    func testRestartListUsesTheProcessProbeAndNeverZellij() async {
-        let running: Set<String> = ["kitty", "neovide", "Ghostty", "zellij"]
-        let restart = AppRestart(
-            isRunning: { running.contains($0) },
-            instanceCount: { _ in 2 }
-        )
+    func testRestartListUsesTheProcessTableAndNeverZellij() async {
+        let table = ProcessTable([
+            "kitty": [41, 42],
+            "neovide": [43],
+            "Ghostty": [44],
+            "zellij": [45],
+        ])
+        let restart = AppRestart(pids: { table.pids($0) })
 
         let apps = await restart.appsToRestart(
             kittyNeedsRestart: true,
@@ -40,10 +42,7 @@ final class AppRestartTests: XCTestCase {
     }
 
     func testAKittyThatRecolouredLiveIsNotOffered() async {
-        let restart = AppRestart(
-            isRunning: { _ in true },
-            instanceCount: { _ in 1 }
-        )
+        let restart = AppRestart(pids: { _ in [1] })
 
         let apps = await restart.appsToRestart(
             kittyNeedsRestart: false,
@@ -55,10 +54,8 @@ final class AppRestartTests: XCTestCase {
     }
 
     func testAnAppThatIsNotRunningIsNotOffered() async {
-        let restart = AppRestart(
-            isRunning: { $0 == "Ghostty" },
-            instanceCount: { _ in 1 }
-        )
+        let table = ProcessTable(["Ghostty": [4]])
+        let restart = AppRestart(pids: { table.pids($0) })
         let apps = await restart.appsToRestart(
             kittyNeedsRestart: true,
             neovideNeedsRestart: true,
@@ -71,18 +68,17 @@ final class AppRestartTests: XCTestCase {
 
     func testRestartQuitsGracefullyThenReopens() async {
         let calls = CallLog()
-        let running = RunningFlag(true)
+        let relaunched = CallLog()
+        let table = ProcessTable(["Ghostty": [7]])
         let restart = AppRestart(
-            timeout: 10,
-            pollInterval: 0.2,
-            isRunning: { _ in running.value },
-            instanceCount: { _ in 1 },
+            pids: { table.pids($0) },
             run: { arguments, _ in
                 calls.record(arguments.joined(separator: " "))
-                if arguments[0] == "/usr/bin/osascript" { running.value = false }
-                return ProcessResult(status: 0, stdout: Data(), stderr: Data())
+                if arguments[0] == "/usr/bin/osascript" { table.set("Ghostty", []) }
+                return success()
             },
-            wait: { _ in }
+            wait: { _ in },
+            relaunch: { relaunched.record($0.name) }
         )
 
         let report = await restart.restart([
@@ -92,23 +88,56 @@ final class AppRestartTests: XCTestCase {
         XCTAssertEqual(report, "Restarted Ghostty")
         XCTAssertEqual(calls.all, [
             "/usr/bin/osascript -e tell application \"Ghostty\" to quit",
-            "/usr/bin/open -a Ghostty",
         ])
+        XCTAssertEqual(relaunched.all, ["Ghostty"])
     }
 
-    func testAnAppThatRefusesToQuitIsReopenedAfterTheTimeoutWithoutForceKill() async {
+    func testAnEditorThatRefusesToQuitIsBroughtForwardWithoutForceKill() async {
         let calls = CallLog()
-        let waits = CallCounter()
+        let relaunched = CallLog()
+        let table = ProcessTable(["Ghostty": [7]])
         let restart = AppRestart(
-            timeout: 0.4,
+            quitTimeout: 0.4,
             pollInterval: 0.2,
-            isRunning: { _ in true },
-            instanceCount: { _ in 1 },
+            pids: { table.pids($0) },
             run: { arguments, _ in
                 calls.record(arguments.joined(separator: " "))
-                return ProcessResult(status: 0, stdout: Data(), stderr: Data())
+                return success()
             },
-            wait: { _ in waits.increment() }
+            wait: { _ in },
+            relaunch: { relaunched.record($0.name) }
+        )
+
+        let report = await restart.restart([
+            AppRestart.App(name: "Ghostty", processName: "Ghostty"),
+        ])
+
+        XCTAssertEqual(report, "Restarted Ghostty")
+        XCTAssertEqual(calls.all, [
+            "/usr/bin/osascript -e tell application \"Ghostty\" to quit",
+        ])
+        XCTAssertFalse(calls.all.contains { $0.hasPrefix("/bin/kill") }, "editors are never force-killed")
+        XCTAssertEqual(relaunched.all, ["Ghostty"])
+    }
+
+    // MARK: - kitty escalation
+
+    func testKittyEscalatesFromQuitToSIGTERMThenRelaunches() async {
+        let calls = CallLog()
+        let relaunched = CallLog()
+        let table = ProcessTable(["kitty": [11, 12]])
+        let restart = AppRestart(
+            quitTimeout: 0.4,
+            termTimeout: 0.4,
+            pollInterval: 0.2,
+            pids: { table.pids($0) },
+            run: { arguments, _ in
+                calls.record(arguments.joined(separator: " "))
+                if arguments[0] == "/bin/kill" { table.set("kitty", []) }
+                return success()
+            },
+            wait: { _ in },
+            relaunch: { relaunched.record($0.name) }
         )
 
         let report = await restart.restart([
@@ -116,12 +145,69 @@ final class AppRestartTests: XCTestCase {
         ])
 
         XCTAssertEqual(report, "Restarted kitty")
-        XCTAssertEqual(waits.value, 2, "two 200 ms polls fit in the 400 ms timeout")
         XCTAssertEqual(calls.all, [
             "/usr/bin/osascript -e tell application \"kitty\" to quit",
-            "/usr/bin/open -a kitty",
+            "/bin/kill -TERM 11 12",
         ])
-        XCTAssertFalse(calls.all.contains { $0.contains("kill") }, "no force-kill, ever")
+        XCTAssertEqual(relaunched.all, ["kitty"])
+    }
+
+    func testKittyThatIgnoresSIGTERMGetsSIGKILLBeforeRelaunch() async {
+        let calls = CallLog()
+        let relaunched = CallLog()
+        let table = ProcessTable(["kitty": [21]])
+        let restart = AppRestart(
+            quitTimeout: 0.4,
+            termTimeout: 0.4,
+            pollInterval: 0.2,
+            pids: { table.pids($0) },
+            run: { arguments, _ in
+                calls.record(arguments.joined(separator: " "))
+                if arguments[0] == "/bin/kill", arguments[1] == "-KILL" {
+                    table.set("kitty", [])
+                }
+                return success()
+            },
+            wait: { _ in },
+            relaunch: { relaunched.record($0.name) }
+        )
+
+        let report = await restart.restart([
+            AppRestart.App(name: "kitty", processName: "kitty"),
+        ])
+
+        XCTAssertEqual(report, "Restarted kitty")
+        XCTAssertEqual(calls.all, [
+            "/usr/bin/osascript -e tell application \"kitty\" to quit",
+            "/bin/kill -TERM 21",
+            "/bin/kill -KILL 21",
+        ])
+        XCTAssertEqual(relaunched.all, ["kitty"])
+    }
+
+    func testAnUnkillableKittyIsReportedAndNotDuplicated() async {
+        let calls = CallLog()
+        let relaunched = CallLog()
+        let table = ProcessTable(["kitty": [31]])
+        let restart = AppRestart(
+            quitTimeout: 0.4,
+            termTimeout: 0.4,
+            pollInterval: 0.2,
+            pids: { table.pids($0) },
+            run: { arguments, _ in
+                calls.record(arguments.joined(separator: " "))
+                return success()
+            },
+            wait: { _ in },
+            relaunch: { relaunched.record($0.name) }
+        )
+
+        let report = await restart.restart([
+            AppRestart.App(name: "kitty", processName: "kitty"),
+        ])
+
+        XCTAssertEqual(report, "could not stop kitty")
+        XCTAssertEqual(relaunched.all, [], "a surviving instance must not get a second window")
     }
 
     func testQuitScriptEscapesTheAppName() {
@@ -138,16 +224,25 @@ final class AppRestartTests: XCTestCase {
         let home = temporaryDirectory()
         let palettePaths = paths(home)
         let calls = CallLog()
+        let table = ProcessTable([
+            "kitty": [1],
+            "neovide": [2],
+            "Ghostty": [3],
+        ])
         let restart = AppRestart(
-            timeout: 0.1,
+            quitTimeout: 0.1,
             pollInterval: 0.05,
-            isRunning: { ["kitty", "neovide", "Ghostty"].contains($0) },
-            instanceCount: { _ in 3 },
+            pids: { table.pids($0) },
             run: { arguments, _ in
                 calls.record(arguments.joined(separator: " "))
-                return ProcessResult(status: 0, stdout: Data(), stderr: Data())
+                // Quit every app so the prompt test exercises routing, not kills.
+                if arguments[0] == "/usr/bin/osascript" {
+                    for name in ["kitty", "neovide", "Ghostty"] { table.set(name, []) }
+                }
+                return success()
             },
-            wait: { _ in }
+            wait: { _ in },
+            relaunch: { _ in }
         )
         let engine = ThemingEngine(
             paths: palettePaths,
@@ -172,7 +267,7 @@ final class AppRestartTests: XCTestCase {
         XCTAssertEqual(prompt.apps.map(\.name), ["kitty", "Neovide", "Ghostty"])
         XCTAssertEqual(
             prompt.message,
-            "Restart to finish applying: kitty (3 windows), Neovide, Ghostty"
+            "Restart to finish applying: kitty, Neovide, Ghostty"
         )
         XCTAssertEqual(prompt.primaryLabel, "Restart now")
         XCTAssertEqual(prompt.secondaryLabel, "Later")
@@ -210,8 +305,7 @@ final class AppRestartTests: XCTestCase {
                 runningKittyPIDs: { Set([9]) }
             ),
             appRestart: AppRestart(
-                isRunning: { _ in false },
-                instanceCount: { _ in 0 }
+                pids: { _ in [] }
             ),
             reloadsEnabled: true
         )
@@ -226,6 +320,10 @@ final class AppRestartTests: XCTestCase {
         XCTAssertTrue(second.status.contains("Reloaded 1 kitty window"))
         XCTAssertNil(engine.restartPrompt, "the second Apply recoloured live")
     }
+}
+
+private func success() -> ProcessResult {
+    ProcessResult(status: 0, stdout: Data(), stderr: Data())
 }
 
 private final class CallLog: @unchecked Sendable {
@@ -245,39 +343,25 @@ private final class CallLog: @unchecked Sendable {
     }
 }
 
-private final class CallCounter: @unchecked Sendable {
+/// A fake `pgrep` result: name in, pids out, mutable so a test can make a
+/// quit or signal actually remove a process.
+private final class ProcessTable: @unchecked Sendable {
     private let lock = NSLock()
-    private var count = 0
+    private var table: [String: [Int]]
 
-    var value: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return count
+    init(_ table: [String: [Int]]) {
+        self.table = table
     }
 
-    func increment() {
+    func pids(_ name: String) -> [Int] {
         lock.lock()
         defer { lock.unlock() }
-        count += 1
+        return table[name] ?? []
     }
-}
 
-private final class RunningFlag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var stored: Bool
-
-    init(_ value: Bool) { stored = value }
-
-    var value: Bool {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return stored
-        }
-        set {
-            lock.lock()
-            defer { lock.unlock() }
-            stored = newValue
-        }
+    func set(_ name: String, _ pids: [Int]) {
+        lock.lock()
+        defer { lock.unlock() }
+        table[name] = pids
     }
 }

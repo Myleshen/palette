@@ -33,6 +33,16 @@ public enum ZellijLauncher {
         return Preparation(name: name, recreated: true, warning: warning)
     }
 
+    /// zellij reads its palette at session start, so the Theming pane's
+    /// "Open themed session" button needs a new session, not an attach.
+    public static let themedSessionName = "Palette"
+
+    /// The button's command: a fresh Palette session that shows the palette
+    /// Palette just wrote.
+    public static func themedSessionScript(zellij: String) -> String {
+        attachScript(zellij: zellij, name: themedSessionName, create: true)
+    }
+
     /// Shell line for an external terminal. Attach is retried once because the
     /// session can die between the session list and the attach.
     public static func attachScript(zellij: String, name: String, create: Bool) -> String {

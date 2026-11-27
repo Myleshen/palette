@@ -341,6 +341,7 @@ struct SettingsView: View {
     private let onApply: (PaletteConfig) -> String?
     private let onOpen: (URL) -> Void
     private let onThemeCards: () -> Void
+    private let onOpenThemedZellij: () -> Void
     private let onExportBackup: () -> Void
     /// Clears the learned-ranking rows; returns an error message on failure.
     private let onForgetLearned: () async -> String?
@@ -366,6 +367,7 @@ struct SettingsView: View {
         onApply: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
         onThemeCards: @escaping () -> Void,
+        onOpenThemedZellij: @escaping () -> Void,
         onExportBackup: @escaping () -> Void,
         onForgetLearned: @escaping () async -> String?
     ) {
@@ -429,6 +431,7 @@ struct SettingsView: View {
         self.onApply = onApply
         self.onOpen = onOpen
         self.onThemeCards = onThemeCards
+        self.onOpenThemedZellij = onOpenThemedZellij
         self.onExportBackup = onExportBackup
         self.onForgetLearned = onForgetLearned
         _theming = ObservedObject(wrappedValue: theming)
@@ -1104,7 +1107,7 @@ struct SettingsView: View {
             .init(title: "Palette", tab: .theming, anchor: "appearance-theme", keywords: "palette theme browser ghostty search preview dark light catppuccin gruvbox aetheria"),
             .init(title: "Themes", tab: .theming, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
             .init(title: "Theme Cards", tab: .theming, anchor: "appearance-theme", keywords: "cards gallery wallpaper desktop picture swatch flip apply shortcut"),
-            .init(title: "Wallpaper folder", tab: .theming, anchor: "appearance-theme", keywords: "wallpaper folder directory theme cards pictures wallpapers group"),
+            .init(title: "Wallpaper folder", tab: .theming, anchor: "theming-section", keywords: "wallpaper folder directory theme cards pictures wallpapers group extract"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
@@ -1153,6 +1156,7 @@ struct SettingsView: View {
             .init(title: "Diagnostics", tab: .diagnostics, anchor: "diagnostics-lines", keywords: "diagnostics startup warnings log"),
             .init(title: "Theming", tab: .theming, anchor: "theming-section", keywords: "theming cross app palette terminal editor export managed files"),
             .init(title: "Other apps", tab: .theming, anchor: "theming-section", keywords: "other apps palette source theme wallpaper extract desktop picture follow"),
+            .init(title: "Palette source", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper toggle disable override follow extract"),
             .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
             .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium apps"),
             .init(title: "Browsers", tab: .theming, anchor: "theming-browsers", keywords: "browsers helium chrome edge brave vivaldi chromium arc silent managed plist mobileconfig admin all profiles seed enable remove download"),
@@ -2115,18 +2119,8 @@ struct SettingsView: View {
 
     // MARK: - Theming
 
-    private enum OtherAppsPalette: String, CaseIterable, Identifiable {
-        case palette
-        case theme
-        case wallpaper
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .palette: return "Palette theme"
-            case .theme: return "Another theme"
-            case .wallpaper: return "Wallpaper"
-            }
-        }
+    private var sourceControls: ThemingSourceControls {
+        ThemingSourceControls(source: config.theming.source)
     }
 
     private var themeGalleryShortcutLabel: String {
@@ -2156,7 +2150,7 @@ struct SettingsView: View {
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Theme Cards").font(theme.font(size: 13))
-                        Text("Large card gallery with left and right neighbours peeking; the desktop picture palette comes first.")
+                        Text("Large card gallery with left and right neighbours peeking; the desktop picture palette comes first. Its wallpaper folder is under Other apps.")
                             .font(.caption)
                             .foregroundStyle(muted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -2168,19 +2162,6 @@ struct SettingsView: View {
                     Button("Open") { onThemeCards() }
                         .controlSize(.small)
                         .accessibilityLabel("Open Theme Cards gallery")
-                }
-                pickerRow(
-                    "Wallpaper folder",
-                    help: "Theme Cards reads this folder for its Wallpapers group. Empty shows the desktop picture card only."
-                ) {
-                    TextField("~/wallpapers", text: $config.theming.wallpaperDirectory)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 380)
-                }
-                if wallpaperFolderMissing {
-                    Text("Folder not found")
-                        .font(.caption)
-                        .foregroundStyle(danger)
                 }
                 Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
             } footer: {
@@ -2215,17 +2196,20 @@ struct SettingsView: View {
                         .foregroundStyle(muted)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    pickerRow("Palette for other apps", help: "Palette theme uses the palette chosen in Palette above.") {
-                        Picker("Palette for other apps", selection: otherAppsPaletteBinding) {
-                            ForEach(OtherAppsPalette.allCases) { option in
-                                Text(option.title).tag(option)
-                            }
+                    pickerRow(
+                        "Palette source",
+                        help: "Theme follows the theme picker; Wallpaper samples the desktop picture for the files Palette writes for other apps."
+                    ) {
+                        Picker("Palette source", selection: $config.theming.source) {
+                            Text("Theme").tag(ThemingSource.theme)
+                            Text("Wallpaper").tag(ThemingSource.wallpaper)
                         }
                         .labelsHidden()
                         .pickerStyle(.segmented)
-                        .frame(maxWidth: 380)
+                        .frame(maxWidth: 260)
                     }
-                    if config.theming.source == .theme && !config.theming.theme.isEmpty {
+
+                    VStack(alignment: .leading, spacing: 6) {
                         pickerRow("Theme override", help: "Empty follows the Palette theme above.") {
                             PaletteMenuPicker(
                                 selection: otherAppsThemeBinding,
@@ -2240,8 +2224,30 @@ struct SettingsView: View {
                             )
                             .frame(maxWidth: 360, alignment: .leading)
                         }
+                        if let reason = sourceControls.themeDisabledReason {
+                            Text(reason)
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    if config.theming.source == .wallpaper {
+                    .disabled(!sourceControls.themeEnabled)
+                    .opacity(sourceControls.themeEnabled ? 1 : 0.45)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        pickerRow(
+                            "Wallpaper folder",
+                            help: "Both this palette and the Theme Cards wallpapers group read it. Empty shows the desktop picture card only."
+                        ) {
+                            TextField("~/wallpapers", text: $config.theming.wallpaperDirectory)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 380)
+                        }
+                        if wallpaperFolderMissing {
+                            Text("Folder not found")
+                                .font(.caption)
+                                .foregroundStyle(danger)
+                        }
                         HStack(alignment: .top, spacing: 12) {
                             Group {
                                 if let wallpaperPreviewImage {
@@ -2307,7 +2313,15 @@ struct SettingsView: View {
                             .pickerStyle(.segmented)
                             .frame(maxWidth: 260)
                         }
+                        if let reason = sourceControls.wallpaperDisabledReason {
+                            Text(reason)
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                    .disabled(!sourceControls.wallpaperEnabled)
+                    .opacity(sourceControls.wallpaperEnabled ? 1 : 0.45)
 
                     Divider().padding(.vertical, 4)
                     HStack(spacing: 8) {
@@ -2467,6 +2481,13 @@ struct SettingsView: View {
                                             .controlSize(.small)
                                             .help("Ask the running app to re-read the Palette colours. Palette never restarts it.")
                                         }
+                                        if target == .zellij {
+                                            Button("Open themed session") {
+                                                onOpenThemedZellij()
+                                            }
+                                            .controlSize(.small)
+                                            .help("Open a new kitty window on a fresh Palette zellij session. zellij reads the palette only at session start, so a running session keeps its old colours.")
+                                        }
                                     }
                                 }
                             }
@@ -2580,29 +2601,6 @@ struct SettingsView: View {
         return theming.legacyProfiles.contains(browser.bundleID)
             ? "Enable silent theming — removes the old profile"
             : "Enable silent theming"
-    }
-
-    private var otherAppsPaletteBinding: Binding<OtherAppsPalette> {
-        Binding(
-            get: {
-                if config.theming.source == .wallpaper { return .wallpaper }
-                return config.theming.theme.isEmpty ? .palette : .theme
-            },
-            set: { option in
-                switch option {
-                case .palette:
-                    config.theming.source = .theme
-                    config.theming.theme = ""
-                case .theme:
-                    config.theming.source = .theme
-                    if config.theming.theme.isEmpty {
-                        config.theming.theme = themeManager.currentThemeID
-                    }
-                case .wallpaper:
-                    config.theming.source = .wallpaper
-                }
-            }
-        )
     }
 
     private var otherAppsThemeBinding: Binding<String> {
