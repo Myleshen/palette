@@ -266,4 +266,65 @@ final class ThemeApplyIntegrationTests: XCTestCase {
 
         XCTAssertEqual(data(".config/starship.toml"), userBytes)
     }
+
+    func testCustomPaletteValuesAreRecolouredAndFollowTheTheme() async throws {
+        guard FileManager.default.fileExists(atPath: bundledThemes.path) else {
+            throw XCTSkip("bundled themes are missing")
+        }
+        let user = """
+        palette = "noctalia"
+        format = "$directory"
+
+        [directory]
+        style = "fg:pink bold"
+
+        [palettes.noctalia]
+        pink = "#ffacea"
+        text = "#f2dde8"
+        flamingo = "#ffb4ab"
+        subtext0 = "#a28a99"
+
+        """
+        let starshipPath = home.appendingPathComponent(".config/starship.toml")
+        try user.write(to: starshipPath, atomically: true, encoding: .utf8)
+        let userBytes = data(".config/starship.toml")
+        let engine = makeEngine()
+        var config = theming([.starship])
+
+        func recoloured() throws -> [String: String] {
+            let table = try TOMLTable(string: text(".config/palette/theme/\(StarshipTheme.fileName)"))
+            let values = try XCTUnwrap(table.table("palettes")?.table("noctalia"))
+            return Dictionary(uniqueKeysWithValues: values.keys.map { ($0, values.str($0) ?? "") })
+        }
+
+        _ = await engine.applyTheme(named: "catppuccin-mocha", config: config)
+        let mocha = try recoloured()
+        let mochaPalette = PalettePalette(
+            theme: ThemeLoader.load(name: "catppuccin-mocha", themesDirectory: bundledThemes).theme
+        )
+        let allowed = Set(
+            [mochaPalette.background, mochaPalette.foreground, mochaPalette.cursor,
+             mochaPalette.selectionBackground, mochaPalette.selectionForeground] + mochaPalette.ansi
+        )
+        let originals = [
+            "pink": "#ffacea",
+            "text": "#f2dde8",
+            "flamingo": "#ffb4ab",
+            "subtext0": "#a28a99",
+        ]
+        XCTAssertEqual(Set(mocha.keys), Set(originals.keys))
+        for (key, original) in originals {
+            let value = try XCTUnwrap(mocha[key])
+            XCTAssertNotEqual(value, original, "\(key) was not recoloured")
+            XCTAssertTrue(allowed.contains(value), "\(key) mapped to \(value), outside the Palette colours")
+        }
+
+        config.theme = "default-light"
+        _ = await engine.applyTheme(named: "default-light", config: config)
+        let light = try recoloured()
+
+        XCTAssertEqual(Set(mocha.keys), Set(light.keys))
+        XCTAssertNotEqual(mocha, light)
+        XCTAssertEqual(data(".config/starship.toml"), userBytes)
+    }
 }

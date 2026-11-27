@@ -50,7 +50,6 @@ final class StarshipThemeTests: XCTestCase {
     func testUnrelatedKeysModulesAndTheUsersOwnPaletteSurvive() throws {
         let user = """
         add_newline = false
-        palette = "mine"
 
         [palettes.mine]
         blue = "#123456"
@@ -66,7 +65,6 @@ final class StarshipThemeTests: XCTestCase {
         let table = try TOMLTable(string: render(user))
 
         XCTAssertEqual(table.bool("add_newline"), false)
-        XCTAssertEqual(table.str("palette"), "mine")
         XCTAssertEqual(table.table("palettes")?.table("mine")?.str("blue"), "#123456")
         XCTAssertEqual(table.table("time")?.str("time_format"), "%H:%M")
         XCTAssertEqual(table.table("time")?.str("style"), "bold \(palette.ansi[7])")
@@ -79,6 +77,92 @@ final class StarshipThemeTests: XCTestCase {
 
         XCTAssertFalse(out.contains("# keep me"))
         XCTAssertTrue(out.contains("comments are dropped by the TOML round-trip"))
+    }
+
+    func testActivePaletteValuesSnapToPaletteColoursAndKeepTheirKeys() throws {
+        let user = """
+        palette = "noctalia"
+        format = "$directory$git_branch"
+        "$schema" = "https://starship.rs/config-schema.json"
+
+        [directory]
+        style = "fg:pink bold"
+
+        [git_branch]
+        style = "fg:text"
+
+        [git_status]
+        style = "fg:flamingo"
+
+        [time]
+        style = "fg:subtext0"
+
+        [palettes.noctalia]
+        pink = "#ffacea"
+        text = "#f2dde8"
+        flamingo = "#ffb4ab"
+        subtext0 = "#a28a99"
+        """
+        let table = try TOMLTable(string: render(user))
+        let paletteTable = try XCTUnwrap(table.table("palettes")?.table("noctalia"))
+        let originals = [
+            "pink": "#ffacea",
+            "text": "#f2dde8",
+            "flamingo": "#ffb4ab",
+            "subtext0": "#a28a99",
+        ]
+        let allowed = Set(
+            [palette.background, palette.foreground, palette.cursor, palette.selectionBackground, palette.selectionForeground]
+                + palette.ansi
+        )
+
+        XCTAssertEqual(Set(paletteTable.keys), Set(originals.keys))
+        for (key, original) in originals {
+            let mapped = try XCTUnwrap(paletteTable.str(key))
+            XCTAssertNotEqual(mapped, original, "\(key) was not recoloured")
+            XCTAssertTrue(allowed.contains(mapped), "\(key) mapped to \(mapped), outside the Palette colours")
+        }
+
+        // The modules keep their custom names; only the palette values moved.
+        XCTAssertEqual(table.table("directory")?.str("style"), "fg:pink bold")
+        XCTAssertEqual(table.table("git_branch")?.str("style"), "fg:text")
+        XCTAssertEqual(table.table("git_status")?.str("style"), "fg:flamingo")
+        XCTAssertEqual(table.table("time")?.str("style"), "fg:subtext0")
+        XCTAssertEqual(table.str("palette"), "noctalia")
+        XCTAssertEqual(table.str("format"), "$directory$git_branch")
+    }
+
+    func testActivePaletteValuesFollowTheTheme() throws {
+        let user = """
+        palette = "noctalia"
+
+        [palettes.noctalia]
+        pink = "#ffacea"
+        text = "#f2dde8"
+        flamingo = "#ffb4ab"
+        subtext0 = "#a28a99"
+        """
+        func values(_ palette: PalettePalette) throws -> [String: String] {
+            let table = try TOMLTable(string: StarshipTheme.render(
+                userConfig: user,
+                palette: palette,
+                header: header
+            ).text)
+            let values = try XCTUnwrap(table.table("palettes")?.table("noctalia"))
+            return Dictionary(uniqueKeysWithValues: values.keys.map { ($0, values.str($0) ?? "") })
+        }
+
+        let dark = try values(PalettePalette(theme: .defaultDark))
+        let light = try values(PalettePalette(theme: .defaultLight))
+
+        XCTAssertEqual(Set(dark.keys), Set(light.keys))
+        XCTAssertNotEqual(dark, light)
+    }
+
+    func testConfigWithoutPaletteStillGetsTheANSIRemap() throws {
+        let table = try TOMLTable(string: render("[directory]\nstyle = \"bold blue\"\n"))
+
+        XCTAssertEqual(table.table("directory")?.str("style"), "bold \(palette.ansi[4])")
     }
 
     func testHexAndUnknownNamesAreLeftAlone() throws {

@@ -6,7 +6,10 @@ import TOMLKit
 /// Starship modules carry literal colour names in their `style` and `format`
 /// values, so simply selecting a palette leaves untouched modules on their old
 /// terminal colours. This copy resolves those names to the palette's hex values
-/// and keeps every other key and module as it was.
+/// and keeps every other key and module as it was. Custom names that only exist
+/// in the user's active `[palettes.<name>]` table are handled by moving that
+/// table's values to the nearest Palette colour, so `fg:pink` follows the theme
+/// without rewriting the style string.
 ///
 /// TOMLKit rebuilds the document, so comments in the user's file are dropped.
 /// The generated header records that; keys, modules and values are preserved.
@@ -64,6 +67,9 @@ public enum StarshipTheme {
             }
             table = (try? TOMLTable(string: defaultConfig)) ?? TOMLTable()
         }
+        // Custom palette names (pink, text, …) bypass the ANSI remap, so the
+        // active palette's values are moved to the nearest Palette colour too.
+        recolourActivePalette(table: table, palette: palette)
         remap(table: table, palette: palette)
         let text = [
             header,
@@ -84,6 +90,90 @@ public enum StarshipTheme {
             "test -f \(fishPath); and source \(fishPath)",
             "",
         ].joined(separator: "\n")
+    }
+
+    // MARK: - Active palette recolouring
+
+    /// Starship resolves `fg:pink` through the active `[palettes.<name>]`
+    /// table only. Keeping the keys and moving each value to the nearest
+    /// Palette colour recolours every module that uses a custom name without
+    /// rewriting its style or format.
+    static func recolourActivePalette(table: TOMLTable, palette: PalettePalette) {
+        guard let name = table.str("palette")?.trimmingCharacters(in: .whitespaces),
+              !name.isEmpty,
+              let values = table.table("palettes")?.table(name) else { return }
+        let candidates = paletteCandidates(palette)
+        guard !candidates.isEmpty else { return }
+        for key in values.keys {
+            guard let raw = values[key]?.string,
+                  let colour = colour(from: raw, palette: palette),
+                  let nearest = nearestHex(to: colour, candidates: candidates) else { continue }
+            values[key] = nearest
+        }
+    }
+
+    /// The Palette colours a custom entry may snap to: surfaces, text/accent,
+    /// selection and the 16 ANSI slots.
+    static func paletteCandidates(_ palette: PalettePalette) -> [(colour: RGBA, hex: String)] {
+        let hexes = [
+            palette.background,
+            palette.foreground,
+            palette.cursor,
+            palette.selectionBackground,
+            palette.selectionForeground,
+        ] + palette.ansi
+        return hexes.compactMap { hex in RGBA(hex: hex).map { ($0, hex) } }
+    }
+
+    /// Palette values are hex, ANSI names or a 0…15 index. Anything else is
+    /// left alone rather than guessed at.
+    static func colour(from raw: String, palette: PalettePalette) -> RGBA? {
+        if let hex = RGBA(hex: raw) { return hex }
+        let token = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        let slot: Int?
+        if let named = ansiSlot(token) {
+            slot = named
+        } else if let index = Int(token) {
+            slot = index
+        } else {
+            slot = nil
+        }
+        guard let slot, palette.ansi.indices.contains(slot) else { return nil }
+        return RGBA(hex: palette.ansi[slot])
+    }
+
+    /// Euclidean distance in OKLab, which is close to how the eye separates
+    /// colours and cheap enough to run over a whole palette table.
+    static func nearestHex(to colour: RGBA, candidates: [(colour: RGBA, hex: String)]) -> String? {
+        let origin = oklab(colour)
+        var best: (distance: Double, hex: String)?
+        for candidate in candidates {
+            let value = oklab(candidate.colour)
+            let dl = origin.l - value.l
+            let da = origin.a - value.a
+            let db = origin.b - value.b
+            let distance = dl * dl + da * da + db * db
+            if let current = best, current.distance <= distance { continue }
+            best = (distance, candidate.hex)
+        }
+        return best?.hex
+    }
+
+    private static func oklab(_ colour: RGBA) -> (l: Double, a: Double, b: Double) {
+        func linear(_ value: Double) -> Double {
+            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        let r = linear(colour.red)
+        let g = linear(colour.green)
+        let b = linear(colour.blue)
+        let long = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+        let medium = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+        let short = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+        return (
+            0.2104542553 * long + 0.7936177850 * medium - 0.0040720468 * short,
+            1.9779984951 * long - 2.4285922050 * medium + 0.4505937099 * short,
+            0.0259040371 * long + 0.7827717662 * medium - 0.8086757660 * short
+        )
     }
 
     // MARK: - Remapping
@@ -144,6 +234,11 @@ public enum StarshipTheme {
 
     /// ANSI 0...7 for the base names, 8...15 for `bright-*`.
     static func paletteHex(_ name: String, palette: PalettePalette) -> String? {
+        guard let slot = ansiSlot(name), palette.ansi.indices.contains(slot) else { return nil }
+        return palette.ansi[slot]
+    }
+
+    static func ansiSlot(_ name: String) -> Int? {
         let names = ["black", "red", "green", "yellow", "blue", "purple", "cyan", "white"]
         var base = name
         var bright = false
@@ -152,8 +247,6 @@ public enum StarshipTheme {
             base.removeFirst("bright-".count)
         }
         guard let index = names.firstIndex(of: base) else { return nil }
-        let slot = (bright ? 8 : 0) + index
-        guard palette.ansi.indices.contains(slot) else { return nil }
-        return palette.ansi[slot]
+        return (bright ? 8 : 0) + index
     }
 }
