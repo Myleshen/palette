@@ -960,6 +960,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var statusPanelHighlight: String
         var themeMenuRows: Int
         var themeMenuRendered: Int
+        var thumbsReady: Bool
+        var thumbsLoaded: Int
+        var thumbsTotal: Int
         var panelHeight: CGFloat
         var panelWidth: CGFloat
         var panelFrame: CGRect
@@ -986,6 +989,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "paletteMenuRows", "paletteMenuHighlight",
         "statusPanelOpen", "statusPanelRows", "statusPanelHighlight",
         "themeMenuRows", "themeMenuRendered",
+        "thumbsReady", "thumbsLoaded", "thumbsTotal",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
         "panelGeometryOK", "registeredHotkeys",
     ]
@@ -1025,6 +1029,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusPanelHighlight: statusPanel?.scriptHighlightedTitle ?? "",
             themeMenuRows: ThemeBrowserRenderProbe.catalogSize,
             themeMenuRendered: ThemeBrowserRenderProbe.rows,
+            thumbsReady: themeGallery?.scriptThumbsReady ?? false,
+            thumbsLoaded: themeGallery?.scriptThumbsLoaded ?? 0,
+            thumbsTotal: themeGallery?.scriptThumbsTotal ?? 0,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
             panelFrame: panel?.panel.frame ?? .zero,
@@ -1084,6 +1091,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "statusPanelHighlight": return observation.statusPanelHighlight
         case "themeMenuRows": return String(observation.themeMenuRows)
         case "themeMenuRendered": return String(observation.themeMenuRendered)
+        case "thumbsReady": return String(observation.thumbsReady)
+        case "thumbsLoaded": return String(observation.thumbsLoaded)
+        case "thumbsTotal": return String(observation.thumbsTotal)
         case "promptTitle": return observation.promptTitle
         case "promptError": return observation.promptError
         case "panelHeight": return String(format: "%.2f", observation.panelHeight)
@@ -1112,7 +1122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen", "statusPanelOpen", "panelGeometryOK":
+        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen", "statusPanelOpen", "panelGeometryOK", "thumbsReady":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -1122,7 +1132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "!=": return have != want ? nil : "\(key)=\(actual), expected != \(want)"
             default: return "'\(op)' is not supported for \(key)"
             }
-        case "selectionIndex", "itemCount", "paletteMenuProbe", "paletteMenuRows", "statusPanelRows", "themeMenuRows", "themeMenuRendered", "registeredHotkeys":
+        case "selectionIndex", "itemCount", "paletteMenuProbe", "paletteMenuRows", "statusPanelRows", "themeMenuRows", "themeMenuRendered", "thumbsLoaded", "thumbsTotal", "registeredHotkeys":
             guard let want = Int(expected), let have = Int(actual) else {
                 return "\(key) expects a number, got '\(expected)'"
             }
@@ -1213,6 +1223,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "statusPanelHighlight": observation.statusPanelHighlight,
             "themeMenuRows": observation.themeMenuRows,
             "themeMenuRendered": observation.themeMenuRendered,
+            "thumbsReady": observation.thumbsReady,
+            "thumbsLoaded": observation.thumbsLoaded,
+            "thumbsTotal": observation.thumbsTotal,
             "panelHeight": observation.panelHeight,
             "panelWidth": observation.panelWidth,
             "panelFrame": [

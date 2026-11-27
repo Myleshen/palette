@@ -163,7 +163,7 @@ dotfiles stay untouched. It fails on a non-zero exit, a missing `SCRIPT OK` in
 the log, a missing quiet-presentation log line, or a missing artifact, and it
 kills a leftover Palette process before exiting.
 
-E2E is the bundle-only layer: five flows, each proving something a test process
+E2E is the bundle-only layer: four flows, each proving something a test process
 cannot. Functional behaviour lives in `swift test`, where it can assert
 controller and file state instead of a screenshot.
 

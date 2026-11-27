@@ -39,8 +39,9 @@ rm -f "$OUT_FAN" "$OUT_PREVIEW" "$OUT_WALLPAPERS" "$OUT_WALLPAPER_PREVIEW" "$OUT
 
 # The wallpaper cards decode 4K pictures on first sight; give the front card a
 # moment before capturing so the snapshot shows the picture, not its loader.
-PALETTE_SCRIPT="${PREFIX}themecards; wait=1.5; themecards_next; wait=0.35; themecards_next; wait=0.6; themecards_snapshot=$OUT_FAN; wait=0.2; themecards_deal=0.5; wait=0.3; themecards_snapshot=$OUT_DEAL; wait=0.2; themecards_deal=1; wait=0.3; themecards_preview; wait=0.8; themecards_snapshot=$OUT_PREVIEW; wait=0.2; themecards_previewclose; themecards_mode=wallpapers; wait=4; themecards_snapshot=$OUT_WALLPAPERS; wait=0.2; themecards_preview; wait=1.5; themecards_snapshot=$OUT_WALLPAPER_PREVIEW; wait=0.2; exit" \
-  nice -n 10 taskpolicy -b "$APP" >/dev/null 2>&1 || true
+PALETTE_SCRIPT="${PREFIX}themecards; wait=1.5; themecards_next; wait=0.35; themecards_next; wait=0.6; themecards_snapshot=$OUT_FAN; wait=0.2; themecards_deal=0.5; wait=0.3; themecards_snapshot=$OUT_DEAL; wait=0.2; themecards_deal=1; wait=0.3; themecards_preview; wait=0.8; themecards_snapshot=$OUT_PREVIEW; wait=0.2; themecards_previewclose; themecards_mode=wallpapers; wait_until=thumbsReady=true;timeout=20; assert=thumbsReady=true; wait=0.3; themecards_snapshot=$OUT_WALLPAPERS; wait=0.2; themecards_preview; wait=1.5; themecards_snapshot=$OUT_WALLPAPER_PREVIEW; wait=0.2; exit" \
+  nice -n 10 taskpolicy -b "$APP" >/dev/null 2>&1 || SCRIPT_STATUS=$?
+SCRIPT_STATUS="${SCRIPT_STATUS:-0}"
 
 for out in "$OUT_FAN" "$OUT_PREVIEW" "$OUT_WALLPAPERS" "$OUT_WALLPAPER_PREVIEW" "$OUT_DEAL"; do
   if [ ! -s "$out" ]; then
@@ -49,3 +50,7 @@ for out in "$OUT_FAN" "$OUT_PREVIEW" "$OUT_WALLPAPERS" "$OUT_WALLPAPER_PREVIEW" 
   fi
   echo "wrote $out"
 done
+if [ "$SCRIPT_STATUS" -ne 0 ]; then
+  echo "theme cards script failed (exit $SCRIPT_STATUS)" >&2
+  exit 1
+fi

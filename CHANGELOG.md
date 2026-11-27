@@ -154,7 +154,7 @@
   recording options, Ask model, theme override, all font pickers, every Settings
   dropdown) is a custom panel now. Native menu tracking no longer swallows global
   hotkeys, so screenshots, clipboard and launcher work while a Palette menu is
-  open. Long lists are lazy and searchable: the 942-row theme menu opens in
+  open. Long lists are lazy and searchable: a 942-row stress menu opens in
   ~42 ms instead of ~1.4 s and renders ~50 rows.
 - **Annotator selection.** Marks can be selected, text resized from a corner
   handle (Escape cancels, one undo step), and deleted with Delete or the

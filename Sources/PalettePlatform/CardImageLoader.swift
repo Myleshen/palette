@@ -13,63 +13,167 @@ public struct CardThumbnail: @unchecked Sendable {
     }
 }
 
-/// Thumbnails for wallpaper cards. Decoding happens off the main thread, one
-/// per card and never twice: a flip only reads the cache. Video files get a
-/// still frame when AVFoundation can produce one cheaply, otherwise nil and
-/// the card draws a film glyph.
+/// Thumbnails for wallpaper cards. Decoding is ImageIO-downsampled to the size
+/// the card draws (512 px is 2× its width, enough for Retina), so a 4K/8K file
+/// never becomes a full-size bitmap. A 512 px picture is kept in an NSCache and
+/// encoded to a disk cache keyed by path+mtime, so a warm open reads ~40 KB
+/// instead of the original file. One serial utility queue decodes, never the
+/// main thread. Video files get a still frame when AVFoundation can produce
+/// one cheaply, otherwise nil and the card shows its palette colour.
 public actor CardImageLoader {
     public static let shared = CardImageLoader()
 
-    private var cache: [String: CardThumbnail] = [:]
+    private final class Entry {
+        let thumbnail: CardThumbnail
+
+        init(_ thumbnail: CardThumbnail) {
+            self.thumbnail = thumbnail
+        }
+    }
+
+    private let cacheDirectory: URL
+    private let memory = NSCache<NSString, Entry>()
+    /// Serial, low QoS: a fan's 19 cards decode one at a time, off the main
+    /// thread, instead of racing 19 full decodes.
+    private let queue = DispatchQueue(label: "dev.myleshen.palette.card-thumbnails", qos: .utility)
+
     private var loads: [String: Int] = [:]
 
-    public init() {}
+    /// `cacheDirectory` is injectable so tests never touch the real cache.
+    public init(
+        cacheDirectory: URL = PalettePaths.resolve().cacheDir
+            .appendingPathComponent("ThemeThumbnails", isDirectory: true)
+    ) {
+        self.cacheDirectory = cacheDirectory
+        memory.countLimit = 120
+        memory.totalCostLimit = 64 * 1024 * 1024
+        let directory = cacheDirectory
+        queue.async {
+            Self.prune(directory, maxFiles: 400)
+        }
+    }
 
-    public func thumbnail(for url: URL, maxPixel: CGFloat = 720) async -> CardThumbnail? {
-        let key = Self.key(url, maxPixel: maxPixel)
-        if let hit = cache[key] { return hit }
+    public func thumbnail(for url: URL, maxPixel: CGFloat = 512) async -> CardThumbnail? {
+        let pixel = max(32, Int(maxPixel.rounded()))
+        let key = Self.cacheKey(url, maxPixel: pixel)
+        if let hit = memory.object(forKey: key as NSString) { return hit.thumbnail }
         loads[key, default: 0] += 1
         let image: NSImage?
         if WallpaperLibrary.videoExtensions.contains(url.pathExtension.lowercased()) {
-            image = await Self.videoFrame(url: url, maxPixel: maxPixel)
+            image = await Self.videoFrame(url: url, maxPixel: pixel)
         } else {
-            image = Self.imageThumbnail(url: url, maxPixel: maxPixel)
+            let directory = cacheDirectory
+            image = await withCheckedContinuation { continuation in
+                queue.async {
+                    continuation.resume(
+                        returning: Self.imageThumbnail(url: url, maxPixel: pixel, cacheDirectory: directory)
+                    )
+                }
+            }
         }
         guard let image else { return nil }
         let thumbnail = CardThumbnail(image)
-        cache[key] = thumbnail
+        let cost = Int(image.size.width * image.size.height * 4)
+        memory.setObject(Entry(thumbnail), forKey: key as NSString, cost: cost)
         return thumbnail
     }
 
     /// Test hook: how often this exact picture was decoded.
-    public func loadCount(for url: URL, maxPixel: CGFloat = 720) -> Int {
-        loads[Self.key(url, maxPixel: maxPixel)] ?? 0
+    public func loadCount(for url: URL, maxPixel: CGFloat = 512) -> Int {
+        loads[Self.cacheKey(url, maxPixel: max(32, Int(maxPixel.rounded())))] ?? 0
     }
 
     public func resetForTesting() {
-        cache.removeAll()
+        memory.removeAllObjects()
         loads.removeAll()
     }
 
-    private static func key(_ url: URL, maxPixel: CGFloat) -> String {
-        "\(url.standardizedFileURL.path)#\(Int(maxPixel))"
+    /// The key both caches use: a changed file or mtime is a different picture.
+    static func cacheKey(_ url: URL, maxPixel: Int) -> String {
+        let path = url.standardizedFileURL.path
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey])
+            .contentModificationDate?.timeIntervalSince1970) ?? 0
+        return "\(path)|\(Int(modified))|\(maxPixel)"
     }
 
-    private static func imageThumbnail(url: URL, maxPixel: CGFloat) -> NSImage? {
+    private static func imageThumbnail(url: URL, maxPixel: Int, cacheDirectory: URL) -> NSImage? {
+        let key = cacheKey(url, maxPixel: maxPixel)
+        let file = cacheDirectory.appendingPathComponent("\(stableHash(key)).jpg")
+        if let data = try? Data(contentsOf: file),
+           let source = CGImageSourceCreateWithData(data as CFData, nil),
+           let image = CGImageSourceCreateImageAtIndex(
+               source,
+               0,
+               [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+           ) {
+            return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+        }
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixel),
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
             kCGImageSourceShouldCacheImmediately: true,
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
             return nil
         }
+        if let encoded = jpegData(image) {
+            try? FileManager.default.createDirectory(
+                at: cacheDirectory,
+                withIntermediateDirectories: true
+            )
+            try? encoded.write(to: file, options: .atomic)
+        }
         return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
     }
 
-    private static func videoFrame(url: URL, maxPixel: CGFloat) async -> NSImage? {
+    private static func jpegData(_ image: CGImage) -> Data? {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            "public.jpeg" as CFString,
+            1,
+            nil
+        ) else { return nil }
+        CGImageDestinationAddImage(
+            destination,
+            image,
+            [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary
+        )
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return data as Data
+    }
+
+    /// FNV-1a, stable across launches: Swift's Hasher is seeded per process and
+    /// would never find yesterday's cache file.
+    private static func stableHash(_ string: String) -> String {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in string.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return String(hash, radix: 16)
+    }
+
+    /// Watch every edit leaves an entry behind; keep the folder bounded.
+    private static func prune(_ directory: URL, maxFiles: Int) {
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: keys
+        ), files.count > maxFiles else { return }
+        let oldest = files.sorted {
+            let left = (try? $0.resourceValues(forKeys: Set(keys)).contentModificationDate) ?? .distantPast
+            let right = (try? $1.resourceValues(forKeys: Set(keys)).contentModificationDate) ?? .distantPast
+            return left < right
+        }
+        for file in oldest.prefix(files.count - maxFiles) {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    private static func videoFrame(url: URL, maxPixel: Int) async -> NSImage? {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true

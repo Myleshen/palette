@@ -543,7 +543,7 @@ final class ThemeFanTests: XCTestCase {
 
     func testThumbnailIsDecodedOncePerCard() async throws {
         let picture = try writePNG("thumb.png")
-        let loader = CardImageLoader()
+        let loader = CardImageLoader(cacheDirectory: root.appendingPathComponent("thumbs", isDirectory: true))
         let first = await loader.thumbnail(for: picture)
         let second = await loader.thumbnail(for: picture)
         XCTAssertNotNil(first)
@@ -558,6 +558,143 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertEqual(brokenCount, 1)
     }
 
+    private func writeLargePNG(_ name: String, width: Int = 1200, height: Int = 800) throws -> URL {
+        let url = root.appendingPathComponent(name)
+        let representation = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+        let data = try XCTUnwrap(representation?.representation(using: .png, properties: [:]))
+        try data.write(to: url)
+        return url
+    }
+
+    /// The card only ever draws 512 px, so the pipeline decodes down to that,
+    /// writes the encoded downsample, and a later loader reads the cache
+    /// instead of the original file.
+    func testThumbnailIsDownsampledAndWarmLoadSkipsTheOriginal() async throws {
+        let cache = root.appendingPathComponent("thumbs-512", isDirectory: true)
+        let picture = try writeLargePNG("large.png")
+        let loader = CardImageLoader(cacheDirectory: cache)
+        let loaded = await loader.thumbnail(for: picture)
+        let first = try XCTUnwrap(loaded)
+        XCTAssertLessThanOrEqual(max(first.image.size.width, first.image.size.height), 512)
+        let files = try FileManager.default.contentsOfDirectory(atPath: cache.path)
+        XCTAssertEqual(files.count, 1, "the downsample is encoded once")
+
+        // Make the original unreadable: only the disk cache can answer now.
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: picture.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: picture.path) }
+        let warm = CardImageLoader(cacheDirectory: cache)
+        let second = await warm.thumbnail(for: picture)
+        XCTAssertNotNil(second, "a warm open reads the cached downsample, not the original")
+        XCTAssertLessThanOrEqual(
+            max(second?.image.size.width ?? 0, second?.image.size.height ?? 0),
+            512
+        )
+    }
+
+    func testThumbnailCacheKeyTracksTheFileMtime() async throws {
+        let cache = root.appendingPathComponent("thumbs-mtime", isDirectory: true)
+        let picture = try writePNG("changing.png")
+        let loader = CardImageLoader(cacheDirectory: cache)
+        _ = await loader.thumbnail(for: picture)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: cache.path).count, 1)
+
+        let before = try XCTUnwrap(
+            picture.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        )
+        var mutablePicture = picture
+        var values = URLResourceValues()
+        values.contentModificationDate = Date().addingTimeInterval(60)
+        try mutablePicture.setResourceValues(values)
+        let after = try XCTUnwrap(
+            picture.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        )
+        XCTAssertGreaterThan(after, before, "the test moved the mtime")
+        _ = await loader.thumbnail(for: picture)
+        let files = try FileManager.default.contentsOfDirectory(atPath: cache.path)
+        XCTAssertEqual(files.count, 2, "an edited picture is a new cache key")
+    }
+
+    // MARK: - Timings
+
+    func testOpenAndFlipTimingsWith942Cards() throws {
+        guard FileManager.default.fileExists(atPath: bundledDirectory.path) else {
+            throw XCTSkip("bundled themes are missing")
+        }
+        ThemeLoader.resetCachesForTesting()
+        let clock = ContinuousClock()
+        var catalog = ThemeBrowserCatalog(themes: [])
+        let catalogueTime = clock.measure {
+            catalog = ThemeBrowserCatalog(themes: ThemeLoader.catalog(
+                themesDirectory: root,
+                bundledThemesDirectory: bundledDirectory
+            ))
+        }
+        let wallpapers = (0..<12).map { root.appendingPathComponent("wall-\($0).png") }
+        var deck = ThemeCardDeck(
+            catalog: catalog,
+            wallpapers: wallpapers,
+            currentDesktop: wallpapers[0],
+            mode: .colors
+        )
+
+        var palettes: [String: ThemeCardPalette] = [:]
+        let openTime = clock.measure {
+            _ = ThemeCardDeck(
+                catalog: catalog,
+                wallpapers: wallpapers,
+                currentDesktop: wallpapers[0],
+                mode: .colors
+            )
+            for slot in deck.fanWindow(reach: ThemeDeckReachForTests.reach) {
+                guard let name = slot.card.themeID else { continue }
+                palettes[slot.card.cacheKey] = ThemeCardPalette(theme: ThemeLoader.load(
+                    name: name,
+                    themesDirectory: root,
+                    bundledThemesDirectory: bundledDirectory
+                ).theme)
+            }
+        }
+
+        let flips = 1_000
+        let flipTime = clock.measure {
+            for _ in 0..<flips {
+                deck.move(by: 1)
+                _ = palettes[deck.current.cacheKey]
+            }
+        }
+
+        let perFlip = seconds(flipTime) / Double(flips)
+        print(
+            "Fan deck Colors: \(catalog.count) themes · "
+                + "catalogue \(milliseconds(catalogueTime)) ms · open "
+                + "\(milliseconds(openTime)) ms · warm flip \(microseconds(perFlip)) µs"
+        )
+        XCTAssertLessThan(perFlip, 0.001, "a warm flip is a dictionary lookup")
+    }
+
+    private func seconds(_ duration: Duration) -> Double {
+        let parts = duration.components
+        return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
+    }
+
+    private func milliseconds(_ duration: Duration) -> String {
+        String(format: "%.1f", seconds(duration) * 1_000)
+    }
+
+    private func microseconds(_ value: Double) -> String {
+        String(format: "%.1f", value * 1_000_000)
+    }
 }
 
 /// The hand the deck shows on a 1280 pt screen, for the parse-count tests.
