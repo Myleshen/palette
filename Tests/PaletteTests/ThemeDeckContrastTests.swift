@@ -88,6 +88,19 @@ final class ThemeDeckContrastTests: XCTestCase {
             check("card secondary title", over(fg, cardBg, ThemeDeckInk.labelAlpha), cardBg)
             check("banner caption", over(fg, cardBg, ThemeDeckInk.labelAlpha), cardBg)
 
+            // A colour card now draws its palette gradient full bleed and puts
+            // every label on a scrim of the card's own bg, so measure the plate
+            // against each gradient stop: the brightest and darkest are the two
+            // worst backdrops.
+            for stop in card.brightestANSI.compactMap({ RGBA(hex: $0) }) {
+                let plate = over(cardBg, stop, ThemeDeckInk.cardScrim)
+                check("colour card title", over(fg, plate, ThemeDeckInk.labelAlpha), plate)
+                check("colour card badge", over(accent, plate, ThemeDeckInk.labelAlpha), plate)
+                check("colour card swatch label", over(fg, plate, ThemeDeckInk.labelAlpha), plate)
+                check("colour card hex row", over(fg, plate, ThemeDeckInk.labelAlpha), plate)
+                check("colour card appearance", over(fg, plate, ThemeDeckInk.labelAlpha), plate)
+            }
+
             // The focused theme preview.
             check("preview kicker", over(fg, cardBg, ThemeDeckInk.labelAlpha), cardBg)
             check("preview counter", over(fg, cardBg, ThemeDeckInk.labelAlpha), cardBg)

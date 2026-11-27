@@ -557,7 +557,7 @@ final class ThemeFanTests: XCTestCase {
 
     func testThumbnailIsDecodedOncePerCard() async throws {
         let picture = try writePNG("thumb.png")
-        let loader = CardImageLoader()
+        let loader = CardImageLoader(cacheDirectory: root.appendingPathComponent("thumbs", isDirectory: true))
         let first = await loader.thumbnail(for: picture)
         let second = await loader.thumbnail(for: picture)
         XCTAssertNotNil(first)
@@ -570,6 +570,73 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertNil(broken, "an unreadable picture asks the card for its glyph")
         let brokenCount = await loader.loadCount(for: missing)
         XCTAssertEqual(brokenCount, 1)
+    }
+
+    private func writeLargePNG(_ name: String, width: Int = 1200, height: Int = 800) throws -> URL {
+        let url = root.appendingPathComponent(name)
+        let representation = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+        let data = try XCTUnwrap(representation?.representation(using: .png, properties: [:]))
+        try data.write(to: url)
+        return url
+    }
+
+    /// The card only ever draws 512 px, so the pipeline decodes down to that,
+    /// writes the encoded downsample, and a later loader reads the cache
+    /// instead of the original file.
+    func testThumbnailIsDownsampledAndWarmLoadSkipsTheOriginal() async throws {
+        let cache = root.appendingPathComponent("thumbs-512", isDirectory: true)
+        let picture = try writeLargePNG("large.png")
+        let loader = CardImageLoader(cacheDirectory: cache)
+        let loaded = await loader.thumbnail(for: picture)
+        let first = try XCTUnwrap(loaded)
+        XCTAssertLessThanOrEqual(max(first.image.size.width, first.image.size.height), 512)
+        let files = try FileManager.default.contentsOfDirectory(atPath: cache.path)
+        XCTAssertEqual(files.count, 1, "the downsample is encoded once")
+
+        // Make the original unreadable: only the disk cache can answer now.
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: picture.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: picture.path) }
+        let warm = CardImageLoader(cacheDirectory: cache)
+        let second = await warm.thumbnail(for: picture)
+        XCTAssertNotNil(second, "a warm open reads the cached downsample, not the original")
+        XCTAssertLessThanOrEqual(
+            max(second?.image.size.width ?? 0, second?.image.size.height ?? 0),
+            512
+        )
+    }
+
+    func testThumbnailCacheKeyTracksTheFileMtime() async throws {
+        let cache = root.appendingPathComponent("thumbs-mtime", isDirectory: true)
+        let picture = try writePNG("changing.png")
+        let loader = CardImageLoader(cacheDirectory: cache)
+        _ = await loader.thumbnail(for: picture)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: cache.path).count, 1)
+
+        let before = try XCTUnwrap(
+            picture.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        )
+        var mutablePicture = picture
+        var values = URLResourceValues()
+        values.contentModificationDate = Date().addingTimeInterval(60)
+        try mutablePicture.setResourceValues(values)
+        let after = try XCTUnwrap(
+            picture.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        )
+        XCTAssertGreaterThan(after, before, "the test moved the mtime")
+        _ = await loader.thumbnail(for: picture)
+        let files = try FileManager.default.contentsOfDirectory(atPath: cache.path)
+        XCTAssertEqual(files.count, 2, "an edited picture is a new cache key")
     }
 
     // MARK: - Timings

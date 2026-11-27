@@ -13,6 +13,9 @@ enum ThemeDeckInk {
     /// `elevated` layered over the deck background.
     static let fieldFill: Double = 0.65
     static let chipFill: Double = 0.6
+    /// The bar a colour card's labels sit on, over its palette gradient. Solid:
+    /// the theme's own fg/accent pairs are only guaranteed against its bg.
+    static let cardScrim: Double = 1
     /// Black label bar over a wallpaper card or preview image.
     static let wallpaperScrim: Double = 0.72
     /// The section/video/counter line on that bar.
@@ -112,6 +115,10 @@ final class ThemeGalleryWindowController: NSWindowController {
     private var wallpapers: [WallpaperFile] = []
     private var loadingPalettes: Set<String> = []
     private var loadingThumbnails: Set<String> = []
+    /// Pictures that cannot be decoded; they count as settled so a broken file
+    /// never holds the "thumbnails ready" flag.
+    private var failedThumbnails: Set<String> = []
+    private var thumbnailBatchStart: DispatchTime?
     private var loadingWallpaperPalettes: Set<String> = []
     private var wallpaperLoading = false
     private var wallpaperLoaded = false
@@ -524,7 +531,13 @@ final class ThemeGalleryWindowController: NSWindowController {
     private var reach: Int { model.layout.reach }
 
     private func loadVisibleCards() {
-        for card in visibleCards() {
+        let cards = visibleCards()
+        if model.deck.mode == .wallpapers, cardThumbnailPaths(cards).contains(where: {
+            model.thumbnails[$0] == nil && !failedThumbnails.contains($0)
+        }) {
+            if thumbnailBatchStart == nil { thumbnailBatchStart = DispatchTime.now() }
+        }
+        for card in cards {
             switch card.kind {
             case .wallpaper:
                 loadWallpaperIfNeeded()
@@ -535,6 +548,26 @@ final class ThemeGalleryWindowController: NSWindowController {
                 loadPalette(for: card)
             }
         }
+    }
+
+    /// The visible window's picture paths, in fan order.
+    private func cardThumbnailPaths(_ cards: [ThemeCard]) -> [String] {
+        cards.compactMap { $0.wallpaperPath }
+    }
+
+    /// Script/dump hooks: has every picture in the visible window finished
+    /// decoding (or failed)? A broken file counts as settled.
+    var scriptThumbsReady: Bool {
+        let paths = cardThumbnailPaths(visibleCards())
+        return paths.allSatisfy { model.thumbnails[$0] != nil || failedThumbnails.contains($0) }
+    }
+
+    var scriptThumbsLoaded: Int {
+        cardThumbnailPaths(visibleCards()).filter { model.thumbnails[$0] != nil }.count
+    }
+
+    var scriptThumbsTotal: Int {
+        cardThumbnailPaths(visibleCards()).count
     }
 
     private func loadPalette(for card: ThemeCard) {
@@ -557,15 +590,34 @@ final class ThemeGalleryWindowController: NSWindowController {
 
     private func loadThumbnail(for url: URL) {
         let path = url.standardizedFileURL.path
-        guard model.thumbnails[path] == nil, !loadingThumbnails.contains(path) else { return }
+        guard model.thumbnails[path] == nil,
+              !loadingThumbnails.contains(path),
+              !failedThumbnails.contains(path) else { return }
         loadingThumbnails.insert(path)
         Task { @MainActor [weak self] in
             let thumbnail = await CardImageLoader.shared.thumbnail(for: url)
             guard let self else { return }
             self.loadingThumbnails.remove(path)
-            guard let thumbnail else { return }
-            self.model.thumbnails[path] = thumbnail.image
+            if let thumbnail {
+                self.model.thumbnails[path] = thumbnail.image
+            } else {
+                self.failedThumbnails.insert(path)
+            }
+            self.logThumbnailBatchIfReady()
         }
+    }
+
+    /// One line per window load, so a slow folder is visible in the log instead
+    /// of only looking like empty cards.
+    private func logThumbnailBatchIfReady() {
+        guard let start = thumbnailBatchStart, scriptThumbsReady else { return }
+        thumbnailBatchStart = nil
+        let elapsed = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
+        Log.shared.info(
+            "Theme cards wallpaper thumbnails ready: \(scriptThumbsLoaded)/\(scriptThumbsTotal) "
+                + "in \(elapsed / 1_000_000) ms",
+            source: "theme"
+        )
     }
 
     /// The card's own dots. The picture is decoded small off-main, then only
@@ -576,7 +628,9 @@ final class ThemeGalleryWindowController: NSWindowController {
         loadingWallpaperPalettes.insert(key)
         let appearance = themeManager.theme.appearance
         Task { @MainActor [weak self] in
-            let small = await CardImageLoader.shared.thumbnail(for: url, maxPixel: 96)
+            // Same downsample the card draws, so this is a cache hit, not a
+            // second decode of the original.
+            let small = await CardImageLoader.shared.thumbnail(for: url)
             guard let self else { return }
             self.loadingWallpaperPalettes.remove(key)
             guard let image = small?.image,
@@ -1238,119 +1292,94 @@ private struct ThemeGalleryView: View {
         foreground: Color,
         selected: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: selected ? 10 : 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(card.displayName)
-                    .font(.system(size: selected ? 18 : 12, weight: .semibold))
-                    .foregroundStyle(foreground)
-                    .lineLimit(selected ? 1 : 2)
+        // Full bleed: the palette's gradient is the card, edge to edge. Every
+        // label sits on a solid bar of the card's own background, never on the
+        // gradient itself.
+        let art = (palette?.brightestANSI ?? []).compactMap { RGBA(hex: $0)?.color }
+        let scrim = color(palette?.background, fallback: theme.palette.bg)
+            .opacity(ThemeDeckInk.cardScrim)
+        let accent = accentColor(palette, foreground: foreground)
+        return ZStack {
+            LinearGradient(
+                colors: art.isEmpty
+                    ? [foreground.opacity(0.10), foreground.opacity(0.22)]
+                    : art,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: selected ? 8 : 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(card.displayName)
+                            .font(.system(size: selected ? 17 : 12, weight: .semibold))
+                            .foregroundStyle(ThemeDeckInk.label(foreground))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if selected {
+                            Spacer(minLength: 4)
+                            Text(card.sectionTitle.uppercased())
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(0.6)
+                                .foregroundStyle(accent)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .overlay(
+                                    Capsule().strokeBorder(accent.opacity(0.7), lineWidth: 1)
+                                )
+                                // Leave the heart badge its corner.
+                                .padding(.trailing, model.deck.favourites.contains(card.cacheKey) ? 18 : 0)
+                        }
+                    }
+
+                    HStack(spacing: selected ? 6 : 4) {
+                        cardSwatch("BG", palette?.background, foreground: foreground, selected: selected)
+                        cardSwatch("FG", palette?.foreground, foreground: foreground, selected: selected)
+                        cardSwatch("ACCENT", palette?.accent, foreground: foreground, selected: selected)
+                        if selected {
+                            cardSwatch("SELECT", palette?.selection, foreground: foreground, selected: true)
+                        }
+                    }
+                }
+                .padding(.horizontal, selected ? 13 : 9)
+                .padding(.vertical, selected ? 11 : 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(scrim)
+
+                Spacer(minLength: 0)
+
                 if selected {
-                    Spacer(minLength: 6)
-                    Text(card.sectionTitle.uppercased())
-                        .font(.system(size: 9, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(accentColor(palette, foreground: foreground))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .overlay(
-                            Capsule().strokeBorder(
-                                accentColor(palette, foreground: foreground).opacity(0.7),
-                                lineWidth: 1
-                            )
-                        )
-                        // Leave the heart badge its corner.
-                        .padding(.trailing, model.deck.favourites.contains(card.cacheKey) ? 18 : 0)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 4) {
+                            ForEach(Array((palette?.brightestANSI ?? []).prefix(8).enumerated()), id: \.offset) { _, hex in
+                                Circle()
+                                    .fill(color(hex, fallback: theme.palette.fgMuted))
+                                    .frame(width: 11, height: 11)
+                                    .overlay(Circle().strokeBorder(foreground.opacity(0.22), lineWidth: 0.5))
+                            }
+                            Spacer(minLength: 4)
+                            let appearance = displayAppearance(card, palette: palette)
+                            if !appearance.isEmpty {
+                                Text(appearance.uppercased())
+                                    .font(.system(size: 9, weight: .medium))
+                                    .tracking(0.5)
+                                    .foregroundStyle(ThemeDeckInk.label(foreground))
+                            }
+                        }
+                        Text(paletteSummary(card, palette: palette))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(ThemeDeckInk.label(foreground))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(scrim)
                 }
-            }
-
-            HStack(spacing: selected ? 8 : 5) {
-                swatchBlock("BG", palette?.background, foreground: foreground, tall: selected)
-                swatchBlock("FG", palette?.foreground, foreground: foreground, tall: selected)
-                swatchBlock("ACCENT", palette?.accent, foreground: foreground, tall: selected)
-                if selected {
-                    swatchBlock("SELECT", palette?.selection, foreground: foreground, tall: true)
-                }
-            }
-
-            HStack(spacing: selected ? 5 : 3) {
-                ForEach(Array((palette?.brightestANSI ?? []).prefix(selected ? 8 : 6).enumerated()), id: \.offset) { _, hex in
-                    Circle()
-                        .fill(color(hex, fallback: theme.palette.fgMuted))
-                        .frame(width: selected ? 12 : 6, height: selected ? 12 : 6)
-                        .overlay(Circle().strokeBorder(foreground.opacity(0.18), lineWidth: 0.5))
-                }
-                Spacer(minLength: 4)
-                if selected {
-                    Text(displayAppearance(card, palette: palette))
-                        .font(.system(size: 10))
-                        .foregroundStyle(ThemeDeckInk.label(foreground))
-                }
-            }
-
-            if selected {
-                paletteBanner(palette, foreground: foreground)
-                    .frame(maxHeight: .infinity)
-            } else {
-                paletteBanner(palette, foreground: foreground, compact: true)
-                    .frame(maxHeight: .infinity)
-            }
-
-            Spacer(minLength: 0)
-
-            if selected {
-                Text(paletteSummary(card, palette: palette))
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(ThemeDeckInk.label(foreground))
-                    .lineLimit(1)
-            } else {
-                Text(card.sectionTitle)
-                    .font(.system(size: 9))
-                    .foregroundStyle(ThemeDeckInk.label(foreground))
-                    .lineLimit(1)
             }
         }
-        .padding(selected ? 15 : 11)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    /// A strip of the palette's own colours, so the card shows more than four
-    /// blocks and the empty middle earns its space.
-    private func paletteBanner(
-        _ palette: ThemeCardPalette?,
-        foreground: Color,
-        compact: Bool = false
-    ) -> some View {
-        let colors = (palette?.brightestANSI ?? []).compactMap { RGBA(hex: $0)?.color }
-        return RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: colors.isEmpty
-                        ? [foreground.opacity(0.06), foreground.opacity(0.14)]
-                        : colors,
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .overlay(alignment: .bottomLeading) {
-                if !compact {
-                    Text("The quick brown fox   #!/bin/sh")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(ThemeDeckInk.label(foreground))
-                        .lineLimit(1)
-                        .padding(8)
-                        // The strip is the palette's brightest ANSI colours,
-                        // so the caption needs its own opaque paper.
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(color(palette?.background, fallback: theme.palette.bg))
-                        )
-                }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(foreground.opacity(0.12), lineWidth: 1)
-            )
-            .accessibilityHidden(true)
     }
 
     private func wallpaperBody(
@@ -1362,77 +1391,80 @@ private struct ThemeGalleryView: View {
         let image = model.thumbnail(for: card)
         let video = isVideoCard(card)
         // Full bleed: the picture is the card, corner to corner. The name sits
-        // on a scrim over it, with no inner frame or inset thumbnail.
-        return ZStack(alignment: .bottomLeading) {
-            Group {
-                if let image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    LinearGradient(
-                        colors: [
-                            theme.color(theme.palette.elevated),
-                            theme.color(theme.palette.surface),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    Image(systemName: video ? "film" : "photo")
-                        .font(.system(size: selected ? 44 : 28, weight: .light))
-                        .foregroundStyle(foreground.opacity(0.35))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // on a scrim over it, with no inner frame or inset thumbnail. The
+        // GeometryReader gives the label a real width to truncate in.
+        return GeometryReader { proxy in
+            ZStack(alignment: .bottomLeading) {
+                Group {
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        // Progressive paint: the card is never a blank tile. The
+                        // palette's own background is the picture's average
+                        // colour, so the swap to the image does not flash.
+                        Rectangle()
+                            .fill(color(palette?.background, fallback: theme.palette.surface))
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
 
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.8)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.8)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Spacer(minLength: 0)
-                // A solid bar, not the gradient alone: the labels must stay
-                // readable over any picture, including a white one.
-                VStack(alignment: .leading, spacing: selected ? 7 : 4) {
-                    Text(card.displayName)
-                        .font(.system(size: selected ? 16 : 11, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .lineLimit(selected ? 1 : 2)
-                    if selected {
-                        HStack(spacing: 5) {
-                            Text(card.sectionTitle.uppercased())
-                                .font(.system(size: 9, weight: .semibold))
-                                .tracking(0.6)
-                                .foregroundStyle(Color.white.opacity(ThemeDeckInk.wallpaperSecondary))
-                            if video {
-                                Text("VIDEO")
+                VStack(alignment: .leading, spacing: 0) {
+                    Spacer(minLength: 0)
+                    // A solid bar, not the gradient alone: the labels must stay
+                    // readable over any picture, including a white one.
+                    VStack(alignment: .leading, spacing: selected ? 7 : 4) {
+                        Text(card.displayName)
+                            .font(.system(size: selected ? 16 : 11, weight: .semibold))
+                            .foregroundStyle(Color.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(
+                                width: proxy.size.width - 2 * (selected ? 15 : 11),
+                                alignment: .leading
+                            )
+                        if selected {
+                            HStack(spacing: 5) {
+                                Text(card.sectionTitle.uppercased())
                                     .font(.system(size: 9, weight: .semibold))
                                     .tracking(0.6)
                                     .foregroundStyle(Color.white.opacity(ThemeDeckInk.wallpaperSecondary))
+                                if video {
+                                    Text("VIDEO")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .tracking(0.6)
+                                        .foregroundStyle(Color.white.opacity(ThemeDeckInk.wallpaperSecondary))
+                                }
+                                Spacer(minLength: 4)
+                                ForEach(Array((palette?.brightestANSI ?? []).prefix(8).enumerated()), id: \.offset) { _, hex in
+                                    Circle()
+                                        .fill(color(hex, fallback: theme.palette.fgMuted))
+                                        .frame(width: 9, height: 9)
+                                }
                             }
-                            Spacer(minLength: 4)
-                            ForEach(Array((palette?.brightestANSI ?? []).prefix(8).enumerated()), id: \.offset) { _, hex in
-                                Circle()
-                                    .fill(color(hex, fallback: theme.palette.fgMuted))
-                                    .frame(width: 9, height: 9)
-                            }
+                            .frame(maxWidth: .infinity)
                         }
                     }
+                    .padding(selected ? 15 : 11)
+                    .frame(width: proxy.size.width, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(.black.opacity(ThemeDeckInk.wallpaperScrim))
+                    )
                 }
-                .padding(selected ? 15 : 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.black.opacity(ThemeDeckInk.wallpaperScrim))
-                )
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottomLeading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Focused preview
@@ -1745,21 +1777,23 @@ private struct ThemeGalleryView: View {
             .accessibilityHidden(true)
     }
 
-    private func swatchBlock(
+    /// A swatch chip that sits on the card's scrim rather than on a block of
+    /// padding, so the palette itself stays full bleed.
+    private func cardSwatch(
         _ title: String,
         _ hex: String?,
         foreground: Color,
-        tall: Bool
+        selected: Bool
     ) -> some View {
-        VStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+        VStack(spacing: 3) {
+            RoundedRectangle(cornerRadius: selected ? 5 : 3, style: .continuous)
                 .fill(color(hex, fallback: theme.palette.elevated))
-                .frame(height: tall ? 56 : 34)
+                .frame(height: selected ? 30 : 18)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(foreground.opacity(0.14), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: selected ? 5 : 3, style: .continuous)
+                        .strokeBorder(foreground.opacity(0.22), lineWidth: 1)
                 )
-            if tall {
+            if selected {
                 Text(title)
                     .font(.system(size: 8, weight: .medium))
                     .foregroundStyle(ThemeDeckInk.label(foreground))
