@@ -70,14 +70,18 @@ Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `shift+` (for example `key=cmd+k`). `snapshot` writes the panel content without
 screen-recording permission, so it works on a locked display.
 
-Theme cards have their own steps: `themecards` opens the fanned gallery,
-`themecards_next` / `_prev` / `_first` / `_last` move, `themecards_filter=<text>`
-types into the filter, `themecards_tab` toggles favourites, `themecards_favourite`
-marks the front card, `themecards_apply` applies it without Return, and
+Theme cards have their own steps: `themecards` opens the Colors deck,
+`themecards_mode=colors|wallpapers` switches mode, `themecards_next` / `_prev` /
+`_first` / `_last` move, `themecards_filter=<text>` types into the filter,
+`themecards_tab` toggles favourites, `themecards_favourite` marks the front
+card, `themecards_apply` applies it without Return, `themecards_preview` and
+`themecards_previewclose` open and collapse the full-screen preview, and
 `themecards_snapshot=<path>` / `themecardsclose` capture and close it.
 `Scripts/theme-cards-snapshot.sh` uses those steps to render
-`Tests/Snapshots/theme-cards-fan.png` headlessly, which is how the hand, the
-dimming and the lifted card are checked without opening the app.
+`Tests/Snapshots/theme-cards-fan.png`, `theme-cards-preview.png`,
+`theme-cards-wallpapers.png` and `theme-cards-wallpaper-preview.png` headlessly,
+which is how the hand, the dimming, the lifted card, the focused preview and the
+Wallpapers mode are checked without opening the app.
 
 A scripted run never takes focus. Windows are ordered to the back of the normal
 level, panels never become key, the app stays an accessory (no Dock icon), and a
@@ -128,8 +132,11 @@ What remains human-only: the system app menu bar, Services, file panels,
 first-run and TCC alerts, and confirming that a real Carbon hotkey still fires
 while a panel is open. The theme cards gallery renders in script mode without
 activation, but its steps drive the deck model directly: real arrow-key handling,
-typing into the filter, click-to-deal and drag on a card, and the lift animation
-are checked by eye (see `theme-cards-fan.png`). Script mode can also prove the
+typing into the filter, click-to-deal and drag on a card, the lift animation and
+the preview's grow-from-the-card spring are checked by eye (see
+`theme-cards-fan.png`, `theme-cards-preview.png`,
+`theme-cards-wallpapers.png` and `theme-cards-wallpaper-preview.png`). Script
+mode can also prove the
 app stayed out of focus (`appActive=false`), but not that a real activation
 (click, Dock, `open`) leaves the panel placed correctly. Those stay on the manual
 checklist.

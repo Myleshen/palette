@@ -689,7 +689,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 } else if let value = step.dropPrefix("statuspanel_snapshot=") {
                     self.writeStatusPanelSnapshot(to: value)
                 } else if step == "themecards" {
-                    self.showThemeGallery()
+                    self.showThemeGallery(mode: .colors)
+                } else if let value = step.dropPrefix("themecards_mode=") {
+                    self.themeGallery?.scriptMode(ThemeCardMode(rawValue: value) ?? .colors)
                 } else if step == "themecardsclose" {
                     self.themeGallery?.hide()
                 } else if step == "themecards_first" {
@@ -708,6 +710,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.themeGallery?.scriptToggleFavourite()
                 } else if step == "themecards_apply" {
                     self.themeGallery?.scriptApply()
+                } else if step == "themecards_preview" {
+                    self.themeGallery?.scriptPreview()
+                } else if step == "themecards_previewclose" {
+                    self.themeGallery?.scriptPreviewClose()
                 } else if let value = step.dropPrefix("themecards_snapshot=") {
                     if let view = self.themeGallery?.window?.contentView {
                         self.write(view: view, to: value)
@@ -884,6 +890,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let owned = [
             configuration.hotkey, configuration.clipboardHotkey,
             configuration.terminalHotkey, configuration.themeGalleryHotkey,
+            configuration.wallpaperGalleryHotkey,
             configuration.scratchpadHotkey,
             configuration.askHotkey, configuration.screenshotHotkey,
             configuration.regionScreenshotHotkey, configuration.windowScreenshotHotkey,
@@ -1284,6 +1291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "enter": (36, "\r"), "esc": (53, "\u{1B}"), "tab": (48, "\t"),
             "space": (49, " "), "comma": (43, ","), "k": (40, "k"),
             "r": (15, "r"), "w": (13, "w"), "s": (1, "s"), "o": (31, "o"), "c": (8, "c"),
+            "p": (35, "p"),
             "f": (3, "f"), "backspace": (51, "\u{8}"),
             "1": (18, "1"), "2": (19, "2"), "3": (20, "3"),
             "4": (21, "4"), "5": (23, "5"), "6": (22, "6"),
@@ -1606,7 +1614,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Desired(id: "terminal", label: "Terminal shortcut", keys: configuration.terminalHotkey,
                     press: { [weak self] in self?.toggleTerminalPanel() }),
             Desired(id: "theme-gallery", label: "Theme cards shortcut", keys: configuration.themeGalleryHotkey,
-                    press: { [weak self] in self?.toggleThemeGallery() }),
+                    press: { [weak self] in self?.toggleThemeGallery(mode: .colors) }),
+            Desired(id: "wallpaper-gallery", label: "Wallpaper cards shortcut",
+                    keys: configuration.wallpaperGalleryHotkey,
+                    press: { [weak self] in self?.toggleThemeGallery(mode: .wallpapers) }),
             Desired(id: "scratchpad", label: "Scratchpad list shortcut", keys: configuration.scratchpadHotkey,
                     press: { [weak self] in self?.toggleScratchpad() }),
             Desired(id: "ask", label: "Ask shortcut", keys: configuration.askHotkey,
@@ -3319,16 +3330,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themeGallery?.preload()
     }
 
-    private func showThemeGallery() {
+    private func showThemeGallery(mode: ThemeCardMode = .colors) {
         panel?.hide(activatePrevious: false)
-        themeGallery?.show()
+        themeGallery?.show(mode: mode)
     }
 
-    private func toggleThemeGallery() {
+    private func toggleThemeGallery(mode: ThemeCardMode = .colors) {
         if themeGallery?.isOpen == true {
             themeGallery?.hide()
         } else {
-            showThemeGallery()
+            showThemeGallery(mode: mode)
         }
     }
 
@@ -3352,7 +3363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         case .wallpaper:
             guard ThemingEngine.shouldApplyWallpaperCard(configuration.theming) else {
-                message = "Cross-app theming is off; the palette was not applied."
+                message = wallpaperPaletteSkippedMessage()
                 failed = false
                 break
             }
@@ -3371,12 +3382,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 message = applied.error ?? "\(name): \(applied.status)"
                 failed = applied.error != nil
             } else {
-                message = "Desktop picture set: \(name)"
+                message = configuration.theming.enabled
+                    ? "Desktop picture set: \(name) · palette source is Theme, palette unchanged"
+                    : "Desktop picture set: \(name) · cross-app theming is off"
                 failed = false
             }
         }
         searchController?.setStatus(message, duration: 6)
         return ThemeGalleryApplyOutcome(message: message, failed: failed)
+    }
+
+    /// Why a wallpaper card left the palette alone. The card never switches
+    /// `source` behind the user: an enabled engine on the Theme source is a
+    /// deliberate "picture only" state.
+    private func wallpaperPaletteSkippedMessage() -> String {
+        configuration.theming.enabled
+            ? "Palette source is Theme; the desktop palette was not applied."
+            : "Cross-app theming is off; the palette was not applied."
     }
 
     /// Puts one file on every screen. Returns false when macOS rejects it,

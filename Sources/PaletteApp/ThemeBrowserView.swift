@@ -311,7 +311,7 @@ struct ThemeBrowserView: View {
                         .foregroundStyle(preview.color(preview.palette.accent))
                 }
             }
-            sample(preview)
+            LauncherThemeSample(theme: preview)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(previewDescription(preview))
             Spacer(minLength: 0)
@@ -341,125 +341,6 @@ struct ThemeBrowserView: View {
                 .foregroundStyle(muted)
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private func sample(_ preview: Theme) -> some View {
-        let sampleAccent = preview.color(preview.palette.accent)
-        return VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                Text(preview.search.placeholder)
-                    .font(preview.font(size: min(preview.typography.size, 15)))
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                Text("⌘K")
-                    .font(preview.monoFont(size: 9))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(preview.color(preview.palette.bg).opacity(0.6))
-                    .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-            }
-            .foregroundStyle(preview.color(preview.palette.fgMuted))
-            .padding(.horizontal, 9)
-            .frame(height: 32)
-            .background(preview.color(preview.palette.elevated))
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-            resultRow(preview, title: "Safari", subtitle: "Application", icon: "safari", selected: true)
-            resultRow(preview, title: "Theme Browser", subtitle: "Settings", icon: "paintpalette", selected: false)
-
-            HStack(spacing: 5) {
-                chip("apps", theme: preview, filled: true)
-                chip("theme", theme: preview, filled: false)
-                Spacer()
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("PREVIEW")
-                    .font(preview.monoFont(size: 9, weight: .semibold))
-                    .foregroundStyle(sampleAccent)
-                Text("Palette — quick, local, yours")
-                    .font(preview.font(size: min(preview.typography.size, 14)))
-                    .foregroundStyle(preview.color(preview.palette.fg))
-                    .lineLimit(1)
-                Text("mono: glitch in the matrix")
-                    .font(preview.monoFont(size: min(preview.typography.monoSize, 12)))
-                    .foregroundStyle(preview.color(preview.palette.fgMuted))
-                    .lineLimit(1)
-            }
-            .padding(9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(preview.color(preview.palette.surface))
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(preview.color(preview.palette.border).opacity(0.6), lineWidth: 1)
-            )
-        }
-        .padding(11)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(preview.color(preview.palette.bg))
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(preview.color(preview.palette.border), lineWidth: 1)
-        )
-    }
-
-    private func resultRow(
-        _ preview: Theme,
-        title: String,
-        subtitle: String,
-        icon: String,
-        selected: Bool
-    ) -> some View {
-        HStack(spacing: 7) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .frame(width: 16)
-                .foregroundStyle(selected
-                    ? preview.color(preview.palette.accent)
-                    : preview.color(preview.palette.fgMuted))
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(preview.font(size: min(preview.typography.size, 13), weight: selected ? .semibold : .regular))
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(preview.font(size: min(preview.typography.subtitleSize, 10)))
-                    .foregroundStyle(preview.color(preview.palette.fgMuted))
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            if selected {
-                Text("↩")
-                    .font(preview.monoFont(size: 9))
-                    .foregroundStyle(preview.color(preview.palette.selectionFg))
-            }
-        }
-        .padding(.horizontal, 8)
-        .frame(height: 34)
-        .foregroundStyle(selected
-            ? preview.color(preview.palette.selectionFg)
-            : preview.color(preview.palette.fg))
-        .background(selected
-            ? preview.color(preview.palette.selectionBg)
-            : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-    }
-
-    private func chip(_ title: String, theme preview: Theme, filled: Bool) -> some View {
-        Text(title)
-            .font(preview.monoFont(size: 9, weight: .medium))
-            .foregroundStyle(filled
-                ? preview.color(preview.palette.accentFg)
-                : preview.color(preview.palette.fgMuted))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(filled
-                ? preview.color(preview.palette.accent)
-                : preview.color(preview.palette.elevated))
-            .clipShape(Capsule())
     }
 
     private func previewDescription(_ preview: Theme) -> String {

@@ -118,12 +118,38 @@ public struct ThemeCard: Identifiable, Equatable, Sendable {
     }
 }
 
+/// The deck's two shows: theme cards and wallpaper cards. A hotkey picks one;
+/// filters and the favourites view then stay inside it.
+public enum ThemeCardMode: String, Equatable, Sendable, CaseIterable {
+    case colors
+    case wallpapers
+
+    public var title: String {
+        switch self {
+        case .colors: return "Colors"
+        case .wallpapers: return "Wallpapers"
+        }
+    }
+
+    public func includes(_ card: ThemeCard) -> Bool {
+        switch self {
+        case .colors: return !card.isWallpaper
+        case .wallpapers: return card.isWallpaper
+        }
+    }
+}
+
 /// The ordered card list: wallpapers, then the browser's sections (Built-in,
 /// Ghostty, Omarchy, Custom). `selected` indexes the visible list, so a filter
 /// or the favourites view never has to remap it. Movement wraps at both ends.
 public struct ThemeCardDeck: Equatable, Sendable {
     public private(set) var cards: [ThemeCard]
     public var selected: Int
+    public var mode: ThemeCardMode = .colors {
+        didSet {
+            if mode != oldValue { selected = 0 }
+        }
+    }
     public var query: String = "" {
         didSet {
             if query != oldValue { selected = 0 }
@@ -139,8 +165,9 @@ public struct ThemeCardDeck: Equatable, Sendable {
     /// Path of the picture currently on the desktop, for the dot on its card.
     public var currentDesktopPath: String?
 
-    public init(cards: [ThemeCard] = [.wallpaper], selected: Int = 0) {
+    public init(cards: [ThemeCard] = [.wallpaper], selected: Int = 0, mode: ThemeCardMode = .colors) {
         self.cards = cards.isEmpty ? [.wallpaper] : cards
+        self.mode = mode
         self.selected = min(max(0, selected), self.cards.count - 1)
     }
 
@@ -151,7 +178,8 @@ public struct ThemeCardDeck: Equatable, Sendable {
         catalog: ThemeBrowserCatalog,
         currentTheme: String? = nil,
         wallpapers: [URL] = [],
-        currentDesktop: URL? = nil
+        currentDesktop: URL? = nil,
+        mode: ThemeCardMode = .colors
     ) {
         var cards: [ThemeCard] = []
         let files = wallpapers.map(ThemeCard.wallpaperFile)
@@ -166,8 +194,9 @@ public struct ThemeCardDeck: Equatable, Sendable {
         for section in catalog.sections {
             cards.append(contentsOf: section.themes.map(ThemeCard.theme))
         }
-        self.init(cards: cards)
-        if let currentTheme, let index = cards.firstIndex(where: { $0.matches(currentTheme) }) {
+        self.init(cards: cards, mode: mode)
+        if mode == .colors, let currentTheme,
+           let index = visible.firstIndex(where: { $0.matches(currentTheme) }) {
             selected = index
         }
     }
@@ -175,6 +204,7 @@ public struct ThemeCardDeck: Equatable, Sendable {
     /// The filtered hand the fan draws.
     public var visible: [ThemeCard] {
         cards.filter { card in
+            guard mode.includes(card) else { return false }
             guard card.matches(query: query) else { return false }
             return !favouritesOnly || favourites.contains(card.cacheKey)
         }
