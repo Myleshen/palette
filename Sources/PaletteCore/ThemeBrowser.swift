@@ -34,8 +34,8 @@ public extension ThemeInfo {
         return .builtIn
     }
 
-    /// `ghostty-dracula` → `dracula` and `omarchy-nord` → `nord`, so typing the
-    /// scheme name without the source prefix still finds it.
+    /// `ghostty-catppuccin-mocha` → `catppuccin-mocha`, so typing the scheme
+    /// name without the source prefix still finds it.
     var canonicalName: String {
         guard let prefix = section.sourcePrefix, name.hasPrefix(prefix) else { return name }
         return String(name.dropFirst(prefix.count))
