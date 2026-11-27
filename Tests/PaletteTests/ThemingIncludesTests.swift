@@ -151,13 +151,31 @@ final class ThemingIncludesTests: XCTestCase {
         let first = install(includes, .kitty)
         XCTAssertTrue(first.addedRemoteControl, "the first Apply is the one that needs the restart")
         let text = try read(home + "/.config/kitty/kitty.conf")
-        XCTAssertTrue(text.contains("allow_remote_control socket-only\ninclude ~/config/theme/kitty.conf"))
+        XCTAssertTrue(text.contains(
+            "allow_remote_control socket-only\n"
+                + "# Palette overrides listen_on so it can recolour this window live; unchecking restores your own line.\n"
+                + "listen_on unix:${TMPDIR}palette-kitty-{kitty_pid}\n"
+                + "include ~/config/theme/kitty.conf"
+        ))
         XCTAssertTrue(text.contains("listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}"), "the user's listener stays")
+        XCTAssertLessThan(
+            try XCTUnwrap(text.range(of: "omarchy-kitty-{kitty_pid}")?.lowerBound),
+            try XCTUnwrap(text.range(of: "palette-kitty-{kitty_pid}")?.lowerBound),
+            "the managed listener must come after the user's line; kitty keeps the last one"
+        )
 
         let second = install(includes, .kitty)
         XCTAssertEqual(second.action, .unchanged)
         XCTAssertFalse(second.addedRemoteControl, "the directive is in the config now, so no second restart hint")
         XCTAssertEqual(try read(home + "/.config/kitty/kitty.conf"), text)
+
+        _ = includes.remove(.kitty)
+        let restored = try read(home + "/.config/kitty/kitty.conf")
+        XCTAssertEqual(
+            restored,
+            "listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}\n",
+            "removing the block restores the user's own listener"
+        )
     }
 
     func testRemovalRestoresTheUnrelatedContentByteForByte() throws {

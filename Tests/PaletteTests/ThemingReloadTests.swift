@@ -22,6 +22,7 @@ final class ThemingReloadTests: XCTestCase {
         printf '%s\\n' "$*" >> "\(log)"
         case "$*" in
           *"@ ls"*) exit \(lsStatus) ;;
+          *" ls") printf '[{}]'; exit 0 ;;
           *"set-colors"*) exit \(setStatus) ;;
         esac
         exit 1
@@ -104,7 +105,7 @@ final class ThemingReloadTests: XCTestCase {
 
     // MARK: - Remote control with a real executable
 
-    func testRemoteControlOffIsReportedAsARestart() async throws {
+    func testNoSocketIsReportedAsARestartWithoutSendingACommand() async throws {
         let directory = temporaryDirectory()
         let kitty = KittyRemoteControl(binary: try fakeKitty(in: directory, lsStatus: 1, setStatus: 0))
 
@@ -112,24 +113,18 @@ final class ThemingReloadTests: XCTestCase {
 
         XCTAssertEqual(status.state, .action)
         XCTAssertEqual(status.message, "Restart kitty (remote control disabled)")
-        XCTAssertEqual(recordedArguments(in: directory), ["@ ls"], "set-colors must not run without remote control")
-    }
-
-    func testRemoteControlOnSendsSetColorsWithTheThemeFile() async throws {
-        let directory = temporaryDirectory()
-        let kitty = KittyRemoteControl(binary: try fakeKitty(in: directory, lsStatus: 0, setStatus: 0))
-        let themeFile = directory + "/theme/kitty.conf"
-
-        let status = await kitty.reload(themeFile: themeFile)
-
-        XCTAssertEqual(status.state, .reloaded)
-        XCTAssertEqual(status.message, "Reloaded open kitty windows")
-        XCTAssertTrue(recordedArguments(in: directory).contains("@ set-colors -a \(themeFile)"))
+        XCTAssertEqual(recordedArguments(in: directory), [], "set-colors must not run without a socket")
     }
 
     func testARefusedSetColorsIsNeverReportedAsReloaded() async throws {
         let directory = temporaryDirectory()
-        let kitty = KittyRemoteControl(binary: try fakeKitty(in: directory, lsStatus: 0, setStatus: 1))
+        let runtime = directory + "/run"
+        try write("", to: runtime + "/kitty-31")
+        let kitty = KittyRemoteControl(
+            binary: try fakeKitty(in: directory, lsStatus: 0, setStatus: 1),
+            environment: ["XDG_RUNTIME_DIR": runtime],
+            runningKittyPIDs: { Set([31]) }
+        )
 
         let status = await kitty.reload(themeFile: directory + "/kitty.conf")
 
@@ -173,6 +168,21 @@ final class ThemingReloadTests: XCTestCase {
             KittyRemoteControl.listenTemplate(inConfig: "listen_on tcp:127.0.0.1:0\n"),
             "a TCP listener is not a filesystem socket"
         )
+        XCTAssertEqual(
+            KittyRemoteControl.listenTemplate(
+                inConfig: "listen_on unix:${TMPDIR}palette-kitty-{kitty_pid}\n"
+            ),
+            "palette-kitty-{kitty_pid}",
+            "the managed block's listener parses like any other"
+        )
+        XCTAssertEqual(
+            KittyRemoteControl.listenTemplate(inConfig: """
+            listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}
+            listen_on unix:${TMPDIR}palette-kitty-{kitty_pid}
+            """),
+            "palette-kitty-{kitty_pid}",
+            "kitty keeps the last listener, so the managed line is the active one"
+        )
     }
 
     func testSocketDiscoveryKeepsOnlySocketsOfRunningKittyProcesses() {
@@ -205,10 +215,62 @@ final class ThemingReloadTests: XCTestCase {
         XCTAssertEqual(status.state, .reloaded)
         XCTAssertEqual(status.message, "Reloaded 1 kitty window")
         XCTAssertEqual(
-            recordedArguments(in: directory),
+            recordedArguments(in: directory).filter { $0.contains("set-colors") },
             ["@ --to unix:\(runtime)/kitty-77 set-colors -a \(theme)"],
             "the socket must be addressed explicitly, not through an inherited env"
         )
+    }
+
+    func testDiscoveryFindsManagedAndUserSocketsAndIgnoresStaleEntries() async throws {
+        let directory = temporaryDirectory()
+        let temp = directory + "/tmp"
+        let runtime = directory + "/xdg"
+        try write("", to: temp + "/palette-kitty-11")
+        try write("", to: temp + "/palette-kitty-12")
+        try write("", to: runtime + "/omarchy-kitty-11")
+        let config = directory + "/kitty.conf"
+        try write("listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}\n", to: config)
+        let kitty = KittyRemoteControl(
+            binary: try fakeKitty(in: directory, lsStatus: 0, setStatus: 0),
+            environment: ["TMPDIR": temp, "XDG_RUNTIME_DIR": runtime],
+            runningKittyPIDs: { Set([11]) }
+        )
+
+        let status = await kitty.reload(themeFile: directory + "/theme.conf", configPath: config)
+
+        XCTAssertEqual(status.state, .reloaded)
+        XCTAssertEqual(status.message, "Reloaded 2 kitty windows")
+        let commands = Set(recordedArguments(in: directory).filter { $0.contains("set-colors") })
+        XCTAssertEqual(commands, [
+            "@ --to unix:\(temp)/palette-kitty-11 set-colors -a \(directory)/theme.conf",
+            "@ --to unix:\(runtime)/omarchy-kitty-11 set-colors -a \(directory)/theme.conf",
+        ], "the managed socket and the user's old listener are both recoloured")
+        XCTAssertFalse(commands.contains { $0.contains("palette-kitty-12") }, "a stale socket is ignored")
+    }
+
+    func testSeveralWindowsInOneKittyProcessAreCounted() async throws {
+        let directory = temporaryDirectory()
+        let path = directory + "/kitty"
+        try """
+        #!/bin/sh
+        case "$*" in
+          *" ls") printf '[{},{},{}]'; exit 0 ;;
+          *"set-colors"*) exit 0 ;;
+        esac
+        exit 1
+        """.write(toFile: path, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+        try write("", to: directory + "/run/palette-kitty-5")
+        let kitty = KittyRemoteControl(
+            binary: path,
+            environment: ["TMPDIR": directory + "/run"],
+            runningKittyPIDs: { Set([5]) }
+        )
+
+        let status = await kitty.reload(themeFile: directory + "/theme.conf")
+
+        XCTAssertEqual(status.state, .reloaded)
+        XCTAssertEqual(status.message, "Reloaded 3 kitty windows", "@ ls is the window count, not the socket count")
     }
 
     func testMissingRuntimeDirectoryFallsBackToTheRestartHint() async throws {
@@ -225,7 +287,13 @@ final class ThemingReloadTests: XCTestCase {
 
         XCTAssertEqual(status.state, .action)
         XCTAssertEqual(status.message, "Restart kitty (remote control disabled)")
-        XCTAssertEqual(recordedArguments(in: directory), ["@ ls"])
+        XCTAssertEqual(recordedArguments(in: directory), [])
+
+        // A listener Palette cannot scan must not fall back to kitty's default.
+        let tcp = directory + "/tcp.conf"
+        try write("listen_on tcp:127.0.0.1:0\n", to: tcp)
+        _ = await kitty.reload(themeFile: directory + "/theme.conf", configPath: tcp)
+        XCTAssertEqual(recordedArguments(in: directory), [])
     }
 
     // MARK: - Engine wiring
@@ -240,17 +308,22 @@ final class ThemingReloadTests: XCTestCase {
             cacheDir: URL(fileURLWithPath: home + "/cache", isDirectory: true)
         )
         let fake = try fakeKitty(in: home, lsStatus: 0, setStatus: 0)
+        try write("", to: home + "/run/kitty-88")
         let engine = ThemingEngine(
             paths: paths,
             themesDirectory: paths.themesDir,
-            kitty: KittyRemoteControl(binary: fake)
+            kitty: KittyRemoteControl(
+                binary: fake,
+                environment: ["XDG_RUNTIME_DIR": home + "/run"],
+                runningKittyPIDs: { Set([88]) }
+            )
         )
 
         let status = await engine.reload(.kitty)
 
         XCTAssertEqual(status.state, .reloaded)
         XCTAssertEqual(engine.reloadStatus(for: .kitty), status)
-        XCTAssertTrue(recordedArguments(in: home).contains { $0.hasPrefix("@ set-colors -a ") })
+        XCTAssertTrue(recordedArguments(in: home).contains { $0.contains("set-colors -a ") })
     }
 
     @MainActor

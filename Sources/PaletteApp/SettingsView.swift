@@ -306,8 +306,8 @@ struct SettingsView: View {
     @State private var wallpaperPreviewImage: NSImage?
     @State private var copiedInclude: String?
     @State private var removePoliciesPending = false
-    /// A managed policy outlives unchecking or Revert; the browser keeps the
-    /// Palette colour until it is removed in Device Management.
+    /// A silent plist outlives unchecking or Revert; the browser keeps the
+    /// Palette colour until it is removed in the Browsers card.
     @State private var policyWarning: String?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
@@ -480,21 +480,18 @@ struct SettingsView: View {
                 Text("The key is deleted from the encrypted local key file. This cannot be undone.")
             }
             .confirmationDialog(
-                "Remove the managed palette policies?",
+                "Remove silent browser theming?",
                 isPresented: $removePoliciesPending,
                 titleVisibility: .visible
             ) {
-                Button(theming.supportsLegacyPolicyCLI ? "Remove policies" : "Show removal steps",
-                       role: .destructive) {
+                Button("Remove", role: .destructive) {
                     Task { @MainActor in
-                        await theming.removePolicies(config.theming)
+                        await theming.removeSilentTheming()
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(theming.supportsLegacyPolicyCLI
-                    ? "Every browser Palette can manage stops using its theme. Running browsers may need a restart."
-                    : "macOS 27 removed profiles install; remove Palette under System Settings → General → Device Management → Profiles.")
+                Text("Palette deletes the managed preference files it owns. Browsers fall back to their own colour; running browsers may need a restart.")
             }
     }
 
@@ -1157,8 +1154,8 @@ struct SettingsView: View {
             .init(title: "Other apps", tab: .theming, anchor: "theming-section", keywords: "other apps palette source theme wallpaper extract desktop picture follow"),
             .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
             .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium apps"),
-            .init(title: "Browsers", tab: .theming, anchor: "theming-browsers", keywords: "browsers helium chrome edge brave vivaldi chromium arc managed policy mobileconfig admin all profiles seed install remove"),
-            .init(title: "Helium policy", tab: .theming, anchor: "theming-browsers", keywords: "helium managed policy mobileconfig admin all profiles seed install remove profiles"),
+            .init(title: "Browsers", tab: .theming, anchor: "theming-browsers", keywords: "browsers helium chrome edge brave vivaldi chromium arc silent managed plist mobileconfig admin all profiles seed enable remove download"),
+            .init(title: "Helium policy", tab: .theming, anchor: "theming-browsers", keywords: "helium silent managed plist mobileconfig admin all profiles seed enable remove download"),
             .init(title: "Include lines", tab: .theming, anchor: "theming-targets", keywords: "include line config-file source copy kitty ghostty zellij neovim fish starship bat delta btop yazi"),
             .init(title: "Apply", tab: .theming, anchor: "theming-section", keywords: "apply palette revert previous generated files"),
         ]
@@ -2352,7 +2349,7 @@ struct SettingsView: View {
 
             if config.theming.enabled {
                 card("Browsers", anchor: "theming-browsers") {
-                    Text("admin once · all profiles of that browser · seed colour, approximate")
+                    Text("Silent updates · all profiles of that browser · seed colour, approximate")
                         .font(.caption)
                         .foregroundStyle(muted)
                     ForEach(theming.browserRows()) { browser in
@@ -2361,7 +2358,7 @@ struct SettingsView: View {
                                 toggleRow(
                                     browser.targetTitle,
                                     isOn: themingTargetBinding(browser.target),
-                                    help: "Managed policy \(browser.policyIdentifier)"
+                                    help: "Managed preference \(browser.silentPlistPath)"
                                 )
                             } else {
                                 HStack(spacing: 8) {
@@ -2381,25 +2378,38 @@ struct SettingsView: View {
                     }
 
                     Divider().padding(.vertical, 4)
-                    Text("Profiles install: the generated .mobileconfig opens in System Settings, where you approve it under General → Device Management. No password prompt comes from Palette.")
+                    Text("Enable silent browser theming once. macOS asks for your password, removes any old Palette profile, and creates a preference file Palette owns, so later applies update it with no prompt.")
                         .font(.caption)
                         .foregroundStyle(muted)
                         .fixedSize(horizontal: false, vertical: true)
+                    if !legacyProfileNames.isEmpty {
+                        Text("Removing the old profile: \(legacyProfileNames).")
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                    }
                     HStack(spacing: 8) {
-                        Button(theming.policyBusy ? "Opening…" : "Open in System Settings…") {
+                        Button(theming.policyBusy ? "Enabling…" : "Enable silent browser theming…") {
                             Task { @MainActor in
-                                await theming.installPolicies(config.theming)
+                                await theming.enableSilentTheming(
+                                    config.theming,
+                                    background: PalettePalette(theme: theme).background
+                                )
                             }
                         }
-                        .disabled(theming.policyBusy || browserPolicyFiles.isEmpty)
-                        .help("Select the browser, press Apply Palette to generate its profile, then open it here.")
-                        Button("Reveal file") { revealPolicyFiles() }
-                            .disabled(browserPolicyFiles.isEmpty)
+                        .disabled(theming.policyBusy || !canEnableSilentTheming)
+                        .help("One administrator prompt for every selected installed browser.")
+                        Button("Download profile") {
+                            Task { @MainActor in
+                                await theming.exportPolicyProfiles(config.theming)
+                            }
+                        }
+                        .disabled(theming.policyBusy || selectedBrowsers.isEmpty)
+                        .help("Save a .mobileconfig for the OS-managed route instead.")
                         Button("Refresh") {
                             Task { @MainActor in await theming.refreshPolicyStates() }
                         }
                         .disabled(theming.policyBusy)
-                        Button("Remove Policies…") {
+                        Button("Remove…") {
                             removePoliciesPending = true
                         }
                         .disabled(theming.policyBusy)
@@ -2419,27 +2429,8 @@ struct SettingsView: View {
                             .foregroundStyle(danger)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if theming.supportsLegacyPolicyCLI, !browserInstallCommand.isEmpty {
-                        Text("Legacy CLI (still available on this macOS; macOS 27 removed it)")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(muted)
-                        ForEach([browserInstallCommand, browserRemoveCommand], id: \.self) { command in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text(command)
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 8)
-                                Button(copiedInclude == command ? "Copied" : "Copy") {
-                                    copyInclude(command)
-                                }
-                                .controlSize(.small)
-                            }
-                        }
-                    }
                 } footer: {
-                    Text("Helium is always listed; the other browsers appear when installed. The managed policy seeds the Palette colour for every profile of that browser.")
+                    Text("Helium is always listed; the other browsers appear when installed. Silent theming seeds the Palette background for every profile of that browser.")
                 }
                 .task { await theming.refreshPolicyStates() }
 
@@ -2541,7 +2532,7 @@ struct SettingsView: View {
     }
 
     /// What the selected targets actually put on disk: a marker block, a
-    /// managed policy, a generated copy or nothing at all.
+    /// managed preference, a generated copy or nothing at all.
     private var themingInstallSummary: String {
         let selected = config.theming.targets
             .compactMap(ThemingTarget.init(rawValue:))
@@ -2556,36 +2547,33 @@ struct SettingsView: View {
         return "Installed: " + parts.joined(separator: " · ") + "."
     }
 
-    private var browserPolicyFiles: [String] {
-        selectedBrowsers.compactMap { browser in
-            let path = theming.policyURL(for: browser).path
-            return FileManager.default.fileExists(atPath: path) ? path : nil
+    private var canEnableSilentTheming: Bool {
+        let installed = theming.installedBrowserIDs()
+        return selectedBrowsers.contains {
+            installed.contains($0.bundleID) && theming.policyStates[$0.bundleID] != true
         }
     }
 
-    private var browserInstallCommand: String {
-        ChromiumPolicy.installCommand(paths: browserPolicyFiles)
-    }
-
-    private var browserRemoveCommand: String {
-        ChromiumPolicy.removeCommand(identifiers: ChromiumPolicy.allPolicyIdentifiers())
+    private var legacyProfileNames: String {
+        ChromiumBrowser.catalog
+            .filter { theming.legacyProfiles.contains($0.bundleID) }
+            .map(\.name)
+            .joined(separator: ", ")
     }
 
     private func browserPolicyStatus(_ browser: ChromiumBrowser) -> String {
         guard browser.supportsThemePolicy else {
             return "Unsupported — does not implement BrowserThemeColor."
         }
-        switch theming.policyStates[browser.bundleID] {
-        case true?: return "Installed — all profiles"
-        case false?: return "Not installed"
-        case nil: return "Not checked"
+        if theming.policyStates[browser.bundleID] == true {
+            return "Managed — updates silently"
         }
-    }
-
-    private func revealPolicyFiles() {
-        let urls = browserPolicyFiles.map { URL(fileURLWithPath: $0) }
-        guard !urls.isEmpty else { return }
-        NSWorkspace.shared.activateFileViewerSelecting(urls)
+        guard theming.installedBrowserIDs().contains(browser.bundleID) else {
+            return "Not installed"
+        }
+        return theming.legacyProfiles.contains(browser.bundleID)
+            ? "Enable silent theming — removes the old profile"
+            : "Enable silent theming"
     }
 
     private var otherAppsPaletteBinding: Binding<OtherAppsPalette> {
@@ -2654,8 +2642,8 @@ struct SettingsView: View {
                     targets.removeAll { $0 == target.rawValue }
                     if let browser = target.browser,
                        theming.policyStates[browser.bundleID] == true {
-                        policyWarning = "\(browser.name) still has Palette's managed policy installed. "
-                            + "Unchecking does not remove it — use Remove Policies."
+                        policyWarning = "\(browser.name) still has silent theming enabled. "
+                            + "Unchecking does not remove it — use Remove… in the Browsers card."
                     }
                 }
                 config.theming.targets = targets
@@ -2681,8 +2669,8 @@ struct SettingsView: View {
             }
             if !installed.isEmpty {
                 policyWarning = "Revert restored the files, but \(installed.map(\.name).joined(separator: ", ")) "
-                    + "still \(installed.count == 1 ? "has" : "have") Palette's managed policy installed. "
-                    + "Use Remove Policies."
+                    + "still \(installed.count == 1 ? "has" : "have") silent theming enabled. "
+                    + "Use Remove… in the Browsers card."
             }
         }
     }

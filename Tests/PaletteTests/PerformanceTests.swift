@@ -190,8 +190,9 @@ final class PerformanceTests: XCTestCase {
             themesDirectory: bundledThemes,
             chromiumProbe: ThemingEngine.ChromiumProbe(
                 installed: { [] },
-                policyInstalled: { _ in false },
-                isRunning: { _ in false }
+                isRunning: { _ in false },
+                silentActive: { _ in false },
+                legacyProfile: { _ in false }
             ),
             reloadsEnabled: false
         )

@@ -225,7 +225,9 @@ public struct ThemingIncludes: Sendable {
         let resolved = resolve(plan.path)
         let existing = (try? String(contentsOfFile: resolved, encoding: .utf8)) ?? ""
         let existed = fileManager.fileExists(atPath: resolved)
-        let addedRemoteControl = target == .kitty && !hasRemoteControlDirective(existing)
+        let addedRemoteControl = target == .kitty && (
+            !hasRemoteControlDirective(existing) || !hasManagedListenOn(existing)
+        )
         do {
             try backupIfNeeded(plan, resolved: resolved, existed: existed)
             let updated = appendingBlock(to: removingBlock(from: existing, format: plan.format), format: plan.format, body: body)
@@ -353,9 +355,15 @@ public struct ThemingIncludes: Sendable {
         switch plan.target {
         case .kitty:
             // socket-only keeps remote control on the local unix socket and
-            // off TCP, for every running kitty Palette recolours live. The
-            // block is Palette's, so the directive leaves with it.
-            return "allow_remote_control socket-only\ninclude \(shortPath(themeFile(.kitty).path))"
+            // off TCP. Palette's listen_on is intentionally after the user's
+            // line: kitty keeps the last one, so the managed block overrides it
+            // for live recolour, and removing the block restores the original.
+            return [
+                "allow_remote_control socket-only",
+                "# Palette overrides listen_on so it can recolour this window live; unchecking restores your own line.",
+                "listen_on unix:${TMPDIR}palette-kitty-{kitty_pid}",
+                "include \(shortPath(themeFile(.kitty).path))",
+            ].joined(separator: "\n")
         case .ghostty:
             return "config-file = \(themeFile(.ghostty).path)"
         case .zellij:
@@ -420,6 +428,15 @@ public struct ThemingIncludes: Sendable {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("#") else { return false }
             return trimmed.split(whereSeparator: { $0 == " " || $0 == "\t" }).first == "allow_remote_control"
+        }
+    }
+
+    /// An install from the version that only wrote `allow_remote_control` has
+    /// no managed listener yet, so its running kitty needs one restart too.
+    private func hasManagedListenOn(_ text: String) -> Bool {
+        text.components(separatedBy: .newlines).contains { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed == "listen_on unix:${TMPDIR}\(KittyRemoteControl.managedListenTemplate)"
         }
     }
 

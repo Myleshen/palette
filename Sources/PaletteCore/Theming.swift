@@ -685,8 +685,9 @@ public struct ChromiumBrowser: Sendable, Equatable, Identifiable {
 
     public var policyIdentifier: String { ChromiumPolicy.identifier(for: bundleID) }
     public var mobileConfigFileName: String { "\(target.rawValue)-theme.mobileconfig" }
-    public var policyPlistPath: String { "/Library/Managed Preferences/\(bundleID).plist" }
-    public var targetTitle: String { "\(name) (managed policy)" }
+    /// The user-owned file Palette writes silently after the one-time enable.
+    public var silentPlistPath: String { ChromiumPolicy.userPlistPath(bundleID: bundleID) }
+    public var targetTitle: String { "\(name) (silent managed theme)" }
 
     public static let catalog: [ChromiumBrowser] = [
         ChromiumBrowser(name: "Helium", appName: "Helium", processName: "Helium",
@@ -723,6 +724,11 @@ public enum ChromiumPolicy {
     /// browsers currently checked, so removal cannot leave a stale policy.
     public static func allPolicyIdentifiers() -> [String] {
         ChromiumBrowser.catalog.filter(\.supportsThemePolicy).map(\.policyIdentifier)
+    }
+
+    /// The Palette identifiers still present in `profiles -P` output.
+    public static func remainingIdentifiers(in profilesOutput: String) -> [String] {
+        allPolicyIdentifiers().filter { profilesOutput.contains($0) }
     }
 
     /// Managed preference files macOS may use: device scope, then the user's
@@ -782,32 +788,89 @@ public enum ChromiumPolicy {
         return nil
     }
 
-    public static func installCommand(paths: [String]) -> String {
-        paths.map { "sudo profiles install -path \(token($0))" }.joined(separator: " && ")
+    /// The user-scoped managed preference Palette owns after the one-time
+    /// enable. Chromium reads it like any managed domain, but because the file
+    /// is user-owned a later Apply can rewrite it without administrator rights.
+    public static func userPlistPath(bundleID: String, user: String = NSUserName()) -> String {
+        "/Library/Managed Preferences/\(user)/\(bundleID).plist"
     }
 
-    public static func removeCommand(identifiers: [String]) -> String {
-        identifiers.map { "sudo profiles remove -identifier \(token($0))" }.joined(separator: " && ")
+    public static func silentPlistData(colour: String) -> Data {
+        (try? PropertyListSerialization.data(
+            fromPropertyList: ["BrowserThemeColor": colour],
+            format: .xml,
+            options: 0
+        )) ?? Data()
     }
 
-    public enum InstallFlow: String, Sendable, Equatable {
-        /// macOS 27 removed `profiles install`; the profile is opened in
-        /// System Settings and approved there.
-        case systemSettings
-        /// Older macOS still advertises `profiles install`, so the sudo form
-        /// stays available as a legacy note and for removal.
-        case legacyProfiles
+    /// Silent mode is on only when the file exists and this user can rewrite
+    /// it; a root-owned leftover from a profile is not silent mode.
+    public static func silentWritable(path: String, user: String = NSUserName()) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+              let owner = attributes[.ownerAccountName] as? String,
+              let permissions = attributes[.posixPermissions] as? NSNumber else { return false }
+        return owner == user && permissions.intValue & 0o200 != 0
     }
 
-    public static func installFlow(majorVersion: Int) -> InstallFlow {
-        majorVersion >= 27 ? .systemSettings : .legacyProfiles
+    public struct SilentTarget: Sendable, Equatable {
+        public var bundleID: String
+        public var colour: String
+
+        public init(bundleID: String, colour: String) {
+            self.bundleID = bundleID
+            self.colour = colour
+        }
     }
 
-    /// The line shown after `open` handed the files to System Settings.
-    public static func installSteps(files: [String]) -> String {
-        "Opened \(files.count) profile file\(files.count == 1 ? "" : "s") in System Settings. " +
-            "Approve each under General → Device Management → Profiles, then Refresh. " +
-            "macOS 27 removed `profiles install`; no password prompt is needed here."
+    /// The one-time password prompt. Legacy profiles go first because
+    /// `profiles remove` may clean the managed-preference files macOS wrote;
+    /// then the user-owned plist is created, handed to the user and seeded.
+    public static func enableCommand(
+        targets: [SilentTarget],
+        installedIdentifiers: [String],
+        user: String = NSUserName()
+    ) -> String {
+        var steps = installedIdentifiers.map {
+            "(/usr/bin/profiles remove -identifier \(token($0)) 2>/dev/null || true)"
+        }
+        let directory = "/Library/Managed Preferences/\(user)"
+        steps.append("mkdir -p \(token(directory))")
+        for target in targets {
+            let path = token(userPlistPath(bundleID: target.bundleID, user: user))
+            steps.append("touch \(path)")
+            steps.append("chown \(token(user)) \(path)")
+            steps.append("chmod 644 \(path)")
+            // `defaults write` is the plist write; the chown/chmod repeat
+            // because defaults may replace the file rather than edit in place.
+            steps.append("/usr/bin/defaults write \(path) BrowserThemeColor \(quoted(target.colour))")
+            steps.append("chown \(token(user)) \(path)")
+            steps.append("chmod 644 \(path)")
+        }
+        return steps.joined(separator: " && ")
+    }
+
+    /// Removal deletes only Palette's user-owned plists; no profile exists to
+    /// remove once silent mode is on.
+    public static func removalCommand(bundleIDs: [String], user: String = NSUserName()) -> String {
+        bundleIDs.map { "rm -f \(token(userPlistPath(bundleID: $0, user: user)))" }
+            .joined(separator: " && ")
+    }
+
+    public static func refreshArguments(binary: String) -> [String] {
+        [binary, "--refresh-platform-policy", "--no-startup-window"]
+    }
+
+    /// Launching the app bundle's binary asks the running instance to re-read
+    /// its managed preferences; `open -a` is not used because the flag must
+    /// reach Chromium, not LaunchServices.
+    public static func appBinary(appName: String, home: String = NSHomeDirectory()) -> String? {
+        for root in ["/Applications", home + "/Applications"] {
+            let bundle = Bundle(path: root + "/" + appName + ".app")
+            if let executable = bundle?.executableURL?.path, FileManager.default.isExecutableFile(atPath: executable) {
+                return executable
+            }
+        }
+        return nil
     }
 
     /// One seed colour per browser; Chromium derives the rest.
@@ -888,7 +951,13 @@ public enum ChromiumPolicy {
     /// Shell-safe enough for the display command and the single osascript call.
     public static func token(_ value: String) -> String {
         guard value.contains(where: { $0.isWhitespace }) else { return value }
-        return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        return quoted(value)
+    }
+
+    /// Always quoted, for values such as `#RRGGBB` where `#` would otherwise
+    /// start a shell comment.
+    public static func quoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }
 

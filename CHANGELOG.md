@@ -87,17 +87,19 @@
   and a one-step Revert; Palette never rewrites an app's config beyond its marked
   block. Wallpaper palettes re-apply automatically when the wallpaper changes;
   theme palettes apply on demand. Apply reports the truth per app: kitty reloads
-  through remote control when available, and the rest say exactly what they
-  need (restart, new session, source, next prompt).
-- **Chromium browser theming via managed policy.** Installed Chromium browsers
-  (Helium, Chrome, Edge, Brave, Vivaldi, Chromium) can inherit the palette
-  background as `BrowserThemeColor` through a per-browser `.mobileconfig`.
-  Palette opens the generated profile in System Settings; you approve it under
-  General → Device Management → Profiles and press Refresh. Palette issues no
-  password prompt of its own (macOS 27 removed `profiles install`; older macOS
-  still offers the legacy sudo command as a note, and removal there is the only
-  sudo path). App-wide per browser and approximate by design; Arc is listed as
-  unsupported.
+  every window over its unix socket once Palette's managed block has been
+  restarted into, and the rest say exactly what they need (restart, new session,
+  source, next prompt). A non-blocking prompt offers to restart only the apps
+  that cannot reload (Neovide, Ghostty); zellij sessions are never killed.
+- **Chromium browser theming via a user-owned managed plist.** Installed
+  Chromium browsers (Helium, Chrome, Edge, Brave, Vivaldi, Chromium) inherit the
+  palette background as `BrowserThemeColor`. One **Enable silent browser
+  theming** step asks for the administrator password, removes any old Palette
+  profile, and hands the user-scoped plist to your account; every later Apply
+  rewrites it with no password and no System Settings trip. Running browsers
+  refresh themselves; **Download profile** still exports a `.mobileconfig` for
+  the OS-managed route. App-wide per browser and approximate by design; Arc is
+  listed as unsupported.
 - **19 Omarchy themes** (`omarchy-*`), MIT, contrast-checked, alongside the 914
   Ghostty themes in the theme browser.
 - Action-routing contract and store-level wiring tests with mutation checks.

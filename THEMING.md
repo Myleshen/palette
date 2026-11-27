@@ -261,7 +261,7 @@ declaration). `palette.json` carries the same fields as JSON.
 | delta | `[include] path` in `~/.gitconfig` (or `~/.config/git/config`) | next git/delta command |
 | btop | `color_theme = "palette"` in `~/.config/btop/btop.conf` and a symlink at `~/.config/btop/themes/palette.theme` | restart btop |
 | yazi | nothing automatic; `yazi.toml` is generated for a manual merge | after you merge it into `~/.config/yazi/theme.toml` and restart yazi |
-| Chromium browsers | `BrowserThemeColor` in a generated `.mobileconfig` | after macOS policy approval and a browser restart |
+| Chromium browsers | `BrowserThemeColor` in the user-owned managed preference plist; a `.mobileconfig` is still generated as a manual fallback | every Apply writes it silently; a running browser refreshes itself |
 
 yazi is manual on purpose: its `theme.toml` is a table-per-section file, so
 appending a second `[mgr]` block would be invalid TOML. Copy the generated file
@@ -307,22 +307,30 @@ true` checks the desktop picture's URL every five seconds and re-applies when it
 changes. The launcher's own theme is not derived from the wallpaper; this path
 only feeds the cross-app targets.
 
-### Browser policy
+### Browser theming
 
 Chromium browsers (Helium always; Chrome, Edge, Brave, Vivaldi and Chromium when
-installed) get the palette background as `BrowserThemeColor` in a per-browser
-`.mobileconfig` under the theme directory. macOS applies it to every profile of
-that browser at once, so it is app-wide and approximate by design, not a
-per-window theme.
+installed) get the palette background as `BrowserThemeColor`. Palette writes it
+to the user-scoped managed preference file
+`/Library/Managed Preferences/<user>/<bundleID>.plist`. Chromium reads that file
+like any managed domain, so the colour covers every profile of that browser at
+once; it is app-wide and approximate by design, not a per-window theme.
 
-Install is the macOS policy flow: **Open in System Settings…** hands the profile
-files to System Settings, you approve each under **General → Device Management →
-Profiles**, then press **Refresh**. Palette asks for no password or Touch ID at
-that point. On macOS 27 `profiles install` no longer exists, so removal is also
-done in System Settings; older macOS still shows the legacy `sudo profiles`
-install/remove commands as a copyable note. A running browser picks the policy up
-on restart; when the policy is already installed Palette asks it to refresh with
-`--refresh-platform-policy`.
+The first time, press **Enable silent browser theming** in the Browsers card.
+That is the only administrator step: one password prompt that removes any old
+Palette profile, creates the plist, hands it to your user, and seeds the current
+colour. After that every Apply rewrites the plist as you, with no password and
+no System Settings trip. A running browser is asked to refresh with
+`<app bundle binary> --refresh-platform-policy --no-startup-window`; if the
+binary cannot be found, the row says a restart picks the colour up.
+
+**Download profile** still writes a valid `.mobileconfig` to `~/Downloads` for
+people who prefer the OS-managed route. **Remove…** deletes Palette's plist
+with one administrator prompt; the browser falls back to its own colour.
+
+The old flow — approving a profile under **General → Device Management →
+Profiles**, re-approving after every palette change — is gone. The one-time
+enable removes any profile left by an earlier Palette version first.
 
 ### Starship
 
@@ -354,9 +362,9 @@ sourced from fish's marked block; other shells must export it themselves.
   Apply again to recreate the links.
 - **Revert restored an app config but not the palette.** Revert restores the
   previous generated set and the app configs, not the launcher's own theme.
-- **A browser policy does not appear.** The profile must be approved in System
-  Settings; the Browsers card shows *Not installed* until it is, and **Refresh**
-  re-reads the state.
+- **A browser did not change colour.** Press **Enable silent browser theming**
+  once. After that the Browsers card says *Managed — updates silently*; a
+  running browser may need a restart, and **Refresh** re-reads the state.
 - **The themed apps use the wrong theme.** A `theme` value that is a display
   name instead of an id is migrated on launch; re-pick the theme in Settings →
   Theming if a hand-edited value still looks wrong.
