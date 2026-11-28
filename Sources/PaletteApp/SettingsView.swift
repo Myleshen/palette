@@ -1172,6 +1172,7 @@ struct SettingsView: View {
             .init(title: "Other apps", tab: .theming, anchor: "theming-section", keywords: "other apps palette source theme wallpaper extract desktop picture follow"),
             .init(title: "Palette source", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper toggle disable override follow extract"),
             .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
+            .init(title: "Terminal transparency", tab: .theming, anchor: "row-Terminal transparency", keywords: "transparent transparency opacity neovide kitty ghostty nvim background blur"),
             .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium apps"),
             .init(title: "Recommendations", tab: .theming, anchor: "theming-recommendations", keywords: "recommendations conflicts config conflict nvim starship zellij kitty ghostty fish helium neovide palette overridden"),
             .init(title: "Config conflicts", tab: .theming, anchor: "theming-recommendations", keywords: "conflicts recommendations config overridden palette old colours"),
@@ -2341,6 +2342,20 @@ struct SettingsView: View {
                     }
                     .disabled(!sourceControls.wallpaperEnabled)
                     .opacity(sourceControls.wallpaperEnabled ? 1 : 0.45)
+
+                    pickerRow(
+                        "Terminal transparency",
+                        help: "Auto keeps Neovim see-through when kitty, Ghostty or Neovide already has an opacity below 1. On drops Normal's background; off always paints the palette background."
+                    ) {
+                        Picker("Terminal transparency", selection: $config.theming.transparent) {
+                            Text("Auto").tag(ThemingTransparency.auto)
+                            Text("On").tag(ThemingTransparency.on)
+                            Text("Off").tag(ThemingTransparency.off)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 260)
+                    }
 
                     Divider().padding(.vertical, 4)
                     HStack(spacing: 8) {

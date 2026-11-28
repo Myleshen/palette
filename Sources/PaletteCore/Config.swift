@@ -1405,6 +1405,7 @@ public enum ConfigLoader {
         theme = ""                    # empty uses the theme Palette is showing
         follow_wallpaper = false
         dark_mode = "auto"            # auto | dark | light
+        transparent = "auto"          # auto | on | off — keep terminal/Neovide transparency
         wallpaper_directory = "~/wallpapers"  # theme cards' Wallpapers group; empty shows the desktop card only
         targets = ["kitty", "ghostty", "zellij", "nvim", "fish", "starship"]
 
