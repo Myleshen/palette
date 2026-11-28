@@ -457,6 +457,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showOnboardingIfNeeded()
         repairStaleThemingOnLaunch()
         restoreWallpaperOwnTheme()
+        // Launching straight into follow mode must poll too; reload() alone
+        // would leave desktop changes unseen until a settings change.
+        configureThemingPolling()
 
         if let firstError = startupDiagnostics.first(where: { $0.level == .error }) {
             searchController.setStatus(firstError.message, duration: nil)
@@ -3602,15 +3605,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Wallpaper follow
 
+    /// Five seconds only for wallpaper-follow mode, exposed so the launch
+    /// path is testable without an AppKit app.
+    static func themingPollInterval(_ config: ThemingConfig) -> TimeInterval? {
+        ThemingEngine.shouldAutoApply(config) ? 5 : nil
+    }
+
     /// A five-second URL check, and only while the engine is in wallpaper-follow
     /// mode. No daemon, no filesystem watcher, no wake-ups otherwise.
     private func configureThemingPolling() {
         themingTimer?.invalidate()
         themingTimer = nil
-        let config = configuration.theming
-        guard config.enabled, config.source == .wallpaper, config.followWallpaper else { return }
+        guard let interval = Self.themingPollInterval(configuration.theming) else { return }
         wallpaperFollow.reseed(wallpaperSignature())
-        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.themingWallpaperTick()
             }

@@ -266,6 +266,24 @@ final class ThemingAuditTests: XCTestCase {
         XCTAssertFalse(AppDelegate.shouldMarkOnboardingComplete(saved: false, isScriptMode: true))
     }
 
+    /// Launch installs the five-second poll from the same predicate reload
+    /// uses, so wallpaper-follow works before any settings change.
+    func testThemingPollOnlyForEnabledWallpaperFollow() {
+        var config = ThemingConfig(enabled: true, source: .wallpaper, followWallpaper: true)
+        XCTAssertEqual(AppDelegate.themingPollInterval(config), 5)
+
+        config.followWallpaper = false
+        XCTAssertNil(AppDelegate.themingPollInterval(config))
+        config.followWallpaper = true
+
+        config.source = .theme
+        XCTAssertNil(AppDelegate.themingPollInterval(config))
+        config.source = .wallpaper
+
+        config.enabled = false
+        XCTAssertNil(AppDelegate.themingPollInterval(config))
+    }
+
     func testEmptyWallpaperFolderMeansEmpty() {
         XCTAssertNil(WallpaperLibrary.directory(path: ""))
         XCTAssertNil(WallpaperLibrary.directory(path: "   "))
