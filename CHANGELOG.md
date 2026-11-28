@@ -18,6 +18,18 @@
 - **Quick-access kitty panel and stale Starship shells now follow the palette**
   too: the drop-down gets the same managed block and socket, and the user's
   starship palette block is refreshed on every apply.
+- **nvim is themed end to end.** 298 highlight groups (base, treesitter,
+  diagnostics, diff, lualine, neo-tree, telescope/snacks, noice/notify) plus
+  `colors_name = "palette"`, with sidebars/dashboards transparent when the
+  terminal or Neovide is translucent.
+- **fish colours actually apply.** The generated lines no longer start a value
+  with `#` (fish read it as a comment and silently unset the colour).
+- **Starship keeps your palette names.** Palette no longer adds a
+  `[palettes.palette]` table to your `starship.toml`; it remaps the values of
+  the palette you actually select, so `fg:pink`-style references keep working.
+- **zellij switches live.** `theme_dark`/`theme_light` are written and every
+  running session is told to switch, with fish as the pane shell for
+  GUI-launched sessions.
 - **One wallpaper on every Space.** Applying a wallpaper now rewrites every
   Space's picture in the wallpaper store and refreshes WallpaperAgent, so
   switching Space no longer changes the wallpaper or the palette.
