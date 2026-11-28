@@ -135,6 +135,26 @@ public enum StarshipTheme {
         }
     }
 
+    /// A `[palettes.palette]` table for the user's own starship.toml, so a
+    /// shell that inherited no STARSHIP_CONFIG (a zellij server started before
+    /// the setting existed) still reads the current colours.
+    public static func paletteBlock(_ palette: PalettePalette) -> String {
+        let names = ["black", "red", "green", "yellow", "blue", "purple", "cyan", "white"]
+        var lines = ["[palettes.palette]"]
+        for name in names {
+            if let hex = semanticHex(for: name, palette: palette) { lines.append("\(name) = \"\(hex)\"") }
+        }
+        for name in names {
+            if let hex = semanticHex(for: "bright-\(name)", palette: palette) {
+                lines.append("bright-\(name) = \"\(hex)\"")
+            }
+        }
+        for key in ["bg", "fg", "accent", "muted"] {
+            if let hex = semanticHex(for: key, palette: palette) { lines.append("\(key) = \"\(hex)\"") }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// The Palette colours a custom entry may snap to: surfaces, text/accent,
     /// selection and the 16 ANSI slots.
     static func paletteCandidates(_ palette: PalettePalette) -> [(colour: RGBA, hex: String)] {

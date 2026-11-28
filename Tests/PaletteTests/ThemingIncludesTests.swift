@@ -68,15 +68,37 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertTrue(try read(home + "/.config/fish/config.fish").contains("# >>> palette theme >>>"))
     }
 
-    func testStarshipInstallNeverWritesTheUserConfig() throws {
+    /// A shell that inherited no STARSHIP_CONFIG (a zellij server started
+    /// before the setting existed) reads the user's starship.toml, so that file
+    /// must carry the current palette too — between markers, never touching the
+    /// user's own lines.
+    func testStarshipInstallUpdatesOnlyItsPaletteBlock() throws {
         let home = makeHome()
         let path = home + "/.config/starship.toml"
-        let original = "# user starship\nadd_newline = false\n\n[character]\nsuccess_symbol = \">\"\n"
+        let original = "# user starship\nadd_newline = false\n\npalette = \"palette\"\n\n[character]\nsuccess_symbol = \">\"\n"
         try write(original, to: path)
         let includes = includes(home)
 
-        XCTAssertEqual(install(includes, .starship).action, .unchanged)
-        XCTAssertEqual(try read(path), original)
+        _ = install(includes, .starship)
+        let first = try read(path)
+        XCTAssertTrue(first.contains("# >>> palette theme >>>"))
+        XCTAssertTrue(first.contains("[palettes.palette]"))
+        XCTAssertTrue(first.contains("# user starship"))
+        XCTAssertTrue(first.contains("[character]"))
+
+        let second = try read(path)
+        let block = first.components(separatedBy: "# >>> palette theme >>>").last?
+            .components(separatedBy: "# <<< palette theme <<<").first
+        XCTAssertNotNil(block)
+        XCTAssertEqual(
+            first.components(separatedBy: "# >>> palette theme >>>").count, 2,
+            "a second apply must replace the block, not append another"
+        )
+        XCTAssertEqual(second, first)
+
+        XCTAssertEqual(includes.remove(.starship).action, .removed)
+        XCTAssertFalse(try read(path).contains("[palettes.palette]"))
+        XCTAssertTrue(try read(path).contains("# user starship"))
     }
 
     func testVimFallbackUsesVimCommentsAndSource() throws {

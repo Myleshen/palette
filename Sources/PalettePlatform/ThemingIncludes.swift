@@ -218,9 +218,9 @@ public struct ThemingIncludes: Sendable {
         guard let plan = plan(for: target) else {
             return Outcome(target: target, path: nil, action: .unchanged, error: nil)
         }
-        if target == .starship {
-            // The engine writes the colour-remapped copy; Palette never edits
-            // the user's starship.toml, so there is no include to install.
+        if target == .starship, !fileManager.fileExists(atPath: resolve(plan.path)) {
+            // No user config to update; the generated copy still works through
+            // STARSHIP_CONFIG.
             return Outcome(target: target, path: plan.path, action: .unchanged, error: nil)
         }
         guard let body = blockBody(for: plan, palette: palette, metadata: metadata) else {
@@ -237,6 +237,9 @@ public struct ThemingIncludes: Sendable {
             let updated = appendingBlock(to: removingBlock(from: existing, format: plan.format), format: plan.format, body: body)
             if updated != existing {
                 try write(updated, to: resolved)
+            }
+            if target == .kitty {
+                writeQuickAccessKitty(body)
             }
             try installAuxiliary(target)
             return Outcome(
@@ -261,6 +264,7 @@ public struct ThemingIncludes: Sendable {
             return removeStarship(plan)
         }
         removeAuxiliary(target)
+        if target == .kitty { removeQuickAccessKitty() }
         let resolved = resolve(plan.path)
         guard let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
               existing.contains(startMarker(plan.format)) else {
@@ -360,6 +364,35 @@ public struct ThemingIncludes: Sendable {
         "\(format.comment) <<< palette theme <<<"
     }
 
+    /// The quick-access panel is a separate kitty process with its own config,
+    /// so it never sees kitty.conf's include or listener. Give it the same
+    /// managed block, or the drop-down keeps the previous palette forever.
+    private var quickAccessKittyPath: String? {
+        let path = home + "/.config/kitty/quick-access-terminal.conf"
+        return fileManager.fileExists(atPath: path) ? path : nil
+    }
+
+    private func writeQuickAccessKitty(_ body: String) {
+        guard let path = quickAccessKittyPath else { return }
+        let resolved = resolve(path)
+        let existing = (try? String(contentsOfFile: resolved, encoding: .utf8)) ?? ""
+        let updated = appendingBlock(
+            to: removingBlock(from: existing, format: .hash),
+            format: .hash,
+            body: body
+        )
+        if updated != existing { try? write(updated, to: resolved) }
+    }
+
+    private func removeQuickAccessKitty() {
+        guard let path = quickAccessKittyPath else { return }
+        let resolved = resolve(path)
+        guard let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
+              existing.contains(startMarker(.hash)) else { return }
+        let updated = removingBlock(from: existing, format: .hash)
+        if updated != existing { try? write(updated, to: resolved) }
+    }
+
     private func blockBody(
         for plan: Plan,
         palette: PalettePalette,
@@ -398,9 +431,11 @@ public struct ThemingIncludes: Sendable {
             // also exports STARSHIP_CONFIG for the themed copy.
             return fishBody()
         case .starship:
-            // Never inlined: the engine writes the remapped copy and fish
-            // exports STARSHIP_CONFIG. Kept out of the block path on purpose.
-            return nil
+            // The remapped copy is what fish exports through STARSHIP_CONFIG;
+            // this block covers shells that inherited no environment (a zellij
+            // server started before the setting existed) and would otherwise
+            // keep a stale palette forever.
+            return StarshipTheme.paletteBlock(palette)
         case .bat:
             return "--theme=palette"
         case .delta:
