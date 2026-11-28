@@ -4,6 +4,15 @@
 
 ### Added
 
+- **One wallpaper on every Space.** Applying a wallpaper now rewrites every
+  Space's picture in the wallpaper store and refreshes WallpaperAgent, so
+  switching Space no longer changes the wallpaper or the palette.
+- **Theming recommendations.** Settings → Theming lists config lines that
+  override the palette (LazyVim colorscheme, a foreign starship palette, a
+  duplicate zellij theme, kitty colours after the include, a stale Helium
+  profile) with file, line and the fix.
+- **The deck says why.** With the wallpaper owning the palette, Apply is
+  disabled for theme cards and the reason stays visible.
 - **Follow-mode starts at launch.** With `source = "wallpaper"` and
   `follow_wallpaper = true`, the five-second desktop poll is installed at
   launch, not only after a settings change, so changing the desktop recolours
