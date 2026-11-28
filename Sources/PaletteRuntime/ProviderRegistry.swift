@@ -92,6 +92,8 @@ public final class ProviderRegistry: @unchecked Sendable {
     private let byID: [String: any PaletteProvider]
     private let globalProviders: [any PaletteProvider]
     private let globalDeadline: Duration
+    private let prewarmLock = NSLock()
+    private var didPrewarm = false
 
     public init(
         providers: [any PaletteProvider],
@@ -289,6 +291,23 @@ public final class ProviderRegistry: @unchecked Sendable {
         for provider in providers {
             if let external = provider as? ExternalProvider {
                 await external.shutdown()
+            }
+        }
+    }
+
+    /// Run each provider's launch-time warm-up once. Callers start this from a
+    /// background task; a provider that has nothing to warm up is a no-op, and
+    /// one that is missing its tool skips itself.
+    public func prewarm() async {
+        let alreadyStarted = prewarmLock.withLock {
+            let already = didPrewarm
+            didPrewarm = true
+            return already
+        }
+        guard !alreadyStarted else { return }
+        await withTaskGroup(of: Void.self) { group in
+            for provider in providers {
+                group.addTask { await provider.prewarm() }
             }
         }
     }
