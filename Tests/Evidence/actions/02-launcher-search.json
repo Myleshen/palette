@@ -1,0 +1,125 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "Search Google for “calc 2+2*3”",
+  "focusZone" : "search",
+  "itemCount" : 4,
+  "items" : [
+    {
+      "actions" : [
+        "open:Open in Browser"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "google:calc 2+2*3",
+      "providerID" : "search",
+      "subtitle" : "www.google.com",
+      "title" : "Search Google for “calc 2+2*3”"
+    },
+    {
+      "actions" : [
+        "open:Open in Browser"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "duckduckgo:calc 2+2*3",
+      "providerID" : "search",
+      "subtitle" : "duckduckgo.com",
+      "title" : "Search DuckDuckGo for “calc 2+2*3”"
+    },
+    {
+      "actions" : [
+        "open:Open in Browser"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "github:calc 2+2*3",
+      "providerID" : "search",
+      "subtitle" : "github.com",
+      "title" : "Search GitHub for “calc 2+2*3”"
+    },
+    {
+      "actions" : [
+        "open:Open in Browser"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "youtube:calc 2+2*3",
+      "providerID" : "search",
+      "subtitle" : "www.youtube.com",
+      "title" : "Search YouTube for “calc 2+2*3”"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : false,
+  "previewVisible" : false,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "calc 2+2*3",
+  "railFocused" : false,
+  "railID" : "everything",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+
+    ],
+    "background" : "",
+    "foreground" : "",
+    "live" : false
+  },
+  "terminalActive" : false,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}

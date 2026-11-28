@@ -1,0 +1,1853 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "Aetheria Pink",
+  "focusZone" : "search",
+  "itemCount" : 148,
+  "items" : [
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "aetheria-pink",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · dark",
+      "title" : "Aetheria Pink"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "catppuccin-latte",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · light",
+      "title" : "Catppuccin Latte"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "catppuccin-mocha",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · dark",
+      "title" : "Catppuccin Mocha"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "default-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · dark",
+      "title" : "Default Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "default-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · light",
+      "title" : "Default Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-3024-day",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · 3024 Day"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-3024-night",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · 3024 Night"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-adwaita",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Adwaita"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-adwaita-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Adwaita Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-aizen-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Aizen Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-aizen-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Aizen Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-alxpro-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · AlxPro Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-alxpro-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · AlxPro Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-analyzed-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Analyzed Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-analyzed-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Analyzed Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-apple-system-colors",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Apple System Colors"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-apple-system-colors-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Apple System Colors Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-atom-one-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Atom One Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-atom-one-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Atom One Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-ayu",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Ayu"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-ayu-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Ayu Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-bauhaus-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Bauhaus Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-bauhaus-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Bauhaus Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-belafonte-day",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Belafonte Day"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-belafonte-night",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Belafonte Night"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-bluloco-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Bluloco Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-bluloco-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Bluloco Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-builtin-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Builtin Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-builtin-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Builtin Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-builtin-tango-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Builtin Tango Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-builtin-tango-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Builtin Tango Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-callie",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Callie"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-callie-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Callie Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-catppuccin-latte",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Catppuccin Latte"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-catppuccin-mocha",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Catppuccin Mocha"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-claude",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Claude"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-claude-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Claude Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-clear-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Clear Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-clear-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Clear Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-code-2026-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Code 2026 Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-code-2026-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Code 2026 Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-cursor-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Cursor Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-cursor-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Cursor Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-datum-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · datum (dark)"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-datum-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · datum (light)"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-electron-highlighter",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Electron Highlighter"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-electron-highlighter-day",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Electron Highlighter Day"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-everforest-dark-soft",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Everforest Dark Soft"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-everforest-light-med",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Everforest Light Med"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-flexoki-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Flexoki Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-flexoki-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Flexoki Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-github",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · GitHub"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-github-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · GitHub Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-gitlab-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · GitLab Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-gitlab-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · GitLab Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-grok-day",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Grok Day"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-grok-night",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Grok Night"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-gruvbox-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Gruvbox Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-gruvbox-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Gruvbox Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-gruvbox-material",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Gruvbox Material"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-gruvbox-material-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Gruvbox Material Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-horizon",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Horizon"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-horizon-bright",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Horizon Bright"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-iceberg-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Iceberg Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-iceberg-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Iceberg Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-isocon-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Isocon Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-isocon-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Isocon Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-iterm2-solarized-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · iTerm2 Solarized Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-iterm2-solarized-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · iTerm2 Solarized Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-iterm2-tango-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · iTerm2 Tango Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-iterm2-tango-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · iTerm2 Tango Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-kanagawa-lotus",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Kanagawa Lotus"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-kanagawa-wave",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Kanagawa Wave"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-karma-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Karma Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-karma-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Karma Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-material",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Material"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-material-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Material Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-melange-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Melange Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-melange-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Melange Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-monokai-pro",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Monokai Pro"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-monokai-pro-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Monokai Pro Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-monospace-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Monospace Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-monospace-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Monospace Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-neobones-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Neobones Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-neobones-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Neobones Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-nord",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Nord"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-nord-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Nord Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-nvim-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Nvim Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-nvim-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Nvim Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-one-double-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · One Double Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-one-double-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · One Double Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-one-half-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · One Half Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-one-half-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · One Half Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-onenord",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Onenord"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-onenord-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Onenord Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-opencode-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · OpenCode Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-opencode-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · OpenCode Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-patina",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Patina"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-patina-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Patina Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-pencil-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Pencil Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-pencil-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Pencil Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-pierre-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Pierre Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-pierre-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Pierre Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-pro",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Pro"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-pro-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Pro Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-pyrokai",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Pyrokai"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-pyrokai-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Pyrokai Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-raycast-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Raycast Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-raycast-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Raycast Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-rose-pine",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Rose Pine"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-rose-pine-dawn",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Rose Pine Dawn"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-selenized-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Selenized Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-selenized-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Selenized Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-sequoia-moonlight-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Sequoia Moonlight Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-sequoia-moonlight-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Sequoia Moonlight Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-sequoia-retro-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Sequoia Retro Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-sequoia-retro-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Sequoia Retro Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-silkcircuit-dawn",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · SilkCircuit Dawn"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-silkcircuit-soft",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · SilkCircuit Soft"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-tailwind-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Tailwind Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-tailwind-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Tailwind Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-terminal-basic",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Terminal Basic"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-terminal-basic-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Terminal Basic Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-termius-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Termius Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-termius-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Termius Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-tinacious-design-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Tinacious Design Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-tinacious-design-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Tinacious Design Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-token-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Token Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-token-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Token Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-tokyonight",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · TokyoNight"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-tokyonight-day",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · TokyoNight Day"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-tomorrow",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Tomorrow"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-tomorrow-night",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Tomorrow Night"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-vercel",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Vercel"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-vercel-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Vercel Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-violet-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Violet Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-violet-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Violet Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-xcode-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Xcode Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-xcode-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Xcode Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-zenbones",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Zenbones"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-zenbones-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Zenbones Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-zenwritten-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · dark",
+      "title" : "Ghostty · Zenwritten Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "ghostty-zenwritten-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · Ghostty port · light",
+      "title" : "Ghostty · Zenwritten Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "gruvbox-dark",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · dark",
+      "title" : "Gruvbox Dark"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "gruvbox-light",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · light",
+      "title" : "Gruvbox Light"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "ACTIVE",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "siri-graphite",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · dark · current",
+      "title" : "Siri Graphite"
+    },
+    {
+      "actions" : [
+        "select:Use Theme"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "siri-silver",
+      "providerID" : "theme",
+      "subtitle" : "Built-in · light",
+      "title" : "Siri Silver"
+    },
+    {
+      "actions" : [
+        "cards:Open Theme Cards"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "theme-cards",
+      "providerID" : "theme",
+      "subtitle" : "Large card gallery · wallpaper palette first",
+      "title" : "Theme Cards"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : false,
+  "previewVisible" : false,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "\/theme",
+  "railFocused" : false,
+  "railID" : "theme",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "Themes",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+
+    ],
+    "background" : "",
+    "foreground" : "",
+    "live" : false
+  },
+  "terminalActive" : false,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}

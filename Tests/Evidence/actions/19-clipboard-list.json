@@ -1,0 +1,160 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "kubectl logs -f deploy\/palette --tail=200",
+  "focusZone" : "search",
+  "itemCount" : 5,
+  "items" : [
+    {
+      "actions" : [
+        "paste:Paste",
+        "copy:Copy",
+        "pin:Pin",
+        "delete:Delete Entry",
+        "clip-transform:Transform Text…",
+        "scratch-entry:Open in Scratchpad"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "clip-bbeaa52390a7b3c20f52b68ccd6bc24653ce3a02d7b8428303850e383588b88c",
+      "providerID" : "clip",
+      "subtitle" : "1m ago · 41 chars",
+      "title" : "kubectl logs -f deploy\/palette --tail=200"
+    },
+    {
+      "actions" : [
+        "paste:Paste",
+        "copy:Copy",
+        "pin:Pin",
+        "delete:Delete Entry",
+        "clip-transform:Transform Text…",
+        "scratch-entry:Open in Scratchpad"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "clip-ee864981c8be95cf04faff32d2a0e96eb37fc5db100db2834c687262e0ce0212",
+      "providerID" : "clip",
+      "subtitle" : "3m ago · 50 chars",
+      "title" : "BEGIN; UPDATE settings SET source = theme; COMMIT;"
+    },
+    {
+      "actions" : [
+        "paste:Paste",
+        "copy:Copy",
+        "pin:Pin",
+        "delete:Delete Entry",
+        "clip-transform:Transform Text…",
+        "scratch-entry:Open in Scratchpad"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "clip-647e00d0384b136ba036248989ae82d4d5f1a66c044d5d1bc8e04c1952a8a6d9",
+      "providerID" : "clip",
+      "subtitle" : "4m ago · 44 chars",
+      "title" : "https:\/\/github.com\/myleshen\/palette\/releases"
+    },
+    {
+      "actions" : [
+        "paste-image:Paste Image",
+        "copy-image:Copy Image",
+        "ocr-copy:Copy Text (OCR)",
+        "pin:Pin",
+        "delete:Delete Entry"
+      ],
+      "badge" : "image",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "img-96a7a93a31c6cdbbe8656cb25db30083f19a88617e48814cf25d069d4ace27f1",
+      "providerID" : "clip",
+      "subtitle" : "6m ago · PNG image",
+      "title" : "Image 1200×700"
+    },
+    {
+      "actions" : [
+        "paste-files:Paste Files",
+        "copy-files:Copy Files",
+        "term-here:Open in Embedded Terminal",
+        "pin:Pin",
+        "delete:Delete Entry"
+      ],
+      "badge" : "files",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "files-856cdde4e1c9e368925e558314fa9986f4454295c440fc579bd187661e19866b",
+      "providerID" : "clip",
+      "subtitle" : "8m ago · release-notes.md, palette-2.20.0.dmg",
+      "title" : "2 items"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : true,
+  "previewVisible" : true,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "\/clip",
+  "railFocused" : false,
+  "railID" : "clip",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "Clipboard History",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+
+    ],
+    "background" : "",
+    "foreground" : "",
+    "live" : false
+  },
+  "terminalActive" : false,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}
