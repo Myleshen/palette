@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.20.1 — 2026-11-28
+
+### Fixed
+
+- **Copy command for browser policy.** The Browsers card can copy the exact
+  `defaults write … BrowserThemeColor` line (plus the browser restart) for the
+  selected browsers, for when the silent path is not honoured.
+- **Helium note.** Helium derives its chrome colours from the wallpaper itself;
+  the card now says so instead of implying the policy always applies.
+
 ## 2.20.0 — 2026-11-28
 
 ### Added

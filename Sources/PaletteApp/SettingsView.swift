@@ -2470,6 +2470,19 @@ struct SettingsView: View {
                         }
                         .disabled(theming.policyBusy || selectedBrowsers.isEmpty)
                         .help("Save a .mobileconfig for the OS-managed route instead.")
+                        Button("Copy command") {
+                            let colour = PalettePalette(theme: theme).background
+                            let lines = ChromiumBrowser.catalog
+                                .filter { selectedBrowsers.contains($0) }
+                                .map { browser in
+                                    "sudo defaults write \"/Library/Managed Preferences/\(browser.bundleID)\" "
+                                        + "BrowserThemeColor -string \"\(colour)\"; killall \(browser.processName) 2>/dev/null"
+                                }
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+                        }
+                        .disabled(selectedBrowsers.isEmpty)
+                        .help("Copy the exact command to set the browser's managed colour by hand.")
                         Button("Refresh") {
                             Task { @MainActor in await theming.refreshPolicyStates() }
                         }
@@ -2481,6 +2494,12 @@ struct SettingsView: View {
                         if theming.policyBusy {
                             PaletteSpinner()
                         }
+                    }
+                    if ChromiumBrowser.catalog.contains(where: { $0.target == .helium }) {
+                        Text("Helium paints its own chrome from the desktop wallpaper; if it ignores the palette, use Copy command, paste it in Terminal and restart Helium.")
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if let status = theming.policyStatus {
                         Text(status)
