@@ -18,6 +18,13 @@
 - **Quick-access kitty panel and stale Starship shells now follow the palette**
   too: the drop-down gets the same managed block and socket, and the user's
   starship palette block is refreshed on every apply.
+- **Every plugin group snaps to the palette.** After painting its own groups,
+  the nvim file maps any remaining group colour a plugin defined to the nearest
+  palette colour (no link, no stale colour), which covers pickers, notifiers,
+  trouble, cmp and future plugins without naming them.
+- **One picture on every Space, reliably.** The first retargetable Space entry
+  becomes canonical and is copied to every other Space/display, with a second
+  settle pass after WallpaperAgent writes its cache back.
 - **nvim is themed end to end.** 298 highlight groups (base, treesitter,
   diagnostics, diff, lualine, neo-tree, telescope/snacks, noice/notify) plus
   `colors_name = "palette"`, with sidebars/dashboards transparent when the
