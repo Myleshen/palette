@@ -63,9 +63,33 @@ final class ThemeGalleryModel: ObservableObject {
     @Published var dealOverride: Double?
     /// Dismiss animates the hand back out before the panel orders off.
     @Published var closing = false
+    /// The user's saved palette source, refreshed on every config reload so a
+    /// source flip re-enables theme cards while the deck is open.
+    @Published var paletteSource: ThemingSource = .theme
 
     init(deck: ThemeCardDeck = ThemeCardDeck()) {
         self.deck = deck
+    }
+
+    /// Why the card in front refuses Apply, nil when it can apply. Derived from
+    /// the live source and card kind, so it stays true while the state holds
+    /// instead of being a status message another action can overwrite.
+    var blockedApplyReason: String? {
+        guard deck.count > 0 else { return nil }
+        return ThemeCardSourceGuard.blockedReason(
+            source: paletteSource,
+            target: deck.current.target
+        )
+    }
+
+    /// Pressing Apply on a refused card shows the hint and nothing else: no
+    /// apply starts and no celebration fires. Returns whether it was refused.
+    @discardableResult
+    func showApplyRefusal() -> Bool {
+        guard let reason = blockedApplyReason else { return false }
+        status = reason
+        statusFailed = false
+        return true
     }
 
     func palette(for card: ThemeCard) -> ThemeCardPalette? {
@@ -268,8 +292,10 @@ final class ThemeGalleryWindowController: NSWindowController {
     }
 
     /// A config reload can point the cards at a different folder. Rescan now
-    /// instead of waiting for the next launch.
+    /// instead of waiting for the next launch. The same reload carries the
+    /// palette source, so sync that before the folder comparison returns.
     func updateWallpaperDirectory(_ url: URL?) {
+        model.paletteSource = paletteSource()
         guard url != wallpaperDirectory else { return }
         wallpaperDirectory = url
         wallpapers = []
@@ -365,6 +391,7 @@ final class ThemeGalleryWindowController: NSWindowController {
         model.statusFailed = false
         model.applying = false
         model.wallpaperUnavailable = false
+        model.paletteSource = paletteSource()
         updateAppearance()
         installClickMonitors()
         guard let window else { return }
@@ -372,7 +399,6 @@ final class ThemeGalleryWindowController: NSWindowController {
         model.closing = false
         relayout()
         loadVisibleCards()
-        showSourceHintIfNeeded()
         if WindowPresentation.isScripted {
             // A scripted run must leave focus alone; the panel still renders.
             window.orderFront(nil)
@@ -413,17 +439,6 @@ final class ThemeGalleryWindowController: NSWindowController {
             self.model.closing = false
             self.window?.orderOut(nil)
         }
-    }
-
-    /// The deck is in wallpaper mode's guard territory: Colors can be looked
-    /// at, but the footer says why applying a theme card will not work until
-    /// the source flips back.
-    private func showSourceHintIfNeeded() {
-        guard model.deck.mode == .colors,
-              model.deck.count > 0,
-              paletteSource() == .wallpaper else { return }
-        model.status = ThemeCardSourceGuard.wallpaperHint
-        model.statusFailed = false
     }
 
     func toggle() {
@@ -718,6 +733,7 @@ final class ThemeGalleryWindowController: NSWindowController {
             model.statusFailed = false
             return
         }
+        guard !model.showApplyRefusal() else { return }
         apply(model.deck.current)
     }
 
@@ -727,6 +743,7 @@ final class ThemeGalleryWindowController: NSWindowController {
             source: paletteSource(),
             target: card.target
         ) {
+            model.paletteSource = paletteSource()
             model.status = reason
             model.statusFailed = false
             return
@@ -743,6 +760,7 @@ final class ThemeGalleryWindowController: NSWindowController {
                 self.model.deck.currentDesktopPath = path
             }
             self.model.applying = false
+            self.model.paletteSource = self.paletteSource()
             self.model.status = outcome.message.isEmpty ? "Applied" : outcome.message
             self.model.statusFailed = outcome.failed
         }
@@ -848,9 +866,9 @@ final class ThemeGalleryWindowController: NSWindowController {
         model.deck.mode = mode
         model.deck.query = ""
         model.deck.favouritesOnly = false
+        model.paletteSource = paletteSource()
         rebuildDeck(keepSelection: false)
         loadVisibleCards()
-        showSourceHintIfNeeded()
         Log.shared.info("Theme cards mode → \(mode.title)", source: "theme")
     }
 
@@ -1813,17 +1831,34 @@ private struct ThemeGalleryView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        HStack(spacing: 10) {
+        let blocked = model.blockedApplyReason
+        return HStack(spacing: 10) {
             Button("Apply", action: applyCurrent)
                 .buttonStyle(.borderedProminent)
                 .tint(theme.color(theme.palette.accent))
-                .accessibilityLabel("Apply the card in front")
+                .disabled(blocked != nil)
+                .opacity(blocked == nil ? 1 : 0.45)
+                .help(blocked ?? "Apply the card in front")
+                .accessibilityLabel(
+                    blocked.map { "Apply unavailable: \($0)" } ?? "Apply the card in front"
+                )
+
+            if let blocked {
+                Text(blocked)
+                    .font(.caption)
+                    .foregroundStyle(theme.color(theme.palette.warning))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(blocked)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Apply unavailable: \(blocked)")
+            }
 
             if model.applying {
                 ProgressView()
                     .controlSize(.small)
                     .accessibilityLabel("Applying")
-            } else if let status = model.status {
+            } else if let status = model.status, status != ThemeCardSourceGuard.wallpaperHint {
                 Text(status)
                     .font(.caption)
                     .foregroundStyle(model.statusFailed
