@@ -2363,7 +2363,7 @@ struct TerminalSurface: NSViewRepresentable {
         }
 
         private static func environment(shell: String) -> [String] {
-            var environment = ProcessInfo.processInfo.environment
+            var environment = ProcessRunner.sanitizedEnvironment(ProcessInfo.processInfo.environment)
                 .filter { $0.key != "SHELL" && $0.key != "TERM" }
                 .map { "\($0.key)=\($0.value)" }
             environment.append("SHELL=\(shell)")

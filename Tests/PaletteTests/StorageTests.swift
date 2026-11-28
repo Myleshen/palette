@@ -363,4 +363,39 @@ final class StorageTests: XCTestCase {
         XCTAssertTrue(rows.contains { $0.title == file.lastPathComponent })
         XCTAssertTrue(rows.first?.preview != nil)
     }
+
+    func testSandboxDirectoriesAndDatabaseAreUserOnly() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-permissions-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config"),
+            stateDir: root.appendingPathComponent("state"),
+            cacheDir: root.appendingPathComponent("cache")
+        )
+        try paths.createDirectories()
+
+        func mode(_ url: URL) throws -> Int {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? 0
+        }
+
+        for directory in [paths.stateDir, paths.logsDir, paths.cacheDir] {
+            XCTAssertEqual(try mode(directory) & 0o777, 0o700, directory.path)
+        }
+
+        let store = try PaletteStore(
+            path: paths.databaseFile.path,
+            imagesDirectory: paths.clipboardImagesDir
+        )
+        try withExtendedLifetime(store) {
+            XCTAssertEqual(try mode(paths.databaseFile) & 0o777, 0o600)
+            for suffix in ["-wal", "-shm"] {
+                let side = URL(fileURLWithPath: paths.databaseFile.path + suffix)
+                guard FileManager.default.fileExists(atPath: side.path) else { continue }
+                XCTAssertEqual(try mode(side) & 0o777, 0o600, side.path)
+            }
+        }
+    }
 }

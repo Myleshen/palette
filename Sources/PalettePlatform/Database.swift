@@ -157,6 +157,7 @@ public actor PaletteStore {
             imageFiles: imageFiles,
             databasePath: path
         )
+        Self.secureDatabaseFiles(path: path)
     }
 
     deinit {
@@ -164,6 +165,43 @@ public actor PaletteStore {
             sqlite3_close(database)
         }
     }
+
+    /// Clipboard text and history must not be world-readable, including the
+    /// WAL side files and any migration snapshot.
+    private static func secureDatabaseFiles(path: String) {
+        restrictDatabaseFile(path)
+        for suffix in ["-wal", "-shm"] {
+            restrictDatabaseFile(path + suffix)
+        }
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+        let prefix = URL(fileURLWithPath: path).lastPathComponent + ".bak-"
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names where name.hasPrefix(prefix) {
+            restrictDatabaseFile(directory.appendingPathComponent(name).path)
+        }
+    }
+
+    private static func restrictDatabaseFile(_ path: String) {
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        do {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: path
+            )
+        } catch {
+            permissionLogLock.lock()
+            defer { permissionLogLock.unlock() }
+            guard !didLogPermissionFailure else { return }
+            didLogPermissionFailure = true
+            Log.shared.warn(
+                "Could not restrict database permissions on \(path): \(error.localizedDescription)",
+                source: "storage"
+            )
+        }
+    }
+
+    private static let permissionLogLock = NSLock()
+    nonisolated(unsafe) private static var didLogPermissionFailure = false
 
     private static func migrate(
         _ database: OpaquePointer?,
@@ -520,6 +558,7 @@ public actor PaletteStore {
             for suffix in ["-wal", "-shm"] {
                 try? FileManager.default.removeItem(atPath: candidate.path + suffix)
             }
+            restrictDatabaseFile(candidate.path)
         }
         guard let backup = sqlite3_backup_init(destination, "main", database, "main") else {
             throw ProviderError.failed(String(cString: sqlite3_errmsg(destination)))

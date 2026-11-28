@@ -682,7 +682,30 @@ public struct PalettePaths: Sendable {
         for url in [configDir, providersDir, themesDir, themeDir, stateDir, logsDir, cacheDir] {
             try manager.createDirectory(at: url, withIntermediateDirectories: true)
         }
+        // Clipboard text, logs and cached vault data are user-private.
+        for url in [stateDir, logsDir, cacheDir] {
+            Self.restrict(url, to: 0o700)
+        }
     }
+
+    /// Permission tightening must never stop the app from launching.
+    private static func restrict(_ url: URL, to mode: Int) {
+        do {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: mode],
+                ofItemAtPath: url.path
+            )
+        } catch {
+            permissionLogLock.lock()
+            defer { permissionLogLock.unlock() }
+            guard !didLogPermissionFailure else { return }
+            didLogPermissionFailure = true
+            NSLog("Palette: could not restrict permissions on \(url.path): \(error.localizedDescription)")
+        }
+    }
+
+    private static let permissionLogLock = NSLock()
+    nonisolated(unsafe) private static var didLogPermissionFailure = false
 
     /// Resources live in the app bundle in release builds, and next to the
     /// package during `swift run` and tests.
