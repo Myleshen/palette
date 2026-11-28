@@ -184,6 +184,9 @@ final class KeepAwakeTests: XCTestCase {
         XCTAssertTrue(script.contains("12h cap reached"))
         XCTAssertTrue(script.contains("battery power; lid sleep restored"))
         XCTAssertTrue(script.contains(ClamshellGuard.daemonLabel), "the guard removes its own plist on exit")
+        XCTAssertTrue(script.contains("/Library/Logs/Palette/clamshell-guard.log"))
+        XCTAssertTrue(script.contains("/bin/chmod 0600"))
+        XCTAssertFalse(script.contains("/tmp/palette-clamshell-guard.log"))
     }
 
     func testClamshellInstallCommandParsesAsShell() async throws {
@@ -399,7 +402,8 @@ final class KeepAwakeTests: XCTestCase {
                 pmset: fakePmset.path,
                 sleepBinary: fakeSleep.path,
                 interval: 0,
-                maxArmedSeconds: maxArmedSeconds
+                maxArmedSeconds: maxArmedSeconds,
+                logPath: root.appendingPathComponent("guard.log").path
             )
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/sh")

@@ -183,6 +183,9 @@ public enum AskClient {
     /// Hard ceiling on the whole call, a little above `timeout`, so a stalled
     /// connection cannot sit in the fallback loop forever.
     public static let deadline: TimeInterval = 130
+    /// Ceiling on a non-streaming JSON body, applied while it is read so a
+    /// hostile or broken endpoint cannot balloon memory.
+    private static let maxResponseBytes = 2_000_000
 
     /// Dedicated session: `URLSession.shared` defaults to a 60 s resource
     /// timeout, which would silently undercut the values above.
@@ -283,7 +286,11 @@ public enum AskClient {
                     isSSE = !trimmed.hasPrefix("{")
                 }
                 guard isSSE else {
-                    raw.append(contentsOf: line.utf8)
+                    let remaining = Self.maxResponseBytes - raw.count
+                    if remaining > 0 {
+                        raw.append(contentsOf: line.utf8.prefix(remaining))
+                    }
+                    if raw.count >= Self.maxResponseBytes { break }
                     raw.append(0x0A)
                     continue
                 }

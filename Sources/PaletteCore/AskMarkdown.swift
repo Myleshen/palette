@@ -277,12 +277,10 @@ public enum AskMarkdown {
         return result
     }
 
-    /// Only https images are rendered; every other scheme stays text and is
-    /// never fetched.
+    /// Only public https images are rendered; every other scheme, loopback,
+    /// link-local and private address stays text and is never fetched.
     public static func isSafeImageURL(_ url: URL) -> Bool {
-        guard url.scheme?.lowercased() == "https" else { return false }
-        guard let host = url.host, !host.isEmpty else { return false }
-        return true
+        SafeURL.isSafeRemoteHTTPS(url)
     }
 
     /// Links only ever open http/https. A `file:`, `javascript:` or custom

@@ -130,7 +130,9 @@ public final class StatsProvider: PaletteProvider, @unchecked Sendable {
         guard let out = await run(["/usr/bin/pmset", "-g", "batt"]) else { return nil }
         let line = out.split(separator: "\n").last.map(String.init) ?? ""
         let percent = line.split(separator: "%").first?.split(separator: "\t").last.map(String.init) ?? ""
-        let state = line.contains("AC Power") ? "on power" : (line.contains("charging") ? "charging" : "on battery")
+        // "Now drawing from 'AC Power'" is the first line; the battery line
+        // only says "charged" or "discharging".
+        let state = line.contains("charging") ? "charging" : (out.contains("AC Power") ? "on power" : "on battery")
         guard !percent.isEmpty else { return nil }
         return PaletteItem(
             id: "stats-battery",

@@ -4,7 +4,7 @@ import Foundation
 import TOMLKit
 import PaletteCore
 @testable import PalettePlatform
-import PaletteProviders
+@testable import PaletteProviders
 
 final class AskTests: XCTestCase {
     func testAskConfigRoundTripsWithoutSecrets() throws {
@@ -683,6 +683,81 @@ final class AskTests: XCTestCase {
         XCTAssertFalse(AskMarkdown.isSafeImageURL(URL(string: "http://example.com/a.png")!))
         XCTAssertFalse(AskMarkdown.isSafeImageURL(URL(string: "file:///etc/passwd")!))
         XCTAssertFalse(AskMarkdown.isSafeImageURL(URL(string: "data:image/png;base64,abc")!))
+    }
+
+    func testAskImageURLsRejectPrivateHosts() {
+        for raw in [
+            "https://127.0.0.1/x.png",
+            "https://169.254.1.1/x.png",
+            "https://192.168.1.5/x.png",
+            "https://[::1]/x",
+            "https://[fd00::1]/x",
+            "https://localhost/x.png",
+        ] {
+            XCTAssertFalse(
+                AskMarkdown.isSafeImageURL(URL(string: raw)!),
+                "\(raw) must never be fetched as a markdown image"
+            )
+        }
+        XCTAssertTrue(AskMarkdown.isSafeImageURL(URL(string: "https://example.com/x.png")!))
+        XCTAssertFalse(
+            AskMarkdown.isSafeImageURL(URL(string: "http://example.com/x.png")!),
+            "plain http images stay text"
+        )
+    }
+
+    func testAskWebRedirectsAreCancelledBeforeFollowing() {
+        for raw in [
+            "https://127.0.0.1/x",
+            "https://169.254.1.1/x",
+            "https://192.168.1.5/x",
+            "https://[::1]/x",
+        ] {
+            XCTAssertFalse(AskWebSearch.allowsRedirect(to: URL(string: raw)!), raw)
+        }
+        XCTAssertTrue(AskWebSearch.allowsRedirect(to: URL(string: "https://example.com/x")!))
+
+        let redirectGuard = AskWebSearch.RedirectGuard()
+        let session = URLSession.shared
+        let task = session.dataTask(with: URL(string: "https://example.com/")!)
+        let response = HTTPURLResponse(
+            url: URL(string: "https://example.com/")!,
+            statusCode: 302,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        var decisions: [URLRequest?] = []
+        let unsafeRequest = URLRequest(url: URL(string: "https://192.168.1.5/x")!)
+        redirectGuard.urlSession(
+            session,
+            task: task,
+            willPerformHTTPRedirection: response,
+            newRequest: unsafeRequest
+        ) { decisions.append($0) }
+        XCTAssertEqual(decisions.count, 1)
+        XCTAssertNil(decisions[0], "an unsafe redirect must cancel the request")
+
+        let safeRequest = URLRequest(url: URL(string: "https://example.com/next")!)
+        redirectGuard.urlSession(
+            session,
+            task: task,
+            willPerformHTTPRedirection: response,
+            newRequest: safeRequest
+        ) { decisions.append($0) }
+        XCTAssertEqual(decisions.count, 2)
+        XCTAssertEqual(decisions[1]?.url, safeRequest.url)
+    }
+
+    func testFaviconURLKeepsCraftedHostInsideTheDomainParameter() throws {
+        let url = try XCTUnwrap(FaviconStore.faviconURL(for: "evil.example&sz=1"))
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(components.host, "www.google.com")
+        XCTAssertEqual(components.path, "/s2/favicons")
+        XCTAssertEqual(
+            components.queryItems?.first { $0.name == "domain" }?.value,
+            "evil.example&sz=1"
+        )
+        XCTAssertEqual(components.queryItems?.filter { $0.name == "sz" }.count, 1)
     }
 
     func testAskFallbackUsesOnlyEndpointsWithKeys() async throws {

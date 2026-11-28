@@ -150,7 +150,9 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
         switch command {
         case "logs":
             let app = terminalApp
-            try await MainActor.run { try launcher.openTerminal(command: "\(docker) logs -f \(name)", app: app) }
+            try await MainActor.run {
+                try launcher.openTerminal(command: Self.logsCommand(docker: docker, name: name), app: app)
+            }
         default:
             let result = try? await ProcessRunner.run([docker, command, name], timeout: 20)
             if result?.status != 0 {
@@ -165,5 +167,11 @@ public final class DockerProvider: PaletteProvider, @unchecked Sendable {
             await psCache.invalidate()
             await MainActor.run { onRefresh?() }
         }
+    }
+
+    /// Both the binary path and the container name can contain shell
+    /// metacharacters, so the terminal command quotes each one.
+    static func logsCommand(docker: String, name: String) -> String {
+        "\(ProjectProvider.shellQuote(docker)) logs -f \(ProjectProvider.shellQuote(name))"
     }
 }
