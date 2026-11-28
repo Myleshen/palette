@@ -1,0 +1,111 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "kubectl logs -f deploy\/palette --tail=200",
+  "focusZone" : "search",
+  "itemCount" : 2,
+  "items" : [
+    {
+      "actions" : [
+        "paste:Paste",
+        "copy:Copy",
+        "pin:Pin",
+        "delete:Delete Entry",
+        "clip-transform:Transform Text…",
+        "scratch-entry:Open in Scratchpad"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "clip-bbeaa52390a7b3c20f52b68ccd6bc24653ce3a02d7b8428303850e383588b88c",
+      "providerID" : "clip",
+      "subtitle" : "3m ago · 41 chars",
+      "title" : "kubectl logs -f deploy\/palette --tail=200"
+    },
+    {
+      "actions" : [
+        "paste:Paste",
+        "copy:Copy",
+        "pin:Pin",
+        "delete:Delete Entry",
+        "clip-transform:Transform Text…",
+        "scratch-entry:Open in Scratchpad"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "clip-a6f35d1b361e9ae63dffc9cbf537d78722aac10a4202e3f52b4e1242df21a808",
+      "providerID" : "clip",
+      "subtitle" : "5m ago · 48 chars",
+      "title" : "SELECT * FROM sessions WHERE expires_at < now();"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : true,
+  "previewVisible" : true,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "\/clip ",
+  "railFocused" : false,
+  "railID" : "clip",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "Clipboard History",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+
+    ],
+    "background" : "",
+    "foreground" : "",
+    "live" : false
+  },
+  "terminalActive" : false,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}
