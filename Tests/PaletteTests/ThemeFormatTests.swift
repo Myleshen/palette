@@ -123,17 +123,47 @@ final class ThemeFormatTests: XCTestCase {
         XCTAssertEqual(lines.first, "themes {")
         XCTAssertEqual(lines.last, "}")
         var colours = Set<String>()
+        var currentRole: String?
+        var roles: [String: Int] = [:]
         for line in lines {
             if ["themes {", "    palette {", "    }", "}"].contains(line) { continue }
-            let match = captures(#"^        ([a-z]+) "(#[0-9a-f]{6})"$"#, in: line)
-            XCTAssertEqual(match.count, 1, "KDL line does not parse: \(line)")
-            colours.insert(match.first?[1] ?? "")
+            if line == "        }" {
+                XCTAssertNotNil(currentRole, "closing brace outside a role")
+                currentRole = nil
+                continue
+            }
+            if let match = captures(#"^        ([a-z_]+) \{$"#, in: line).first {
+                XCTAssertNil(currentRole, "nested role block: \(line)")
+                currentRole = match[1]
+                roles[match[1]] = 0
+                continue
+            }
+            if let match = captures(#"^        ([a-z]+) "(#[0-9a-f]{6})"$"#, in: line).first {
+                XCTAssertNil(currentRole, "palette key inside a role: \(line)")
+                colours.insert(match[1])
+                continue
+            }
+            XCTAssertNotNil(currentRole, "line outside any known block: \(line)")
+            let inner = captures(#"^            (base|background|emphasis_[0-3]) "(#[0-9a-f]{6})"$"#, in: line)
+            XCTAssertEqual(inner.count, 1, "KDL line does not parse: \(line)")
+            roles[currentRole ?? ""]! += 1
         }
         XCTAssertEqual(
             colours,
             ["fg", "bg", "black", "red", "green", "yellow", "blue",
              "magenta", "cyan", "white", "orange", "gray"]
         )
+        let expectedRoles = [
+            "text_unselected", "text_selected", "ribbon_unselected", "ribbon_selected",
+            "frame_unselected", "frame_selected", "frame_highlight",
+            "exit_code_success", "exit_code_error",
+        ]
+        XCTAssertEqual(Set(roles.keys), Set(expectedRoles))
+        for role in expectedRoles {
+            // base, background and four emphasis slots.
+            XCTAssertEqual(roles[role], 6, "\(role) is incomplete")
+        }
+        XCTAssertNil(currentRole, "unclosed role block")
         XCTAssertFalse(try render(.zellij).contains("\n#"), "KDL has no # comments")
     }
 

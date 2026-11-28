@@ -1482,6 +1482,20 @@ public enum ThemingRenderer {
         return PalettePalette.hex(black.contrast(with: color) >= white.contrast(with: color) ? black : white)
     }
 
+    /// Text colour that still clears `minimum` after the value is rounded to
+    /// the 8-bit hex that actually lands in the file. `readable` checks the
+    /// unrounded colour, which can lose a hair in the last iteration.
+    private static func readableHex(_ color: String, on background: String, minimum: Double) -> String {
+        let bg = RGBA(hex: background) ?? RGBA(red: 0, green: 0, blue: 0)
+        let chosen = PalettePalette.hex(
+            PalettePalette.readable(RGBA(hex: color) ?? bg, on: bg, minimum: minimum)
+        )
+        if let rounded = RGBA(hex: chosen), rounded.contrast(with: bg) >= minimum {
+            return chosen
+        }
+        return PalettePalette.hex(PalettePalette.bestText(on: bg))
+    }
+
     /// nil for targets that are not configured yet, so phase two cannot
     /// silently write a half-guessed format.
     public static func contents(
@@ -1737,6 +1751,29 @@ public enum ThemingRenderer {
         }
         out.append("        orange \"\(palette.ansi[3])\"")
         out.append("        gray \"\(palette.muted)\"")
+
+        // Zellij derives none of its UI roles from fg/bg; without them the tab
+        // bar, status bar and frames fall back to grey defaults.
+        let emphasis = Array(palette.ansi[1...4])
+        func role(_ name: String, base: String, background: String, minimum: Double) {
+            out.append("        \(name) {")
+            out.append("            base \"\(readableHex(base, on: background, minimum: minimum))\"")
+            out.append("            background \"\(background)\"")
+            for (index, color) in emphasis.enumerated() {
+                out.append("            emphasis_\(index) \"\(readableHex(color, on: background, minimum: 4.5))\"")
+            }
+            out.append("        }")
+        }
+        role("text_unselected", base: palette.foreground, background: palette.background, minimum: 4.5)
+        role("text_selected", base: palette.cursorText, background: palette.cursor, minimum: 4.5)
+        role("ribbon_unselected", base: palette.muted, background: palette.surface, minimum: 4.5)
+        role("ribbon_selected", base: palette.cursorText, background: palette.cursor, minimum: 4.5)
+        role("frame_unselected", base: palette.muted, background: palette.background, minimum: 3)
+        role("frame_selected", base: palette.cursor, background: palette.background, minimum: 3)
+        role("frame_highlight", base: palette.cursorText, background: palette.cursor, minimum: 3)
+        role("exit_code_success", base: palette.background, background: palette.ansi[2], minimum: 4.5)
+        role("exit_code_error", base: palette.background, background: palette.ansi[1], minimum: 4.5)
+
         out.append("    }")
         out.append("}")
         return out.joined(separator: "\n") + "\n"

@@ -90,6 +90,80 @@ final class GeneratedContrastTests: XCTestCase {
         }
     }
 
+    /// Zellij's UI roles are fixed foreground/background pairs of its own; the
+    /// palette only supplies the ANSI block, so every role has to name both
+    /// sides and stay readable. Frames are non-text, hence 3:1.
+    func testZellijRolePairsAreReadableInDarkLightAndMidTone() throws {
+        var midTone = PalettePalette(theme: .defaultLight)
+        midTone.background = "#ffffff"
+        midTone.surface = "#808080"
+        midTone.cursor = "#808080"
+        midTone.cursorText = "#ffffff"
+        midTone.muted = "#808080"
+        midTone.ansi[1] = "#808080"
+        midTone.ansi[2] = "#808080"
+
+        for palette in [PalettePalette(theme: .defaultDark), PalettePalette(theme: .defaultLight), midTone] {
+            let roles = try zellijRoles(palette)
+            XCTAssertEqual(
+                Set(roles.keys),
+                ["text_unselected", "text_selected", "ribbon_unselected", "ribbon_selected",
+                 "frame_unselected", "frame_selected", "frame_highlight",
+                 "exit_code_success", "exit_code_error"]
+            )
+            for (name, keys) in roles {
+                let minimum: Double = name.hasPrefix("frame_") ? 3 : 4.5
+                let base = try XCTUnwrap(keys["base"], "\(name) has no base")
+                let background = try XCTUnwrap(keys["background"], "\(name) has no background")
+                XCTAssertGreaterThanOrEqual(
+                    try ratio(base, background),
+                    minimum,
+                    "\(name) \(base) on \(background)"
+                )
+                for index in 0..<4 {
+                    let emphasis = try XCTUnwrap(keys["emphasis_\(index)"], "\(name) has no emphasis_\(index)")
+                    XCTAssertGreaterThanOrEqual(try ratio(emphasis, background), 4.5, "\(name) emphasis \(index)")
+                }
+            }
+            XCTAssertEqual(roles["text_unselected"]?["background"], palette.background)
+            XCTAssertEqual(roles["ribbon_unselected"]?["background"], palette.surface)
+            XCTAssertEqual(roles["ribbon_selected"]?["background"], palette.cursor)
+            XCTAssertEqual(roles["frame_selected"]?["background"], palette.background)
+            XCTAssertEqual(roles["frame_highlight"]?["background"], palette.cursor)
+            XCTAssertEqual(roles["exit_code_success"]?["background"], palette.ansi[2])
+            XCTAssertEqual(roles["exit_code_error"]?["background"], palette.ansi[1])
+        }
+    }
+
+    private func zellijRoles(_ palette: PalettePalette) throws -> [String: [String: String]] {
+        let output = try XCTUnwrap(ThemingRenderer.contents(
+            for: .zellij,
+            palette: palette,
+            metadata: PaletteMetadata(source: "theme", theme: "test", appearance: palette.appearance)
+        ))
+        var roles: [String: [String: String]] = [:]
+        var current: String?
+        for line in output.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasSuffix("{") {
+                let name = String(trimmed.dropLast()).trimmingCharacters(in: .whitespaces)
+                current = ["themes", "palette"].contains(name) ? nil : name
+                if let current { roles[current] = [:] }
+                continue
+            }
+            if trimmed == "}" {
+                current = nil
+                continue
+            }
+            guard let current else { continue }
+            let parts = trimmed.components(separatedBy: "\"")
+            guard parts.count >= 3 else { continue }
+            let key = parts[0].trimmingCharacters(in: .whitespaces)
+            roles[current]?[key] = parts[1]
+        }
+        return roles
+    }
+
     private func chipText(_ background: String) throws -> String {
         let color = try XCTUnwrap(RGBA(hex: background))
         let soft = PalettePalette.bestText(on: color)
