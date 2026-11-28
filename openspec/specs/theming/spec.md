@@ -243,36 +243,12 @@ launcher and the live embedded terminal without restarting a shell.
 - **WHEN** a wallpaper palette is applied
 - **THEN** it is sampled again at launch because no theme id exists
 
-### Requirement: Browser policy
-
-Chromium-based browsers SHALL be themed through `BrowserThemeColor` in the
-user-scoped managed preference plist; Helium SHALL always be supported and the
-others only when installed. The first enable SHALL be the only administrator
-step; later applies SHALL rewrite the plist without a password. A
-`.mobileconfig` download and a Remove action SHALL remain available. See
-[ADR 0007](../../decisions/0007-silent-chromium-managed-policy.md).
-
-#### Scenario: Silent update after enable
-
-- **WHEN** silent browser theming has been enabled once and the palette changes
-- **THEN** the plist is rewritten as the user and a running browser is asked to refresh
-
-#### Scenario: Browser not installed
-
-- **WHEN** a catalogue browser is absent
-- **THEN** its row reports that instead of writing a policy
-
-#### Scenario: Remove
-
-- **WHEN** the user chooses Remove
-- **THEN** Palette's plist is deleted with one administrator prompt and the browser fallback colour returns
-
 ### Requirement: Launch repair
 
 On launch Palette SHALL migrate a display-name `theme` value to its id, repair a
 stale `palette.json` id or pre-2.20 `#`-prefixed Lua/KDL header with one silent
 re-apply, and report an unknown target id or invalid `dark_mode` as a
-diagnostic. A stale browser profile SHALL be surfaced once per apply.
+diagnostic.
 
 #### Scenario: Old generated file
 

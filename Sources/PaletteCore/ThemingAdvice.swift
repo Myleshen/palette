@@ -39,8 +39,7 @@ public struct ThemingAdvice: Sendable, Equatable, Identifiable {
 
     public static func scan(
         home: String = NSHomeDirectory(),
-        enabledTargets: Set<ThemingTarget> = Set(ThemingTarget.allCases),
-        managedPreferencesDirectory: String = "/Library/Managed Preferences/\(NSUserName())"
+        enabledTargets: Set<ThemingTarget> = Set(ThemingTarget.allCases)
     ) -> [ThemingAdvice] {
         var rows: [ThemingAdvice] = []
 
@@ -350,42 +349,6 @@ public struct ThemingAdvice: Sendable, Equatable, Identifiable {
             }
         }
 
-        // MARK: Helium
-
-        if enabled(.helium), let browser = ChromiumBrowser.browser(for: .helium) {
-            let own = managedPreferencesDirectory + "/\(browser.bundleID).plist"
-            if !FileManager.default.fileExists(atPath: own) {
-                add(
-                    .helium, .blocking, own,
-                    message: "Helium is enabled, but no Palette managed policy exists, so the palette "
-                        + "never reaches it.",
-                    suggestion: "Settings → Theming → Browsers → Enable silent browser theming."
-                )
-            }
-            if FileManager.default.fileExists(atPath: managedPreferencesDirectory) {
-                if let names = try? FileManager.default.contentsOfDirectory(
-                    atPath: managedPreferencesDirectory
-                ) {
-                    for name in names.sorted() where name.hasSuffix(".plist") {
-                        let path = managedPreferencesDirectory + "/" + name
-                        guard path != own,
-                              let data = FileManager.default.contents(atPath: path),
-                              ChromiumPolicy.themeColor(in: data, bundleID: browser.bundleID) != nil else {
-                            continue
-                        }
-                        add(
-                            .helium, .blocking, path,
-                            message: "Another managed preference also sets BrowserThemeColor for Helium; "
-                                + "macOS merges both and the old value can win.",
-                            suggestion: "Remove the old profile, or re-run Enable silent browser theming."
-                        )
-                    }
-                } else {
-                    unreadable(.helium, managedPreferencesDirectory)
-                }
-            }
-        }
-
         return rows.filter { enabledTargets.contains($0.target) }
     }
 }
@@ -480,7 +443,6 @@ public extension ThemingTarget {
         case .nvim: return "chevron.left.forwardslash.chevron.right"
         case .fish: return "fish"
         case .starship: return "sparkles"
-        case .helium: return "globe"
         default: return "app.dashed"
         }
     }

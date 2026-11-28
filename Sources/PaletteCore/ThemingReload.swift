@@ -31,12 +31,6 @@ public enum ThemingReload {
     }
 
     public static func status(for target: ThemingTarget) -> Status {
-        if target.isBrowser {
-            return Status(
-                state: .action,
-                message: "Restart the browser (or relaunch it with --refresh-platform-policy)"
-            )
-        }
         switch target {
         case .kitty:
             return Status(state: .action, message: "Restart kitty (remote control disabled)")
@@ -75,9 +69,7 @@ public enum ThemingReload {
                 state: .action,
                 message: "Merge the theme into ~/.config/yazi/theme.toml (copy only if absent), then restart yazi"
             )
-        case .vscode, .zed, .arc:
-            return Status(state: .action, message: target.unavailableReason ?? "Not configured yet.")
-        default:
+        case .vscode, .zed:
             return Status(state: .action, message: target.unavailableReason ?? "Not configured yet.")
         }
     }

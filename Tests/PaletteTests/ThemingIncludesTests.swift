@@ -437,7 +437,6 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertEqual(includes.plan(for: .delta)?.path, home + "/.config/git/config")
         XCTAssertNil(includes.plan(for: .yazi))
         XCTAssertNil(includes.plan(for: .vscode))
-        XCTAssertNil(includes.plan(for: .helium))
     }
 
     func testStatusReportsInstalledNotInstalledAndUnavailable() throws {

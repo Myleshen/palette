@@ -278,13 +278,12 @@ declaration). `palette.json` carries the same fields as JSON.
 | delta | `[include] path` in `~/.gitconfig` (or `~/.config/git/config`) | next git/delta command |
 | btop | `color_theme = "palette"` in `~/.config/btop/btop.conf` and a symlink at `~/.config/btop/themes/palette.theme` | restart btop |
 | yazi | nothing automatic; `yazi.toml` is generated for a manual merge | after you merge it into `~/.config/yazi/theme.toml` and restart yazi |
-| Chromium browsers | `BrowserThemeColor` in the user-owned managed preference plist; a `.mobileconfig` is still generated as a manual fallback | every Apply writes it silently; a running browser refreshes itself |
 
 yazi is manual on purpose: its `theme.toml` is a table-per-section file, so
 appending a second `[mgr]` block would be invalid TOML. Copy the generated file
-over your theme, or merge the values you want, then restart yazi. VS Code, Zed,
-Neovide and Arc are listed but disabled, with the reason shown; Neovide is
-covered by the Neovim palette.
+over your theme, or merge the values you want, then restart yazi. VS Code and
+Zed are listed but disabled, with the reason shown; Neovide is covered by the
+Neovim palette.
 
 ### Marker blocks, backup and Revert
 
@@ -335,31 +334,6 @@ id in `[theme]`, so the launcher, the embedded terminal and the other apps all
 show one palette. A deliberate "Theme override" for other apps is the one place
 they differ.
 
-### Browser theming
-
-Chromium browsers (Helium always; Chrome, Edge, Brave, Vivaldi and Chromium when
-installed) get the palette background as `BrowserThemeColor`. Palette writes it
-to the user-scoped managed preference file
-`/Library/Managed Preferences/<user>/<bundleID>.plist`. Chromium reads that file
-like any managed domain, so the colour covers every profile of that browser at
-once; it is app-wide and approximate by design, not a per-window theme.
-
-The first time, press **Enable silent browser theming** in the Browsers card.
-That is the only administrator step: one password prompt that removes any old
-Palette profile, creates the plist, hands it to your user, and seeds the current
-colour. After that every Apply rewrites the plist as you, with no password and
-no System Settings trip. A running browser is asked to refresh with
-`<app bundle binary> --refresh-platform-policy --no-startup-window`; if the
-binary cannot be found, the row says a restart picks the colour up.
-
-**Download profile** still writes a valid `.mobileconfig` to `~/Downloads` for
-people who prefer the OS-managed route. **Remove…** deletes Palette's plist
-with one administrator prompt; the browser falls back to its own colour.
-
-The old flow — approving a profile under **General → Device Management →
-Profiles**, re-approving after every palette change — is gone. The one-time
-enable removes any profile left by an earlier Palette version first.
-
 ### Starship
 
 Starship modules embed literal colour names, so selecting a palette is not
@@ -390,9 +364,6 @@ sourced from fish's marked block; other shells must export it themselves.
   Apply again to recreate the links.
 - **Revert restored an app config but not the palette.** Revert restores the
   previous generated set and the app configs, not the launcher's own theme.
-- **A browser did not change colour.** Press **Enable silent browser theming**
-  once. After that the Browsers card says *Managed — updates silently*; a
-  running browser may need a restart, and **Refresh** re-reads the state.
 - **The themed apps use the wrong theme.** A `theme` value that is a display
   name instead of an id is migrated on launch; re-pick the theme in Settings →
   Theming if a hand-edited value still looks wrong. An id pruned from the
@@ -517,6 +488,6 @@ to the generated per-app files in `~/.config/palette/theme/`:
 
 Both are written on every apply, included in the previous set, and restored by
 Revert. They do not replace the per-app files: those remain because each app
-needs its own live-reload mechanism (a socket, a file watcher, a shell
-environment or a managed policy). The standard files are what make a new app
+needs its own live-reload mechanism (a socket, a file watcher or a shell
+environment). The standard files are what make a new app
 cost zero — point it at the file instead of adding an adapter.

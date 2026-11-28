@@ -5,13 +5,11 @@ import PaletteCore
 /// mirrors one real user config pattern.
 final class ThemingAdviceTests: XCTestCase {
     private var home: URL!
-    private var managed: URL!
 
     override func setUpWithError() throws {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent("palette-advice-\(UUID().uuidString)", isDirectory: true)
         home = base.appendingPathComponent("home", isDirectory: true)
-        managed = base.appendingPathComponent("managed", isDirectory: true)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
     }
 
@@ -31,8 +29,7 @@ final class ThemingAdviceTests: XCTestCase {
     private func scan(_ targets: Set<ThemingTarget> = Set(ThemingTarget.allCases)) -> [ThemingAdvice] {
         ThemingAdvice.scan(
             home: home.path,
-            enabledTargets: targets,
-            managedPreferencesDirectory: managed.path
+            enabledTargets: targets
         )
     }
 
@@ -305,46 +302,6 @@ final class ThemingAdviceTests: XCTestCase {
         XCTAssertEqual(rows.first?.severity, .blocking)
         XCTAssertEqual(rows.first?.line, 3)
         XCTAssertEqual(rows.first?.target, .ghostty)
-    }
-
-    // MARK: - Helium
-
-    func testHeliumMissingPolicyIsBlockingOnlyWhenEnabled() throws {
-        let rows = scan([.helium])
-        XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows.first?.target, .helium)
-        XCTAssertEqual(rows.first?.severity, .blocking)
-        XCTAssertNil(rows.first?.line)
-        XCTAssertTrue(rows.first?.file.hasSuffix("net.imput.helium.plist") == true)
-        XCTAssertTrue(rows.first?.message.contains("no Palette managed policy") == true)
-
-        XCTAssertTrue(scan([.kitty]).isEmpty)
-    }
-
-    func testHeliumOtherManagedPlistOverrideIsBlocking() throws {
-        try FileManager.default.createDirectory(at: managed, withIntermediateDirectories: true)
-        let own = managed.appendingPathComponent("net.imput.helium.plist")
-        try ChromiumPolicy.silentPlistData(colour: "#090404").write(to: own)
-        let complete = try PropertyListSerialization.data(
-            fromPropertyList: [
-                "net.imput.helium": [
-                    "BrowserThemeColor": [
-                        "mcxdomain": "always",
-                        "value": "#1e1e2e",
-                    ],
-                ],
-            ],
-            format: .xml,
-            options: 0
-        )
-        try complete.write(to: managed.appendingPathComponent("complete.plist"))
-
-        let rows = scan([.helium])
-        XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows.first?.target, .helium)
-        XCTAssertEqual(rows.first?.severity, .blocking)
-        XCTAssertEqual(rows.first?.file, managed.appendingPathComponent("complete.plist").path)
-        XCTAssertTrue(rows.first?.message.contains("Another managed preference") == true)
     }
 
     // MARK: - Neovide
