@@ -178,7 +178,10 @@ final class ThemeFormatTests: XCTestCase {
         XCTAssertFalse(body.contains { $0.hasPrefix("#") }, "Lua cannot use # comments")
         XCTAssertEqual(body.filter { $0.hasPrefix("hl(\"") }.count, 0)
         // One table, one loop: every group carries fg and/or bg.
-        let entries = body.filter { $0.range(of: #"^  .+ = \{ .+ \},$"#, options: .regularExpression) != nil }
+        let entries = body.filter {
+            $0.range(of: #"^  .+ = \{ .+ \},$"#, options: .regularExpression) != nil
+                && !$0.contains("ansi =")
+        }
         XCTAssertEqual(entries.count, ThemingRenderer.nvimHighlights(transparent: false).count)
         XCTAssertTrue(text.filter { $0 == "{" }.count == text.filter { $0 == "}" }.count)
         // Every colour is a quoted hex string, so no Lua escaping is needed.
@@ -234,7 +237,7 @@ final class ThemeFormatTests: XCTestCase {
 
         // One loop over the whole table per pass, plus the fallback links: no
         // partial clear, no group left carrying the previous colorscheme.
-        XCTAssertEqual(text.components(separatedBy: "nvim_set_hl").count - 1, 2)
+        XCTAssertEqual(text.components(separatedBy: "nvim_set_hl").count - 1, 3)
         XCTAssertTrue(text.contains("for group, colors in pairs(groups) do"))
         XCTAssertTrue(text.contains("vim.api.nvim_set_hl(0, group, colors)"))
         XCTAssertFalse(text.contains("nvim_set_hl(0, group, {})"), "no partial clearing")
@@ -246,6 +249,7 @@ final class ThemeFormatTests: XCTestCase {
         }
         let entries = text.components(separatedBy: "\n").filter {
             $0.range(of: #"^  .+ = \{ .+ \},$"#, options: .regularExpression) != nil
+                && !$0.contains("ansi =")
         }
         XCTAssertEqual(entries.count, ThemingRenderer.nvimHighlights(transparent: false).count)
 

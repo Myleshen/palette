@@ -53,8 +53,21 @@ public enum StarshipTheme {
         palette: PalettePalette,
         header: String
     ) -> Result {
-        let user = userConfig?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var user = userConfig?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let hadConfig = !user.isEmpty
+        // Palette owns the palette table it writes: rename the user's active
+        // palette to `palette` here, in the generated copy only, so their
+        // custom names (pink, text, …) survive while the block is clearly ours.
+        if hadConfig,
+           let name = activePaletteName(in: user),
+           name != "palette" {
+            user = user.replacingOccurrences(of: "[palettes.\(name)]", with: "[palettes.palette]")
+            user = user.replacingOccurrences(
+                of: #"(?m)^palette\s*=\s*"\#(name)""#,
+                with: "palette = \"palette\"",
+                options: .regularExpression
+            )
+        }
         var notice: String?
         let table: TOMLTable
         if hadConfig, let parsed = try? TOMLTable(string: user) {
@@ -80,6 +93,20 @@ public enum StarshipTheme {
             "",
         ].joined(separator: "\n")
         return Result(text: text, notice: notice)
+    }
+
+    /// The palette name the config selects, if any.
+    static func activePaletteName(in text: String) -> String? {
+        for line in text.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("palette"), !trimmed.hasPrefix("[") else { continue }
+            guard let equals = trimmed.firstIndex(of: "=") else { continue }
+            let value = trimmed[trimmed.index(after: equals)...]
+                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            if !value.isEmpty { return value }
+        }
+        return nil
     }
 
     /// Fish snippet sourced by the managed block. It exports the themed config

@@ -104,7 +104,7 @@ final class StarshipThemeTests: XCTestCase {
         subtext0 = "#a28a99"
         """
         let table = try TOMLTable(string: render(user))
-        let paletteTable = try XCTUnwrap(table.table("palettes")?.table("noctalia"))
+        let paletteTable = try XCTUnwrap(table.table("palettes")?.table("palette"))
         let originals = [
             "pink": "#ffacea",
             "text": "#f2dde8",
@@ -128,7 +128,7 @@ final class StarshipThemeTests: XCTestCase {
         XCTAssertEqual(table.table("git_branch")?.str("style"), "fg:text")
         XCTAssertEqual(table.table("git_status")?.str("style"), "fg:flamingo")
         XCTAssertEqual(table.table("time")?.str("style"), "fg:subtext0")
-        XCTAssertEqual(table.str("palette"), "noctalia")
+        XCTAssertEqual(table.str("palette"), "palette")
         XCTAssertEqual(table.str("format"), "$directory$git_branch")
     }
 
@@ -176,7 +176,7 @@ final class StarshipThemeTests: XCTestCase {
                 palette: palette,
                 header: header
             ).text)
-            let values = try XCTUnwrap(table.table("palettes")?.table("noctalia"))
+            let values = try XCTUnwrap(table.table("palettes")?.table("palette"))
             return Dictionary(uniqueKeysWithValues: values.keys.map { ($0, values.str($0) ?? "") })
         }
 
@@ -220,5 +220,29 @@ final class StarshipThemeTests: XCTestCase {
         XCTAssertTrue(result.notice?.contains("not valid TOML") == true)
         let table = try TOMLTable(string: result.text)
         XCTAssertEqual(table.table("directory")?.str("style"), "bold \(palette.ansi[4])")
+    }
+}
+
+extension StarshipThemeTests {
+    /// The generated copy always owns the `palette` table; the user's custom
+    /// key names are preserved inside it, and their old table name is gone.
+    func testActivePaletteIsRenamedToPalette() throws {
+        let user = """
+        palette = "noctalia"
+
+        [character]
+        success_symbol = "[>](fg:pink)"
+
+        [palettes.noctalia]
+        pink = "#ffacea"
+        text = "#f2dde8"
+        """
+        let table = try TOMLTable(string: render(user))
+        XCTAssertEqual(table.str("palette"), "palette")
+        let palettes = try XCTUnwrap(table.table("palettes"))
+        XCTAssertNil(palettes.table("noctalia"))
+        let owned = try XCTUnwrap(palettes.table("palette"))
+        XCTAssertEqual(Set(owned.keys), ["pink", "text"])
+        XCTAssertNotEqual(owned.str("pink"), "#ffacea")
     }
 }

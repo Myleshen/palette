@@ -38,7 +38,7 @@ final class NvimThemeTests: XCTestCase {
                 name = String(body[..<separator.lowerBound])
                 spec = String(body[separator.upperBound...].dropLast())
             }
-            result[name] = spec.trimmingCharacters(in: .whitespaces)
+            if name != "ansi" { result[name] = spec.trimmingCharacters(in: .whitespaces) }
         }
         return result
     }
