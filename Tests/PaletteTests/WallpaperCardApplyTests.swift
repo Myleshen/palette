@@ -128,17 +128,7 @@ final class WallpaperCardApplyTests: XCTestCase {
         XCTAssertEqual(flow.config, before, "config stays as it was")
     }
 
-    func testThemeConfigFlipsTheSourceBack() {
-        var config = ThemingConfig(enabled: true, source: .wallpaper, followWallpaper: true)
-        config.targets = ["kitty"]
-        let next = WallpaperCardPolicy.themeConfig(from: config)
-        XCTAssertEqual(next.source, .theme)
-        XCTAssertTrue(next.followWallpaper, "the user's follow setting is left alone")
-        XCTAssertEqual(next.targets, ["kitty"])
-        XCTAssertTrue(next.enabled)
-    }
-
-    func testWallpaperConfigKeepsEveryOtherSetting() {
+    func testThemeConfigKeepsEveryOtherSetting() {
         var config = ThemingConfig(enabled: false, source: .theme, followWallpaper: true)
         config.wallpaperDirectory = "~/Pictures/Walls"
         let next = WallpaperCardPolicy.wallpaperConfig(from: config)

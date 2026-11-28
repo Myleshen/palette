@@ -71,6 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var restartPromptCancellable: AnyCancellable?
     private var themingTimer: Timer?
     private var wallpaperFollow = WallpaperFollowState()
+    /// The deck's source toggle: explicit, one at a time, and the only place a
+    /// theme apply runs while wallpaper colours are being switched off.
+    private let paletteSourceSwitcher = ThemingSourceSwitcher()
     private var launcher: LauncherService!
     private var pasteboard: PasteboardService!
     private var clipboardMonitor: ClipboardMonitor?
@@ -3315,7 +3318,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `/theme` is a real choice: store it in `[theme]` so a relaunch keeps it,
     /// instead of the old meta key that was written and deleted every launch.
+    /// While wallpaper colours own the palette the pick is refused and nothing
+    /// is written; the source only changes from the deck or Settings control.
     private func pickTheme(_ name: String) {
+        if let refusal = ThemingSourceGuard.refusal(source: configuration.theming.source) {
+            searchController?.setStatus(refusal, duration: 8)
+            return
+        }
         // The load is off-main now, so the slot to write comes from the
         // resolved theme rather than the previous one.
         themeManager.select(name) { [weak self] theme in
@@ -3323,11 +3332,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.configuration.theme = self.configuration.theme.applying(
                 themeID: name,
                 appearance: theme.appearance
-            )
-            // A theme pick owns the palette again; leaving `source` on wallpaper
-            // would keep the deck's theme cards blocked.
-            self.configuration.theming = WallpaperCardPolicy.themeConfig(
-                from: self.configuration.theming
             )
             self.themeManager.updateSelection(self.configuration.theme)
             do {
@@ -3438,8 +3442,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @discardableResult
     private func applyPaletteToAppsNow(_ name: String) async -> ThemingEngine.ApplyResult {
+        if let refusal = ThemingSourceGuard.refusal(source: configuration.theming.source) {
+            return ThemingEngine.ApplyResult(
+                status: refusal,
+                source: configuration.theming.source.rawValue,
+                appearance: "",
+                written: [],
+                skipped: [],
+                includeLines: [],
+                notices: [],
+                changes: [],
+                targets: [],
+                error: refusal
+            )
+        }
         configuration.theming.enabled = true
-        configuration.theming = WallpaperCardPolicy.themeConfig(from: configuration.theming)
         configuration.theming.theme = name
         configuration.theming = configuration.theming.resolvingThemeID(
             fallback: themeManager.currentThemeID,
@@ -3482,7 +3499,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 return (image, palette.map(ThemeCardPalette.init(palette:)))
             },
-            paletteSource: { [weak self] in self?.configuration.theming.source ?? .theme }
+            paletteSource: { [weak self] in self?.configuration.theming.source ?? .theme },
+            setSource: { [weak self] source in
+                guard let self else {
+                    return ThemeGalleryApplyOutcome(
+                        message: "Palette is not ready to switch source.",
+                        failed: true
+                    )
+                }
+                return await self.applyPaletteSource(source)
+            }
         )
         // The catalogue headers are read once now; a hotkey press only renders cards.
         themeGallery?.preload()
@@ -3613,6 +3639,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.shared.warn("Could not save the palette source: \(error.localizedDescription)", source: "theming")
         }
         return await themingEngine.applyWallpaper(configuration.theming)
+    }
+
+    /// The deck's `Wallpaper colours | Theme colours` control. Unlike a theme
+    /// pick, this is the user switching the source on purpose, so it applies the
+    /// palette that matches instead of being refused.
+    private func applyPaletteSource(_ source: ThemingSource) async -> ThemeGalleryApplyOutcome {
+        guard let switched = await paletteSourceSwitcher.switchSource(
+            to: source,
+            themeName: themeManager.currentThemeID,
+            config: configuration,
+            saveConfig: { [weak self] updated in
+                guard let self else { return }
+                try self.writeConfig(updated)
+                self.configuration.theming.source = updated.theming.source
+            },
+            applyOwnTheme: { [weak self] name in self?.pickTheme(name) },
+            applyTheme: { [weak self] name in
+                guard let self, self.configuration.theming.enabled else { return .empty }
+                return await self.applyPaletteToAppsNow(name)
+            },
+            applyWallpaper: { [weak self] in
+                guard let self else { return .empty }
+                return await self.applyWallpaperPaletteNow()
+            }
+        ) else {
+            // A second press while the first is running is not an error.
+            return ThemeGalleryApplyOutcome(message: "", failed: false)
+        }
+        return switched.outcome
     }
 
     // MARK: - Wallpaper follow
@@ -4017,6 +4072,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Settings saves everything live, so a changed `[theme]` selection is a
+    /// theme apply and obeys the same rule as `/theme` and the deck. Refused
+    /// before anything is written; the caller shows the message.
+    static func settingsThemeApplyRefusal(current: PaletteConfig, updated: PaletteConfig) -> String? {
+        guard current.theme != updated.theme else { return nil }
+        return ThemingSourceGuard.refusal(source: updated.theming.source)
+    }
+
     /// Auto-apply writes the same canonical file the old Save button wrote, then
     /// reloads the app in place. The Settings view is not rebuilt, so the field
     /// the user is typing in keeps focus.
@@ -4025,6 +4088,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // over it would erase comments and every unknown key.
         if let configErrorMessage {
             return configErrorMessage
+        }
+        if let refusal = Self.settingsThemeApplyRefusal(current: configuration, updated: updated) {
+            return refusal
         }
         let updatesAutomaticChanged = configuration.updates.automatic != updated.updates.automatic
         do {

@@ -118,36 +118,16 @@ public struct ThemeCard: Identifiable, Equatable, Sendable {
     }
 }
 
-/// The ⌘⌥G deck offers theme cards even when the wallpaper drives the
-/// cross-app palette. Applying one then would change Palette's own theme but
-/// not the other apps, so say why nothing happened instead of applying
-/// silently.
-public enum ThemeCardSourceGuard {
-    public static let wallpaperHint =
-        "Palette follows the wallpaper — switch source to Theme to pick colours"
-
-    public static func blockedReason(source: ThemingSource, target: ThemeCardTarget) -> String? {
-        guard source == .wallpaper, case .theme = target else { return nil }
-        return wallpaperHint
-    }
-}
-
 /// Picking a wallpaper is picking its colours, the way pywal does on Linux: the
 /// picture, the palette and the config source move together. A wallpaper card
-/// never asks what the source was, and a theme pick always leaves the config in
-/// theme mode so the deck's guard is never ambiguous.
+/// never asks what the source was; a theme pick doesn't touch the source, so
+/// the deck's guard is decided by `ThemingSourceGuard`.
 public enum WallpaperCardPolicy {
     /// The config a wallpaper card leaves behind. `follow_wallpaper` is the
     /// user's own setting and is never forced.
     public static func wallpaperConfig(from config: ThemingConfig) -> ThemingConfig {
         var next = config
         next.source = .wallpaper
-        return next
-    }
-
-    public static func themeConfig(from config: ThemingConfig) -> ThemingConfig {
-        var next = config
-        next.source = .theme
         return next
     }
 

@@ -61,17 +61,17 @@ final class PaletteSourceTests: XCTestCase {
 
     func testSourceGuardBlocksOnlyThemeCardsUnderWallpaperSource() {
         XCTAssertEqual(
-            ThemeCardSourceGuard.blockedReason(source: .wallpaper, target: .theme("default-dark")),
-            "Palette follows the wallpaper — switch source to Theme to pick colours"
+            ThemingSourceGuard.blockedReason(source: .wallpaper, target: .theme("default-dark")),
+            ThemingSourceGuard.refusalMessage
         )
-        XCTAssertNil(ThemeCardSourceGuard.blockedReason(source: .wallpaper, target: .wallpaper))
+        XCTAssertNil(ThemingSourceGuard.blockedReason(source: .wallpaper, target: .wallpaper))
         XCTAssertNil(
-            ThemeCardSourceGuard.blockedReason(
+            ThemingSourceGuard.blockedReason(
                 source: .wallpaper,
                 target: .wallpaperFile("/tmp/wallpaper.png")
             )
         )
-        XCTAssertNil(ThemeCardSourceGuard.blockedReason(source: .theme, target: .theme("default-dark")))
+        XCTAssertNil(ThemingSourceGuard.blockedReason(source: .theme, target: .theme("default-dark")))
     }
 
     // MARK: - Deck blocked/enabled matrix
@@ -96,7 +96,7 @@ final class PaletteSourceTests: XCTestCase {
         XCTAssertNil(gallery(source: .wallpaper, .wallpaper).blockedApplyReason)
         XCTAssertEqual(
             gallery(source: .wallpaper, themeCard()).blockedApplyReason,
-            ThemeCardSourceGuard.wallpaperHint
+            ThemingSourceGuard.refusalMessage
         )
     }
 
@@ -111,7 +111,7 @@ final class PaletteSourceTests: XCTestCase {
         XCTAssertNil(model.blockedApplyReason)
 
         model.paletteSource = .wallpaper
-        XCTAssertEqual(model.blockedApplyReason, ThemeCardSourceGuard.wallpaperHint)
+        XCTAssertEqual(model.blockedApplyReason, ThemingSourceGuard.refusalMessage)
     }
 
     /// Return on a blocked card records the hint and refuses the apply: the
@@ -124,7 +124,7 @@ final class PaletteSourceTests: XCTestCase {
         XCTAssertEqual(model.celebration, 0)
 
         XCTAssertTrue(model.showApplyRefusal())
-        XCTAssertEqual(model.status, ThemeCardSourceGuard.wallpaperHint)
+        XCTAssertEqual(model.status, ThemingSourceGuard.refusalMessage)
         XCTAssertFalse(model.statusFailed)
         XCTAssertFalse(model.applying)
         XCTAssertEqual(model.celebration, 0)

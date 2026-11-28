@@ -23,13 +23,15 @@ struct ThemeBrowserView: View {
     @ObservedObject var themeManager: ThemeManager
     @Binding var selection: ThemeSelection
     let themesDirectory: URL
-    /// "Use Theme" also puts the palette source back in theme mode, so a
-    /// wallpaper left in charge never keeps the theme cards blocked.
-    var onUseTheme: () -> Void = {}
+    /// The live `[theming] source`. While it is wallpaper, Use Theme is refused
+    /// and the preview pane says why instead of flipping the source.
+    var paletteSource: ThemingSource = .theme
 
     @State private var browser: ThemeBrowserSession?
     @State private var previewTheme: Theme?
     @State private var status: String?
+    /// The guard's message when a theme apply was refused.
+    @State private var refusal: String?
     /// Parsed row palettes, kept small; parsing happens in a task, never in a
     /// row body.
     @State private var swatches = ThemeSwatchCache()
@@ -331,6 +333,14 @@ struct ThemeBrowserView: View {
                         .font(.caption)
                         .foregroundStyle(muted)
                         .transition(.opacity)
+                } else if let refusal {
+                    Label(refusal, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(theme.color(theme.palette.danger))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(refusal)
+                        .transition(.opacity)
                 } else if let status {
                     Label(status, systemImage: "checkmark.circle.fill")
                         .font(.caption)
@@ -390,6 +400,7 @@ struct ThemeBrowserView: View {
         session.select(name)
         browser = session
         status = nil
+        refusal = nil
         requestSwatch(name)
     }
 
@@ -399,14 +410,21 @@ struct ThemeBrowserView: View {
         browser = session
         if let name = session.selected { requestSwatch(name) }
         status = nil
+        refusal = nil
     }
 
     private func applySelected() {
         guard var session = browser, let name = session.selected else { return }
+        if let refusal = ThemingSourceGuard.refusal(source: paletteSource) {
+            // Refused: no selection change, no theme manager call, no write.
+            self.refusal = refusal
+            status = nil
+            return
+        }
+        refusal = nil
         let updated = session.applying(to: selection, activeAppearance: theme.appearance)
         selection = updated
         themeManager.selection = updated
-        onUseTheme()
         status = nil
         requestSwatch(name)
         session.markApplied()
