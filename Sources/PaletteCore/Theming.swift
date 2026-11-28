@@ -1475,6 +1475,12 @@ public struct PaletteMetadata: Sendable, Equatable {
 
 public enum ThemingRenderer {
     public static let paletteJSONName = "palette.json"
+    /// The same palette in two shapes other tools already read, so a new app
+    /// costs a file read instead of an adapter. Written on every apply.
+    public static let base16Name = "palette.yaml"
+    public static let terminalSexyName = "palette.terminal-sexy.json"
+    /// Both standard files, in the order they are written and listed.
+    public static let standardExportNames = [base16Name, terminalSexyName]
 
     /// Text for an ANSI-coloured chip or diff emphasis. The softer #111 wins
     /// when it clears 4.5:1; otherwise pure black/white always can.
@@ -1718,6 +1724,86 @@ public enum ThemingRenderer {
         let data = (try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]))
             ?? Data("{}".utf8)
         return String(decoding: data, as: UTF8.self) + "\n"
+    }
+
+    /// The standard exports, in write order. One palette, two files: every
+    /// target below still exists for live reload, these are for everything else.
+    public static func standardExports(
+        palette: PalettePalette,
+        metadata: PaletteMetadata
+    ) -> [(name: String, contents: String)] {
+        [
+            (base16Name, base16(palette, header: metadata.header)),
+            (terminalSexyName, terminalSexy(palette)),
+        ]
+    }
+
+    /// base16 slots. The palette has one muted and one foreground role, so
+    /// base03/base04 both take muted and base05/base06/base07 both take
+    /// foreground; base08–base0F are the ANSI hues in base16 order (red,
+    /// orange, yellow, green, cyan, blue, magenta, brown), reusing the same
+    /// terminal palette so the two files cannot disagree.
+    ///
+    /// `base01` is the elevated surface (panels, popups) and `base02` the
+    /// surface behind the window, so a base16 app keeps the same elevation
+    /// order as Palette's own UI.
+    private static func base16(_ palette: PalettePalette, header: String) -> String {
+        let slots: [(String, String)] = [
+            ("base00", palette.background),
+            ("base01", palette.elevated),
+            ("base02", palette.surface),
+            ("base03", palette.muted),
+            ("base04", palette.muted),
+            ("base05", palette.foreground),
+            ("base06", palette.foreground),
+            ("base07", palette.foreground),
+            ("base08", palette.ansi[1]),
+            ("base09", palette.ansi[3]),
+            ("base0A", palette.ansi[3]),
+            ("base0B", palette.ansi[2]),
+            ("base0C", palette.ansi[6]),
+            ("base0D", palette.ansi[4]),
+            ("base0E", palette.ansi[5]),
+            ("base0F", palette.ansi[1]),
+        ]
+        var out = [header, ""]
+        out.append("scheme: \(yamlQuoted(palette.name))")
+        out.append("author: \(yamlQuoted("Palette"))")
+        for (key, value) in slots {
+            out.append("\(key): \(yamlQuoted(value))")
+        }
+        return out.joined(separator: "\n") + "\n"
+    }
+
+    /// terminal.sexy names its slots `color_01`…`color_16` for ANSI 0…15; the
+    /// cursor and selection keys are the ones its importer reads.
+    private static func terminalSexy(_ palette: PalettePalette) -> String {
+        var payload: [String: Any] = [
+            "name": palette.name,
+            "author": "Palette",
+            "foreground": palette.foreground,
+            "background": palette.background,
+            "cursorColor": palette.cursor,
+            "cursorAccentColor": palette.cursorText,
+            "selectionColor": palette.selectionBackground,
+            "selectionForegroundColor": palette.selectionForeground,
+        ]
+        for (index, color) in palette.ansi.enumerated() {
+            payload[String(format: "color_%02d", index + 1)] = color
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]))
+            ?? Data("{}".utf8)
+        return String(decoding: data, as: UTF8.self) + "\n"
+    }
+
+    /// YAML double-quoted scalar. A theme name with a quote or backslash would
+    /// otherwise make the whole scheme unparseable.
+    private static func yamlQuoted(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "\"\(escaped)\""
     }
 
     private static func kitty(_ palette: PalettePalette, header: String) -> String {

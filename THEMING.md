@@ -502,3 +502,21 @@ post_hook = "kitty @ set-colors --all --configured ~/.config/kitty/theme.conf"
 Switching Palette's palette would then keep kitty, Neovide, zellij, and btop in
 sync. Today the generated set under `~/.config/palette/theme/` covers those apps
 without templating; per-template output and post-hooks are not implemented.
+
+## Standard export
+
+Every apply also writes the palette in two shapes other tools already read, next
+to the generated per-app files in `~/.config/palette/theme/`:
+
+- `palette.yaml` — a base16 scheme. `base00` is the background, `base05` the
+  foreground, `base08`–`base0F` the ANSI hues in base16 order (red, orange,
+  yellow, green, cyan, blue, magenta, brown), and `base01`–`base04` the
+  elevated/surface/muted roles that express Palette's elevation order.
+- `palette.terminal-sexy.json` — terminal.sexy's shape: `color_01`…`color_16`
+  are ANSI 0…15, plus foreground, background, cursor and selection.
+
+Both are written on every apply, included in the previous set, and restored by
+Revert. They do not replace the per-app files: those remain because each app
+needs its own live-reload mechanism (a socket, a file watcher, a shell
+environment or a managed policy). The standard files are what make a new app
+cost zero — point it at the file instead of adding an adapter.

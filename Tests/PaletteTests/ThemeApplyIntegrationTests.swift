@@ -272,7 +272,7 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         XCTAssertNil(applied.error, applied.error ?? "")
         XCTAssertEqual(
             Set(applied.written),
-            Set(targets.map(\.fileName) + ["palette.json", StarshipTheme.fileName, StarshipTheme.snippetFileName])
+            Set(targets.map(\.fileName) + ["palette.json", StarshipTheme.fileName, StarshipTheme.snippetFileName] + ThemingRenderer.standardExportNames)
         )
 
         let blocks: [(String, ThemingIncludes.Format, String)] = [

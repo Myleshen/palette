@@ -302,7 +302,7 @@ public final class ThemingEngine: ObservableObject {
     }
 
     private var managedFileNames: [String] {
-        Self.managedFileNames() + [ThemingRenderer.paletteJSONName]
+        Self.managedFileNames() + [ThemingRenderer.paletteJSONName] + ThemingRenderer.standardExportNames
     }
 
     private func disabledResult() -> ApplyResult {
@@ -1058,6 +1058,16 @@ public final class ThemingEngine: ObservableObject {
         )
         written.append(ThemingRenderer.paletteJSONName)
 
+        // The standard shapes are not targets: they are always written, on
+        // every apply, so another tool reads one file instead of an adapter.
+        for (name, contents) in ThemingRenderer.standardExports(palette: palette, metadata: metadata) {
+            try Data(contents.utf8).write(
+                to: themeDir.appendingPathComponent(name),
+                options: .atomic
+            )
+            written.append(name)
+        }
+
         if policySelected {
             if anyNeedsEnable {
                 statusSuffix = "Enable silent browser theming"
@@ -1223,6 +1233,9 @@ public final class ThemingEngine: ObservableObject {
             }
         }
         files[ThemingRenderer.paletteJSONName] = ThemingRenderer.paletteJSON(palette: palette, metadata: metadata)
+        for (name, contents) in ThemingRenderer.standardExports(palette: palette, metadata: metadata) {
+            files[name] = contents
+        }
         return files
     }
 

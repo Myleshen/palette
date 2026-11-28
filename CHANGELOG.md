@@ -4,6 +4,9 @@
 
 ### Added
 
+- **Standard palette export.** Each apply also writes `palette.yaml` (base16)
+  and `palette.terminal-sexy.json`, so another tool can read Palette's colours
+  without an adapter; per-app files remain for live reload.
 - **One wallpaper on every Space.** Applying a wallpaper now rewrites every
   Space's picture in the wallpaper store and refreshes WallpaperAgent, so
   switching Space no longer changes the wallpaper or the palette.

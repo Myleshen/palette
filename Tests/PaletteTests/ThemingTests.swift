@@ -244,6 +244,7 @@ final class ThemingTests: XCTestCase {
             generated,
             [
                 "fish.fish", "ghostty.conf", "kitty.conf", "nvim.lua", "palette.json",
+                "palette.terminal-sexy.json", "palette.yaml",
                 "previous", "starship-palette.fish", "starship-theme.toml", "zellij.kdl",
             ]
         )
