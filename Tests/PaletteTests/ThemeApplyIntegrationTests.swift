@@ -99,12 +99,6 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         return ThemingEngine(
             paths: paths,
             themesDirectory: bundledThemes,
-            chromiumProbe: ThemingEngine.ChromiumProbe(
-                installed: { [] },
-                isRunning: { _ in false },
-                silentActive: { _ in false },
-                legacyProfile: { _ in false }
-            ),
             reloadsEnabled: false
         )
     }

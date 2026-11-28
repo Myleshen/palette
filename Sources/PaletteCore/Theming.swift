@@ -1,5 +1,4 @@
 import AppKit
-import CryptoKit
 import Foundation
 import TOMLKit
 
@@ -305,13 +304,6 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
     case delta
     case btop
     case yazi
-    case helium
-    case chrome
-    case edge
-    case brave
-    case vivaldi
-    case chromium
-    case arc
     case vscode
     case zed
 
@@ -323,11 +315,7 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
     /// config is never edited. The user points the app at the file once.
     public var isManual: Bool { self == .btop || self == .yazi }
 
-    public var browser: ChromiumBrowser? { ChromiumBrowser.browser(for: self) }
-    public var isBrowser: Bool { browser != nil }
-
     public var title: String {
-        if let browser { return browser.targetTitle }
         switch self {
         case .kitty: return "kitty"
         case .ghostty: return "Ghostty"
@@ -341,12 +329,10 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .yazi: return "yazi"
         case .vscode: return "VS Code"
         case .zed: return "Zed"
-        default: return rawValue
         }
     }
 
     public var fileName: String {
-        if let browser { return browser.mobileConfigFileName }
         switch self {
         case .kitty: return "kitty.conf"
         case .ghostty: return "ghostty.conf"
@@ -360,25 +346,20 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .yazi: return "yazi.toml"
         case .vscode: return "vscode.json"
         case .zed: return "zed.json"
-        default: return "\(rawValue).txt"
         }
     }
 
     public var isImplemented: Bool {
-        if let browser { return browser.supportsThemePolicy }
         switch self {
         case .kitty, .ghostty, .zellij, .nvim, .fish, .starship, .bat, .delta, .btop, .yazi:
             return true
         case .vscode, .zed:
-            return false
-        default:
             return false
         }
     }
 
     /// Why a target cannot be generated, or nil when it can.
     public var unavailableReason: String? {
-        if self == .arc { return "Unsupported — Arc does not implement BrowserThemeColor." }
         switch self {
         case .vscode: return "Not yet — VS Code needs a settings merge."
         case .zed: return "Not yet — Zed theme install is not wired."
@@ -387,17 +368,13 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
     }
 
     public var statusLabel: String {
-        if isBrowser, isImplemented { return "Managed policy" }
-        return unavailableReason ?? "Ready"
+        unavailableReason ?? "Ready"
     }
 
     /// What the app's own config needs to read the generated file. Zellij,
     /// Starship and Neovim have no include directive, so the hint says what to
     /// do instead of inventing syntax.
     public var includeHint: String {
-        if let browser {
-            return "No include line — managed policy \(browser.policyIdentifier)"
-        }
         switch self {
         case .kitty:
             return "include ~/.config/palette/theme/kitty.conf"
@@ -424,8 +401,6 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
             return "Merge ~/.config/palette/theme/yazi.toml into ~/.config/yazi/theme.toml (copy it only if you have no theme.toml; never overwrite an existing one)"
         case .vscode, .zed:
             return unavailableReason ?? "Not configured yet."
-        default:
-            return unavailableReason ?? "Not configured yet."
         }
     }
 
@@ -433,13 +408,11 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
     /// rows cannot describe the same target differently.
     public enum InstallKind: String, Sendable, Equatable {
         case markerBlock = "marker block"
-        case policy = "managed policy"
         case generated = "generated copy"
         case manual = "manual"
     }
 
     public var installKind: InstallKind {
-        if isBrowser { return .policy }
         switch self {
         case .starship: return .generated
         case .btop, .yazi, .vscode, .zed: return .manual
@@ -1227,304 +1200,6 @@ public enum WallpaperPalette {
     }
 }
 
-// MARK: - Chromium browsers
-
-public struct ChromiumBrowser: Sendable, Equatable, Identifiable {
-    public var id: String { bundleID }
-    public var name: String
-    public var appName: String
-    public var processName: String
-    public var bundleID: String
-    public var target: ThemingTarget
-    /// Arc does not implement the BrowserThemeColor policy, so it stays listed
-    /// but disabled once found.
-    public var supportsThemePolicy: Bool
-
-    public var policyIdentifier: String { ChromiumPolicy.identifier(for: bundleID) }
-    public var mobileConfigFileName: String { "\(target.rawValue)-theme.mobileconfig" }
-    /// The user-owned file Palette writes silently after the one-time enable.
-    public var silentPlistPath: String { ChromiumPolicy.userPlistPath(bundleID: bundleID) }
-    public var targetTitle: String { "\(name) (silent managed theme)" }
-
-    public static let catalog: [ChromiumBrowser] = [
-        ChromiumBrowser(name: "Helium", appName: "Helium", processName: "Helium",
-                        bundleID: "net.imput.helium", target: .helium, supportsThemePolicy: true),
-        ChromiumBrowser(name: "Google Chrome", appName: "Google Chrome", processName: "Google Chrome",
-                        bundleID: "com.google.Chrome", target: .chrome, supportsThemePolicy: true),
-        ChromiumBrowser(name: "Microsoft Edge", appName: "Microsoft Edge", processName: "Microsoft Edge",
-                        bundleID: "com.microsoft.edgemac", target: .edge, supportsThemePolicy: true),
-        ChromiumBrowser(name: "Brave", appName: "Brave Browser", processName: "Brave Browser",
-                        bundleID: "com.brave.Browser", target: .brave, supportsThemePolicy: true),
-        ChromiumBrowser(name: "Vivaldi", appName: "Vivaldi", processName: "Vivaldi",
-                        bundleID: "com.vivaldi.Vivaldi", target: .vivaldi, supportsThemePolicy: true),
-        ChromiumBrowser(name: "Chromium", appName: "Chromium", processName: "Chromium",
-                        bundleID: "org.chromium.Chromium", target: .chromium, supportsThemePolicy: true),
-        ChromiumBrowser(name: "Arc", appName: "Arc", processName: "Arc",
-                        bundleID: "company.thebrowser.Browser", target: .arc, supportsThemePolicy: false),
-    ]
-
-    public static func browser(for target: ThemingTarget) -> ChromiumBrowser? {
-        catalog.first { $0.target == target }
-    }
-
-    public static func browser(forBundleID bundleID: String) -> ChromiumBrowser? {
-        catalog.first { $0.bundleID == bundleID }
-    }
-}
-
-public enum ChromiumPolicy {
-    public static func identifier(for bundleID: String) -> String {
-        "dev.myleshen.palette.chromium.\(bundleID)"
-    }
-
-    /// Every identifier Palette can install: the whole catalogue, not only the
-    /// browsers currently checked, so removal cannot leave a stale policy.
-    public static func allPolicyIdentifiers() -> [String] {
-        ChromiumBrowser.catalog.filter(\.supportsThemePolicy).map(\.policyIdentifier)
-    }
-
-    /// The Palette identifiers still present in `profiles -P` output.
-    public static func remainingIdentifiers(in profilesOutput: String) -> [String] {
-        allPolicyIdentifiers().filter { profilesOutput.contains($0) }
-    }
-
-    /// Managed preference files macOS may use: device scope, then the user's
-    /// own scope. `complete.plist` carries every forced preference for the
-    /// user, so a profile that only writes there still counts as installed.
-    public static func managedPreferencePaths(
-        bundleID: String,
-        user: String = NSUserName()
-    ) -> [String] {
-        [
-            "/Library/Managed Preferences/\(bundleID).plist",
-            "/Library/Managed Preferences/\(user)/\(bundleID).plist",
-            "/Library/Managed Preferences/\(user)/complete.plist",
-        ]
-    }
-
-    /// True when a managed-preference plist carries this browser's domain.
-    /// `complete.plist` is shared by every managed domain, so its mere
-    /// existence must not count as an installed browser policy.
-    public static func carriesDomain(_ bundleID: String, in data: Data) -> Bool {
-        guard let propertyList = try? PropertyListSerialization.propertyList(
-            from: data,
-            options: [],
-            format: nil
-        ), let root = propertyList as? [String: Any] else { return false }
-        return root[bundleID] != nil
-    }
-
-    /// The seeded colour in an installed plist. `complete.plist` nests every
-    /// domain, so the bundle id scopes the search first; a direct domain plist
-    /// has the keys at the root.
-    public static func themeColor(in data: Data, bundleID: String? = nil) -> String? {
-        guard let propertyList = try? PropertyListSerialization.propertyList(
-            from: data,
-            options: [],
-            format: nil
-        ) else { return nil }
-        if let bundleID,
-           let root = propertyList as? [String: Any],
-           let domain = root[bundleID] {
-            return themeColor(in: domain)
-        }
-        return themeColor(in: propertyList)
-    }
-
-    private static func themeColor(in object: Any) -> String? {
-        if let dictionary = object as? [String: Any] {
-            if let colour = dictionary["BrowserThemeColor"] as? String { return colour }
-            // A real managed preference wraps the value: the payload is
-            // `{ mcxdomain, source, value }`, not a bare colour like the
-            // silent plist and exported profile use.
-            if let payload = dictionary["BrowserThemeColor"] as? [String: Any],
-               let colour = payload["value"] as? String {
-                return colour
-            }
-            for value in dictionary.values {
-                if let colour = themeColor(in: value) { return colour }
-            }
-        } else if let array = object as? [Any] {
-            for value in array {
-                if let colour = themeColor(in: value) { return colour }
-            }
-        }
-        return nil
-    }
-
-    /// The user-scoped managed preference Palette owns after the one-time
-    /// enable. Chromium reads it like any managed domain, but because the file
-    /// is user-owned a later Apply can rewrite it without administrator rights.
-    public static func userPlistPath(bundleID: String, user: String = NSUserName()) -> String {
-        "/Library/Managed Preferences/\(user)/\(bundleID).plist"
-    }
-
-    public static func silentPlistData(colour: String) -> Data {
-        (try? PropertyListSerialization.data(
-            fromPropertyList: ["BrowserThemeColor": colour],
-            format: .xml,
-            options: 0
-        )) ?? Data()
-    }
-
-    /// Silent mode is on only when the file exists and this user can rewrite
-    /// it; a root-owned leftover from a profile is not silent mode.
-    public static func silentWritable(path: String, user: String = NSUserName()) -> Bool {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
-              let owner = attributes[.ownerAccountName] as? String,
-              let permissions = attributes[.posixPermissions] as? NSNumber else { return false }
-        return owner == user && permissions.intValue & 0o200 != 0
-    }
-
-    public struct SilentTarget: Sendable, Equatable {
-        public var bundleID: String
-        public var colour: String
-
-        public init(bundleID: String, colour: String) {
-            self.bundleID = bundleID
-            self.colour = colour
-        }
-    }
-
-    /// The one-time password prompt. Legacy profiles go first because
-    /// `profiles remove` may clean the managed-preference files macOS wrote;
-    /// then the user-owned plist is created, handed to the user and seeded.
-    public static func enableCommand(
-        targets: [SilentTarget],
-        installedIdentifiers: [String],
-        user: String = NSUserName()
-    ) -> String {
-        var steps = installedIdentifiers.map {
-            "(/usr/bin/profiles remove -identifier \(token($0)) 2>/dev/null || true)"
-        }
-        let directory = "/Library/Managed Preferences/\(user)"
-        steps.append("mkdir -p \(token(directory))")
-        for target in targets {
-            let path = token(userPlistPath(bundleID: target.bundleID, user: user))
-            steps.append("touch \(path)")
-            steps.append("chown \(token(user)) \(path)")
-            steps.append("chmod 644 \(path)")
-            // `defaults write` is the plist write; the chown/chmod repeat
-            // because defaults may replace the file rather than edit in place.
-            steps.append("/usr/bin/defaults write \(path) BrowserThemeColor \(quoted(target.colour))")
-            steps.append("chown \(token(user)) \(path)")
-            steps.append("chmod 644 \(path)")
-        }
-        return steps.joined(separator: " && ")
-    }
-
-    /// Removal deletes only Palette's user-owned plists; no profile exists to
-    /// remove once silent mode is on.
-    public static func removalCommand(bundleIDs: [String], user: String = NSUserName()) -> String {
-        bundleIDs.map { "rm -f \(token(userPlistPath(bundleID: $0, user: user)))" }
-            .joined(separator: " && ")
-    }
-
-    public static func refreshArguments(binary: String) -> [String] {
-        [binary, "--refresh-platform-policy", "--no-startup-window"]
-    }
-
-    /// Launching the app bundle's binary asks the running instance to re-read
-    /// its managed preferences; `open -a` is not used because the flag must
-    /// reach Chromium, not LaunchServices.
-    public static func appBinary(appName: String, home: String = NSHomeDirectory()) -> String? {
-        for root in ["/Applications", home + "/Applications"] {
-            let bundle = Bundle(path: root + "/" + appName + ".app")
-            if let executable = bundle?.executableURL?.path, FileManager.default.isExecutableFile(atPath: executable) {
-                return executable
-            }
-        }
-        return nil
-    }
-
-    /// One seed colour per browser; Chromium derives the rest.
-    /// A stable UUID per browser and payload, or two profiles installed
-    /// together would share a UUID and macOS would treat them as one.
-    static func profileUUID(browser: ChromiumBrowser, salt: String) -> String {
-        let digest = SHA256.hash(data: Data("\(salt):\(browser.bundleID)".utf8))
-        var bytes = Array(digest.prefix(16))
-        bytes[6] = (bytes[6] & 0x0F) | 0x40
-        bytes[8] = (bytes[8] & 0x3F) | 0x80
-        let hex = bytes.map { String(format: "%02X", $0) }.joined()
-        return [
-            hex.prefix(8),
-            hex.dropFirst(8).prefix(4),
-            hex.dropFirst(12).prefix(4),
-            hex.dropFirst(16).prefix(4),
-            hex.dropFirst(20),
-        ].joined(separator: "-")
-    }
-
-    public static func mobileConfig(browser: ChromiumBrowser, palette: PalettePalette) -> String {
-        let identifier = identifier(for: browser.bundleID)
-        let escaped = palette.background
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-        return """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-          <key>PayloadContent</key>
-          <array>
-            <dict>
-              <key>PayloadType</key>
-              <string>com.apple.ManagedClient.preferences</string>
-              <key>PayloadIdentifier</key>
-              <string>\(identifier)</string>
-              <key>PayloadUUID</key>
-              <string>\(profileUUID(browser: browser, salt: "payload"))</string>
-              <key>PayloadVersion</key>
-              <integer>1</integer>
-              <key>PayloadDisplayName</key>
-              <string>Palette \(browser.name) theme</string>
-              <key>PayloadContent</key>
-              <dict>
-                <key>\(browser.bundleID)</key>
-                <dict>
-                  <key>Forced</key>
-                  <array>
-                    <dict>
-                      <key>mcx_preference_settings</key>
-                      <dict>
-                        <key>BrowserThemeColor</key>
-                        <string>\(escaped)</string>
-                      </dict>
-                    </dict>
-                  </array>
-                </dict>
-              </dict>
-            </dict>
-          </array>
-          <key>PayloadType</key>
-          <string>Configuration</string>
-          <key>PayloadIdentifier</key>
-          <string>\(identifier)</string>
-          <key>PayloadUUID</key>
-          <string>\(profileUUID(browser: browser, salt: "configuration"))</string>
-          <key>PayloadVersion</key>
-          <integer>1</integer>
-          <key>PayloadDisplayName</key>
-          <string>Palette \(browser.name) theme</string>
-        </dict>
-        </plist>
-        """
-    }
-
-    /// Shell-safe enough for the display command and the single osascript call.
-    public static func token(_ value: String) -> String {
-        guard value.contains(where: { $0.isWhitespace }) else { return value }
-        return quoted(value)
-    }
-
-    /// Always quoted, for values such as `#RRGGBB` where `#` would otherwise
-    /// start a shell comment.
-    public static func quoted(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
-}
-
 // MARK: - Renderers
 
 public struct PaletteMetadata: Sendable, Equatable {
@@ -1644,7 +1319,7 @@ public enum ThemingRenderer {
         case .delta: return delta(palette, header: header)
         case .btop: return btop(palette, header: header)
         case .yazi: return yazi(palette, header: header)
-        case .starship, .vscode, .zed, .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc:
+        case .starship, .vscode, .zed:
             return nil
         }
     }

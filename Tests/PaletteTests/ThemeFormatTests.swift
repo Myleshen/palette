@@ -45,7 +45,7 @@ final class ThemeFormatTests: XCTestCase {
     // MARK: - Headers
 
     func testHeaderUsesEachTargetsCommentSyntax() throws {
-        for target in ThemingTarget.allCases where target.isImplemented && !target.isBrowser && target != .starship {
+        for target in ThemingTarget.allCases where target.isImplemented && target != .starship {
             let text = try render(target)
             switch target {
             case .zellij:
@@ -420,27 +420,6 @@ final class ThemeFormatTests: XCTestCase {
         for rule in rules {
             let mime = try XCTUnwrap(rule.table?.str("mime"))
             XCTAssertTrue(mime.hasPrefix("**/"), "filetype mime needs a **/ glob: \(mime)")
-        }
-    }
-
-    // MARK: - Chromium managed policy
-
-    func testMobileConfigsAreValidPlistXMLWithUniqueUUIDs() throws {
-        var uuids = Set<String>()
-        for browser in ChromiumBrowser.catalog where browser.supportsThemePolicy {
-            let xml = ChromiumPolicy.mobileConfig(browser: browser, palette: palette)
-            XCTAssertTrue(xml.hasPrefix("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"), browser.name)
-            XCTAssertNoThrow(try XMLDocument(xmlString: xml), browser.name)
-
-            let data = try XCTUnwrap(xml.data(using: .utf8))
-            let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
-            let root = try XCTUnwrap(plist as? [String: Any], browser.name)
-            XCTAssertEqual(root["PayloadType"] as? String, "Configuration")
-            XCTAssertEqual(root["PayloadIdentifier"] as? String, browser.policyIdentifier)
-
-            let uuid = try XCTUnwrap(root["PayloadUUID"] as? String, browser.name)
-            XCTAssertNotNil(UUID(uuidString: uuid), "\(browser.name) UUID is malformed: \(uuid)")
-            XCTAssertTrue(uuids.insert(uuid).inserted, "duplicate PayloadUUID \(uuid)")
         }
     }
 }

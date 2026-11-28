@@ -307,10 +307,6 @@ struct SettingsView: View {
     @State private var wallpaperPreviewImage: NSImage?
     @State private var copiedInclude: String?
     @State private var copiedAdvice: String?
-    @State private var removePoliciesPending = false
-    /// A silent plist outlives unchecking or Revert; the browser keeps the
-    /// Palette colour until it is removed in the Browsers card.
-    @State private var policyWarning: String?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
@@ -494,20 +490,6 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("The key is deleted from the encrypted local key file. This cannot be undone.")
-            }
-            .confirmationDialog(
-                "Remove silent browser theming?",
-                isPresented: $removePoliciesPending,
-                titleVisibility: .visible
-            ) {
-                Button("Remove", role: .destructive) {
-                    Task { @MainActor in
-                        await theming.removeSilentTheming()
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Palette deletes the managed preference files it owns. Browsers fall back to their own colour; running browsers may need a restart.")
             }
     }
 
@@ -1173,11 +1155,9 @@ struct SettingsView: View {
             .init(title: "Palette source", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper toggle disable override follow extract"),
             .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
             .init(title: "Terminal transparency", tab: .theming, anchor: "row-Terminal transparency", keywords: "transparent transparency opacity neovide kitty ghostty nvim background blur"),
-            .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium apps"),
-            .init(title: "Recommendations", tab: .theming, anchor: "theming-recommendations", keywords: "recommendations conflicts config conflict nvim starship zellij kitty ghostty fish helium neovide palette overridden"),
+            .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed apps"),
+            .init(title: "Recommendations", tab: .theming, anchor: "theming-recommendations", keywords: "recommendations conflicts config conflict nvim starship zellij kitty ghostty fish neovide palette overridden"),
             .init(title: "Config conflicts", tab: .theming, anchor: "theming-recommendations", keywords: "conflicts recommendations config overridden palette old colours"),
-            .init(title: "Browsers", tab: .theming, anchor: "theming-browsers", keywords: "browsers helium chrome edge brave vivaldi chromium arc silent managed plist mobileconfig admin all profiles seed enable remove download"),
-            .init(title: "Helium policy", tab: .theming, anchor: "theming-browsers", keywords: "helium silent managed plist mobileconfig admin all profiles seed enable remove download"),
             .init(title: "Include lines", tab: .theming, anchor: "theming-targets", keywords: "include line config-file source copy kitty ghostty zellij neovim fish starship bat delta btop yazi"),
             .init(title: "Apply", tab: .theming, anchor: "theming-section", keywords: "apply palette revert previous generated files"),
         ]
@@ -2202,12 +2182,6 @@ struct SettingsView: View {
                     ),
                     help: "Off by default. Palette always themes itself; this also writes managed palette files for terminals and editors."
                 )
-                if let policyWarning {
-                    Text(policyWarning)
-                        .font(.caption)
-                        .foregroundStyle(danger)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
                 if !config.theming.enabled {
                     Text("Palette themes itself here and in Appearance; enable this to also theme other apps.")
                         .font(.caption)
@@ -2413,94 +2387,8 @@ struct SettingsView: View {
             }
 
             if config.theming.enabled {
-                card("Browsers", anchor: "theming-browsers") {
-                    Text("Silent updates · all profiles of that browser · seed colour, approximate")
-                        .font(.caption)
-                        .foregroundStyle(muted)
-                    ForEach(theming.browserRows()) { browser in
-                        VStack(alignment: .leading, spacing: 2) {
-                            if browser.supportsThemePolicy {
-                                toggleRow(
-                                    browser.targetTitle,
-                                    isOn: themingTargetBinding(browser.target),
-                                    help: "Managed preference \(browser.silentPlistPath)"
-                                )
-                            } else {
-                                HStack(spacing: 8) {
-                                    Toggle(browser.targetTitle, isOn: .constant(false))
-                                        .toggleStyle(.checkbox)
-                                        .disabled(true)
-                                        .font(theme.font(size: 13))
-                                    Text("Unsupported — does not implement BrowserThemeColor.")
-                                        .font(.caption)
-                                        .foregroundStyle(muted)
-                                }
-                            }
-                            Text(browserPolicyStatus(browser))
-                                .font(.caption)
-                                .foregroundStyle(muted)
-                        }
-                    }
-
-                    Divider().padding(.vertical, 4)
-                    Text("Enable silent browser theming once. macOS asks for your password, removes any old Palette profile, and creates a preference file Palette owns, so later applies update it with no prompt.")
-                        .font(.caption)
-                        .foregroundStyle(muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !legacyProfileNames.isEmpty {
-                        Text("Removing the old profile: \(legacyProfileNames).")
-                            .font(.caption)
-                            .foregroundStyle(muted)
-                    }
-                    HStack(spacing: 8) {
-                        Button(theming.policyBusy ? "Enabling…" : "Enable silent browser theming…") {
-                            Task { @MainActor in
-                                await theming.enableSilentTheming(
-                                    config.theming,
-                                    background: PalettePalette(theme: theme).background
-                                )
-                            }
-                        }
-                        .disabled(theming.policyBusy || !canEnableSilentTheming)
-                        .help("One administrator prompt for every selected installed browser.")
-                        Button("Download profile") {
-                            Task { @MainActor in
-                                await theming.exportPolicyProfiles(config.theming)
-                            }
-                        }
-                        .disabled(theming.policyBusy || selectedBrowsers.isEmpty)
-                        .help("Save a .mobileconfig for the OS-managed route instead.")
-                        Button("Refresh") {
-                            Task { @MainActor in await theming.refreshPolicyStates() }
-                        }
-                        .disabled(theming.policyBusy)
-                        Button("Remove…") {
-                            removePoliciesPending = true
-                        }
-                        .disabled(theming.policyBusy)
-                        if theming.policyBusy {
-                            PaletteSpinner()
-                        }
-                    }
-                    if let status = theming.policyStatus {
-                        Text(status)
-                            .font(.caption)
-                            .foregroundStyle(muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let error = theming.policyError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(danger)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                } footer: {
-                    Text("Helium is always listed; the other browsers appear when installed. Silent theming seeds the Palette background for every profile of that browser.")
-                }
-                .task { await theming.refreshPolicyStates() }
-
                 card("Targets", anchor: "theming-targets") {
-                    ForEach(ThemingTarget.allCases.filter { !$0.isBrowser }) { target in
+                    ForEach(ThemingTarget.allCases) { target in
                         if target.isImplemented {
                             let status = theming.includeStatus(for: target)
                             VStack(alignment: .leading, spacing: 2) {
@@ -2652,57 +2540,20 @@ struct SettingsView: View {
         return !FileManager.default.fileExists(atPath: url.path)
     }
 
-    private var selectedBrowsers: [ChromiumBrowser] {
-        config.theming.targets.compactMap { raw in
-            guard let target = ThemingTarget(rawValue: raw) else { return nil }
-            return ChromiumBrowser.browser(for: target)
-        }
-        .filter(\.supportsThemePolicy)
-    }
-
     /// What the selected targets actually put on disk: a marker block, a
-    /// managed preference, a generated copy or nothing at all.
+    /// generated copy or nothing at all.
     private var themingInstallSummary: String {
         let selected = config.theming.targets
             .compactMap(ThemingTarget.init(rawValue:))
             .filter(\.isImplemented)
         guard !selected.isEmpty else { return "Nothing selected: no app is changed." }
-        let order: [ThemingTarget.InstallKind] = [.markerBlock, .policy, .generated, .manual]
+        let order: [ThemingTarget.InstallKind] = [.markerBlock, .generated, .manual]
         let parts = order.compactMap { kind -> String? in
             let names = selected.filter { $0.installKind == kind }.map(\.title)
             guard !names.isEmpty else { return nil }
             return "\(kind.rawValue): \(names.joined(separator: ", "))"
         }
         return "Installed: " + parts.joined(separator: " · ") + "."
-    }
-
-    private var canEnableSilentTheming: Bool {
-        let installed = theming.installedBrowserIDs()
-        return selectedBrowsers.contains {
-            installed.contains($0.bundleID) && theming.policyStates[$0.bundleID] != true
-        }
-    }
-
-    private var legacyProfileNames: String {
-        ChromiumBrowser.catalog
-            .filter { theming.legacyProfiles.contains($0.bundleID) }
-            .map(\.name)
-            .joined(separator: ", ")
-    }
-
-    private func browserPolicyStatus(_ browser: ChromiumBrowser) -> String {
-        guard browser.supportsThemePolicy else {
-            return "Unsupported — does not implement BrowserThemeColor."
-        }
-        if theming.policyStates[browser.bundleID] == true {
-            return "Managed — updates silently"
-        }
-        guard theming.installedBrowserIDs().contains(browser.bundleID) else {
-            return "Not installed"
-        }
-        return theming.legacyProfiles.contains(browser.bundleID)
-            ? "Enable silent theming — removes the old profile"
-            : "Enable silent theming"
     }
 
     private var otherAppsThemeBinding: Binding<String> {
@@ -2743,14 +2594,8 @@ struct SettingsView: View {
                 var targets = config.theming.targets
                 if enabled {
                     if !targets.contains(target.rawValue) { targets.append(target.rawValue) }
-                    policyWarning = nil
                 } else {
                     targets.removeAll { $0 == target.rawValue }
-                    if let browser = target.browser,
-                       theming.policyStates[browser.bundleID] == true {
-                        policyWarning = "\(browser.name) still has silent theming enabled. "
-                            + "Unchecking does not remove it — use Remove… in the Browsers card."
-                    }
                 }
                 config.theming.targets = targets
             }
@@ -2758,7 +2603,6 @@ struct SettingsView: View {
     }
 
     private func applyTheming() {
-        policyWarning = nil
         let themingConfig = config.theming
         let fallback = themeManager.currentThemeID
         Task { @MainActor in
@@ -2769,15 +2613,6 @@ struct SettingsView: View {
     private func revertTheming() {
         Task { @MainActor in
             _ = await theming.revert()
-            await theming.refreshPolicyStates()
-            let installed = ChromiumBrowser.catalog.filter {
-                theming.policyStates[$0.bundleID] == true
-            }
-            if !installed.isEmpty {
-                policyWarning = "Revert restored the files, but \(installed.map(\.name).joined(separator: ", ")) "
-                    + "still \(installed.count == 1 ? "has" : "have") silent theming enabled. "
-                    + "Use Remove… in the Browsers card."
-            }
         }
     }
 

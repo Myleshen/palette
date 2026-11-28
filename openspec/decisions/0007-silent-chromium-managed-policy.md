@@ -1,6 +1,6 @@
 # 0007. Theme Chromium browsers through the user-scoped managed plist
 
-- Status: accepted
+- Status: superseded by 2.20.1 (Chromium browser theming removed)
 - Date: 2026-11-27
 
 ## Context

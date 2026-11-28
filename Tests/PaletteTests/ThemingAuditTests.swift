@@ -6,8 +6,8 @@ import PaletteCore
 @testable import PaletteApp
 
 /// Regression cover for the 2.20 theming audit: stale generated files, the
-/// wallpaper card guard, managed-policy scopes and removal, bat/btop manual
-/// setup, the wallpaper folder, unknown config values and the deck frame.
+/// wallpaper card guard, bat/btop manual setup, the wallpaper folder, unknown
+/// config values and the deck frame.
 @MainActor
 final class ThemingAuditTests: XCTestCase {
     private func makePaths() -> PalettePaths {
@@ -23,24 +23,11 @@ final class ThemingAuditTests: XCTestCase {
 
     private func makeEngine(
         _ paths: PalettePaths,
-        installed: Set<String> = [],
-        silent: Bool = false,
-        legacy: Bool = false,
         reloadsEnabled: Bool = false
     ) -> ThemingEngine {
-        let silentPath: @Sendable (String) -> String = { bundleID in
-            paths.home + "/managed/\(bundleID).plist"
-        }
-        return ThemingEngine(
+        ThemingEngine(
             paths: paths,
             themesDirectory: paths.themesDir,
-            chromiumProbe: ThemingEngine.ChromiumProbe(
-                installed: { installed },
-                isRunning: { _ in false },
-                silentActive: { _ in silent },
-                legacyProfile: { _ in legacy },
-                silentPath: silentPath
-            ),
             reloadsEnabled: reloadsEnabled
         )
     }
@@ -117,66 +104,41 @@ final class ThemingAuditTests: XCTestCase {
         )
     }
 
-    // MARK: - Chromium policy
+    // MARK: - Legacy browser theming cleanup
 
-    func testManagedPreferencePathsCoverDeviceAndUserScope() {
-        let paths = ChromiumPolicy.managedPreferencePaths(
-            bundleID: "com.google.Chrome",
-            user: "myleshen"
-        )
-        XCTAssertEqual(paths, [
-            "/Library/Managed Preferences/com.google.Chrome.plist",
-            "/Library/Managed Preferences/myleshen/com.google.Chrome.plist",
-            "/Library/Managed Preferences/myleshen/complete.plist",
-        ])
-    }
+    func testLaunchCleanupRemovesGeneratedProfilesAndLeavesOtherFiles() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("palette-legacy-\(UUID().uuidString)", isDirectory: true)
+        let themeDir = root.appendingPathComponent("theme", isDirectory: true)
+        let previous = themeDir.appendingPathComponent("previous", isDirectory: true)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        try FileManager.default.createDirectory(at: previous, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: managed, withIntermediateDirectories: true)
 
-    func testUserScopeDetectionAndSeededColour() async throws {
-        let palette = PalettePalette(theme: .defaultDark)
-        let browser = try XCTUnwrap(ChromiumBrowser.browser(for: .chrome))
-        let xml = ChromiumPolicy.mobileConfig(browser: browser, palette: palette)
-        XCTAssertEqual(
-            ChromiumPolicy.themeColor(in: Data(xml.utf8), bundleID: browser.bundleID),
-            palette.background,
-            "an exported profile's seeded colour must be readable"
+        try write("profile\n", to: themeDir.appendingPathComponent("helium-theme.mobileconfig"))
+        try write("profile\n", to: previous.appendingPathComponent("brave-theme.mobileconfig"))
+        try write("profile\n", to: previous.appendingPathComponent("chromium-theme.mobileconfig"))
+        try write("plist\n", to: managed.appendingPathComponent("net.imput.helium.plist"))
+        try write("kitty\n", to: themeDir.appendingPathComponent("kitty.conf"))
+
+        let removed = ThemingEngine.removeLegacyBrowserThemeFiles(
+            themeDir: themeDir,
+            managedPreferences: managed.path
         )
 
-        // `complete.plist` is shared, so only the browser's own domain counts.
-        let complete = try PropertyListSerialization.data(
-            fromPropertyList: [
-                browser.bundleID: ["BrowserThemeColor": palette.background],
-            ],
-            format: .xml,
-            options: 0
-        )
-        XCTAssertTrue(ChromiumPolicy.carriesDomain(browser.bundleID, in: complete))
-        XCTAssertFalse(ChromiumPolicy.carriesDomain("com.brave.Browser", in: complete))
-        XCTAssertEqual(
-            ChromiumPolicy.themeColor(in: complete, bundleID: browser.bundleID),
-            palette.background
-        )
-    }
-
-    func testSilentModeStatusReplacesTheReapprovalFlow() async throws {
-        let paths = makePaths()
-        let browser = try XCTUnwrap(ChromiumBrowser.browser(for: .helium))
-        let engine = makeEngine(paths, installed: [browser.bundleID], silent: true)
-        let applied = await engine.apply(
-            ThemingConfig(enabled: true, theme: "default-dark", targets: ["helium"])
-        )
-
-        let target = try XCTUnwrap(applied.targets.first { $0.id == "helium" })
-        XCTAssertEqual(target.note, "Managed — updates silently.")
-        XCTAssertFalse(applied.status.contains("System Settings"))
-        XCTAssertFalse(applied.status.contains("Re-approve"))
-    }
-
-    func testOldProfileIsDetectedForTheOneTimeMigration() {
-        let identifiers = ChromiumPolicy.allPolicyIdentifiers()
-        XCTAssertEqual(identifiers.count, 6, "every BrowserThemeColor browser, not Arc")
-        XCTAssertTrue(identifiers.contains(ChromiumPolicy.identifier(for: "com.google.Chrome")))
-        XCTAssertTrue(identifiers.contains(ChromiumPolicy.identifier(for: "com.brave.Browser")))
-        XCTAssertFalse(identifiers.contains(ChromiumPolicy.identifier(for: "company.thebrowser.Browser")))
+        XCTAssertEqual(removed.count, 4)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: themeDir.appendingPathComponent("helium-theme.mobileconfig").path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: previous.appendingPathComponent("brave-theme.mobileconfig").path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: managed.appendingPathComponent("net.imput.helium.plist").path
+        ))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: themeDir.appendingPathComponent("kitty.conf").path
+        ))
     }
 
     // MARK: - bat and btop

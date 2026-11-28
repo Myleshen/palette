@@ -70,104 +70,10 @@ public final class ThemingEngine: ObservableObject {
         }
     }
 
-    public struct PolicyResult: Sendable, Equatable {
-        public var status: String
-        public var error: String?
-        public var command: String
-        public var states: [String: Bool]
-    }
-
-    /// Injected so tests can answer "is this browser installed / running / is
-    /// silent theming already enabled / is an old profile in the way?" without
-    /// touching the real machine.
-    public struct ChromiumProbe: Sendable {
-        public var installed: @Sendable () -> Set<String>
-        public var isRunning: @Sendable (String) async -> Bool
-        /// The user-scoped managed plist exists and this user can rewrite it.
-        public var silentActive: @Sendable (String) async -> Bool
-        /// A profile from the System Settings era is still installed.
-        public var legacyProfile: @Sendable (String) async -> Bool
-        /// Where Apply writes the silent plist; tests point this at a sandbox.
-        public var silentPath: @Sendable (String) -> String
-
-        public init(
-            installed: @escaping @Sendable () -> Set<String>,
-            isRunning: @escaping @Sendable (String) async -> Bool,
-            silentActive: @escaping @Sendable (String) async -> Bool,
-            legacyProfile: @escaping @Sendable (String) async -> Bool,
-            silentPath: @escaping @Sendable (String) -> String = {
-                ChromiumPolicy.userPlistPath(bundleID: $0)
-            }
-        ) {
-            self.installed = installed
-            self.isRunning = isRunning
-            self.silentActive = silentActive
-            self.legacyProfile = legacyProfile
-            self.silentPath = silentPath
-        }
-
-        public static let live = ChromiumProbe(
-            installed: {
-                var ids = Set<String>()
-                for browser in ChromiumBrowser.catalog {
-                    let candidates = [
-                        "/Applications/\(browser.appName).app",
-                        NSHomeDirectory() + "/Applications/\(browser.appName).app",
-                    ]
-                    for candidate in candidates {
-                        guard let bundle = Bundle(path: candidate),
-                              bundle.bundleIdentifier == browser.bundleID else { continue }
-                        ids.insert(browser.bundleID)
-                        break
-                    }
-                }
-                return ids
-            },
-            isRunning: { processName in
-                guard let result = try? await ProcessRunner.run(["pgrep", "-x", processName], timeout: 2) else {
-                    return false
-                }
-                return result.status == 0
-            },
-            silentActive: { bundleID in
-                ChromiumPolicy.silentWritable(path: ChromiumPolicy.userPlistPath(bundleID: bundleID))
-            },
-            legacyProfile: { bundleID in
-                let user = NSUserName()
-                let userPlist = ChromiumPolicy.userPlistPath(bundleID: bundleID, user: user)
-                if let attributes = try? FileManager.default.attributesOfItem(atPath: userPlist),
-                   let owner = attributes[.ownerAccountName] as? String,
-                   owner != user {
-                    return true
-                }
-                // A user-owned plist is silent mode, not a legacy profile.
-                let devicePlist = "/Library/Managed Preferences/\(bundleID).plist"
-                if FileManager.default.fileExists(atPath: devicePlist) { return true }
-                let complete = "/Library/Managed Preferences/\(user)/complete.plist"
-                if let data = FileManager.default.contents(atPath: complete),
-                   ChromiumPolicy.carriesDomain(bundleID, in: data) {
-                    return true
-                }
-                guard let result = try? await ProcessRunner.run(["profiles", "-P"], timeout: 3) else {
-                    return false
-                }
-                return result.stdoutString.contains(ChromiumPolicy.identifier(for: bundleID))
-            }
-        )
-    }
-
     @Published public private(set) var status = "No palette applied yet."
     @Published public private(set) var lastResult: ApplyResult?
     @Published public private(set) var previewPalette: PalettePalette?
     @Published public private(set) var busy = false
-    @Published public private(set) var policyBusy = false
-    @Published public private(set) var policyStates: [String: Bool] = [:]
-    /// Browsers with a System Settings-era profile that the one-time enable
-    /// removes before switching to silent updates.
-    @Published public private(set) var legacyProfiles: Set<String> = []
-    @Published public private(set) var policyStatus: String?
-    @Published public private(set) var policyError: String?
-    @Published public private(set) var policyCommand: String?
     /// Last reload answer per target, so the Targets rows and the Apply result
     /// say what the app actually did rather than guessing.
     @Published public private(set) var reloadStatuses: [String: ThemingReload.Status] = [:]
@@ -185,46 +91,33 @@ public final class ThemingEngine: ObservableObject {
     public let includes: ThemingIncludes
 
     private let fileManager = FileManager.default
-    private let chromiumProbe: ChromiumProbe
     private let kitty: KittyRemoteControl
     private let appRestart: AppRestart
     /// Tests generate files in a sandbox HOME; asking the user's kitty to
     /// reload colours from that sandbox would paint the live terminal.
     private let reloadsEnabled: Bool
-    /// Runs the one password-protected shell; injected so a test can count the
-    /// single osascript call without asking for a password.
-    private let runAdministrator: @Sendable (String) async throws -> ProcessResult
     /// Injected by tests so a sandbox image stands in for the desktop picture.
     private let wallpaperOverride: [URL]?
     /// Injected by tests; the real one asks System Events to switch macOS.
     private let setSystemAppearance: @Sendable (Bool) async -> Bool
-    /// The last applied palette, so the one-time enable can seed the current
-    /// BrowserThemeColor and the export can render a profile before an Apply.
-    private var lastPalette: PalettePalette?
 
     public init(
         paths: PalettePaths,
         themesDirectory: URL,
-        chromiumProbe: ChromiumProbe = .live,
         kitty: KittyRemoteControl = KittyRemoteControl(),
         appRestart: AppRestart = .live,
         reloadsEnabled: Bool = true,
         wallpaperOverride: [URL]? = nil,
-        setSystemAppearance: @escaping @Sendable (Bool) async -> Bool = { _ in false },
-        runAdministrator: @escaping @Sendable (String) async throws -> ProcessResult = { shell in
-            try await ThemingEngine.administratorRun(shell)
-        }
+        setSystemAppearance: @escaping @Sendable (Bool) async -> Bool = { _ in false }
     ) {
         self.themeDir = paths.themeDir
         self.previousDir = paths.themeDir.appendingPathComponent("previous", isDirectory: true)
         self.themesDirectory = themesDirectory
-        self.chromiumProbe = chromiumProbe
         self.kitty = kitty
         self.appRestart = appRestart
         self.reloadsEnabled = reloadsEnabled
         self.wallpaperOverride = wallpaperOverride
         self.setSystemAppearance = setSystemAppearance
-        self.runAdministrator = runAdministrator
         self.includes = ThemingIncludes(home: paths.home, themeDir: paths.themeDir)
     }
 
@@ -245,31 +138,34 @@ public final class ThemingEngine: ObservableObject {
         includes.removeAll()
     }
 
-    /// Helium is always offered; every other browser only when it is installed.
-    public func browserRows() -> [ChromiumBrowser] {
-        let installed = chromiumProbe.installed()
-        return ChromiumBrowser.catalog.filter {
-            $0.target == .helium || installed.contains($0.bundleID)
-        }
-    }
-
-    public func installedBrowserIDs() -> Set<String> { chromiumProbe.installed() }
-
-    public func policyURL(for browser: ChromiumBrowser) -> URL {
-        themeDir.appendingPathComponent(browser.mobileConfigFileName)
-    }
-
-    public func refreshPolicyStates() async {
-        var states: [String: Bool] = [:]
-        var legacy = Set<String>()
-        for browser in ChromiumBrowser.catalog {
-            states[browser.bundleID] = await chromiumProbe.silentActive(browser.bundleID)
-            if await chromiumProbe.legacyProfile(browser.bundleID) {
-                legacy.insert(browser.bundleID)
+    /// 2.20.1 removed Chromium browser theming. Delete the generated profiles and
+    /// the managed plists those builds wrote so the theme directory and
+    /// /Library/Managed Preferences hold only what Palette still manages.
+    public static func removeLegacyBrowserThemeFiles(
+        themeDir: URL,
+        managedPreferences: String = "/Library/Managed Preferences/\(NSUserName())"
+    ) -> [String] {
+        let bundleIDs = [
+            "net.imput.helium", "com.google.Chrome", "com.microsoft.edgemac",
+            "com.brave.Browser", "com.vivaldi.Vivaldi", "org.chromium.Chromium",
+            "company.thebrowser.Browser",
+        ]
+        var removed: [String] = []
+        for directory in [themeDir, themeDir.appendingPathComponent("previous", isDirectory: true)] {
+            guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { continue }
+            for name in names where name.hasSuffix("-theme.mobileconfig") || name.hasPrefix("chromium") {
+                let path = directory.appendingPathComponent(name)
+                if (try? FileManager.default.removeItem(at: path)) != nil { removed.append(path.path) }
             }
         }
-        policyStates = states
-        legacyProfiles = legacy
+        for bundleID in bundleIDs {
+            let path = managedPreferences + "/" + bundleID + ".plist"
+            if FileManager.default.fileExists(atPath: path),
+               (try? FileManager.default.removeItem(atPath: path)) != nil {
+                removed.append(path)
+            }
+        }
+        return removed
     }
 
     public static func shouldAutoApply(_ config: ThemingConfig, wallpaperChanged: Bool = true) -> Bool {
@@ -425,7 +321,6 @@ public final class ThemingEngine: ObservableObject {
         // Pywal parity: the picture owns Palette's colours even when nothing is
         // generated for other apps. Only the files are gated on the switch.
         guard value.enabled else {
-            lastPalette = palette
             let message = "Palette follows the desktop picture. Cross-app theming is off."
             status = message
             let result = ApplyResult(
@@ -535,234 +430,6 @@ public final class ThemingEngine: ObservableObject {
         }
     }
 
-    // MARK: - Silent browser theming
-
-    /// The one password prompt Palette ever asks for browser theming. It also
-    /// removes every legacy Palette profile before creating the user-owned
-    /// plist, because `profiles remove` may clean the managed-preference files.
-    public func enableSilentTheming(
-        _ config: ThemingConfig,
-        background: String? = nil
-    ) async -> PolicyResult {
-        let installed = chromiumProbe.installed()
-        let selected = selectedBrowsers(config).filter { installed.contains($0.bundleID) }
-        guard !selected.isEmpty else {
-            let message = "Select an installed Chromium browser first."
-            policyStatus = message
-            policyError = message
-            policyCommand = nil
-            return PolicyResult(status: message, error: message, command: "", states: policyStates)
-        }
-        guard let colour = background ?? lastPalette?.background else {
-            let message = "Apply Palette first so Palette knows which BrowserThemeColor to write."
-            policyStatus = message
-            policyError = message
-            policyCommand = nil
-            return PolicyResult(status: message, error: message, command: "", states: policyStates)
-        }
-        var installedIdentifiers: [String] = []
-        for browser in ChromiumBrowser.catalog where browser.supportsThemePolicy {
-            if await chromiumProbe.legacyProfile(browser.bundleID) {
-                installedIdentifiers.append(browser.policyIdentifier)
-            }
-        }
-        let command = ChromiumPolicy.enableCommand(
-            targets: selected.map {
-                ChromiumPolicy.SilentTarget(bundleID: $0.bundleID, colour: colour)
-            },
-            installedIdentifiers: installedIdentifiers
-        )
-        policyBusy = true
-        defer { policyBusy = false }
-        do {
-            let result = try await runWithAdministratorPrivileges(command)
-            guard result.status == 0 else {
-                let message = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
-                policyError = message.isEmpty ? "Enabling silent theming failed or was cancelled." : message
-                policyStatus = "Could not enable silent browser theming."
-                policyCommand = command
-                return PolicyResult(
-                    status: policyStatus ?? "", error: policyError,
-                    command: command, states: policyStates
-                )
-            }
-            await refreshPolicyStates()
-            let inactive = selected.filter { policyStates[$0.bundleID] != true }
-            guard inactive.isEmpty else {
-                let names = inactive.map(\.name).joined(separator: ", ")
-                policyError = "System did not leave a user-writable plist for \(names)."
-                policyStatus = "Silent browser theming could not be verified."
-                policyCommand = command
-                return PolicyResult(
-                    status: policyStatus ?? "", error: policyError,
-                    command: command, states: policyStates
-                )
-            }
-            if reloadsEnabled,
-               let listing = try? await ProcessRunner.run(["profiles", "-P"], timeout: 3) {
-                let leftover = ChromiumPolicy.remainingIdentifiers(in: listing.stdoutString)
-                guard leftover.isEmpty else {
-                    policyError = "Old Palette profiles remain: \(leftover.joined(separator: ", "))."
-                    policyStatus = "Silent theming is on, but an old profile is still installed."
-                    policyCommand = command
-                    return PolicyResult(
-                        status: policyStatus ?? "", error: policyError,
-                        command: command, states: policyStates
-                    )
-                }
-            }
-            let restart = await refreshRunningBrowsers(selected)
-            let names = selected.map(\.name).joined(separator: ", ")
-            var message = installedIdentifiers.isEmpty
-                ? "Silent browser theming enabled — \(names) now update without a password."
-                : "Removed the old Palette profile, then enabled silent theming for \(names)."
-            if !restart.isEmpty {
-                message += " Restart \(restart.joined(separator: ", ")) to pick up the seed colour."
-            }
-            policyError = nil
-            policyStatus = message
-            policyCommand = command
-            return PolicyResult(status: message, error: nil, command: command, states: policyStates)
-        } catch {
-            policyError = error.localizedDescription
-            policyStatus = "Could not enable silent browser theming."
-            policyCommand = command
-            return PolicyResult(
-                status: policyStatus ?? "", error: policyError,
-                command: command, states: policyStates
-            )
-        }
-    }
-
-    /// Deletes Palette's user-owned plists. No profile exists in silent mode,
-    /// so there is nothing for `profiles remove` to do.
-    public func removeSilentTheming() async -> PolicyResult {
-        let bundleIDs = ChromiumBrowser.catalog.filter(\.supportsThemePolicy).map(\.bundleID)
-        guard !bundleIDs.isEmpty else {
-            let message = "Nothing to remove."
-            policyStatus = message
-            policyError = message
-            policyCommand = nil
-            return PolicyResult(status: message, error: message, command: "", states: policyStates)
-        }
-        let command = ChromiumPolicy.removalCommand(bundleIDs: bundleIDs)
-        policyBusy = true
-        defer { policyBusy = false }
-        do {
-            let result = try await runWithAdministratorPrivileges(command)
-            guard result.status == 0 else {
-                let message = result.stderrString.trimmingCharacters(in: .whitespacesAndNewlines)
-                policyError = message.isEmpty ? "Removal failed or was cancelled." : message
-                policyStatus = "Could not remove silent browser theming."
-                policyCommand = command
-                return PolicyResult(
-                    status: policyStatus ?? "", error: policyError,
-                    command: command, states: policyStates
-                )
-            }
-            await refreshPolicyStates()
-            let message = "Removed silent browser theming. Browsers fall back to their own colour."
-            policyError = nil
-            policyStatus = message
-            policyCommand = command
-            return PolicyResult(status: message, error: nil, command: command, states: policyStates)
-        } catch {
-            policyError = error.localizedDescription
-            policyStatus = "Could not remove silent browser theming."
-            policyCommand = command
-            return PolicyResult(
-                status: policyStatus ?? "", error: policyError,
-                command: command, states: policyStates
-            )
-        }
-    }
-
-    /// The fallback for people who prefer the OS-managed route: write the
-    /// same valid .mobileconfig into ~/Downloads for them to install by hand.
-    public func exportPolicyProfiles(_ config: ThemingConfig) async -> PolicyResult {
-        let installed = chromiumProbe.installed()
-        let selected = selectedBrowsers(config).filter { installed.contains($0.bundleID) }
-        guard !selected.isEmpty else {
-            let message = "Select an installed Chromium browser first."
-            policyStatus = message
-            policyError = message
-            return PolicyResult(status: message, error: message, command: "", states: policyStates)
-        }
-        let palette = lastPalette ?? PalettePalette(theme: .defaultDark)
-        let downloads = URL(fileURLWithPath: includes.home)
-            .appendingPathComponent("Downloads", isDirectory: true)
-        var written = 0
-        do {
-            try fileManager.createDirectory(at: downloads, withIntermediateDirectories: true)
-            for browser in selected {
-                let xml = ChromiumPolicy.mobileConfig(browser: browser, palette: palette)
-                try Data(xml.utf8).write(
-                    to: downloads.appendingPathComponent(browser.mobileConfigFileName),
-                    options: .atomic
-                )
-                written += 1
-            }
-        } catch {
-            let message = "Could not export the profile: \(error.localizedDescription)"
-            policyError = message
-            policyStatus = message
-            return PolicyResult(status: message, error: message, command: "", states: policyStates)
-        }
-        let message = "Downloaded \(written) profile\(written == 1 ? "" : "s") to ~/Downloads."
-        policyError = nil
-        policyStatus = message
-        return PolicyResult(status: message, error: nil, command: "", states: policyStates)
-    }
-
-    private func selectedBrowsers(_ config: ThemingConfig) -> [ChromiumBrowser] {
-        config.targets.compactMap { raw in
-            guard let target = ThemingTarget(rawValue: raw),
-                  let browser = ChromiumBrowser.browser(for: target),
-                  browser.supportsThemePolicy else { return nil }
-            return browser
-        }
-    }
-
-    private func runWithAdministratorPrivileges(_ shell: String) async throws -> ProcessResult {
-        try await runAdministrator(shell)
-    }
-
-    /// The single osascript wrapper used by both the enable and removal steps.
-    public static func administratorScript(_ shell: String) -> String {
-        "do shell script \(appleScriptQuote(shell)) with administrator privileges"
-    }
-
-    public static func administratorRun(_ shell: String) async throws -> ProcessResult {
-        try await ProcessRunner.run(
-            ["/usr/bin/osascript", "-e", administratorScript(shell)],
-            timeout: 180
-        )
-    }
-
-    /// Names of running browsers Palette could not refresh because the app
-    /// bundle's executable was missing; they need a restart instead.
-    private func refreshRunningBrowsers(_ browsers: [ChromiumBrowser]) async -> [String] {
-        var needsRestart: [String] = []
-        for browser in browsers {
-            guard await chromiumProbe.isRunning(browser.processName) else { continue }
-            guard let binary = ChromiumPolicy.appBinary(appName: browser.appName) else {
-                needsRestart.append(browser.name)
-                continue
-            }
-            _ = try? await ProcessRunner.run(
-                ChromiumPolicy.refreshArguments(binary: binary),
-                timeout: 4
-            )
-        }
-        return needsRestart
-    }
-
-    private static func appleScriptQuote(_ value: String) -> String {
-        "\"" + value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"") + "\""
-    }
-
     // MARK: - Writing
 
     private func finish(
@@ -771,7 +438,6 @@ public final class ThemingEngine: ObservableObject {
         config: ThemingConfig,
         transparency: TransparencyDetection.Result
     ) async -> ApplyResult {
-        lastPalette = palette
         do {
             let outcome = try await write(palette: palette, metadata: metadata, targets: config.targets)
             let succeeded = outcome.failed.isEmpty
@@ -783,9 +449,6 @@ public final class ThemingEngine: ObservableObject {
                 summary = "Applied \(outcome.written.count) file\(outcome.written.count == 1 ? "" : "s") to \(themeDir.path)."
             } else {
                 summary = "Applied \(outcome.written.count) file\(outcome.written.count == 1 ? "" : "s"); \(outcome.failed.count) failed."
-            }
-            if let suffix = outcome.statusSuffix {
-                summary += " · \(suffix)"
             }
             let reloadMessages = config.targets.compactMap { reloads[$0]?.message }
             if !reloadMessages.isEmpty {
@@ -814,21 +477,12 @@ public final class ThemingEngine: ObservableObject {
                     summary += " · \(message)"
                 }
             }
-            if outcome.policySelected && outcome.needsEnable {
-                notes.append("Browser theming: enable silent updates once in Settings → Theming → Browsers.")
-            }
             notes += outcome.notices
             // One line, not a second card: the Recommendations card has the
-            // file and the fix, the status only has to point at it. The
-            // managed-preference folder follows the probe, so tests never read
-            // the machine's real Helium policy.
-            let managedDirectory = ChromiumBrowser.browser(for: .helium)
-                .map { (chromiumProbe.silentPath($0.bundleID) as NSString).deletingLastPathComponent }
-                ?? "/Library/Managed Preferences/\(NSUserName())"
+            // file and the fix, the status only has to point at it.
             let conflicts = ThemingAdvice.scan(
                 home: includes.home,
-                enabledTargets: Set(config.targets.compactMap(ThemingTarget.init(rawValue:))),
-                managedPreferencesDirectory: managedDirectory
+                enabledTargets: Set(config.targets.compactMap(ThemingTarget.init(rawValue:)))
             ).filter { $0.severity == .blocking }.count
             if conflicts > 0 {
                 summary += " · \(conflicts) config conflict\(conflicts == 1 ? "" : "s")"
@@ -886,20 +540,10 @@ public final class ThemingEngine: ObservableObject {
         var failed: [String]
         var changed: [String]
         var notices: [String]
-        var statusSuffix: String?
-        var policySelected: Bool
-        var needsEnable: Bool
         var reports: [TargetReport]
         /// This Apply first added kitty's remote-control directive; the running
         /// kitty only starts listening after one restart.
         var kittyRemoteControlAdded: Bool
-    }
-
-    private struct ChromiumOutcome {
-        var state: TargetReport.State
-        var note: String
-        var changes: [String]
-        var needsEnable: Bool
     }
 
     private func write(
@@ -944,10 +588,6 @@ public final class ThemingEngine: ObservableObject {
         var failed: [String] = []
         var changes: [String] = []
         var notices: [String] = []
-        var statusSuffix: String?
-        var policySelected = false
-        var anyNeedsEnable = false
-        var anyPolicyWritten = false
         var kittyRemoteControlAdded = false
         var reports: [TargetReport] = []
 
@@ -960,30 +600,6 @@ public final class ThemingEngine: ObservableObject {
                     try? fileManager.removeItem(at: themeDir.appendingPathComponent(target.fileName))
                 }
                 _ = includes.remove(target)
-                continue
-            }
-            if let browser = target.browser {
-                policySelected = true
-                let outcome = await applyChromiumPolicy(browser: browser, palette: palette)
-                switch outcome.state {
-                case .written:
-                    written.append(target.fileName)
-                    changes.append(contentsOf: outcome.changes)
-                    anyPolicyWritten = true
-                case .skipped:
-                    skipped.append(target.fileName)
-                    if outcome.needsEnable { anyNeedsEnable = true }
-                case .failed:
-                    failed.append(target.fileName)
-                }
-                reports.append(TargetReport(
-                    id: target.rawValue,
-                    title: target.title,
-                    fileName: target.fileName,
-                    includeHint: target.includeHint,
-                    note: outcome.note,
-                    state: outcome.state
-                ))
                 continue
             }
             if target == .starship, let starshipFailure {
@@ -1103,15 +719,6 @@ public final class ThemingEngine: ObservableObject {
             written.append(name)
         }
 
-        if policySelected {
-            if anyNeedsEnable {
-                statusSuffix = "Enable silent browser theming"
-            } else if anyPolicyWritten {
-                statusSuffix = "Browser themes update silently"
-            } else {
-                statusSuffix = "No browser theme written"
-            }
-        }
         if selectedIDs.contains(ThemingTarget.zellij.rawValue),
            reloadsEnabled,
            let zellij = ToolLocator.shared.path(for: "zellij") {
@@ -1127,9 +734,6 @@ public final class ThemingEngine: ObservableObject {
             failed: failed,
             changed: changes,
             notices: notices,
-            statusSuffix: statusSuffix,
-            policySelected: policySelected,
-            needsEnable: anyNeedsEnable,
             reports: reports,
             kittyRemoteControlAdded: kittyRemoteControlAdded
         )
@@ -1168,78 +772,6 @@ public final class ThemingEngine: ObservableObject {
         return rendered.notice
     }
 
-    private func applyChromiumPolicy(
-        browser: ChromiumBrowser,
-        palette: PalettePalette
-    ) async -> ChromiumOutcome {
-        guard browser.supportsThemePolicy else {
-            return ChromiumOutcome(
-                state: .skipped,
-                note: "\(browser.name) does not implement BrowserThemeColor.",
-                changes: [],
-                needsEnable: false
-            )
-        }
-        guard chromiumProbe.installed().contains(browser.bundleID) else {
-            return ChromiumOutcome(
-                state: .skipped,
-                note: "\(browser.name) is not installed.",
-                changes: [],
-                needsEnable: false
-            )
-        }
-        // The .mobileconfig stays generated as a manual fallback, but silent
-        // mode is the path Palette actually updates.
-        let xml = ChromiumPolicy.mobileConfig(browser: browser, palette: palette)
-        do {
-            try Data(xml.utf8).write(to: policyURL(for: browser), options: .atomic)
-        } catch {
-            return ChromiumOutcome(
-                state: .failed,
-                note: "Could not write the \(browser.name) profile: \(error.localizedDescription)",
-                changes: [],
-                needsEnable: false
-            )
-        }
-        let active = await chromiumProbe.silentActive(browser.bundleID)
-        policyStates[browser.bundleID] = active
-        guard active else {
-            let legacy = await chromiumProbe.legacyProfile(browser.bundleID)
-            if legacy { legacyProfiles.insert(browser.bundleID) } else { legacyProfiles.remove(browser.bundleID) }
-            let note = legacy
-                ? "Enable silent theming — the old profile will be removed first."
-                : "Enable silent theming (one-time password) to manage \(browser.name)."
-            return ChromiumOutcome(state: .skipped, note: note, changes: [], needsEnable: true)
-        }
-        // A normal user write: the plist is owned by this user after the
-        // one-time enable, so Apply never prompts for a password.
-        let path = chromiumProbe.silentPath(browser.bundleID)
-        do {
-            try fileManager.createDirectory(
-                at: URL(fileURLWithPath: path).deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try ChromiumPolicy.silentPlistData(colour: palette.background)
-                .write(to: URL(fileURLWithPath: path))
-        } catch {
-            return ChromiumOutcome(
-                state: .failed,
-                note: "Could not update \(browser.name): \(error.localizedDescription)",
-                changes: [],
-                needsEnable: false
-            )
-        }
-        let restart = await refreshRunningBrowsers([browser])
-        let note = restart.isEmpty
-            ? "Managed — updates silently."
-            : "Managed — updates silently; restart \(restart.joined(separator: ", ")) to pick up this colour."
-        let changes = [
-            "\(browser.mobileConfigFileName): \(policyURL(for: browser).path)",
-            "\(path): BrowserThemeColor = \(palette.background)",
-        ]
-        return ChromiumOutcome(state: .written, note: note, changes: changes, needsEnable: false)
-    }
-
     /// The exact bytes the next Apply will leave in every managed file, so a
     /// no-op apply can be detected before the snapshot is replaced.
     private func renderedGeneratedFiles(
@@ -1248,14 +780,8 @@ public final class ThemingEngine: ObservableObject {
         targets: [String]
     ) -> [String: String] {
         let selected = Set(targets)
-        let installed = chromiumProbe.installed()
         var files: [String: String] = [:]
         for target in ThemingTarget.allCases where selected.contains(target.rawValue) {
-            if let browser = target.browser {
-                guard browser.supportsThemePolicy, installed.contains(browser.bundleID) else { continue }
-                files[target.fileName] = ChromiumPolicy.mobileConfig(browser: browser, palette: palette)
-                continue
-            }
             if target == .starship {
                 let userPath = includes.plan(for: .starship)?.path
                 let userConfig = userPath.flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
@@ -1511,8 +1037,7 @@ public final class ThemingEngine: ObservableObject {
     ) async -> [String: ThemingReload.Status] {
         var statuses: [String: ThemingReload.Status] = [:]
         for raw in targets {
-            // Browsers report through the managed policy, not a file include.
-            guard let target = ThemingTarget(rawValue: raw), target.isImplemented, !target.isBrowser else {
+            guard let target = ThemingTarget(rawValue: raw), target.isImplemented else {
                 continue
             }
             statuses[raw] = await liveReloadStatus(

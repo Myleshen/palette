@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.20.1 — 2026-11-28
+
+### Removed
+
+- **Chromium browser theming, including Helium.** The `BrowserThemeColor`
+  managed policy is not honoured by Helium at any scope, and macOS no longer
+  installs configuration profiles from the CLI, so the Browsers card, the
+  `Helium`/`Chrome`/`Edge`/`Brave`/`Vivaldi`/`Chromium`/`Arc` targets, the
+  generated `.mobileconfig` files and the administrator prompts are gone.
+  Leftover Palette profiles and managed plists are removed once at launch, and
+  any browser target in an existing config is dropped on load.
+
 ## 2.20.0 — 2026-11-28
 
 ### Added

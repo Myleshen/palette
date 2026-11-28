@@ -180,6 +180,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Log.shared.configure(url: paths.logFile)
         Log.shared.info("Palette launching from \(Bundle.main.bundlePath)", source: "app")
+        let legacyBrowserFiles = ThemingEngine.removeLegacyBrowserThemeFiles(themeDir: paths.themeDir)
+        if !legacyBrowserFiles.isEmpty {
+            Log.shared.info(
+                "Removed \(legacyBrowserFiles.count) leftover browser theming file(s): "
+                    + legacyBrowserFiles.joined(separator: ", "),
+                source: "theming"
+            )
+        }
         CrashReporter.install(url: paths.stateDir.appendingPathComponent("crash.log"))
 
         // One Palette at a time. A stale build or a second installed copy must

@@ -127,7 +127,7 @@ public struct ThemingIncludes: Sendable {
             // so appending a second [mgr]/[status] block is invalid TOML.
             // The generated file stays available as a manual merge.
             return nil
-        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed:
+        case .vscode, .zed:
             return nil
         }
     }
@@ -451,7 +451,7 @@ public struct ThemingIncludes: Sendable {
         case .yazi:
             // Manual only: see `plan(for:)`.
             return nil
-        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed:
+        case .vscode, .zed:
             return nil
         }
     }

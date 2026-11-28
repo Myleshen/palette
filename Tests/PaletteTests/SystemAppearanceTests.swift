@@ -41,10 +41,6 @@ final class SystemAppearanceTests: XCTestCase {
         let engine = ThemingEngine(
             paths: paths,
             themesDirectory: paths.themesDir,
-            chromiumProbe: ThemingEngine.ChromiumProbe(
-                installed: { [] }, isRunning: { _ in false },
-                silentActive: { _ in false }, legacyProfile: { _ in false }
-            ),
             reloadsEnabled: false,
             setSystemAppearance: { dark in
                 recorder.append(dark)
