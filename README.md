@@ -88,7 +88,11 @@ make test       # run the test suite
 ```
 
 The app is ad-hoc signed. macOS may ask for Accessibility permission again
-after a rebuild; that is expected without a Developer ID certificate.
+after a rebuild; that is expected without a Developer ID certificate. Because
+there is no signing identity to anchor to, TCC grants are keyed only to the
+bundle identifier: any app built with the same identifier can inherit a grant
+you gave Palette, and the app runs without the hardened runtime or library
+validation. Only run builds you made or downloaded from the release page.
 
 ### Homebrew
 
@@ -587,7 +591,9 @@ in Settings → Providers to let it answer unprefixed queries too.
 
 `/bw`, `/bwu`, `/bwt`, `/bwn`, and `/bwo` share one in-memory session. The first
 read of a vault is cached for **thirty days** in an AES-GCM encrypted file under
-`~/Library/Caches/Palette/Bitwarden`; the key is a per-user `0600` file. Prefix
+`~/Library/Caches/Palette/Bitwarden`; the key is a per-user `0600` file. The
+cache is `0600` on disk, which stops other users but not another process running
+as you; anything that can read your home directory can read the cache. Prefix
 switches, typing, and copy actions reuse the snapshot instead of spawning
 `bw list` again. Choose **Refresh Bitwarden Cache** in the menu-bar menu when the
 vault changed elsewhere; the next search reads it fresh. The cache is scoped to

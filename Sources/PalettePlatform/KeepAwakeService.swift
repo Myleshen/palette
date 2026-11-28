@@ -630,6 +630,8 @@ public actor ClamshellGuard: ClamshellControlling {
     public static let daemonLabel = "dev.myleshen.palette.clamshell"
     static let daemonDirectory = "/Library/Application Support/Palette"
     static let daemonScriptPath = daemonDirectory + "/clamshell-guard.sh"
+    static let daemonLogDirectory = "/Library/Logs/Palette"
+    public static let daemonLogPath = daemonLogDirectory + "/clamshell-guard.log"
     public static let daemonPlistPath = "/Library/LaunchDaemons/" + daemonLabel + ".plist"
     /// A forgotten clamshell must not keep a laptop awake forever.
     public static let maxArmedDuration: TimeInterval = 12 * 60 * 60
@@ -693,6 +695,7 @@ public actor ClamshellGuard: ClamshellControlling {
         sleepBinary: String = "/bin/sleep",
         interval: Int = 3,
         maxArmedSeconds: Int = 12 * 60 * 60,
+        logPath: String = daemonLogPath,
         cleanUpPlist: Bool = false
     ) -> String {
         let flag = shellQuote(flagPath)
@@ -704,20 +707,21 @@ public actor ClamshellGuard: ClamshellControlling {
               /bin/launchctl bootout system/\(daemonLabel) >/dev/null 2>&1 || true
               """
             : ""
-        // Written by root so a guard that dies right after arming is visible
-        // instead of looking like a silent success.
-        let log = shellQuote("/tmp/palette-clamshell-guard.log")
-        // The guard runs as root, so a permanent exit also drops the log it has
-        // been growing; an exit that launchd will recheck (battery) keeps it.
-        let truncateLog = cleanUpPlist ? ": > \(log)" : ""
+        // Written by root in the system log directory so a guard that dies right
+        // after arming is visible instead of looking like a silent success, and
+        // a local user cannot pre-create or read it through /tmp.
+        let log = shellQuote(logPath)
+        let logDirectory = shellQuote((logPath as NSString).deletingLastPathComponent)
         return """
+        /bin/mkdir -p \(logDirectory)
+        : > \(log)
+        /bin/chmod 0600 \(log)
         exec >>\(log) 2>&1
         note() { echo "$(/bin/date '+%F %T') [guard] $1"; }
         disarm() { \(tool) -a disablesleep 0 >/dev/null 2>&1; }
         cleanup() {
           disarm
         \(cleanup)
-          \(truncateLog)
         }
         finish() {
           trap - EXIT INT TERM HUP

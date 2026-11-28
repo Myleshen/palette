@@ -1864,6 +1864,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = ["-lc", command]
+        // A binding is an arbitrary command, so it must not inherit vault or
+        // Ask credentials from Palette's own environment.
+        process.environment = ProcessRunner.sanitizedEnvironment(ProcessInfo.processInfo.environment)
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = errorLog
@@ -3888,7 +3891,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let confirm = NSAlert()
         confirm.messageText = "Export a backup without clipboard text?"
         confirm.informativeText = """
-        The backup includes config.toml, themes, providers, history and the encrypted Ask key files. \
+        The backup includes config.toml, themes, providers, history and the sealed Ask key blob; the key that unlocks it stays on this Mac. \
         Plain-text clipboard entries are removed before zipping because they can hold pasted secrets. \
         Image and file entries stay because they hold paths and pictures, not the text you typed.
         """
@@ -3910,7 +3913,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The full user state: config, themes, providers, database and the small
-    /// TOML files that used to be left out. The ask key files are encrypted.
+    /// TOML files that used to be left out. The Ask blob travels without the
+    /// key that opens it.
     @discardableResult
     private func writeBackup(to destination: URL) async -> Bool {
         let temp = FileManager.default.temporaryDirectory

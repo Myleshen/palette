@@ -425,4 +425,35 @@ final class ClipboardImageStorageTests: XCTestCase {
         XCTAssertEqual(imageRows, "1")
         XCTAssertTrue(included.contains("config.toml"))
     }
+
+    func testBackupLeavesTheAskKeyBesideTheSealedBlob() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-backup-ask-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = PalettePaths(
+            home: root.path,
+            configDir: root.appendingPathComponent("config"),
+            stateDir: root.appendingPathComponent("state"),
+            cacheDir: root.appendingPathComponent("cache")
+        )
+        try paths.createDirectories()
+        let key = paths.configDir.appendingPathComponent("ask-key.bin")
+        let keys = paths.configDir.appendingPathComponent("ask-keys.bin")
+        try Data(repeating: 7, count: 32).write(to: key)
+        try Data("sealed-blob".utf8).write(to: keys)
+
+        let staged = root.appendingPathComponent("staged")
+        let included = try BackupExporter.stage(paths: paths, into: staged)
+
+        XCTAssertFalse(included.contains("ask-key.bin"), "the raw key must not travel: \(included)")
+        XCTAssertTrue(included.contains("ask-keys.bin"))
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: staged.appendingPathComponent("ask-key.bin").path)
+        )
+        let readme = try String(
+            contentsOf: staged.appendingPathComponent("README.txt"), encoding: .utf8
+        )
+        XCTAssertTrue(readme.contains("ask-keys.bin"), readme)
+        XCTAssertFalse(readme.lowercased().contains("encrypted"), "do not promise encryption")
+    }
 }
