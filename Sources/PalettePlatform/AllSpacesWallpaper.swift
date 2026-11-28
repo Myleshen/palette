@@ -24,51 +24,49 @@ public enum AllSpacesWallpaper {
         return count(in: rewritten)
     }
 
-    /// Copies the Desktop entry that references `picturePath` to every Space
-    /// and display. Pure, so tests run against a fixture store.
+    /// Points every Space's picture entry at `picturePath`. Entries that are
+    /// not file-backed (aerials, dynamic) are left alone. Pure, so tests run
+    /// against a fixture store.
     public static func rewrite(_ data: Data, picturePath: String) throws -> Data? {
         guard var root = try PropertyListSerialization.propertyList(
             from: data, options: [], format: nil
         ) as? [String: Any] else { return nil }
-        let needle = Data("file://\(picturePath)".utf8)
-        func isTarget(_ desktop: [String: Any]?) -> Bool {
-            guard let choices = (desktop?["Content"] as? [String: Any])?["Choices"] as? [[String: Any]],
-                  let configuration = choices.first?["Configuration"] as? Data else { return false }
-            return configuration.range(of: needle) != nil
-        }
-        func desktop(in entry: [String: Any]) -> [String: Any]? {
-            entry["Desktop"] as? [String: Any]
+
+        func retarget(_ entry: inout [String: Any]) -> Bool {
+            guard var desktop = entry["Desktop"] as? [String: Any],
+                  var content = desktop["Content"] as? [String: Any],
+                  var choices = content["Choices"] as? [[String: Any]],
+                  var first = choices.first,
+                  let blob = first["Configuration"] as? Data,
+                  var configuration = try? PropertyListSerialization.propertyList(
+                      from: blob, options: [], format: nil
+                  ) as? [String: Any],
+                  var url = configuration["url"] as? [String: Any],
+                  let relative = url["relative"] as? String,
+                  relative.hasPrefix("file://") else { return false }
+            url["relative"] = "file://\(picturePath)"
+            configuration["url"] = url
+            first["Configuration"] = try? PropertyListSerialization.data(
+                fromPropertyList: configuration, format: .binary, options: 0
+            )
+            choices[0] = first
+            content["Choices"] = choices
+            desktop["Content"] = content
+            entry["Desktop"] = desktop
+            return true
         }
 
-        var source: [String: Any]?
-        if let spaces = root["Spaces"] as? [String: Any] {
-            for case let body as [String: Any] in spaces.values {
-                let displays = body["Displays"] as? [String: Any] ?? [String: Any]()
-                for case let entry as [String: Any] in displays.values {
-                    if isTarget(desktop(in: entry)) { source = desktop(in: entry); break }
-                }
-                if source != nil { break }
-            }
-        }
-        if source == nil, let displays = root["Displays"] as? [String: Any] {
-            for case let entry as [String: Any] in displays.values where isTarget(desktop(in: entry)) {
-                source = desktop(in: entry)
-                break
-            }
-        }
-        guard let source else { return nil }
-
-        func apply(to entry: inout [String: Any]) {
-            entry["Desktop"] = source
-        }
+        var changed = 0
         if var spaces = root["Spaces"] as? [String: Any] {
             for (space, body) in spaces {
                 guard var body = body as? [String: Any] else { continue }
-                var displays = body["Displays"] as? [String: Any] ?? [:]
-                for (id, entry) in displays {
-                    guard var entry = entry as? [String: Any] else { continue }
-                    apply(to: &entry)
-                    displays[id] = entry
+                var displays = body["Displays"] as? [String: Any] ?? [String: Any]()
+                for (id, raw) in displays {
+                    guard var entry = raw as? [String: Any] else { continue }
+                    if retarget(&entry) {
+                        displays[id] = entry
+                        changed += 1
+                    }
                 }
                 body["Displays"] = displays
                 spaces[space] = body
@@ -76,10 +74,9 @@ public enum AllSpacesWallpaper {
             root["Spaces"] = spaces
         }
         if var displays = root["Displays"] as? [String: Any] {
-            for (id, entry) in displays {
-                guard var entry = entry as? [String: Any] else { continue }
-                apply(to: &entry)
-                displays[id] = entry
+            for (id, raw) in displays {
+                guard var entry = raw as? [String: Any] else { continue }
+                if retarget(&entry) { displays[id] = entry }
             }
             root["Displays"] = displays
         }
