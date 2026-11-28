@@ -347,8 +347,20 @@ public final class SearchController: ObservableObject, HostBridge {
         searchTask?.cancel()
         let raw = query
         let scope = scopeProviderID
-        let pathQuery = scope != nil || registry.parser.parse(raw).isBound
-        let delay: UInt64 = debounce && pathQuery ? 120_000_000 : (debounce ? 12_000_000 : 0)
+        let parsed = registry.parser.parse(raw)
+        let pathQuery = scope != nil || parsed.isBound
+        // Disk- and process-backed scopes need the long debounce; a cached
+        // database or the in-memory catalogue answers in a few milliseconds,
+        // and 120 ms there was most of the perceived latency.
+        let instant: Set<String> = ["clip", "theme", "calc", "emoji", "snip", "cheat"]
+        let delay: UInt64
+        if !debounce {
+            delay = 0
+        } else if pathQuery {
+            delay = instant.contains(parsed.providerID ?? "") ? 24_000_000 : 120_000_000
+        } else {
+            delay = 12_000_000
+        }
         searchTask = Task { [weak self] in
             if delay > 0 {
                 try? await Task.sleep(nanoseconds: delay)
