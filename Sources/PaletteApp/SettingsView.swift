@@ -2355,6 +2355,19 @@ struct SettingsView: View {
                         .frame(maxWidth: 260)
                     }
 
+                    pickerRow(
+                        "Match macOS appearance",
+                        help: "Auto switches macOS to dark or light whenever a palette is applied. Off leaves the system appearance alone."
+                    ) {
+                        Picker("Match macOS appearance", selection: $config.theming.systemAppearance) {
+                            Text("Auto").tag(ThemingSystemAppearance.auto)
+                            Text("Off").tag(ThemingSystemAppearance.off)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 160)
+                    }
+
                     Divider().padding(.vertical, 4)
                     HStack(spacing: 8) {
                         Button("Apply Palette") { applyTheming() }

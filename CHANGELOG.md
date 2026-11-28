@@ -18,6 +18,10 @@
 - **Quick-access kitty panel and stale Starship shells now follow the palette**
   too: the drop-down gets the same managed block and socket, and the user's
   starship palette block is refreshed on every apply.
+- **macOS appearance follows the palette.** `[theming] system_appearance`
+  (auto) switches macOS to light when a light palette is applied and back to
+  dark for a dark one; Auto/Off in Settings, and a denied Automation permission
+  is reported instead of failing silently.
 - **Every plugin group snaps to the palette.** After painting its own groups,
   the nvim file maps any remaining group colour a plugin defined to the nearest
   palette colour (no link, no stale colour), which covers pickers, notifiers,

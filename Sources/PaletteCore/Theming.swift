@@ -51,6 +51,18 @@ public struct ThemingSourceControls: Sendable, Equatable {
     }
 }
 
+public enum ThemingSystemAppearance: String, Sendable, Equatable, CaseIterable {
+    case auto
+    case off
+
+    public var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .off: return "Off"
+        }
+    }
+}
+
 public enum ThemingTransparency: String, Sendable, Equatable, CaseIterable {
     case auto
     case on
@@ -81,6 +93,9 @@ public struct ThemingConfig: Sendable, Equatable {
     /// Keep terminal/Neovide translucency: `auto` detects it, `on` and `off`
     /// force it.
     public var transparent: ThemingTransparency
+    /// `auto` switches macOS to the applied palette's appearance, `off` leaves
+    /// the system alone.
+    public var systemAppearance: ThemingSystemAppearance
 
     public init(
         enabled: Bool = false,
@@ -93,7 +108,8 @@ public struct ThemingConfig: Sendable, Equatable {
         extraction: String = ThemingConfig.pywal,
         saturation: Double = 0,
         contrast: Double = 0,
-        transparent: ThemingTransparency = .auto
+        transparent: ThemingTransparency = .auto,
+        systemAppearance: ThemingSystemAppearance = .auto
     ) {
         self.enabled = enabled
         self.source = source
@@ -106,6 +122,7 @@ public struct ThemingConfig: Sendable, Equatable {
         self.saturation = saturation
         self.contrast = contrast
         self.transparent = transparent
+        self.systemAppearance = systemAppearance
     }
 
     public static let pywal = "pywal"
@@ -153,6 +170,10 @@ public struct ThemingConfig: Sendable, Equatable {
            let transparent = ThemingTransparency(rawValue: raw) {
             config.transparent = transparent
         }
+        if let raw = table.str("system_appearance")?.lowercased(),
+           let appearance = ThemingSystemAppearance(rawValue: raw) {
+            config.systemAppearance = appearance
+        }
         return config.normalized()
     }
 
@@ -183,6 +204,8 @@ public struct ThemingConfig: Sendable, Equatable {
         out.append("# pywal --contrast: 0 disables; 1.5...4.5 guarantees readable ANSI colours.")
         out.append("contrast = \(value.contrast)")
         out.append("# auto keeps terminal/Neovide transparency; on | off force the nvim background.")
+        out.append("# auto matches the macOS appearance to the applied palette; off leaves it alone.")
+        out.append("system_appearance = \"\(value.systemAppearance.rawValue)\"")
         out.append("transparent = \"\(value.transparent.rawValue)\"")
         out.append("targets = [\(value.targets.map(ThemingConfig.quote).joined(separator: ", "))]")
         return out.joined(separator: "\n")

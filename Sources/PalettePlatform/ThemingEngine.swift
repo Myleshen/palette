@@ -196,6 +196,8 @@ public final class ThemingEngine: ObservableObject {
     private let runAdministrator: @Sendable (String) async throws -> ProcessResult
     /// Injected by tests so a sandbox image stands in for the desktop picture.
     private let wallpaperOverride: [URL]?
+    /// Injected by tests; the real one asks System Events to switch macOS.
+    private let setSystemAppearance: @Sendable (Bool) async -> Bool
     /// The last applied palette, so the one-time enable can seed the current
     /// BrowserThemeColor and the export can render a profile before an Apply.
     private var lastPalette: PalettePalette?
@@ -208,6 +210,9 @@ public final class ThemingEngine: ObservableObject {
         appRestart: AppRestart = .live,
         reloadsEnabled: Bool = true,
         wallpaperOverride: [URL]? = nil,
+        setSystemAppearance: @escaping @Sendable (Bool) async -> Bool = { dark in
+            await SystemAppearance.set(dark: dark)
+        },
         runAdministrator: @escaping @Sendable (String) async throws -> ProcessResult = { shell in
             try await ThemingEngine.administratorRun(shell)
         }
@@ -220,6 +225,7 @@ public final class ThemingEngine: ObservableObject {
         self.appRestart = appRestart
         self.reloadsEnabled = reloadsEnabled
         self.wallpaperOverride = wallpaperOverride
+        self.setSystemAppearance = setSystemAppearance
         self.runAdministrator = runAdministrator
         self.includes = ThemingIncludes(home: paths.home, themeDir: paths.themeDir)
     }
@@ -795,6 +801,14 @@ public final class ThemingEngine: ObservableObject {
             }
             if metadata.transparentBackgrounds, config.targets.contains(ThemingTarget.nvim.rawValue) {
                 notes.append("nvim: transparent background (\(transparency.reason))")
+            }
+            if succeeded, config.systemAppearance == .auto {
+                let dark = palette.appearance != "light"
+                if await setSystemAppearance(dark) {
+                    notes.append("macOS appearance: \(dark ? "dark" : "light")")
+                } else {
+                    notes.append("macOS appearance unchanged: allow Palette to control System Events in Automation, or set system_appearance = \"off\".")
+                }
             }
             if outcome.policySelected && outcome.needsEnable {
                 notes.append("Browser theming: enable silent updates once in Settings → Theming → Browsers.")
