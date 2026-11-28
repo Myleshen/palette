@@ -10,6 +10,26 @@ public enum ThemingSource: String, Sendable, Equatable, CaseIterable {
     case wallpaper
 }
 
+/// Wallpaper colours own the palette until the user switches the source
+/// explicitly (Settings → Theming or the deck's source control). Every theme
+/// apply asks here first, and a refusal means the caller writes nothing.
+public enum ThemingSourceGuard {
+    public static let refusalMessage =
+        "Wallpaper colours are enabled — switch Palette source to Theme "
+        + "(Settings → Theming, or the Wallpaper deck toggle) to pick a theme."
+
+    /// Non-nil while a theme apply must be refused.
+    public static func refusal(source: ThemingSource) -> String? {
+        source == .wallpaper ? refusalMessage : nil
+    }
+
+    /// The deck's card guard: only a theme card is blocked by wallpaper colours.
+    public static func blockedReason(source: ThemingSource, target: ThemeCardTarget) -> String? {
+        guard source == .wallpaper, case .theme = target else { return nil }
+        return refusalMessage
+    }
+}
+
 /// Which controls the palette-source toggle leaves live. One place so the
 /// greyed rows in Settings and the tests agree; a source that is off must be
 /// disabled, not merely hidden, or a stale click could still apply it.

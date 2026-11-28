@@ -66,6 +66,9 @@ final class ThemeGalleryModel: ObservableObject {
     /// The user's saved palette source, refreshed on every config reload so a
     /// source flip re-enables theme cards while the deck is open.
     @Published var paletteSource: ThemingSource = .theme
+    /// True while the header's source control is applying; the control is
+    /// disabled and a second press is ignored.
+    @Published var switchingSource = false
 
     init(deck: ThemeCardDeck = ThemeCardDeck()) {
         self.deck = deck
@@ -76,10 +79,7 @@ final class ThemeGalleryModel: ObservableObject {
     /// instead of being a status message another action can overwrite.
     var blockedApplyReason: String? {
         guard deck.count > 0 else { return nil }
-        return ThemeCardSourceGuard.blockedReason(
-            source: paletteSource,
-            target: deck.current.target
-        )
+        return ThemingSourceGuard.blockedReason(source: paletteSource, target: deck.current.target)
     }
 
     /// Pressing Apply on a refused card shows the hint and nothing else: no
@@ -124,6 +124,9 @@ final class ThemeGalleryWindowController: NSWindowController {
     private let favourites: ThemeCardFavourites
     private let applyTarget: (ThemeCardTarget) async -> ThemeGalleryApplyOutcome
     private let loadWallpaper: () async -> (NSImage?, ThemeCardPalette?)
+    /// The deck's source control: flips `[theming] source` and applies the
+    /// matching palette without closing.
+    private let switchSource: (ThemingSource) async -> ThemeGalleryApplyOutcome
     /// Read at apply time so the guard sees the source the user last saved.
     private let paletteSource: @MainActor () -> ThemingSource
 
@@ -155,7 +158,8 @@ final class ThemeGalleryWindowController: NSWindowController {
         favourites: ThemeCardFavourites = ThemeCardFavourites(),
         apply: @escaping (ThemeCardTarget) async -> ThemeGalleryApplyOutcome,
         wallpaper: @escaping () async -> (NSImage?, ThemeCardPalette?),
-        paletteSource: @escaping @MainActor () -> ThemingSource
+        paletteSource: @escaping @MainActor () -> ThemingSource,
+        setSource: @escaping (ThemingSource) async -> ThemeGalleryApplyOutcome
     ) {
         self.model = ThemeGalleryModel()
         self.themeManager = themeManager
@@ -165,6 +169,7 @@ final class ThemeGalleryWindowController: NSWindowController {
         self.applyTarget = apply
         self.loadWallpaper = wallpaper
         self.paletteSource = paletteSource
+        self.switchSource = setSource
 
         let panel = ThemeGalleryWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720),
@@ -193,6 +198,7 @@ final class ThemeGalleryWindowController: NSWindowController {
             toggleFavouritesView: { [weak self] in self?.toggleFavouritesView() },
             toggleFavourite: { [weak self] in self?.toggleFavourite() },
             showAll: { [weak self] in self?.showAll() },
+            setSource: { [weak self] source in self?.setPaletteSource(source) },
             close: { [weak self] in self?.hide() }
         )
         let hosting = NSHostingView(rootView: view)
@@ -739,7 +745,7 @@ final class ThemeGalleryWindowController: NSWindowController {
 
     private func apply(_ card: ThemeCard) {
         guard !model.applying else { return }
-        if let reason = ThemeCardSourceGuard.blockedReason(
+        if let reason = ThemingSourceGuard.blockedReason(
             source: paletteSource(),
             target: card.target
         ) {
@@ -763,6 +769,30 @@ final class ThemeGalleryWindowController: NSWindowController {
             self.model.paletteSource = self.paletteSource()
             self.model.status = outcome.message.isEmpty ? "Applied" : outcome.message
             self.model.statusFailed = outcome.failed
+        }
+    }
+
+    // MARK: - Source switch
+
+    /// The header's `Wallpaper colours | Theme colours` control: flips the
+    /// source, applies the matching palette and keeps the deck open so theme
+    /// cards become applicable at once. Errors land in the status line.
+    private func setPaletteSource(_ source: ThemingSource) {
+        guard !model.switchingSource, source != model.paletteSource else { return }
+        model.switchingSource = true
+        model.statusFailed = false
+        model.status = source == .wallpaper
+            ? "Extracting wallpaper colours…"
+            : "Applying theme colours…"
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let outcome = await self.switchSource(source)
+            self.model.switchingSource = false
+            self.model.paletteSource = self.paletteSource()
+            if !outcome.message.isEmpty {
+                self.model.status = outcome.message
+                self.model.statusFailed = outcome.failed
+            }
         }
     }
 
@@ -985,6 +1015,7 @@ private struct ThemeGalleryView: View {
     var toggleFavouritesView: () -> Void
     var toggleFavourite: () -> Void
     var showAll: () -> Void
+    var setSource: (ThemingSource) -> Void
     var close: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1084,6 +1115,8 @@ private struct ThemeGalleryView: View {
 
             filterField
 
+            sourceControl
+
             chip(
                 model.deck.query.isEmpty && !model.deck.favouritesOnly ? "All" : "All themes",
                 lit: model.deck.query.isEmpty && !model.deck.favouritesOnly,
@@ -1111,6 +1144,44 @@ private struct ThemeGalleryView: View {
         let count = model.deck.count
         guard count > 0 else { return "0 / 0" }
         return "\(min(model.deck.selected + 1, count)) / \(count)"
+    }
+
+    /// A theme card cannot change the source itself, so the deck carries the
+    /// explicit switch from Settings: wallpaper colours or theme colours.
+    private var sourceControl: some View {
+        HStack(spacing: 2) {
+            sourceSegment("Wallpaper colours", .wallpaper)
+            sourceSegment("Theme colours", .theme)
+        }
+        .padding(2)
+        .frame(height: 24)
+        .background(
+            Capsule().fill(theme.color(theme.palette.elevated).opacity(ThemeDeckInk.chipFill))
+        )
+        .overlay(
+            Capsule().strokeBorder(theme.color(theme.palette.border).opacity(0.8), lineWidth: 1)
+        )
+        .disabled(model.switchingSource)
+        .opacity(model.switchingSource ? 0.55 : 1)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Palette source")
+    }
+
+    private func sourceSegment(_ label: String, _ source: ThemingSource) -> some View {
+        let active = model.paletteSource == source
+        return Button { setSource(source) } label: {
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(active ? theme.color(theme.palette.bg) : theme.color(theme.palette.fg))
+                .padding(.horizontal, 9)
+                .frame(maxHeight: .infinity)
+                .background(Capsule().fill(active ? theme.color(theme.palette.accent) : .clear))
+        }
+        .buttonStyle(.plain)
+        .help(active ? "\(label) are in use" : "Switch to \(label.lowercased())")
+        .accessibilityLabel(label)
+        .accessibilityValue(active ? "Selected" : "Not selected")
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// Typing is handled by the panel, so this is a field the keyboard drives
@@ -1858,7 +1929,7 @@ private struct ThemeGalleryView: View {
                 ProgressView()
                     .controlSize(.small)
                     .accessibilityLabel("Applying")
-            } else if let status = model.status, status != ThemeCardSourceGuard.wallpaperHint {
+            } else if let status = model.status, status != ThemingSourceGuard.refusalMessage {
                 Text(status)
                     .font(.caption)
                     .foregroundStyle(model.statusFailed
