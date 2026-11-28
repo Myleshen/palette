@@ -107,9 +107,31 @@ public enum StarshipTheme {
         guard !candidates.isEmpty else { return }
         for key in values.keys {
             guard let raw = values[key]?.string,
-                  let colour = colour(from: raw, palette: palette),
-                  let nearest = nearestHex(to: colour, candidates: candidates) else { continue }
-            values[key] = nearest
+                  let colour = colour(from: raw, palette: palette) else { continue }
+            // A key named after a terminal colour means that colour, not the
+            // nearest one: a near-monochrome wallpaper palette would otherwise
+            // snap blue and bright-blue to the same grey.
+            if let hex = semanticHex(for: key, palette: palette) {
+                values[key] = hex
+            } else if let nearest = nearestHex(to: colour, candidates: candidates) {
+                values[key] = nearest
+            }
+        }
+    }
+
+    /// Exact mappings for well-known names. `fg:`/`bg:` prefixes describe how
+    /// the colour is used, not which colour it is, so they map by the name
+    /// after the colon.
+    static func semanticHex(for key: String, palette: PalettePalette) -> String? {
+        var name = key.lowercased()
+        for prefix in ["fg:", "bg:"] where name.hasPrefix(prefix) {
+            name.removeFirst(prefix.count)
+        }
+        switch name {
+        case "fg", "foreground": return palette.foreground
+        case "bg", "background": return palette.background
+        case "accent": return palette.cursor
+        default: return paletteHex(name, palette: palette)
         }
     }
 
