@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-11-28
+goal: Tag v2.20.0 and publish the release with the Homebrew cask bump
+skip_specs: true

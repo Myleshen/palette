@@ -5,6 +5,13 @@ the app decides how to render them. That constraint is deliberate: every theme
 is guaranteed to produce a usable launcher, extensions cannot inject views or
 CSS, and light/dark/accessibility behavior stays coherent.
 
+This file explains how theming works. The behaviour contract — including error
+paths, refusals and migration — lives in
+[`openspec/specs/theming/`](openspec/specs/theming/spec.md) and
+[`openspec/specs/theme-catalogue/`](openspec/specs/theme-catalogue/spec.md);
+the deck is in
+[`openspec/specs/theme-deck/`](openspec/specs/theme-deck/spec.md).
+
 ## 1. Location and selection
 
 ```

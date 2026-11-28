@@ -16,6 +16,29 @@ v2.20.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandbox
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
 
+## Specs
+
+Behaviour is specified in [`openspec/specs/`](openspec/specs/) — one capability
+per directory, each requirement a SHALL with WHEN/THEN scenarios. These specs,
+not this README, are the behavioural source of truth; the guides below are
+explanations that link back to them.
+
+Every code change starts as an OpenSpec change in
+[`openspec/changes/`](openspec/changes/), named for its behaviour
+(`add-theme-deck`, `fix-revert-clobber`); a `release-<version>` change is only
+for packaging and version work. Pure documentation edits are the only
+exception.
+
+```sh
+make specs    # openspec validate --all --strict
+```
+
+Significant technical choices are recorded as ADRs in
+[`openspec/decisions/`](openspec/decisions/), with
+[`matrix.md`](openspec/decisions/matrix.md) mapping capabilities to code and
+tests. A change is archived only after its behaviour is verified on the merged
+tree; a release change stays open until its tag exists.
+
 ## Feature timeline
 
 Where each headline feature landed. Every fix, and everything before 1.8, is in

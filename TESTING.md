@@ -4,10 +4,15 @@
 
 ```sh
 make test          # swift test
+make specs         # openspec validate --all --strict
 ```
 
 The suite is pure Swift and does not require a running app. Path and external
 provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
+
+Behaviour lives in `openspec/specs/`; `make specs` fails on a requirement
+without a WHEN/THEN scenario or an over-long description, and CI runs the same
+command.
 
 | File | What is covered |
 |---|---|

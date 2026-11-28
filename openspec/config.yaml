@@ -1,0 +1,41 @@
+schema: spec-driven
+
+context: |
+  Palette is a macOS-only keyboard launcher written in Swift/SwiftUI/AppKit.
+  It is ad-hoc signed: there is no Apple Developer account, notarisation or
+  App Store listing, so TCC grants (Accessibility, Screen Recording) are keyed
+  to the bundle id and are re-requested after rebuilds. Development happens in
+  worktrees under ~/dev/.worktrees/palette/; never commit node_modules, build
+  artefacts or secrets.
+
+  Release flow: PR -> CI -> squash merge -> v<version> tag -> release workflow
+  (tests, zip, CHANGELOG notes, cask bump in Myleshen/homebrew-tap). A tag is
+  the release. No PR or tag without an explicit request in that turn.
+
+  Specs describe behaviour, not implementation: requirements use SHALL,
+  scenarios use WHEN/THEN/AND. Any user-visible behaviour change needs a change
+  proposal under openspec/changes/ before code.
+
+rules:
+  proposal:
+    - Every code change needs a proposal, including refactors, fixes and test-only work; only pure documentation edits are exempt.
+    - Name the change for its behaviour in kebab-case (add-theme-deck, fix-revert-clobber). Use a release-<version> change only for packaging and version work.
+    - State what is out of scope and which capabilities' requirements change.
+  specs:
+    - One capability per directory under openspec/specs/<capability>/spec.md.
+    - Write exhaustive behaviour: every branch, error path, refusal, cancellation, permission denial, partial failure, migration and empty state gets its own SHALL requirement and scenario.
+    - Requirements state observable behaviour; no class, function or file names.
+    - Every requirement needs at least one WHEN/THEN scenario, and descriptions stay under 500 characters.
+  design:
+    - Record significant technical choices as ADRs under openspec/decisions/ and link the ADR from the affected spec or design.
+  tasks:
+    - Keep unchecked release steps (user testing, PR, CI, tag, brew bump) as checkboxes.
+
+operations:
+  apply:
+    guidance:
+      - Run `openspec validate --all --strict` before opening a PR.
+  archive:
+    guidance:
+      - Archive only after the behaviour is verified on the merged tree.
+      - Keep a release change open until its tag exists and the release is published.

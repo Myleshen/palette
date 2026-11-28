@@ -13,7 +13,7 @@ DEBUG_BINARY := $(DEBUG_BIN_PATH)/$(APP_NAME)
 # Missing git (a source tarball, CI without history) just skips the key.
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null)
 
-.PHONY: all build app install run test clean debug debug-app layout-check e2e
+.PHONY: all build app install run test clean debug debug-app layout-check e2e specs
 
 all: app
 
@@ -71,6 +71,9 @@ e2e:
 
 test:
 	nice -n 10 taskpolicy -b swift test
+
+specs:
+	openspec validate --all --strict
 
 clean:
 	swift package clean
