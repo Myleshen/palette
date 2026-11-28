@@ -67,8 +67,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: PaletteStore!
     private var themeManager: ThemeManager!
     private var themingEngine: ThemingEngine!
+    private var restartPromptController: RestartPromptController?
+    private var restartPromptCancellable: AnyCancellable?
     private var themingTimer: Timer?
-    private var lastWallpaperSignature = ""
+    private var wallpaperFollow = WallpaperFollowState()
+    /// The deck's source toggle: explicit, one at a time, and the only place a
+    /// theme apply runs while wallpaper colours are being switched off.
+    private let paletteSourceSwitcher = ThemingSourceSwitcher()
     private var launcher: LauncherService!
     private var pasteboard: PasteboardService!
     private var clipboardMonitor: ClipboardMonitor?
@@ -89,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeyInstallTask: Task<Void, Never>?
     private var statusItem: NSStatusItem!
     private var statusPanel: StatusPanelController!
+    private var themeGallery: ThemeGalleryWindowController?
     /// Cached so a panel render is synchronous; the countdown itself is
     /// computed from `endsAt`, and every panel open re-reads the service.
     private var keepAwakeStatus = KeepAwakeStatus()
@@ -193,6 +199,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configuration = configResult.config
         startupDiagnostics = configResult.diagnostics
         configErrorMessage = configResult.parseError
+        // The 2.20.0 catalogue cut pruned 793 theme files. A stored reference
+        // to one is rewritten once here, so a picker choice, a theming theme or
+        // a card favourite never points at a theme that no longer loads.
+        let curationNotes = ThemeCuration.migrate(&configuration, themesDirectory: paths.themesDir)
+        if !curationNotes.isEmpty {
+            for note in curationNotes { Log.shared.warn(note, source: "theme") }
+            pendingLaunchStatus = curationNotes.joined(separator: " ")
+            do {
+                try writeConfig(configuration)
+            } catch {
+                Log.shared.error(
+                    "Could not save the migrated theme choice: \(error.localizedDescription)",
+                    source: "theme"
+                )
+            }
+        }
         captureService.stateFile = paths.stateDir.appendingPathComponent("recording.json")
         let recordingAdoption = captureService.adoptPendingRecording()
         let forceOnboarding = ProcessInfo.processInfo.environment["PALETTE_FORCE_ONBOARDING"] == "1"
@@ -267,8 +289,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themingEngine = ThemingEngine(
             paths: paths,
             themesDirectory: paths.themesDir,
-            kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty")
+            kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty"),
+            setSystemAppearance: { dark in await SystemAppearance.set(dark: dark) }
         )
+        themingEngine.onAppliedPalette = { [weak self] palette, metadata in
+            self?.paletteAppliedToOwnTheme(palette, metadata: metadata)
+        }
+        restartPromptController = RestartPromptController(
+            themeManager: themeManager,
+            onRestart: { [weak self] in
+                Task { @MainActor in await self?.themingEngine.restartAppsNow() }
+            },
+            onLater: { [weak self] in self?.themingEngine.dismissRestartPrompt() }
+        )
+        restartPromptCancellable = themingEngine.$restartPrompt
+            .removeDuplicates()
+            .sink { [weak self] prompt in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if let prompt {
+                        self.restartPromptController?.show(prompt)
+                    } else {
+                        self.restartPromptController?.hide()
+                    }
+                }
+            }
+        // A display name saved by an older build never loads; rewrite it to the
+        // theme file id now and persist so the next apply uses the real theme.
+        migrateThemingThemeID()
         // Config overrides must apply on launch, not only after a reload.
         themeManager.typography = configuration.typography
         themeManager.searchPlaceholder = configuration.searchPlaceholder
@@ -315,6 +363,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 for case let provider as PathsProvider in builtRegistry.providers {
                     await provider.prewarm(homeConsent: homeConsent)
                 }
+                // Bound providers that shell out (Bitwarden's status probe)
+                // warm once here so the first query does not pay for it.
+                await builtRegistry.prewarm()
             }
         }
         searchController = SearchController(
@@ -391,6 +442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         wireControllerCallbacks()
         buildPanel()
+        buildThemeGallery()
         buildMainMenu()
         installHotKey()
         checkDefaultProviderTools()
@@ -407,6 +459,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureWatchers()
         scheduleDatabaseMaintenance()
         showOnboardingIfNeeded()
+        repairStaleThemingOnLaunch()
+        restoreWallpaperOwnTheme()
+        // Launching straight into follow mode must poll too; reload() alone
+        // would leave desktop changes unseen until a settings change.
+        configureThemingPolling()
 
         if let firstError = startupDiagnostics.first(where: { $0.level == .error }) {
             searchController.setStatus(firstError.message, duration: nil)
@@ -661,6 +718,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.statusPanel.hide()
                 } else if let value = step.dropPrefix("statuspanel_snapshot=") {
                     self.writeStatusPanelSnapshot(to: value)
+                } else if step == "themecards" {
+                    self.showThemeGallery(mode: .colors)
+                } else if let value = step.dropPrefix("themecards_size=") {
+                    self.themeGallery?.scriptSize(value)
+                } else if let value = step.dropPrefix("themecards_deal="), let progress = Double(value) {
+                    self.themeGallery?.scriptDeal(progress)
+                } else if let value = step.dropPrefix("themecards_mode=") {
+                    self.themeGallery?.scriptMode(ThemeCardMode(rawValue: value) ?? .colors)
+                } else if step == "themecardsclose" {
+                    self.themeGallery?.hide()
+                } else if step == "themecards_first" {
+                    self.themeGallery?.scriptJumpToFirst()
+                } else if step == "themecards_last" {
+                    self.themeGallery?.scriptJumpToLast()
+                } else if step == "themecards_next" {
+                    self.themeGallery?.scriptMove(1)
+                } else if step == "themecards_prev" {
+                    self.themeGallery?.scriptMove(-1)
+                } else if let value = step.dropPrefix("themecards_filter=") {
+                    self.themeGallery?.scriptFilter(value)
+                } else if step == "themecards_tab" {
+                    self.themeGallery?.scriptToggleFavouritesView()
+                } else if step == "themecards_favourite" {
+                    self.themeGallery?.scriptToggleFavourite()
+                } else if step == "themecards_apply" {
+                    self.themeGallery?.scriptApply()
+                } else if step == "themecards_preview" {
+                    self.themeGallery?.scriptPreview()
+                } else if step == "themecards_previewclose" {
+                    self.themeGallery?.scriptPreviewClose()
+                } else if let value = step.dropPrefix("themecards_snapshot=") {
+                    if let view = self.themeGallery?.window?.contentView {
+                        self.write(view: view, to: value)
+                    } else {
+                        self.recordScriptFailure("theme cards are not open")
+                    }
                 } else if step == "palettemenu" {
                     self.showPaletteMenuProbe()
                 } else if step == "palettemenu_long" {
@@ -710,6 +803,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             && PaletteMenuController.shared.scriptKey(event))
                             || (self.statusPanel?.isOpen == true
                                 && self.statusPanel.scriptKey(event))
+                            || (self.themeGallery?.isOpen == true
+                                && self.themeGallery?.scriptKey(event) == true)
                         if !handled {
                             _ = self.searchController.handleKey(event)
                         }
@@ -726,7 +821,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `performBinding` path the Carbon hotkey uses.
     /// Script-only: opens a menu panel with fixed rows so a run can prove it
     /// does not activate the app and that work still happens while it is open.
-    /// `rows` builds a stress menu shaped like the 942-theme picker.
+    /// `rows` builds a stress menu larger than the catalogue ever gets.
     private func showPaletteMenuProbe(long: Bool = false, rows: Int = 0) {
         var items: [PaletteMenuItem] = [
             PaletteMenuItem(id: "one", title: "Probe One", shortcut: "⌘1", checked: true),
@@ -828,7 +923,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let spec = HotKeySpec.parse(keys) else { return "Invalid shortcut" }
         let owned = [
             configuration.hotkey, configuration.clipboardHotkey,
-            configuration.terminalHotkey, configuration.scratchpadHotkey,
+            configuration.terminalHotkey, configuration.themeGalleryHotkey,
+            configuration.wallpaperGalleryHotkey,
+            configuration.scratchpadHotkey,
             configuration.askHotkey, configuration.screenshotHotkey,
             configuration.regionScreenshotHotkey, configuration.windowScreenshotHotkey,
             configuration.recordingHotkey,
@@ -873,9 +970,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var statusPanelHighlight: String
         var themeMenuRows: Int
         var themeMenuRendered: Int
+        var thumbsReady: Bool
+        var thumbsLoaded: Int
+        var thumbsTotal: Int
         var panelHeight: CGFloat
         var panelWidth: CGFloat
         var panelFrame: CGRect
+        var panelGeometryOK: Bool
+        var registeredHotkeys: Int
         var derivedPanelHeight: CGFloat
         var providerCount: Int
         var providerBarMode: String
@@ -897,7 +999,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "paletteMenuRows", "paletteMenuHighlight",
         "statusPanelOpen", "statusPanelRows", "statusPanelHighlight",
         "themeMenuRows", "themeMenuRendered",
+        "thumbsReady", "thumbsLoaded", "thumbsTotal",
         "panelHeight", "providerCount", "providerBarMode", "panelWidth",
+        "panelGeometryOK", "registeredHotkeys",
     ]
 
     private func scriptObservation() -> ScriptObservation {
@@ -935,14 +1039,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusPanelHighlight: statusPanel?.scriptHighlightedTitle ?? "",
             themeMenuRows: ThemeBrowserRenderProbe.catalogSize,
             themeMenuRendered: ThemeBrowserRenderProbe.rows,
+            thumbsReady: themeGallery?.scriptThumbsReady ?? false,
+            thumbsLoaded: themeGallery?.scriptThumbsLoaded ?? 0,
+            thumbsTotal: themeGallery?.scriptThumbsTotal ?? 0,
             panelHeight: panel?.panel.frame.height ?? 0,
             panelWidth: panel?.panel.frame.width ?? 0,
             panelFrame: panel?.panel.frame ?? .zero,
+            panelGeometryOK: panelGeometryIsCorrect,
+            registeredHotkeys: hotkeyManagers.count,
             derivedPanelHeight: panel?.panel.frame.height ?? 0,
             providerCount: searchController?.railEntries.count ?? 0,
             providerBarMode: searchController?.providerBar.rawValue ?? "",
             items: searchController?.items ?? []
         )
+    }
+
+    /// The unit tests prove the `launcherSize` rule; only a running bundle can
+    /// prove AppKit actually put the window there, inside the active screen.
+    private var panelGeometryIsCorrect: Bool {
+        guard let window = panel?.panel, window.isVisible else { return false }
+        guard let screen = PanelController.screenUnderPointer() ?? window.screen else { return false }
+        let visible = screen.visibleFrame
+        let expected = configuration.window.launcherSize(for: visible.size)
+        let frame = window.frame
+        return abs(frame.width - expected.width) < 0.5
+            && abs(frame.height - expected.height) < 0.5
+            && visible.insetBy(dx: -0.5, dy: -0.5).contains(frame)
     }
 
     private func scriptValue(_ key: String, _ observation: ScriptObservation) -> String {
@@ -979,10 +1101,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "statusPanelHighlight": return observation.statusPanelHighlight
         case "themeMenuRows": return String(observation.themeMenuRows)
         case "themeMenuRendered": return String(observation.themeMenuRendered)
+        case "thumbsReady": return String(observation.thumbsReady)
+        case "thumbsLoaded": return String(observation.thumbsLoaded)
+        case "thumbsTotal": return String(observation.thumbsTotal)
         case "promptTitle": return observation.promptTitle
         case "promptError": return observation.promptError
         case "panelHeight": return String(format: "%.2f", observation.panelHeight)
         case "panelWidth": return String(format: "%.2f", observation.panelWidth)
+        case "panelGeometryOK": return String(observation.panelGeometryOK)
+        case "registeredHotkeys": return String(observation.registeredHotkeys)
         case "derivedPanelHeight": return String(format: "%.2f", observation.derivedPanelHeight)
         case "providerCount": return String(observation.providerCount)
         case "providerBarMode": return observation.providerBarMode
@@ -1005,7 +1132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let actual = scriptValue(key, observation)
 
         switch key {
-        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen", "statusPanelOpen":
+        case "panelVisible", "appActive", "actionsMode", "previewEnabled", "scratchpadActive", "terminalActive", "terminalExited", "paletteMenuOpen", "statusPanelOpen", "panelGeometryOK", "thumbsReady":
             guard let want = Bool(expected) else {
                 return "\(key) expects true/false, got '\(expected)'"
             }
@@ -1015,7 +1142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "!=": return have != want ? nil : "\(key)=\(actual), expected != \(want)"
             default: return "'\(op)' is not supported for \(key)"
             }
-        case "selectionIndex", "itemCount", "paletteMenuProbe", "paletteMenuRows", "statusPanelRows", "themeMenuRows", "themeMenuRendered":
+        case "selectionIndex", "itemCount", "paletteMenuProbe", "paletteMenuRows", "statusPanelRows", "themeMenuRows", "themeMenuRendered", "thumbsLoaded", "thumbsTotal", "registeredHotkeys":
             guard let want = Int(expected), let have = Int(actual) else {
                 return "\(key) expects a number, got '\(expected)'"
             }
@@ -1068,6 +1195,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
             ]
         } ?? [:]
+        // Scripts check the live embedded terminal: these are read back from
+        // the view SwiftTerm is drawing, not recomputed from the theme.
+        let terminalColours = TerminalColorProbe.snapshot()
+        let activeTheme = themeManager.theme
+        let screenFrame = (PanelController.screenUnderPointer() ?? panel?.panel.screen)?.visibleFrame ?? .zero
         let dump: [String: Any] = [
             "panelVisible": observation.panelVisible,
             "appActive": observation.appActive,
@@ -1101,6 +1233,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "statusPanelHighlight": observation.statusPanelHighlight,
             "themeMenuRows": observation.themeMenuRows,
             "themeMenuRendered": observation.themeMenuRendered,
+            "thumbsReady": observation.thumbsReady,
+            "thumbsLoaded": observation.thumbsLoaded,
+            "thumbsTotal": observation.thumbsTotal,
             "panelHeight": observation.panelHeight,
             "panelWidth": observation.panelWidth,
             "panelFrame": [
@@ -1108,6 +1243,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "y": observation.panelFrame.origin.y,
                 "width": observation.panelFrame.width,
                 "height": observation.panelFrame.height,
+            ],
+            "panelGeometryOK": observation.panelGeometryOK,
+            "registeredHotkeys": observation.registeredHotkeys,
+            "panelScreenFrame": [
+                "x": screenFrame.origin.x,
+                "y": screenFrame.origin.y,
+                "width": screenFrame.width,
+                "height": screenFrame.height,
             ],
             "derivedPanelHeight": observation.derivedPanelHeight,
             "providerCount": observation.providerCount,
@@ -1127,6 +1270,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             "firstTitle": observation.items.first?.title ?? "",
             "theming": theming,
+            "theme": [
+                "id": themeManager.currentThemeID,
+                "appearance": activeTheme.appearance,
+                "background": activeTheme.palette.bg,
+                "foreground": activeTheme.palette.fg,
+            ],
+            "terminal": terminalColours,
         ]
         do {
             let data = try JSONSerialization.data(
@@ -1141,6 +1291,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// NSApp.terminate always exits 0, so a failed script exits directly.
     private func finishScript() -> Never {
+        // `exit(0)` skips `applicationWillTerminate`; stop the PTY tree here so
+        // the harness's `no-surviving-children` check sees a clean quit.
+        TerminalProcesses.stopAll()
         let reasons = scriptFailureReasons
         Log.shared.info(
             "Script finished: failures=\(reasons.count), appActive=\(NSApp.isActive)",
@@ -1216,7 +1369,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func syntheticKey(_ token: String) -> NSEvent? {
         var flags: NSEvent.ModifierFlags = []
         var name = token.lowercased()
-        for (prefix, flag) in [("cmd+", NSEvent.ModifierFlags.command), ("opt+", .option), ("shift+", .shift)] {
+        for (prefix, flag) in [("ctrl+", NSEvent.ModifierFlags.control), ("cmd+", NSEvent.ModifierFlags.command), ("opt+", .option), ("shift+", .shift)] {
             if name.hasPrefix(prefix) {
                 flags.insert(flag)
                 name = String(name.dropFirst(prefix.count))
@@ -1228,6 +1381,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "enter": (36, "\r"), "esc": (53, "\u{1B}"), "tab": (48, "\t"),
             "space": (49, " "), "comma": (43, ","), "k": (40, "k"),
             "r": (15, "r"), "w": (13, "w"), "s": (1, "s"), "o": (31, "o"), "c": (8, "c"),
+            "p": (35, "p"),
+            "f": (3, "f"), "backspace": (51, "\u{8}"),
             "1": (18, "1"), "2": (19, "2"), "3": (20, "3"),
             "4": (21, "4"), "5": (23, "5"), "6": (22, "6"),
             "7": (26, "7"), "8": (28, "8"), "9": (25, "9"),
@@ -1278,6 +1433,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManagers.values.forEach { $0.unregister() }
         // A draft that was never explicitly closed must survive the quit.
         searchController?.saveScratchpadOnTerminate()
+        // The PTY child (shell, zellij client) is not a child of this process
+        // after the fork; without this it survives the quit and keeps running.
+        TerminalProcesses.stopAll()
         // Keep the clamshell flag: the next launch reads it back and shows the
         // real state. The root guard itself restores normal lid sleep when this
         // process disappears. The caffeinate child is left running on purpose.
@@ -1397,7 +1555,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onSelect: { [weak self] name in self?.pickTheme(name) },
             currentName: { [weak self] in self?.themeManager.currentThemeID ?? "" },
             paletteAvailable: { [weak self] in self?.configuration.theming.enabled ?? false },
-            onApplyPalette: { [weak self] name in self?.applyPaletteToApps(name) }
+            onApplyPalette: { [weak self] name in self?.applyPaletteToApps(name) },
+            onShowCards: { [weak self] in self?.showThemeGallery() }
         )
         providers.append(themes)
 
@@ -1547,6 +1706,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     press: { [weak self] in self?.showClipboard() }),
             Desired(id: "terminal", label: "Terminal shortcut", keys: configuration.terminalHotkey,
                     press: { [weak self] in self?.toggleTerminalPanel() }),
+            Desired(id: "theme-gallery", label: "Theme cards shortcut", keys: configuration.themeGalleryHotkey,
+                    press: { [weak self] in self?.toggleThemeGallery(mode: .colors) }),
+            Desired(id: "wallpaper-gallery", label: "Wallpaper cards shortcut",
+                    keys: configuration.wallpaperGalleryHotkey,
+                    press: { [weak self] in self?.toggleThemeGallery(mode: .wallpapers) }),
             Desired(id: "scratchpad", label: "Scratchpad list shortcut", keys: configuration.scratchpadHotkey,
                     press: { [weak self] in self?.toggleScratchpad() }),
             Desired(id: "ask", label: "Ask shortcut", keys: configuration.askHotkey,
@@ -1710,6 +1874,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = ["-lc", command]
+        // A binding is an arbitrary command, so it must not inherit vault or
+        // Ask credentials from Palette's own environment.
+        process.environment = ProcessRunner.sanitizedEnvironment(ProcessInfo.processInfo.environment)
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = errorLog
@@ -2502,17 +2669,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             to: configuration,
             providers: providerSettingsInfo()
         )
+        var saved = false
         do {
             try writeConfig(essentials)
+            saved = true
         } catch {
             Log.shared.warn("Could not save the Essentials preset: \(error.localizedDescription)", source: "onboarding")
         }
-        if !isScriptMode {
+        if Self.shouldMarkOnboardingComplete(saved: saved, isScriptMode: isScriptMode) {
             UserDefaults.standard.set(true, forKey: "onboardingCompleted")
         }
         onboardingWindow?.close()
         onboardingWindow = nil
         reload(quiet: false)
+    }
+
+    /// The flag only moves after a successful save, so a failed write offers
+    /// setup again instead of pretending the user finished it.
+    static func shouldMarkOnboardingComplete(saved: Bool, isScriptMode: Bool) -> Bool {
+        saved && !isScriptMode
     }
 
     private func showOnboardingIfNeeded() {
@@ -2523,12 +2698,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             providers: providerSettingsInfo(),
             onFinish: { [weak self] updated in
                 guard let self else { return }
+                var saved = false
                 do {
                     try self.writeConfig(updated)
+                    saved = true
                 } catch {
                     self.searchController.setStatus("Could not save setup: \(error.localizedDescription)", duration: 4)
                 }
-                if !self.isScriptMode {
+                if AppDelegate.shouldMarkOnboardingComplete(saved: saved, isScriptMode: self.isScriptMode) {
                     UserDefaults.standard.set(true, forKey: "onboardingCompleted")
                 }
                 self.onboardingWindow?.close()
@@ -3088,7 +3265,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Every config write goes through here so the watcher can tell our save
     /// from an external edit and never reload in a loop.
     private func writeConfig(_ config: PaletteConfig) throws {
-        try ConfigWriter.write(config, to: paths.configFile)
+        do {
+            try ConfigWriter.write(config, to: paths.configFile, parseError: configErrorMessage)
+        } catch {
+            // The broken file and its .bak are the user's only copy; say what
+            // happened instead of letting a caller swallow a silent failure.
+            if searchController != nil {
+                searchController.setStatus(error.localizedDescription, duration: 8)
+            }
+            throw error
+        }
         lastConfigModification = modificationDate(paths.configFile)
     }
 
@@ -3133,19 +3319,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `/theme` is a real choice: store it in `[theme]` so a relaunch keeps it,
     /// instead of the old meta key that was written and deleted every launch.
+    /// While wallpaper colours own the palette the pick is refused and nothing
+    /// is written; the source only changes from the deck or Settings control.
     private func pickTheme(_ name: String) {
+        if let refusal = ThemingSourceGuard.refusal(source: configuration.theming.source) {
+            searchController?.setStatus(refusal, duration: 8)
+            return
+        }
         // The load is off-main now, so the slot to write comes from the
         // resolved theme rather than the previous one.
         themeManager.select(name) { [weak self] theme in
             guard let self else { return }
-            if theme.appearance == "light" {
-                self.configuration.theme.mode = .light
-                self.configuration.theme.light = name
-            } else {
-                self.configuration.theme.mode = .dark
-                self.configuration.theme.dark = name
-            }
-            self.themeManager.selection = self.configuration.theme
+            self.configuration.theme = self.configuration.theme.applying(
+                themeID: name,
+                appearance: theme.appearance
+            )
+            self.themeManager.updateSelection(self.configuration.theme)
             do {
                 try self.writeConfig(self.configuration)
             } catch {
@@ -3158,6 +3347,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// An engine apply also moves Palette's own surfaces, so the launcher and
+    /// the embedded terminal never keep yesterday's palette while other apps
+    /// get the new one. Nothing here calls the engine, so a theme apply cannot
+    /// loop back into a second apply.
+    private func paletteAppliedToOwnTheme(_ palette: PalettePalette, metadata: PaletteMetadata) {
+        if metadata.source == "wallpaper" {
+            // A wallpaper palette has no theme file; its colours become the
+            // launcher theme directly (and survive until the next theme pick).
+            themeManager.applyPalette(palette)
+            return
+        }
+        // A "Theme override" for other apps is deliberate divergence; only a
+        // stale wallpaper look is cleared when Palette's own theme is applied.
+        guard themeManager.hasDerivedPalette,
+              !metadata.themeID.isEmpty,
+              metadata.themeID == themeManager.currentThemeID else { return }
+        themeManager.select(metadata.themeID)
+    }
+
+    /// A wallpaper-sourced palette has no theme file of its own, so a relaunch
+    /// would otherwise show Palette in the config theme while every other app
+    /// keeps the wallpaper colours. Re-extract without touching the files.
+    private func restoreWallpaperOwnTheme() {
+        let config = configuration.theming
+        guard !isScriptMode, config.enabled, config.source == .wallpaper else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let palette = await self.themingEngine.previewWallpaper(config: config) else {
+                return
+            }
+            self.themeManager.applyPalette(palette)
+        }
+    }
+
     /// `/theme` → Apply Palette. It switches the engine to theme mode and
     /// remembers the pick so the next apply and the Settings pane agree.
     private func applyPaletteToApps(_ name: String) {
@@ -3167,30 +3390,303 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// One stored id for every reader: a display name from `/theme`, Settings or
+    /// an old config is rewritten to the catalogue id before it is saved.
+    private func migrateThemingThemeID() {
+        let resolved = configuration.theming.resolvingThemeID(
+            fallback: themeManager.currentThemeID,
+            themesDirectory: paths.themesDir
+        )
+        guard resolved.theme != configuration.theming.theme else { return }
+        configuration.theming = resolved
+        do {
+            try writeConfig(configuration)
+            Log.shared.info("Theming theme id migrated to '\(resolved.theme)'.", source: "theming")
+        } catch {
+            Log.shared.warn("Could not save the theming theme id: \(error.localizedDescription)", source: "theming")
+        }
+    }
+
+    /// An upgrading user can have generated files from a build that wrote `#`
+    /// into Lua/KDL. Neovim fails with E5113 on that file, so the launch path
+    /// rebuilds the set once, silently, logs what it repaired, and then paints
+    /// a running kitty from the file that is now on disk.
+    private var didRepairStaleTheming = false
+
+    private func repairStaleThemingOnLaunch() {
+        guard !isScriptMode, !didRepairStaleTheming else { return }
+        didRepairStaleTheming = true
+        let config = configuration.theming
+        guard config.enabled else { return }
+        let reasons = ThemingStaleness.reasons(themeID: config.theme, themeDir: paths.themeDir)
+        let name = config.theme.isEmpty ? themeManager.currentThemeID : config.theme
+        if !reasons.isEmpty {
+            Log.shared.info(
+                "Re-applying theming on launch: \(reasons.joined(separator: "; "))",
+                source: "theming"
+            )
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if !reasons.isEmpty {
+                let result = config.source == .wallpaper
+                    ? await self.themingEngine.applyWallpaper(config)
+                    : await self.themingEngine.applyTheme(named: name, config: config)
+                if let error = result.error {
+                    Log.shared.warn("Could not repair the generated palette: \(error)", source: "theming")
+                    self.searchController?.setStatus(error, duration: 8)
+                }
+            }
+            await self.themingEngine.pushKittyPaletteOnLaunch(config: config)
+        }
+    }
+
     @discardableResult
     private func applyPaletteToAppsNow(_ name: String) async -> ThemingEngine.ApplyResult {
+        if let refusal = ThemingSourceGuard.refusal(source: configuration.theming.source) {
+            return ThemingEngine.ApplyResult(
+                status: refusal,
+                source: configuration.theming.source.rawValue,
+                appearance: "",
+                written: [],
+                skipped: [],
+                includeLines: [],
+                notices: [],
+                changes: [],
+                targets: [],
+                error: refusal
+            )
+        }
         configuration.theming.enabled = true
-        configuration.theming.source = .theme
         configuration.theming.theme = name
+        configuration.theming = configuration.theming.resolvingThemeID(
+            fallback: themeManager.currentThemeID,
+            themesDirectory: paths.themesDir
+        )
+        // An explicit cross-app apply is also Palette's own choice: record the
+        // resolved id in `[theme]` and show it here, not only in other apps.
+        if themeManager.currentThemeID != configuration.theming.theme {
+            pickTheme(configuration.theming.theme)
+        }
         do {
             try writeConfig(configuration)
         } catch {
             Log.shared.warn("Could not save the palette source: \(error.localizedDescription)", source: "theming")
         }
-        return await themingEngine.applyTheme(named: name, config: configuration.theming)
+        return await themingEngine.applyTheme(named: configuration.theming.theme, config: configuration.theming)
+    }
+
+    // MARK: - Theme cards
+
+    private func buildThemeGallery() {
+        themeGallery = ThemeGalleryWindowController(
+            themeManager: themeManager,
+            themesDirectory: paths.themesDir,
+            wallpaperDirectory: WallpaperLibrary.directory(
+                path: configuration.theming.wallpaperDirectory
+            ),
+            apply: { [weak self] target in
+                guard let self else { return ThemeGalleryApplyOutcome(message: "", failed: true) }
+                return await self.applyGalleryTarget(target)
+            },
+            wallpaper: { [weak self] in
+                guard let self else { return (nil, nil) }
+                let urls = self.themingEngine.wallpaperURLs
+                let image = await Task.detached(priority: .userInitiated) {
+                    urls.first.flatMap { NSImage(contentsOf: $0) }
+                }.value
+                let palette = await self.themingEngine.previewWallpaper(
+                    config: self.configuration.theming
+                )
+                return (image, palette.map(ThemeCardPalette.init(palette:)))
+            },
+            paletteSource: { [weak self] in self?.configuration.theming.source ?? .theme },
+            setSource: { [weak self] source in
+                guard let self else {
+                    return ThemeGalleryApplyOutcome(
+                        message: "Palette is not ready to switch source.",
+                        failed: true
+                    )
+                }
+                return await self.applyPaletteSource(source)
+            }
+        )
+        // The catalogue headers are read once now; a hotkey press only renders cards.
+        themeGallery?.preload()
+    }
+
+    /// The Theming pane's "Open themed session" button. zellij has no runtime
+    /// theme switch, so the only way to see the new palette now is a new
+    /// session; it goes through the same kitty path as Palette's own terminal
+    /// commands.
+    private func openThemedZellijSession() {
+        let zellij = ToolLocator.shared.path(for: "zellij") ?? "zellij"
+        do {
+            try launcher.openTerminal(
+                command: ZellijLauncher.themedSessionScript(zellij: zellij),
+                app: "kitty"
+            )
+        } catch {
+            searchController?.setStatus(
+                "Could not open the themed zellij session: \(error.localizedDescription)",
+                duration: 8
+            )
+        }
+    }
+
+    private func showThemeGallery(mode: ThemeCardMode = .colors) {
+        panel?.hide(activatePrevious: false)
+        themeGallery?.show(mode: mode)
+    }
+
+    private func toggleThemeGallery(mode: ThemeCardMode = .colors) {
+        if themeGallery?.isOpen == true {
+            themeGallery?.hide()
+        } else {
+            showThemeGallery(mode: mode)
+        }
+    }
+
+    /// The gallery's apply route. Theme cards take the same two paths as the
+    /// theme browser: the Palette theme write plus the cross-app engine when
+    /// that is enabled. Picking a wallpaper is picking its colours: the picture
+    /// changes first, then the palette follows it — other apps only when the
+    /// master switch is on.
+    private func applyGalleryTarget(_ target: ThemeCardTarget) async -> ThemeGalleryApplyOutcome {
+        let message: String
+        let failed: Bool
+        switch target {
+        case .theme(let name):
+            pickTheme(name)
+            if configuration.theming.enabled {
+                let applied = await applyPaletteToAppsNow(name)
+                message = applied.error ?? applied.status
+                failed = applied.error != nil
+            } else {
+                message = "Theme applied: \(name)"
+                failed = false
+            }
+        case .wallpaper:
+            let applied = await applyWallpaperPaletteNow()
+            message = applied.error ?? applied.status
+            failed = applied.error != nil
+        case .wallpaperFile(let path):
+            let name = URL(fileURLWithPath: path).lastPathComponent
+            let flow = await ThemeCardApplyFlow.wallpaperFile(
+                path: path,
+                name: name,
+                config: configuration,
+                setDesktopPicture: { [weak self] in self?.setDesktopPicture($0) ?? false },
+                saveConfig: { [weak self] updated in
+                    guard let self else { return }
+                    try self.writeConfig(updated)
+                },
+                applyPalette: { [weak self] config in
+                    guard let self else { return .empty }
+                    return await self.themingEngine.applyWallpaper(config)
+                }
+            )
+            configuration = flow.config
+            message = flow.outcome.message
+            failed = flow.outcome.failed
+        }
+        searchController?.setStatus(message, duration: 6)
+        return ThemeGalleryApplyOutcome(message: message, failed: failed)
+    }
+
+    /// Puts one file on every screen. Returns false when macOS rejects it,
+    /// which it does for video files: those cards say so instead of claiming
+    /// the desktop changed.
+    private func setDesktopPicture(_ path: String) -> Bool {
+        let url = URL(fileURLWithPath: path)
+        var applied = false
+        for screen in NSScreen.screens {
+            do {
+                try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+                applied = true
+            } catch {
+                Log.shared.warn(
+                    "Could not set desktop picture \(url.lastPathComponent) on \(screen.localizedName): "
+                        + error.localizedDescription,
+                    source: "theming"
+                )
+            }
+        }
+        if applied {
+            do {
+                if let spaces = try AllSpacesWallpaper.spread(picture: url) {
+                    Log.shared.info("Wallpaper applied to \(spaces) spaces", source: "theming")
+                }
+            } catch {
+                Log.shared.warn(
+                    "Could not apply the wallpaper to every space: \(error.localizedDescription)",
+                    source: "theming"
+                )
+            }
+        }
+        return applied
+    }
+
+    /// The "From wallpaper" card and the wallpaper-follow timer: the same
+    /// engine and config write, just triggered by a key instead. The picture
+    /// owns the palette, so the source is recorded as wallpaper first even when
+    /// no files are written.
+    @discardableResult
+    private func applyWallpaperPaletteNow() async -> ThemingEngine.ApplyResult {
+        configuration.theming = WallpaperCardPolicy.wallpaperConfig(from: configuration.theming)
+        do {
+            try writeConfig(configuration)
+        } catch {
+            Log.shared.warn("Could not save the palette source: \(error.localizedDescription)", source: "theming")
+        }
+        return await themingEngine.applyWallpaper(configuration.theming)
+    }
+
+    /// The deck's `Wallpaper colours | Theme colours` control. Unlike a theme
+    /// pick, this is the user switching the source on purpose, so it applies the
+    /// palette that matches instead of being refused.
+    private func applyPaletteSource(_ source: ThemingSource) async -> ThemeGalleryApplyOutcome {
+        guard let switched = await paletteSourceSwitcher.switchSource(
+            to: source,
+            themeName: themeManager.currentThemeID,
+            config: configuration,
+            saveConfig: { [weak self] updated in
+                guard let self else { return }
+                try self.writeConfig(updated)
+                self.configuration.theming.source = updated.theming.source
+            },
+            applyOwnTheme: { [weak self] name in self?.pickTheme(name) },
+            applyTheme: { [weak self] name in
+                guard let self, self.configuration.theming.enabled else { return .empty }
+                return await self.applyPaletteToAppsNow(name)
+            },
+            applyWallpaper: { [weak self] in
+                guard let self else { return .empty }
+                return await self.applyWallpaperPaletteNow()
+            }
+        ) else {
+            // A second press while the first is running is not an error.
+            return ThemeGalleryApplyOutcome(message: "", failed: false)
+        }
+        return switched.outcome
     }
 
     // MARK: - Wallpaper follow
+
+    /// Five seconds only for wallpaper-follow mode, exposed so the launch
+    /// path is testable without an AppKit app.
+    static func themingPollInterval(_ config: ThemingConfig) -> TimeInterval? {
+        ThemingEngine.shouldAutoApply(config) ? 5 : nil
+    }
 
     /// A five-second URL check, and only while the engine is in wallpaper-follow
     /// mode. No daemon, no filesystem watcher, no wake-ups otherwise.
     private func configureThemingPolling() {
         themingTimer?.invalidate()
         themingTimer = nil
-        let config = configuration.theming
-        guard config.enabled, config.source == .wallpaper, config.followWallpaper else { return }
-        lastWallpaperSignature = wallpaperSignature()
-        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+        guard let interval = Self.themingPollInterval(configuration.theming) else { return }
+        wallpaperFollow.reseed(wallpaperSignature())
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.themingWallpaperTick()
             }
@@ -3209,11 +3705,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let signature = wallpaperSignature()
-        guard signature != lastWallpaperSignature else { return }
-        lastWallpaperSignature = signature
+        guard wallpaperFollow.begin(signature) else { return }
         let config = configuration.theming
         Task { @MainActor in
             let result = await themingEngine.applyWallpaper(config)
+            // A failed read must be retried, so the signature only advances
+            // once the palette was actually written.
+            wallpaperFollow.finish(signature: signature, succeeded: result.error == nil)
             searchController?.setStatus(result.status, duration: 5)
         }
     }
@@ -3317,10 +3815,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timerService.configure(sound: configuration.timer.sound, notifications: configuration.timer.notify)
         captureService.config = configuration.capture
         themeManager.updateSelection(configuration.theme)
+        migrateThemingThemeID()
         panel?.anchorOverride = configuration.searchPosition.rawValue
         panel?.windowConfig = configuration.window
         statusPanel?.refreshSoon()
         configureThemingPolling()
+        themeGallery?.updateWallpaperDirectory(
+            WallpaperLibrary.directory(path: configuration.theming.wallpaperDirectory)
+        )
 
         let oldRegistry = registry
         let newRegistry = buildRegistry()
@@ -3473,7 +3975,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let confirm = NSAlert()
         confirm.messageText = "Export a backup without clipboard text?"
         confirm.informativeText = """
-        The backup includes config.toml, themes, providers, history and the encrypted Ask key files. \
+        The backup includes config.toml, themes, providers, history and the sealed Ask key blob; the key that unlocks it stays on this Mac. \
         Plain-text clipboard entries are removed before zipping because they can hold pasted secrets. \
         Image and file entries stay because they hold paths and pictures, not the text you typed.
         """
@@ -3495,7 +3997,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The full user state: config, themes, providers, database and the small
-    /// TOML files that used to be left out. The ask key files are encrypted.
+    /// TOML files that used to be left out. The Ask blob travels without the
+    /// key that opens it.
     @discardableResult
     private func writeBackup(to destination: URL) async -> Bool {
         let temp = FileManager.default.temporaryDirectory
@@ -3538,6 +4041,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpen: { [weak self] url in
                 self?.launcher.openPath(url.path)
             },
+            onThemeCards: { [weak self] in
+                self?.showThemeGallery()
+            },
+            onOpenThemedZellij: { [weak self] in
+                self?.openThemedZellijSession()
+            },
             onExportBackup: { [weak self] in
                 self?.exportBackup()
             },
@@ -3564,6 +4073,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Settings saves everything live, so a changed `[theme]` selection is a
+    /// theme apply and obeys the same rule as `/theme` and the deck. Refused
+    /// before anything is written; the caller shows the message.
+    static func settingsThemeApplyRefusal(current: PaletteConfig, updated: PaletteConfig) -> String? {
+        guard current.theme != updated.theme else { return nil }
+        return ThemingSourceGuard.refusal(source: updated.theming.source)
+    }
+
     /// Auto-apply writes the same canonical file the old Save button wrote, then
     /// reloads the app in place. The Settings view is not rebuilt, so the field
     /// the user is typing in keeps focus.
@@ -3572,6 +4089,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // over it would erase comments and every unknown key.
         if let configErrorMessage {
             return configErrorMessage
+        }
+        if let refusal = Self.settingsThemeApplyRefusal(current: configuration, updated: updated) {
+            return refusal
         }
         let updatesAutomaticChanged = configuration.updates.automatic != updated.updates.automatic
         do {

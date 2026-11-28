@@ -1,0 +1,1709 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "Activity Monitor",
+  "focusZone" : "search",
+  "itemCount" : 99,
+  "items" : [
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Activity Monitor.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Activity Monitor.app",
+      "title" : "Activity Monitor"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/AirPort Utility.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/AirPort Utility.app",
+      "title" : "AirPort Utility"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/AltServer.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/AltServer.app",
+      "title" : "AltServer"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Amethyst.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Amethyst.app",
+      "title" : "Amethyst"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/App Store.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/App Store.app",
+      "title" : "App Store"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Apps.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Apps.app",
+      "title" : "Apps"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Audio MIDI Setup.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Audio MIDI Setup.app",
+      "title" : "Audio MIDI Setup"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Automator.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Automator.app",
+      "title" : "Automator"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Balatro.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Balatro.app",
+      "title" : "Balatro"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/BetterCmdTab.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/BetterCmdTab.app",
+      "title" : "BetterCmdTab"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/BetterDisplay.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/BetterDisplay.app",
+      "title" : "BetterDisplay"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Bitwarden.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Bitwarden.app",
+      "title" : "Bitwarden"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Bluetooth File Exchange.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Bluetooth File Exchange.app",
+      "title" : "Bluetooth File Exchange"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Books.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Books.app",
+      "title" : "Books"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Bruno.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Bruno.app",
+      "title" : "Bruno"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Calculator.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Calculator.app",
+      "title" : "Calculator"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Calendar.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Calendar.app",
+      "title" : "Calendar"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Chess.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Chess.app",
+      "title" : "Chess"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Clock.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Clock.app",
+      "title" : "Clock"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/ColorSync Utility.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/ColorSync Utility.app",
+      "title" : "ColorSync Utility"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Console.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Console.app",
+      "title" : "Console"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Contacts.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Contacts.app",
+      "title" : "Contacts"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Dictionary.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Dictionary.app",
+      "title" : "Dictionary"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Digital Color Meter.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Digital Color Meter.app",
+      "title" : "Digital Color Meter"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Disk Utility.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Disk Utility.app",
+      "title" : "Disk Utility"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/FaceTime.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/FaceTime.app",
+      "title" : "FaceTime"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/FindMy.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/FindMy.app",
+      "title" : "Find My"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Library\/CoreServices\/Finder.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Library\/CoreServices\/Finder.app",
+      "title" : "Finder"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/FineTune.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/FineTune.app",
+      "title" : "FineTune"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Font Book.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Font Book.app",
+      "title" : "Font Book"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Freeform.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Freeform.app",
+      "title" : "Freeform"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Games.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Games.app",
+      "title" : "Games"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Grapher.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Grapher.app",
+      "title" : "Grapher"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Helium.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Helium.app",
+      "title" : "Helium"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Home.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Home.app",
+      "title" : "Home"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Image Capture.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Image Capture.app",
+      "title" : "Image Capture"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Image Playground.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Image Playground.app",
+      "title" : "Image Playground"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/iPhone Mirroring.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/iPhone Mirroring.app",
+      "title" : "iPhone Mirroring"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Journal.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Journal.app",
+      "title" : "Journal"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/KeepingYouAwake.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/KeepingYouAwake.app",
+      "title" : "KeepingYouAwake"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Amazon Kindle.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Amazon Kindle.app",
+      "title" : "Kindle"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/kitty.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/kitty.app",
+      "title" : "kitty"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/LibreWolf.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/LibreWolf.app",
+      "title" : "LibreWolf"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/LocalSend.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/LocalSend.app",
+      "title" : "LocalSend"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Mac Mouse Fix.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Mac Mouse Fix.app",
+      "title" : "Mac Mouse Fix"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Magnifier.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Magnifier.app",
+      "title" : "Magnifier"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Mail.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Mail.app",
+      "title" : "Mail"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Maps.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Maps.app",
+      "title" : "Maps"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Messages.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Messages.app",
+      "title" : "Messages"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Migration Assistant.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Migration Assistant.app",
+      "title" : "Migration Assistant"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Mission Control.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Mission Control.app",
+      "title" : "Mission Control"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/MongoDB Compass.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/MongoDB Compass.app",
+      "title" : "MongoDB Compass"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Music.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Music.app",
+      "title" : "Music"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Neovide.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Neovide.app",
+      "title" : "Neovide"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/News.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/News.app",
+      "title" : "News"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Notes.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Notes.app",
+      "title" : "Notes"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Obsidian.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Obsidian.app",
+      "title" : "Obsidian"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/OpenCodeUsage.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/OpenCodeUsage.app",
+      "title" : "OpenCodeUsage"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/OrbStack.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/OrbStack.app",
+      "title" : "OrbStack"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Palette.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Palette.app",
+      "title" : "Palette"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Passwords.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Passwords.app",
+      "title" : "Passwords"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Phone.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Phone.app",
+      "title" : "Phone"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Photo Booth.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Photo Booth.app",
+      "title" : "Photo Booth"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Photos.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Photos.app",
+      "title" : "Photos"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Podcasts.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Podcasts.app",
+      "title" : "Podcasts"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Preview.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Preview.app",
+      "title" : "Preview"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Print Center.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Print Center.app",
+      "title" : "Print Center"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/QuickTime Player.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/QuickTime Player.app",
+      "title" : "QuickTime Player"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Reminders.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Reminders.app",
+      "title" : "Reminders"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Rex.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Rex.app",
+      "title" : "Rex"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Safari.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Safari.app",
+      "title" : "Safari"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Screen Sharing.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Screen Sharing.app",
+      "title" : "Screen Sharing"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Screenshot.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Screenshot.app",
+      "title" : "Screenshot"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Script Editor.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Script Editor.app",
+      "title" : "Script Editor"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Shortcuts.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Shortcuts.app",
+      "title" : "Shortcuts"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Sim Daltonism.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Sim Daltonism.app",
+      "title" : "Sim Daltonism"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Siri AI.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Siri AI.app",
+      "title" : "Siri"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Siri.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Siri.app",
+      "title" : "Siri"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Stats.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Stats.app",
+      "title" : "Stats"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Stickies.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Stickies.app",
+      "title" : "Stickies"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Stocks.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Stocks.app",
+      "title" : "Stocks"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/System Information.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/System Information.app",
+      "title" : "System Information"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/System Settings.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/System Settings.app",
+      "title" : "System Settings"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Tailscale.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Tailscale.app",
+      "title" : "Tailscale"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Users\/myleshen\/Applications\/Tasks.app",
+      "providerID" : "apps",
+      "subtitle" : "~\/Applications\/Tasks.app",
+      "title" : "Tasks"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/Terminal.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/Terminal.app",
+      "title" : "Terminal"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/TextEdit.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/TextEdit.app",
+      "title" : "TextEdit"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/The Unarchiver.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/The Unarchiver.app",
+      "title" : "The Unarchiver"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Time Machine.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Time Machine.app",
+      "title" : "Time Machine"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Time Out.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Time Out.app",
+      "title" : "Time Out"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Tips.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Tips.app",
+      "title" : "Tips"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/TV.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/TV.app",
+      "title" : "TV"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/VoiceMemos.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/VoiceMemos.app",
+      "title" : "Voice Memos"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Utilities\/VoiceOver Utility.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Utilities\/VoiceOver Utility.app",
+      "title" : "VoiceOver Utility"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/System\/Applications\/Weather.app",
+      "providerID" : "apps",
+      "subtitle" : "\/System\/Applications\/Weather.app",
+      "title" : "Weather"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/WhatsApp.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/WhatsApp.app",
+      "title" : "‎WhatsApp"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/Xcode.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/Xcode.app",
+      "title" : "Xcode"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Applications\/ytm.app",
+      "providerID" : "apps",
+      "subtitle" : "\/Applications\/ytm.app",
+      "title" : "ytm"
+    },
+    {
+      "actions" : [
+        "open:Open",
+        "reveal:Show in Finder",
+        "copy-bundle-id:Copy Bundle ID",
+        "quit-app:Quit App",
+        "copy-path:Copy Path",
+        "uninstall-app:Move App to Trash…"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "\/Users\/myleshen\/Applications\/Zellij.app",
+      "providerID" : "apps",
+      "subtitle" : "~\/Applications\/Zellij.app",
+      "title" : "Zellij"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : false,
+  "previewVisible" : false,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "",
+  "railFocused" : false,
+  "railID" : "everything",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+      "#3b3d44",
+      "#f38ba8",
+      "#a6e3a1",
+      "#f9e2af",
+      "#89b4fa",
+      "#7c9cff",
+      "#98ccce",
+      "#ccced3",
+      "#6e7076",
+      "#efa7bd",
+      "#bae5b8",
+      "#f4e4c2",
+      "#a5c4f6",
+      "#9cb3fa",
+      "#afd4d7",
+      "#e7e9ee"
+    ],
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "live" : true
+  },
+  "terminalActive" : true,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}

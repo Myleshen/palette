@@ -237,6 +237,8 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func openClipboard() {
+        if terminalActive { closeTerminalPanel() }
+        if scratchpadActive { closeScratchpad(save: true) }
         previewEnabled = true
         actionsMode = false
         actionItems = []
@@ -345,8 +347,20 @@ public final class SearchController: ObservableObject, HostBridge {
         searchTask?.cancel()
         let raw = query
         let scope = scopeProviderID
-        let pathQuery = scope != nil || registry.parser.parse(raw).isBound
-        let delay: UInt64 = debounce && pathQuery ? 120_000_000 : (debounce ? 12_000_000 : 0)
+        let parsed = registry.parser.parse(raw)
+        let pathQuery = scope != nil || parsed.isBound
+        // Disk- and process-backed scopes need the long debounce; a cached
+        // database or the in-memory catalogue answers in a few milliseconds,
+        // and 120 ms there was most of the perceived latency.
+        let instant: Set<String> = ["clip", "theme", "calc", "emoji", "snip", "cheat"]
+        let delay: UInt64
+        if !debounce {
+            delay = 0
+        } else if pathQuery {
+            delay = instant.contains(parsed.providerID ?? "") ? 24_000_000 : 120_000_000
+        } else {
+            delay = 12_000_000
+        }
         searchTask = Task { [weak self] in
             if delay > 0 {
                 try? await Task.sleep(nanoseconds: delay)
@@ -1109,8 +1123,8 @@ public final class SearchController: ObservableObject, HostBridge {
                 if let text = action.value.text {
                     let previous = panel?.previousApplication
                     let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
-                    performPaste(into: previous) { route in
-                        pasteboard.paste(
+                    await performPaste(into: previous) { route in
+                        await pasteboard.paste(
                             text: text,
                             concealed: action.concealed,
                             clearAfterMs: clearAfterMs,
@@ -1134,8 +1148,8 @@ public final class SearchController: ObservableObject, HostBridge {
                    let image = try await store.clipboardImage(id: id) ?? NSImage(contentsOfFile: id)?.pngData() {
                     let previous = panel?.previousApplication
                     let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
-                    performPaste(into: previous, image: true) { route in
-                        pasteboard.paste(
+                    await performPaste(into: previous, image: true) { route in
+                        await pasteboard.paste(
                             image: image,
                             concealed: action.concealed,
                             clearAfterMs: clearAfterMs,
@@ -1157,8 +1171,8 @@ public final class SearchController: ObservableObject, HostBridge {
                 if let paths = action.value.list, !paths.isEmpty {
                     let previous = panel?.previousApplication
                     let clearAfterMs = action.clearAfterMs ?? (action.concealed ? configuration.clipboard.clearAfterMs : nil)
-                    performPaste(into: previous) { route in
-                        pasteboard.paste(
+                    await performPaste(into: previous) { route in
+                        await pasteboard.paste(
                             files: paths,
                             clearAfterMs: clearAfterMs,
                             into: previous,
@@ -1472,8 +1486,8 @@ public final class SearchController: ObservableObject, HostBridge {
     private func performPaste(
         into app: NSRunningApplication?,
         image: Bool = false,
-        deliver: (PasteTarget.Route?) -> PasteOutcome
-    ) {
+        deliver: (PasteTarget.Route?) async -> PasteOutcome
+    ) async {
         let route = pasteboard.isAccessibilityTrusted
             ? PasteTarget.route(
                 bundleID: app?.bundleIdentifier,
@@ -1481,7 +1495,11 @@ public final class SearchController: ObservableObject, HostBridge {
                 image: image
             )
             : nil
-        let outcome = deliver(route)
+        // The target takes key while activation is polled; without this the
+        // panel would auto-hide before a failed paste can report.
+        panel?.suppressAutoHide = true
+        let outcome = await deliver(route)
+        panel?.suppressAutoHide = false
         if let message = outcome.fallbackStatus {
             // Nothing reached the target: keep the panel up so the user can
             // see what to do with the copy.
@@ -1553,6 +1571,8 @@ public final class SearchController: ObservableObject, HostBridge {
     }
 
     public func openTerminalPanel(command: String? = nil, sessionName: String? = nil) {
+        // A half-written note must survive the mode switch, not be dropped.
+        if scratchpadActive { closeScratchpad(save: true) }
         scratchpadGeneration += 1
         terminalInitialCommand = command
         terminalSessionName = sessionName
@@ -1668,14 +1688,24 @@ public final class SearchController: ObservableObject, HostBridge {
             if !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 scratchpadSaveTask = Task { [weak self] in
-                    guard let self,
-                          let note = try? await self.store.saveScratchNote(
+                    guard let self else { return }
+                    do {
+                        let note = try await self.store.saveScratchNote(
                             id: noteID,
                             title: title,
                             text: text
-                          ) else { return }
-                    guard self.scratchpadGeneration == generation else { return }
-                    self.scratchpadNoteID = note.id
+                        )
+                        guard self.scratchpadGeneration == generation else { return }
+                        self.scratchpadNoteID = note.id
+                    } catch {
+                        guard self.scratchpadGeneration == generation else { return }
+                        // The close already happened, so bring the editor back
+                        // rather than losing the unsaved draft.
+                        self.setStatus(ScratchpadSave.failureStatus(for: error), duration: 6)
+                        self.scratchpadActive = true
+                        self.focusZone = .search
+                        self.requestFocus()
+                    }
                 }
             }
         }
@@ -1698,13 +1728,17 @@ public final class SearchController: ObservableObject, HostBridge {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         Task { [weak self] in
-            guard let self,
-                  let note = try? await self.store.saveScratchNote(
+            guard let self else { return }
+            do {
+                let note = try await self.store.saveScratchNote(
                     id: noteID,
                     title: title,
                     text: text
-                  ) else { return }
-            self.scratchpadNoteID = note.id
+                )
+                self.scratchpadNoteID = note.id
+            } catch {
+                self.setStatus(ScratchpadSave.failureStatus(for: error), duration: 6)
+            }
         }
     }
 
@@ -1755,5 +1789,11 @@ public final class SearchController: ObservableObject, HostBridge {
             object: nil,
             userInfo: ["dx": dx, "dy": dy]
         )
+    }
+}
+
+enum ScratchpadSave {
+    static func failureStatus(for error: Error) -> String {
+        "Could not save the note: \(error.localizedDescription)"
     }
 }

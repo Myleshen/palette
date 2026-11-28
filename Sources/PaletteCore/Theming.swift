@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 import TOMLKit
 
@@ -7,6 +8,65 @@ import TOMLKit
 public enum ThemingSource: String, Sendable, Equatable, CaseIterable {
     case theme
     case wallpaper
+}
+
+/// Wallpaper colours own the palette until the user switches the source
+/// explicitly (Settings → Theming or the deck's source control). Every theme
+/// apply asks here first, and a refusal means the caller writes nothing.
+public enum ThemingSourceGuard {
+    public static let refusalMessage =
+        "Wallpaper colours are enabled — switch Palette source to Theme "
+        + "(Settings → Theming, or the Wallpaper deck toggle) to pick a theme."
+
+    /// Non-nil while a theme apply must be refused.
+    public static func refusal(source: ThemingSource) -> String? {
+        source == .wallpaper ? refusalMessage : nil
+    }
+
+    /// The deck's card guard: only a theme card is blocked by wallpaper colours.
+    public static func blockedReason(source: ThemingSource, target: ThemeCardTarget) -> String? {
+        guard source == .wallpaper, case .theme = target else { return nil }
+        return refusalMessage
+    }
+}
+
+/// Which controls the palette-source toggle leaves live. One place so the
+/// greyed rows in Settings and the tests agree; a source that is off must be
+/// disabled, not merely hidden, or a stale click could still apply it.
+public struct ThemingSourceControls: Sendable, Equatable {
+    public var themeEnabled: Bool
+    public var wallpaperEnabled: Bool
+    public var themeDisabledReason: String?
+    public var wallpaperDisabledReason: String?
+
+    public init(source: ThemingSource) {
+        themeEnabled = source == .theme
+        wallpaperEnabled = source == .wallpaper
+        themeDisabledReason = themeEnabled
+            ? nil
+            : "Wallpaper drives the palette — switch source to pick a theme."
+        wallpaperDisabledReason = wallpaperEnabled
+            ? nil
+            : "Theme drives the palette — switch source to follow the wallpaper."
+    }
+}
+
+public enum ThemingSystemAppearance: String, Sendable, Equatable, CaseIterable {
+    case auto
+    case off
+
+    public var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .off: return "Off"
+        }
+    }
+}
+
+public enum ThemingTransparency: String, Sendable, Equatable, CaseIterable {
+    case auto
+    case on
+    case off
 }
 
 /// `[theming]` drives the cross-app palette files under
@@ -21,6 +81,21 @@ public struct ThemingConfig: Sendable, Equatable {
     public var targets: [String]
     /// auto | dark | light. `auto` follows the system appearance.
     public var darkMode: String
+    /// Pictures the theme cards' leading wallpaper group is built from.
+    public var wallpaperDirectory: String
+    /// Wallpaper extraction algorithm. Only pywal's pipeline ships: 16 sampled
+    /// colours, adjusted and ordered the way pywal writes `colors.json`.
+    public var extraction: String
+    /// pywal `--saturate`: -1...1, 0 leaves colours alone.
+    public var saturation: Double
+    /// pywal `--contrast`: 1...21, 0 disables. 1.5–4.5 is the useful range.
+    public var contrast: Double
+    /// Keep terminal/Neovide translucency: `auto` detects it, `on` and `off`
+    /// force it.
+    public var transparent: ThemingTransparency
+    /// `auto` switches macOS to the applied palette's appearance, `off` leaves
+    /// the system alone.
+    public var systemAppearance: ThemingSystemAppearance
 
     public init(
         enabled: Bool = false,
@@ -28,7 +103,13 @@ public struct ThemingConfig: Sendable, Equatable {
         theme: String = "",
         followWallpaper: Bool = false,
         targets: [String] = ThemingTarget.phaseOne.map(\.rawValue),
-        darkMode: String = "auto"
+        darkMode: String = "auto",
+        wallpaperDirectory: String = WallpaperLibrary.defaultDirectory,
+        extraction: String = ThemingConfig.pywal,
+        saturation: Double = 0,
+        contrast: Double = 0,
+        transparent: ThemingTransparency = .auto,
+        systemAppearance: ThemingSystemAppearance = .auto
     ) {
         self.enabled = enabled
         self.source = source
@@ -36,7 +117,15 @@ public struct ThemingConfig: Sendable, Equatable {
         self.followWallpaper = followWallpaper
         self.targets = targets
         self.darkMode = darkMode
+        self.wallpaperDirectory = wallpaperDirectory
+        self.extraction = extraction
+        self.saturation = saturation
+        self.contrast = contrast
+        self.transparent = transparent
+        self.systemAppearance = systemAppearance
     }
+
+    public static let pywal = "pywal"
 
     public static let defaults = ThemingConfig()
 
@@ -47,6 +136,17 @@ public struct ThemingConfig: Sendable, Equatable {
         value.targets = targets.filter { known.contains($0) && seen.insert($0).inserted }
         if !["auto", "dark", "light"].contains(value.darkMode) {
             value.darkMode = "auto"
+        }
+        // An empty wallpaper folder is a valid answer: the theme cards show the
+        // desktop card only. Returning a missing default here silently hid the
+        // user's choice.
+        value.wallpaperDirectory = value.wallpaperDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.extraction.lowercased() != ThemingConfig.pywal {
+            value.extraction = ThemingConfig.pywal
+        }
+        value.saturation = min(1, max(-1, value.saturation))
+        if value.contrast != 0 && !(1...21).contains(value.contrast) {
+            value.contrast = 0
         }
         return value
     }
@@ -62,6 +162,18 @@ public struct ThemingConfig: Sendable, Equatable {
             config.targets = targets
         }
         config.darkMode = (table.str("dark_mode") ?? config.darkMode).lowercased()
+        config.wallpaperDirectory = table.str("wallpaper_directory") ?? config.wallpaperDirectory
+        config.extraction = table.str("extraction") ?? config.extraction
+        config.saturation = table.number("saturation") ?? config.saturation
+        config.contrast = table.number("contrast") ?? config.contrast
+        if let raw = table.str("transparent")?.lowercased(),
+           let transparent = ThemingTransparency(rawValue: raw) {
+            config.transparent = transparent
+        }
+        if let raw = table.str("system_appearance")?.lowercased(),
+           let appearance = ThemingSystemAppearance(rawValue: raw) {
+            config.systemAppearance = appearance
+        }
         return config.normalized()
     }
 
@@ -77,9 +189,24 @@ public struct ThemingConfig: Sendable, Equatable {
         out.append("source = \"\(value.source.rawValue)\"")
         out.append("theme = \(ThemingConfig.quote(value.theme))")
         out.append("# Only with source = \"wallpaper\": re-apply when the desktop image changes.")
-        out.append("follow_wallpaper = \(value.followWallpaper)")
+        // A leftover true on a theme source would make the next load look like
+        // wallpaper following is on; the setting only means anything for
+        // source = "wallpaper".
+        out.append("follow_wallpaper = \(value.source == .wallpaper ? value.followWallpaper : false)")
         out.append("# auto | dark | light")
         out.append("dark_mode = \"\(value.darkMode)\"")
+        out.append("# Pictures the theme cards' Wallpapers group is built from.")
+        out.append("wallpaper_directory = \(ThemingConfig.quote(value.wallpaperDirectory))")
+        out.append("# Wallpaper colours use pywal's 16-colour pipeline.")
+        out.append("extraction = \"\(value.extraction)\"")
+        out.append("# pywal --saturate: -1.0...1.0 adds saturation, 0 leaves colours alone.")
+        out.append("saturation = \(value.saturation)")
+        out.append("# pywal --contrast: 0 disables; 1.5...4.5 guarantees readable ANSI colours.")
+        out.append("contrast = \(value.contrast)")
+        out.append("# auto keeps terminal/Neovide transparency; on | off force the nvim background.")
+        out.append("# auto matches the macOS appearance to the applied palette; off leaves it alone.")
+        out.append("system_appearance = \"\(value.systemAppearance.rawValue)\"")
+        out.append("transparent = \"\(value.transparent.rawValue)\"")
         out.append("targets = [\(value.targets.map(ThemingConfig.quote).joined(separator: ", "))]")
         return out.joined(separator: "\n")
     }
@@ -90,6 +217,78 @@ public struct ThemingConfig: Sendable, Equatable {
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n")
         return "\"\(escaped)\""
+    }
+
+    /// Values a hand-edited file got wrong. `parse` has to keep going with
+    /// safe defaults, but silently dropping a typo made the config look like it
+    /// applied. Reported once at load.
+    public static func diagnostics(for table: TOMLTable) -> [Diagnostic] {
+        var diagnostics: [Diagnostic] = []
+        if let targets = table.strArray("targets") {
+            let known = Set(ThemingTarget.allCases.map(\.rawValue))
+            for id in targets where !known.contains(id) {
+                diagnostics.append(Diagnostic(
+                    .warning,
+                    "Unknown theming target '\(id)'; ignored.",
+                    source: "config"
+                ))
+            }
+        }
+        if let raw = table.str("dark_mode"),
+           !["auto", "dark", "light"].contains(raw.lowercased()) {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "Unknown theming dark_mode '\(raw)'; using auto.",
+                source: "config"
+            ))
+        }
+        if let raw = table.str("extraction"), raw.lowercased() != ThemingConfig.pywal {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "Unknown theming extraction '\(raw)'; using pywal.",
+                source: "config"
+            ))
+        }
+        if let raw = table.str("transparent"),
+           ThemingTransparency(rawValue: raw.lowercased()) == nil {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "Unknown theming transparent '\(raw)'; using auto.",
+                source: "config"
+            ))
+        }
+        if let value = table.number("saturation"),
+           !(value == 0 || (-1...1).contains(value)) {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "theming saturation \(value) is outside -1...1; using 0.",
+                source: "config"
+            ))
+        }
+        if let value = table.number("contrast"),
+           value != 0, !(1...21).contains(value) {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "theming contrast \(value) is outside 1...21; using 0.",
+                source: "config"
+            ))
+        }
+        return diagnostics
+    }
+}
+
+public extension ThemingConfig {
+    /// Older builds saved the theme picker's display name, which
+    /// `ThemeLoader.load` cannot find. Rewrite it to the catalogue id, falling
+    /// back to the caller's current theme so Apply cannot silently write
+    /// Default Dark.
+    func resolvingThemeID(fallback: String, themesDirectory: URL) -> ThemingConfig {
+        var value = self
+        guard !value.theme.isEmpty else { return value }
+        value.theme = ThemeLoader.themeID(for: value.theme, themesDirectory: themesDirectory)
+            ?? ThemeLoader.themeID(for: fallback, themesDirectory: themesDirectory)
+            ?? (fallback.isEmpty ? value.theme : fallback)
+        return value
     }
 }
 
@@ -115,16 +314,14 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
     case arc
     case vscode
     case zed
-    case neovide
 
     public var id: String { rawValue }
 
     public static let phaseOne: [ThemingTarget] = [.kitty, .ghostty, .zellij, .nvim, .fish, .starship]
-    public static let phaseTwo: [ThemingTarget] = [.bat, .delta, .btop, .yazi]
-    /// First-class entries that have no safe renderer yet. They stay visible so
-    /// the gap is explicit instead of looking like the app is unsupported.
-    public static let notYet: [ThemingTarget] = [.arc, .vscode, .zed, .neovide]
-    public static let browsers: [ThemingTarget] = [.helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc]
+
+    /// Manual targets: Palette writes and links a theme file, but the app's own
+    /// config is never edited. The user points the app at the file once.
+    public var isManual: Bool { self == .btop || self == .yazi }
 
     public var browser: ChromiumBrowser? { ChromiumBrowser.browser(for: self) }
     public var isBrowser: Bool { browser != nil }
@@ -144,7 +341,6 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .yazi: return "yazi"
         case .vscode: return "VS Code"
         case .zed: return "Zed"
-        case .neovide: return "Neovide"
         default: return rawValue
         }
     }
@@ -157,14 +353,13 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .zellij: return "zellij.kdl"
         case .nvim: return "nvim.lua"
         case .fish: return "fish.fish"
-        case .starship: return "starship.toml"
+        case .starship: return StarshipTheme.fileName
         case .bat: return "bat.tmTheme"
         case .delta: return "gitconfig-delta"
         case .btop: return "btop.theme"
         case .yazi: return "yazi.toml"
         case .vscode: return "vscode.json"
         case .zed: return "zed.json"
-        case .neovide: return "neovide.toml"
         default: return "\(rawValue).txt"
         }
     }
@@ -174,7 +369,7 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         switch self {
         case .kitty, .ghostty, .zellij, .nvim, .fish, .starship, .bat, .delta, .btop, .yazi:
             return true
-        case .vscode, .zed, .neovide:
+        case .vscode, .zed:
             return false
         default:
             return false
@@ -187,7 +382,6 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         switch self {
         case .vscode: return "Not yet — VS Code needs a settings merge."
         case .zed: return "Not yet — Zed theme install is not wired."
-        case .neovide: return "Covered by Neovim — no separate file."
         default: return nil
         }
     }
@@ -212,23 +406,44 @@ public enum ThemingTarget: String, CaseIterable, Sendable, Equatable, Identifiab
         case .zellij:
             return "Paste the theme block from ~/.config/palette/theme/zellij.kdl into ~/.config/zellij/config.kdl"
         case .nvim:
-            return "dofile(vim.fn.expand(\"~/.config/palette/theme/nvim.lua\"))"
+            return "dofile(vim.fn.expand(\"~/.config/palette/theme/nvim.lua\")) — also covers Neovide"
         case .fish:
             return "source ~/.config/palette/theme/fish.fish"
         case .starship:
-            return "Copy [palettes.palette] from ~/.config/palette/theme/starship.toml into starship.toml, then set palette = \"palette\""
+            // Palette writes a colour-remapped copy and points Starship at it
+            // through STARSHIP_CONFIG, so the user's starship.toml is never
+            // edited. Fish gets this automatically; other shells set it.
+            return "export STARSHIP_CONFIG=~/.config/palette/theme/starship-theme.toml (Palette does this in fish)"
         case .bat:
-            return "Symlink ~/.config/palette/theme/bat.tmTheme into $(bat --config-dir)/themes/ and set BAT_THEME=\"palette\""
+            return "Symlink ~/.config/palette/theme/bat.tmTheme into $(bat --config-dir)/themes/, set BAT_THEME=\"palette\" (Palette links it and runs bat cache --build)"
         case .delta:
             return "[include]\n    path = ~/.config/palette/theme/gitconfig-delta"
         case .btop:
-            return "Copy ~/.config/palette/theme/btop.theme to ~/.config/btop/themes/palette.theme and set color_theme = \"palette\""
+            return "Palette links ~/.config/palette/theme/btop.theme into ~/.config/btop/themes/palette.theme; set color_theme = \"palette\" in ~/.config/btop/btop.conf once"
         case .yazi:
-            return "Copy ~/.config/palette/theme/yazi.toml to ~/.config/yazi/theme.toml"
-        case .vscode, .zed, .neovide:
+            return "Merge ~/.config/palette/theme/yazi.toml into ~/.config/yazi/theme.toml (copy it only if you have no theme.toml; never overwrite an existing one)"
+        case .vscode, .zed:
             return unavailableReason ?? "Not configured yet."
         default:
             return unavailableReason ?? "Not configured yet."
+        }
+    }
+
+    /// Exactly what Palette installs for the target, so the footer and the
+    /// rows cannot describe the same target differently.
+    public enum InstallKind: String, Sendable, Equatable {
+        case markerBlock = "marker block"
+        case policy = "managed policy"
+        case generated = "generated copy"
+        case manual = "manual"
+    }
+
+    public var installKind: InstallKind {
+        if isBrowser { return .policy }
+        switch self {
+        case .starship: return .generated
+        case .btop, .yazi, .vscode, .zed: return .manual
+        default: return .markerBlock
         }
     }
 }
@@ -365,7 +580,7 @@ public struct PalettePalette: Equatable, Sendable {
         appearance: String,
         colors: [RGBA]
     ) -> [String] {
-        let hues = colors.map { readable($0, on: background, minimum: 2.5) }
+        let hues = colors.map { readable($0, on: background, minimum: 3.0) }
         let bright = hues.map { $0.mixed(with: foreground, amount: 0.3) }
         let black = readable(background.mixed(with: foreground, amount: 0.12), on: background, minimum: 1.4)
         let brightBlack = readable(background.mixed(with: foreground, amount: 0.38), on: background, minimum: 1.7)
@@ -374,9 +589,106 @@ public struct PalettePalette: Equatable, Sendable {
         var values = [black] + hues + [white, brightBlack] + bright + [brightWhite]
         values = values.enumerated().map { index, color in
             // Black slots are supposed to be dim; text slots must stay legible.
-            index == 0 || index == 8 ? color : readable(color, on: background, minimum: 2.5)
+            index == 0 || index == 8 ? color : readable(color, on: background, minimum: 3.0)
         }
         return values.map(hex)
+    }
+
+    /// Wallpaper palettes come from pywal, which can return the same colour in
+    /// two ANSI slots. The bright half repeats the base half in pywal, so a
+    /// colliding bright slot is separated by lightness, keeping its hue. Other
+    /// collisions rotate in OKLCH as before. A scheme that already separates is
+    /// returned untouched, so pywal parity holds.
+    static func distinctANSI(_ colors: [RGBA], background: RGBA) -> [RGBA] {
+        guard colors.count >= 16 else { return colors }
+        let slots = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14]
+        var values = colors
+        for _ in 0..<64 {
+            guard let pair = firstANSICollision(values, slots: slots) else { return values }
+            if pair.1 - pair.0 == 8,
+               let adjusted = lightnessAway(
+                values[pair.1],
+                otherSlots: slots.filter { $0 != pair.1 }.map { values[$0] },
+                background: background
+               ) {
+                values[pair.1] = adjusted
+            } else if let adjusted = rotatedAway(
+                values[pair.1],
+                otherSlots: slots.filter { $0 != pair.1 }.map { values[$0] },
+                background: background
+            ) {
+                values[pair.1] = adjusted
+            } else if let adjusted = rotatedAway(
+                values[pair.0],
+                otherSlots: slots.filter { $0 != pair.0 }.map { values[$0] },
+                background: background
+            ) {
+                values[pair.0] = adjusted
+            } else {
+                return values
+            }
+        }
+        return values
+    }
+
+    private static func firstANSICollision(_ values: [RGBA], slots: [Int]) -> (Int, Int)? {
+        for (offset, first) in slots.enumerated() {
+            for second in slots[(offset + 1)...] where deltaE(values[first], values[second]) < 5 {
+                return (first, second)
+            }
+        }
+        return nil
+    }
+
+    /// Moves a bright slot away from its base by lightness alone. Rotating the
+    /// hue far enough to reach ΔE 5 turns a pastel magenta green; the bright
+    /// half is a brightness variant, not a different colour.
+    private static func lightnessAway(_ color: RGBA, otherSlots: [RGBA], background: RGBA) -> RGBA? {
+        let lab = ThemeContrastRepair.oklab(color)
+        let chroma = (lab.a * lab.a + lab.b * lab.b).squareRoot()
+        let hue = atan2(lab.b, lab.a)
+        let floor = min(2.5, color.contrast(with: background))
+        // Away from the background keeps a dark theme's bright half brighter
+        // and a light theme's darker.
+        let away = lab.l < ThemeContrastRepair.oklab(background).l ? 1.0 : -1.0
+        for step in 1...30 {
+            for direction in [away, -away] {
+                let lightness = min(1, max(0, lab.l + Double(step) * 0.02 * direction))
+                let mapped = ThemeContrastRepair.gamutMapped(ThemeContrastRepair.OKLab(
+                    l: lightness, a: cos(hue) * chroma, b: sin(hue) * chroma
+                ))
+                let candidate = RGBA(hex: hex(mapped)) ?? mapped
+                guard candidate.contrast(with: background) >= floor else { continue }
+                if otherSlots.allSatisfy({ deltaE(candidate, $0) >= 5 }) { return candidate }
+            }
+        }
+        return nil
+    }
+
+    private static func rotatedAway(_ color: RGBA, otherSlots: [RGBA], background: RGBA) -> RGBA? {
+        let lab = ThemeContrastRepair.oklab(color)
+        let chroma = max((lab.a * lab.a + lab.b * lab.b).squareRoot(), 0.04)
+        let hue = atan2(lab.b, lab.a)
+        let floor = min(2.5, color.contrast(with: background))
+        for step in 1...36 {
+            let offset = Double(step) * 5 * Double.pi / 180
+            for direction in [1.0, -1.0] {
+                let angle = hue + offset * direction
+                let mapped = ThemeContrastRepair.gamutMapped(ThemeContrastRepair.OKLab(
+                    l: lab.l, a: cos(angle) * chroma, b: sin(angle) * chroma
+                ))
+                let candidate = RGBA(hex: hex(mapped)) ?? mapped
+                guard candidate.contrast(with: background) >= floor else { continue }
+                if otherSlots.allSatisfy({ deltaE(candidate, $0) >= 5 }) { return candidate }
+            }
+        }
+        return nil
+    }
+
+    private static func deltaE(_ first: RGBA, _ second: RGBA) -> Double {
+        let a = ThemeContrastRepair.oklab(first)
+        let b = ThemeContrastRepair.oklab(second)
+        return 100 * sqrt(pow(a.l - b.l, 2) + pow(a.a - b.a, 2) + pow(a.b - b.b, 2))
     }
 
     static func sixteen(_ values: [String]) -> [String] {
@@ -385,6 +697,43 @@ public struct PalettePalette: Equatable, Sendable {
             values.append(values.last ?? "#ffffff")
         }
         return Array(values.prefix(16))
+    }
+}
+
+extension Theme {
+    /// The launcher view of a palette that has no theme file of its own — a
+    /// wallpaper extraction, or the palette another app was just given. Keeps
+    /// the launcher, the embedded terminal and cross-app targets on one palette
+    /// instead of two.
+    public init(palette source: PalettePalette) {
+        self.init()
+        name = source.name.isEmpty ? "Wallpaper" : source.name
+        appearance = source.appearance
+        palette.bg = source.background
+        palette.surface = source.surface
+        palette.elevated = source.elevated
+        palette.fg = source.foreground
+        palette.fgMuted = source.muted
+        palette.accent = source.cursor
+        palette.accentFg = source.cursorText
+        palette.selectionBg = source.selectionBackground
+        palette.selectionFg = source.selectionForeground
+        palette.border = source.border
+        palette.separator = source.border
+        palette.matchFg = source.ansi[5]
+        // ANSI red/green/yellow/blue are the semantic hues every theme uses, so
+        // a theme built here re-renders the same terminal palette.
+        palette.danger = source.ansi[1]
+        palette.success = source.ansi[2]
+        palette.warning = source.ansi[3]
+        palette.info = source.ansi[4]
+        palette.badgeBg = source.elevated
+        palette.badgeFg = source.foreground
+        states.selected = ThemeState(bg: source.selectionBackground, fg: source.selectionForeground)
+        states.hover = ThemeState(bg: source.surface)
+        states.disabled = ThemeState(fg: source.muted)
+        footer.hintColor = source.muted
+        window.material = appearance == "light" ? "popover" : "hudWindow"
     }
 }
 
@@ -456,31 +805,64 @@ public enum WallpaperPalette {
 
     public static func extract(
         from image: NSImage,
-        appearance: String = "dark"
+        appearance: String = "dark",
+        saturation: Double = 0,
+        contrast: Double = 0
     ) -> PalettePalette? {
         guard let pixels = pixels(from: image) else { return nil }
-        return extract(pixels: pixels, appearance: appearance)
+        return extract(pixels: pixels, appearance: appearance, saturation: saturation, contrast: contrast)
     }
 
-    /// Pure: k-means over the sampled pixels, background by luminance for the
-    /// requested appearance, foreground and accent by contrast.
-    public static func extract(pixels: WallpaperPixels, appearance: String = "dark") -> PalettePalette? {
-        let opaque = pixels.pixels.filter { $0.alpha > 0.5 }
-        guard !opaque.isEmpty else { return nil }
-        let clusters = kmeans(opaque, k: 6)
-        guard !clusters.isEmpty else { return nil }
-
-        let sorted = clusters.sorted { $0.center.luminance < $1.center.luminance }
-        let backdrop = appearance == "light" ? sorted.last! : sorted.first!
-        let background = backdrop.center
-        let foreground = readable(bestText(on: background), on: background, minimum: 4.5)
-
-        let accentCluster = clusters
-            .filter { $0.center.contrast(with: background) >= 2 }
-            .max { lhs, rhs in
-                (lhs.center.saturation * sqrt(lhs.weight)) < (rhs.center.saturation * sqrt(rhs.weight))
+    /// `auto` appearance for a picture: a light image gets pywal's light
+    /// ordering, a dark image the dark one. Average relative luminance over a
+    /// sparse sample, so a 6K file costs a few thousand reads.
+    public static func suggestedAppearance(pixels: WallpaperPixels) -> String {
+        let stride = max(1, pixels.pixels.count / 512)
+        var total = 0.0
+        var count = 0
+        var index = 0
+        while index < pixels.pixels.count {
+            let pixel = pixels.pixels[index]
+            if pixel.alpha > 0.5 {
+                func linear(_ value: Double) -> Double {
+                    value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+                }
+                total += 0.2126 * linear(pixel.red)
+                    + 0.7152 * linear(pixel.green)
+                    + 0.0722 * linear(pixel.blue)
+                count += 1
             }
-        let accent = readable(accentCluster?.center ?? foreground, on: background, minimum: 3)
+            index += stride
+        }
+        guard count > 0 else { return "dark" }
+        return total / Double(count) > 0.35 ? "light" : "dark"
+    }
+
+    /// Pure: pywal's pipeline. Quantize to 16 colours (ascending luminance, the
+    /// order its ImageMagick backend returns), pour them into pywal's
+    /// `color0...color15` slots, then run its dark/light adjustment, `--saturate`
+    /// and `--contrast` steps. Palette's contrast clamp only touches the UI
+    /// roles, never the terminal's 16 colours.
+    public static func extract(
+        pixels: WallpaperPixels,
+        appearance: String = "dark",
+        saturation: Double = 0,
+        contrast: Double = 0
+    ) -> PalettePalette? {
+        let opaque = pixels.pixels.filter { $0.alpha > 0.5 }
+        guard let scheme = pywalScheme(
+            opaque,
+            light: appearance == "light",
+            saturation: min(1, max(-1, saturation)),
+            contrast: (1...21).contains(contrast) ? contrast : 0
+        ) else { return nil }
+
+        let background = scheme[0]
+        let foreground = readable(scheme[15], on: background, minimum: 4.5)
+        // pywal's `special.cursor` is the foreground. Palette draws its caret and
+        // its whole UI accent from this slot, so it takes the most saturated
+        // terminal colour that reads on the background instead.
+        let accent = readable(accentColor(in: scheme, on: background) ?? foreground, on: background, minimum: 3)
         let surface = background.mixed(with: foreground, amount: 0.06)
         let elevated = background.mixed(with: foreground, amount: 0.12)
         let border = readable(background.mixed(with: foreground, amount: 0.24), on: background, minimum: 1.8)
@@ -502,20 +884,258 @@ public enum WallpaperPalette {
             elevated: hex(elevated),
             border: hex(border),
             muted: hex(muted),
-            ansi: PalettePalette.ansi(
-                background: background,
-                foreground: foreground,
-                appearance: appearance,
-                colors: [
-                    RGBA(red: 0.85, green: 0.35, blue: 0.38),
-                    RGBA(red: 0.45, green: 0.76, blue: 0.52),
-                    RGBA(red: 0.87, green: 0.75, blue: 0.40),
-                    RGBA(red: 0.40, green: 0.62, blue: 0.95),
-                    accent,
-                    RGBA(red: 0.42, green: 0.75, blue: 0.82),
-                ]
-            )
+            ansi: PalettePalette.distinctANSI(scheme, background: background).map(hex)
         )
+    }
+
+    /// Most saturated colour in slots 1...14 that stands off the background.
+    private static func accentColor(in scheme: [RGBA], on background: RGBA) -> RGBA? {
+        scheme[1...14]
+            .filter { $0.contrast(with: background) >= 2 }
+            .max { $0.saturation < $1.saturation }
+    }
+
+    // MARK: pywal pipeline
+
+    /// pywal's `wal` backend quantizes with ImageMagick, whose unique-colour
+    /// output is ordered dark to light. We quantize with the deterministic
+    /// k-means below and sort by luminance, then use pywal's own slot layout and
+    /// adjustments unchanged. With the same 16 input colours this matches
+    /// pywal's `colors.json` exactly.
+    static func pywalScheme(
+        _ pixels: [RGBA],
+        light: Bool,
+        saturation: Double,
+        contrast: Double
+    ) -> [RGBA]? {
+        guard !pixels.isEmpty else { return nil }
+        var cols = kmeans(pixels, k: 16)
+            .map { quantized($0.center) }
+            .sorted { $0.luminance < $1.luminance }
+        // A low-colour image cannot fill 16 slots. pywal16 doubles the list in
+        // that case (`extend(hex_colors)`), so keep its colours instead of
+        // repeating only the brightest one.
+        while cols.count < 16 {
+            cols.append(contentsOf: cols)
+        }
+        cols = Array(cols.prefix(16))
+
+        // wal.py: raw = colors[:1] + colors[8:16] + colors[8:-1]
+        var scheme = [cols[0]] + Array(cols[8..<16]) + Array(cols[8..<15])
+        pywalAdjust(&scheme, light: light)
+        pywalSaturate(&scheme, amount: saturation)
+        pywalContrast(&scheme, ratio: contrast, light: light, average: average(pixels))
+        return scheme
+    }
+
+    /// colors.py `generic_adjust` (pywal16 3.8.15, the maintained pywal on
+    /// PyPI; dylanaraps' 3.3.1 differs only in its light loop, which assigns to
+    /// a local and therefore does nothing).
+    static func pywalAdjust(_ colors: inout [RGBA], light: Bool) {
+        if light {
+            colors[0] = lighten(colors[0], 0.95)
+            colors[7] = darken(colors[0], 0.75)
+            colors[8] = darken(colors[0], 0.25)
+            colors[15] = colors[7]
+        } else {
+            // colors[0][1] is the red channel's high hex digit.
+            if redByte(colors[0]) >= 16 {
+                colors[0] = darken(colors[0], 0.40)
+            }
+            // A near-black background loses all hue; pywal lifts it first.
+            if redByte(colors[0]) < 16 || greenByte(colors[0]) < 16 || blueByte(colors[0]) < 16 {
+                colors[0] = saturate(lighten(colors[0], 0.03), to: 0.40)
+            }
+            colors[7] = lighten(colors[0], 0.75)
+            colors[8] = saturate(lighten(colors[0], 0.35), to: 0.10)
+            colors[15] = colors[7]
+        }
+    }
+
+    /// colors.py `saturate_colors`: `--saturate` adds to every slot except the
+    /// foreground pair, so text never turns neon.
+    static func pywalSaturate(_ colors: inout [RGBA], amount: Double) {
+        guard amount != 0, (-1...1).contains(amount) else { return }
+        for index in colors.indices where index != 7 && index != 15 {
+            colors[index] = addSaturation(colors[index], amount)
+        }
+    }
+
+    /// colors.py `ensure_contrast`: `--contrast` pushes slots 1...14 past the
+    /// requested W3 ratio against the image's average luminance. pywal16's
+    /// light branch is unreachable (both conditions skip every colour), so the
+    /// light path here does what that branch intended: darkens colours that are
+    /// too light.
+    static func pywalContrast(_ colors: inout [RGBA], ratio: Double, light: Bool, average: RGBA) {
+        guard ratio != 0, (1...21).contains(ratio) else { return }
+        let mean = quantized(average)
+        let desired = light
+            ? (pywalLuminance(mean) + 0.05) / ratio - 0.05
+            : (pywalLuminance(mean) + 0.05) * ratio - 0.05
+        guard desired < 0.99, desired > 0.01 else { return }
+        for index in 1...14 {
+            let luminance = pywalLuminance(colors[index])
+            if light ? luminance <= desired : luminance >= desired { continue }
+            colors[index] = contrastAdjusted(colors[index], luminance: desired, light: light)
+        }
+    }
+
+    /// util.py `Color.w3_luminance`: the hex channel is read back as a
+    /// three-decimal string (`"%.3f" % (v / 255)`), so reproduce that rounding.
+    static func pywalLuminance(_ color: RGBA) -> Double {
+        let (r, g, b) = bytes(color)
+        func linear(_ byte: Int) -> Double {
+            let value = (Double(byte) / 255 * 1000).rounded() / 1000
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+    }
+
+    /// colorsys.rgb_to_hsv over the same three-decimal channels pywal's
+    /// `ensure_contrast` feeds it.
+    static func pywalHSV(_ color: RGBA) -> (hue: Double, saturation: Double, value: Double) {
+        let (r, g, b) = bytes(color)
+        func channel(_ byte: Int) -> Double { (Double(byte) / 255 * 1000).rounded() / 1000 }
+        return RGBA(red: channel(r), green: channel(g), blue: channel(b)).hsv
+    }
+
+    /// colors.py `binary_luminance_adjust`, ten bisections over saturation and
+    /// value in HSV.
+    static func contrastAdjusted(_ color: RGBA, luminance desired: Double, light: Bool) -> RGBA {
+        let (h, s, v) = pywalHSV(color)
+        var sMin = s
+        var sMax = s
+        var vMin = v
+        var vMax = v
+        if light {
+            sMin = s
+            sMax = 1
+            vMin = 0
+            vMax = v
+        } else if pywalLuminance(hsv(h, s, 1)) >= desired {
+            vMax = 1
+        } else {
+            sMin = 0
+            vMin = 1
+            vMax = 1
+        }
+        var result = color
+        for _ in 0..<10 {
+            let midS = (sMin + sMax) / 2
+            let midV = (vMin + vMax) / 2
+            let candidate = hsv(h, midS, midV)
+            if pywalLuminance(candidate) >= desired {
+                sMin = midS
+                vMax = midV
+            } else {
+                sMax = midS
+                vMin = midV
+            }
+            result = candidate
+        }
+        return result
+    }
+
+    static func average(_ pixels: [RGBA]) -> RGBA {
+        guard !pixels.isEmpty else { return RGBA(red: 0, green: 0, blue: 0) }
+        let total = Double(pixels.count)
+        let sums = pixels.reduce(into: (red: 0.0, green: 0.0, blue: 0.0)) { sums, pixel in
+            sums.red += pixel.red
+            sums.green += pixel.green
+            sums.blue += pixel.blue
+        }
+        return RGBA(red: sums.red / total, green: sums.green / total, blue: sums.blue / total)
+    }
+
+    // MARK: pywal colour math (8-bit, truncating, as util.py does)
+
+    private static func redByte(_ color: RGBA) -> Int { bytes(color).red }
+    private static func greenByte(_ color: RGBA) -> Int { bytes(color).green }
+    private static func blueByte(_ color: RGBA) -> Int { bytes(color).blue }
+
+    static func bytes(_ color: RGBA) -> (red: Int, green: Int, blue: Int) {
+        func byte(_ value: Double) -> Int {
+            Int((min(1, max(0, value)) * 255).rounded())
+        }
+        return (byte(color.red), byte(color.green), byte(color.blue))
+    }
+
+    static func quantized(_ color: RGBA) -> RGBA {
+        let (r, g, b) = bytes(color)
+        return fromBytes(r, g, b)
+    }
+
+    static func fromBytes(_ red: Int, _ green: Int, _ blue: Int) -> RGBA {
+        func channel(_ value: Int) -> Double { Double(min(255, max(0, value))) / 255 }
+        return RGBA(red: channel(red), green: channel(green), blue: channel(blue))
+    }
+
+    /// util.py `darken_color`.
+    static func darken(_ color: RGBA, _ amount: Double) -> RGBA {
+        let (r, g, b) = bytes(color)
+        return fromBytes(Int(Double(r) * (1 - amount)), Int(Double(g) * (1 - amount)), Int(Double(b) * (1 - amount)))
+    }
+
+    /// util.py `lighten_color`.
+    static func lighten(_ color: RGBA, _ amount: Double) -> RGBA {
+        let (r, g, b) = bytes(color)
+        func channel(_ value: Int) -> Int { Int(Double(value) + (255 - Double(value)) * amount) }
+        return fromBytes(channel(r), channel(g), channel(b))
+    }
+
+    /// util.py `saturate_color`: set saturation to an absolute value in HLS.
+    static func saturate(_ color: RGBA, to amount: Double) -> RGBA {
+        let (h, l, _) = color.hls
+        return fromHLS(h, l, amount)
+    }
+
+    /// util.py `add_saturation`: add to saturation in HLS. pywal clamps only at
+    /// ±1, so a negative result is fed to colorsys (channels can invert).
+    static func addSaturation(_ color: RGBA, _ amount: Double) -> RGBA {
+        let (h, l, s) = color.hls
+        return fromHLS(h, l, min(1, max(-1, s + amount)))
+    }
+
+    // colorsys.hls_to_rgb / hsv_to_rgb, truncated to 8 bits like rgb_to_hex.
+    static func fromHLS(_ hue: Double, _ lightness: Double, _ saturation: Double) -> RGBA {
+        let m2 = lightness <= 0.5
+            ? lightness * (1 + saturation)
+            : lightness + saturation - lightness * saturation
+        let m1 = 2 * lightness - m2
+        func channel(_ offset: Double) -> Double {
+            var hue = (hue + offset).truncatingRemainder(dividingBy: 1)
+            if hue < 0 { hue += 1 }
+            if hue < 1.0 / 6 { return m1 + (m2 - m1) * hue * 6 }
+            if hue < 0.5 { return m2 }
+            if hue < 2.0 / 3 { return m1 + (m2 - m1) * (2.0 / 3 - hue) * 6 }
+            return m1
+        }
+        return fromUnit(channel(1.0 / 3), channel(0), channel(-1.0 / 3))
+    }
+
+    static func hsv(_ hue: Double, _ saturation: Double, _ value: Double) -> RGBA {
+        guard saturation > 0 else { return fromUnit(value, value, value) }
+        let sector = hue * 6
+        let index = Int(sector) % 6
+        let fraction = sector - Double(Int(sector))
+        let p = value * (1 - saturation)
+        let q = value * (1 - saturation * fraction)
+        let t = value * (1 - saturation * (1 - fraction))
+        switch index {
+        case 0: return fromUnit(value, t, p)
+        case 1: return fromUnit(q, value, p)
+        case 2: return fromUnit(p, value, t)
+        case 3: return fromUnit(p, q, value)
+        case 4: return fromUnit(t, p, value)
+        default: return fromUnit(value, p, q)
+        }
+    }
+
+    private static func fromUnit(_ red: Double, _ green: Double, _ blue: Double) -> RGBA {
+        func byte(_ value: Double) -> Int {
+            Int((min(1, max(0, value)) * 255).rounded(.down))
+        }
+        return fromBytes(byte(red), byte(green), byte(blue))
     }
 
     private static func hex(_ color: RGBA) -> String { PalettePalette.hex(color) }
@@ -530,17 +1150,28 @@ public enum WallpaperPalette {
 
     struct Cluster {
         var center: RGBA
-        var weight: Double
     }
 
-    /// Deterministic k-means: seeds come from luminance quantiles, so the same
-    /// wallpaper always produces the same palette.
+    /// Deterministic k-means: seeds are picked farthest-first in RGB, so a
+    /// dark wallpaper still contributes its small bright accents instead of
+    /// collapsing into empty clusters. Same wallpaper, same palette.
     static func kmeans(_ pixels: [RGBA], k: Int, iterations: Int = 10) -> [Cluster] {
         guard !pixels.isEmpty, k > 0 else { return [] }
-        let ordered = pixels.sorted { $0.luminance < $1.luminance }
-        var centers: [RGBA] = (0..<k).map { index in
-            let position = Int((Double(index) + 0.5) / Double(k) * Double(ordered.count - 1))
-            return ordered[position]
+        let first = pixels.min { $0.luminance < $1.luminance } ?? pixels[0]
+        var centers: [RGBA] = [first]
+        while centers.count < k {
+            var farthest = pixels[0]
+            var farthestDistance = -1.0
+            for pixel in pixels {
+                let distance = centers.reduce(Double.infinity) { best, center in
+                    min(best, squaredDistance(pixel, center))
+                }
+                if distance > farthestDistance {
+                    farthestDistance = distance
+                    farthest = pixel
+                }
+            }
+            centers.append(farthest)
         }
         var assignments = [Int](repeating: 0, count: pixels.count)
 
@@ -583,10 +1214,8 @@ public enum WallpaperPalette {
 
         var counts = [Int](repeating: 0, count: k)
         for slot in assignments { counts[slot] += 1 }
-        let total = Double(pixels.count)
         return centers.enumerated().compactMap { index, center in
-            guard counts[index] > 0 else { return nil }
-            return Cluster(center: center, weight: Double(counts[index]) / total)
+            counts[index] > 0 ? Cluster(center: center) : nil
         }
     }
 
@@ -613,8 +1242,9 @@ public struct ChromiumBrowser: Sendable, Equatable, Identifiable {
 
     public var policyIdentifier: String { ChromiumPolicy.identifier(for: bundleID) }
     public var mobileConfigFileName: String { "\(target.rawValue)-theme.mobileconfig" }
-    public var policyPlistPath: String { "/Library/Managed Preferences/\(bundleID).plist" }
-    public var targetTitle: String { "\(name) (managed policy)" }
+    /// The user-owned file Palette writes silently after the one-time enable.
+    public var silentPlistPath: String { ChromiumPolicy.userPlistPath(bundleID: bundleID) }
+    public var targetTitle: String { "\(name) (silent managed theme)" }
 
     public static let catalog: [ChromiumBrowser] = [
         ChromiumBrowser(name: "Helium", appName: "Helium", processName: "Helium",
@@ -647,35 +1277,184 @@ public enum ChromiumPolicy {
         "dev.myleshen.palette.chromium.\(bundleID)"
     }
 
-    public static func installCommand(paths: [String]) -> String {
-        paths.map { "sudo profiles install -path \(token($0))" }.joined(separator: " && ")
+    /// Every identifier Palette can install: the whole catalogue, not only the
+    /// browsers currently checked, so removal cannot leave a stale policy.
+    public static func allPolicyIdentifiers() -> [String] {
+        ChromiumBrowser.catalog.filter(\.supportsThemePolicy).map(\.policyIdentifier)
     }
 
-    public static func removeCommand(identifiers: [String]) -> String {
-        identifiers.map { "sudo profiles remove -identifier \(token($0))" }.joined(separator: " && ")
+    /// The Palette identifiers still present in `profiles -P` output.
+    public static func remainingIdentifiers(in profilesOutput: String) -> [String] {
+        allPolicyIdentifiers().filter { profilesOutput.contains($0) }
     }
 
-    public enum InstallFlow: String, Sendable, Equatable {
-        /// macOS 27 removed `profiles install`; the profile is opened in
-        /// System Settings and approved there.
-        case systemSettings
-        /// Older macOS still advertises `profiles install`, so the sudo form
-        /// stays available as a legacy note and for removal.
-        case legacyProfiles
+    /// Managed preference files macOS may use: device scope, then the user's
+    /// own scope. `complete.plist` carries every forced preference for the
+    /// user, so a profile that only writes there still counts as installed.
+    public static func managedPreferencePaths(
+        bundleID: String,
+        user: String = NSUserName()
+    ) -> [String] {
+        [
+            "/Library/Managed Preferences/\(bundleID).plist",
+            "/Library/Managed Preferences/\(user)/\(bundleID).plist",
+            "/Library/Managed Preferences/\(user)/complete.plist",
+        ]
     }
 
-    public static func installFlow(majorVersion: Int) -> InstallFlow {
-        majorVersion >= 27 ? .systemSettings : .legacyProfiles
+    /// True when a managed-preference plist carries this browser's domain.
+    /// `complete.plist` is shared by every managed domain, so its mere
+    /// existence must not count as an installed browser policy.
+    public static func carriesDomain(_ bundleID: String, in data: Data) -> Bool {
+        guard let propertyList = try? PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ), let root = propertyList as? [String: Any] else { return false }
+        return root[bundleID] != nil
     }
 
-    /// The line shown after `open` handed the files to System Settings.
-    public static func installSteps(files: [String]) -> String {
-        "Opened \(files.count) profile file\(files.count == 1 ? "" : "s") in System Settings. " +
-            "Approve each under General → Device Management → Profiles, then Refresh. " +
-            "macOS 27 removed `profiles install`; no password prompt is needed here."
+    /// The seeded colour in an installed plist. `complete.plist` nests every
+    /// domain, so the bundle id scopes the search first; a direct domain plist
+    /// has the keys at the root.
+    public static func themeColor(in data: Data, bundleID: String? = nil) -> String? {
+        guard let propertyList = try? PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ) else { return nil }
+        if let bundleID,
+           let root = propertyList as? [String: Any],
+           let domain = root[bundleID] {
+            return themeColor(in: domain)
+        }
+        return themeColor(in: propertyList)
+    }
+
+    private static func themeColor(in object: Any) -> String? {
+        if let dictionary = object as? [String: Any] {
+            if let colour = dictionary["BrowserThemeColor"] as? String { return colour }
+            // A real managed preference wraps the value: the payload is
+            // `{ mcxdomain, source, value }`, not a bare colour like the
+            // silent plist and exported profile use.
+            if let payload = dictionary["BrowserThemeColor"] as? [String: Any],
+               let colour = payload["value"] as? String {
+                return colour
+            }
+            for value in dictionary.values {
+                if let colour = themeColor(in: value) { return colour }
+            }
+        } else if let array = object as? [Any] {
+            for value in array {
+                if let colour = themeColor(in: value) { return colour }
+            }
+        }
+        return nil
+    }
+
+    /// The user-scoped managed preference Palette owns after the one-time
+    /// enable. Chromium reads it like any managed domain, but because the file
+    /// is user-owned a later Apply can rewrite it without administrator rights.
+    public static func userPlistPath(bundleID: String, user: String = NSUserName()) -> String {
+        "/Library/Managed Preferences/\(user)/\(bundleID).plist"
+    }
+
+    public static func silentPlistData(colour: String) -> Data {
+        (try? PropertyListSerialization.data(
+            fromPropertyList: ["BrowserThemeColor": colour],
+            format: .xml,
+            options: 0
+        )) ?? Data()
+    }
+
+    /// Silent mode is on only when the file exists and this user can rewrite
+    /// it; a root-owned leftover from a profile is not silent mode.
+    public static func silentWritable(path: String, user: String = NSUserName()) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+              let owner = attributes[.ownerAccountName] as? String,
+              let permissions = attributes[.posixPermissions] as? NSNumber else { return false }
+        return owner == user && permissions.intValue & 0o200 != 0
+    }
+
+    public struct SilentTarget: Sendable, Equatable {
+        public var bundleID: String
+        public var colour: String
+
+        public init(bundleID: String, colour: String) {
+            self.bundleID = bundleID
+            self.colour = colour
+        }
+    }
+
+    /// The one-time password prompt. Legacy profiles go first because
+    /// `profiles remove` may clean the managed-preference files macOS wrote;
+    /// then the user-owned plist is created, handed to the user and seeded.
+    public static func enableCommand(
+        targets: [SilentTarget],
+        installedIdentifiers: [String],
+        user: String = NSUserName()
+    ) -> String {
+        var steps = installedIdentifiers.map {
+            "(/usr/bin/profiles remove -identifier \(token($0)) 2>/dev/null || true)"
+        }
+        let directory = "/Library/Managed Preferences/\(user)"
+        steps.append("mkdir -p \(token(directory))")
+        for target in targets {
+            let path = token(userPlistPath(bundleID: target.bundleID, user: user))
+            steps.append("touch \(path)")
+            steps.append("chown \(token(user)) \(path)")
+            steps.append("chmod 644 \(path)")
+            // `defaults write` is the plist write; the chown/chmod repeat
+            // because defaults may replace the file rather than edit in place.
+            steps.append("/usr/bin/defaults write \(path) BrowserThemeColor \(quoted(target.colour))")
+            steps.append("chown \(token(user)) \(path)")
+            steps.append("chmod 644 \(path)")
+        }
+        return steps.joined(separator: " && ")
+    }
+
+    /// Removal deletes only Palette's user-owned plists; no profile exists to
+    /// remove once silent mode is on.
+    public static func removalCommand(bundleIDs: [String], user: String = NSUserName()) -> String {
+        bundleIDs.map { "rm -f \(token(userPlistPath(bundleID: $0, user: user)))" }
+            .joined(separator: " && ")
+    }
+
+    public static func refreshArguments(binary: String) -> [String] {
+        [binary, "--refresh-platform-policy", "--no-startup-window"]
+    }
+
+    /// Launching the app bundle's binary asks the running instance to re-read
+    /// its managed preferences; `open -a` is not used because the flag must
+    /// reach Chromium, not LaunchServices.
+    public static func appBinary(appName: String, home: String = NSHomeDirectory()) -> String? {
+        for root in ["/Applications", home + "/Applications"] {
+            let bundle = Bundle(path: root + "/" + appName + ".app")
+            if let executable = bundle?.executableURL?.path, FileManager.default.isExecutableFile(atPath: executable) {
+                return executable
+            }
+        }
+        return nil
     }
 
     /// One seed colour per browser; Chromium derives the rest.
+    /// A stable UUID per browser and payload, or two profiles installed
+    /// together would share a UUID and macOS would treat them as one.
+    static func profileUUID(browser: ChromiumBrowser, salt: String) -> String {
+        let digest = SHA256.hash(data: Data("\(salt):\(browser.bundleID)".utf8))
+        var bytes = Array(digest.prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x40
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        let hex = bytes.map { String(format: "%02X", $0) }.joined()
+        return [
+            hex.prefix(8),
+            hex.dropFirst(8).prefix(4),
+            hex.dropFirst(12).prefix(4),
+            hex.dropFirst(16).prefix(4),
+            hex.dropFirst(20),
+        ].joined(separator: "-")
+    }
+
     public static func mobileConfig(browser: ChromiumBrowser, palette: PalettePalette) -> String {
         let identifier = identifier(for: browser.bundleID)
         let escaped = palette.background
@@ -695,7 +1474,7 @@ public enum ChromiumPolicy {
               <key>PayloadIdentifier</key>
               <string>\(identifier)</string>
               <key>PayloadUUID</key>
-              <string>5E3C2F6A-9B7D-4C1E-8A2F-7D4B6C9E1A30</string>
+              <string>\(profileUUID(browser: browser, salt: "payload"))</string>
               <key>PayloadVersion</key>
               <integer>1</integer>
               <key>PayloadDisplayName</key>
@@ -723,7 +1502,7 @@ public enum ChromiumPolicy {
           <key>PayloadIdentifier</key>
           <string>\(identifier)</string>
           <key>PayloadUUID</key>
-          <string>8B1D4E7C-3A62-4F90-B5C8-1E9A7D3F6C42</string>
+          <string>\(profileUUID(browser: browser, salt: "configuration"))</string>
           <key>PayloadVersion</key>
           <integer>1</integer>
           <key>PayloadDisplayName</key>
@@ -736,7 +1515,13 @@ public enum ChromiumPolicy {
     /// Shell-safe enough for the display command and the single osascript call.
     public static func token(_ value: String) -> String {
         guard value.contains(where: { $0.isWhitespace }) else { return value }
-        return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        return quoted(value)
+    }
+
+    /// Always quoted, for values such as `#RRGGBB` where `#` would otherwise
+    /// start a shell comment.
+    public static func quoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }
 
@@ -744,36 +1529,96 @@ public enum ChromiumPolicy {
 
 public struct PaletteMetadata: Sendable, Equatable {
     public var source: String
+    /// The catalogue file id, so a later apply can load the same theme again.
+    public var themeID: String
     public var theme: String
     public var appearance: String
     public var generatedAt: Date
     public var targets: [String]
+    /// The nvim file drops Normal's background so a translucent terminal or
+    /// Neovide shows through.
+    public var transparentBackgrounds: Bool
 
     public init(
         source: String,
         theme: String,
         appearance: String,
+        themeID: String = "",
         generatedAt: Date = Date(),
-        targets: [String] = []
+        targets: [String] = [],
+        transparentBackgrounds: Bool = false
     ) {
         self.source = source
         self.theme = theme
+        self.themeID = themeID
         self.appearance = appearance
         self.generatedAt = generatedAt
         self.targets = targets
+        self.transparentBackgrounds = transparentBackgrounds
     }
 
-    public var header: String {
+    public var header: String { header(comment: "#") }
+
+    /// Each target's real comment marker: `#` for shell/conf/TOML, `//` for
+    /// KDL, `--` for Lua. Writing `#` into Lua/KDL made those files invalid.
+    public func header(comment: String) -> String {
         let stamp = ISO8601DateFormatter().string(from: generatedAt)
+        let name = theme.isEmpty ? "" : " · \(theme)\(themeID.isEmpty ? "" : " (\(themeID))")"
         return [
-            "# generated by Palette — do not edit",
-            "# source: \(source)\(theme.isEmpty ? "" : " · \(theme)") · \(appearance) · \(stamp)",
+            "\(comment) generated by Palette — do not edit",
+            "\(comment) source: \(source)\(name) · \(appearance) · \(stamp)",
         ].joined(separator: "\n")
     }
 }
 
+/// One row of the generated nvim highlight table. Colours are role names that
+/// the Lua table resolves to `p.<role>`, so no group can carry a hex value
+/// outside the palette.
+struct NvimHighlight {
+    let group: String
+    var fg: String?
+    var bg: String?
+    var attrs: String?
+    /// Panels and full-window surfaces drop their background when the editor
+    /// is transparent. Floating windows keep theirs for separation.
+    var panel = false
+}
+
 public enum ThemingRenderer {
     public static let paletteJSONName = "palette.json"
+    /// The same palette in two shapes other tools already read, so a new app
+    /// costs a file read instead of an adapter. Written on every apply.
+    public static let base16Name = "palette.yaml"
+    public static let terminalSexyName = "palette.terminal-sexy.json"
+    /// Both standard files, in the order they are written and listed.
+    public static let standardExportNames = [base16Name, terminalSexyName]
+
+    /// Text for an ANSI-coloured chip or diff emphasis. The softer #111 wins
+    /// when it clears 4.5:1; otherwise pure black/white always can.
+    private static func readableChipText(on background: String) -> String {
+        let color = RGBA(hex: background) ?? RGBA(red: 0, green: 0, blue: 0)
+        let soft = PalettePalette.bestText(on: color)
+        if soft.contrast(with: color) >= 4.5 {
+            return PalettePalette.hex(soft)
+        }
+        let black = RGBA(red: 0, green: 0, blue: 0)
+        let white = RGBA(red: 1, green: 1, blue: 1)
+        return PalettePalette.hex(black.contrast(with: color) >= white.contrast(with: color) ? black : white)
+    }
+
+    /// Text colour that still clears `minimum` after the value is rounded to
+    /// the 8-bit hex that actually lands in the file. `readable` checks the
+    /// unrounded colour, which can lose a hair in the last iteration.
+    private static func readableHex(_ color: String, on background: String, minimum: Double) -> String {
+        let bg = RGBA(hex: background) ?? RGBA(red: 0, green: 0, blue: 0)
+        let chosen = PalettePalette.hex(
+            PalettePalette.readable(RGBA(hex: color) ?? bg, on: bg, minimum: minimum)
+        )
+        if let rounded = RGBA(hex: chosen), rounded.contrast(with: bg) >= minimum {
+            return chosen
+        }
+        return PalettePalette.hex(PalettePalette.bestText(on: bg))
+    }
 
     /// nil for targets that are not configured yet, so phase two cannot
     /// silently write a half-guessed format.
@@ -787,15 +1632,19 @@ public enum ThemingRenderer {
         switch target {
         case .kitty: return kitty(palette, header: header)
         case .ghostty: return ghostty(palette, header: header)
-        case .zellij: return zellij(palette, header: header)
-        case .nvim: return nvim(palette, header: header)
+        case .zellij: return zellij(palette, header: metadata.header(comment: "//"))
+        case .nvim:
+            return nvim(
+                palette,
+                header: metadata.header(comment: "--"),
+                transparent: metadata.transparentBackgrounds
+            )
         case .fish: return fish(palette, header: header)
-        case .starship: return starship(palette, header: header)
         case .bat: return bat(palette, header: header)
         case .delta: return delta(palette, header: header)
         case .btop: return btop(palette, header: header)
         case .yazi: return yazi(palette, header: header)
-        case .vscode, .zed, .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .neovide:
+        case .starship, .vscode, .zed, .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc:
             return nil
         }
     }
@@ -809,8 +1658,8 @@ public enum ThemingRenderer {
                 return "<!-- \(text) -->"
             }
             .joined(separator: "\n")
-        var out = [xmlHeader]
-        out.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        // The XML declaration must come first; comments may only follow it.
+        var out = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", xmlHeader]
         out.append("<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">")
         out.append("<plist version=\"1.0\">")
         out.append("<dict>")
@@ -867,9 +1716,9 @@ public enum ThemingRenderer {
     private static func delta(_ palette: PalettePalette, header: String) -> String {
         var out = [header, "", "[delta]"]
         out.append("    minus-style = syntax \"\(palette.background)\"")
-        out.append("    minus-emph-style = normal \"\(palette.ansi[1])\"")
+        out.append("    minus-emph-style = normal \"\(readableChipText(on: palette.ansi[1]))\" \"\(palette.ansi[1])\"")
         out.append("    plus-style = syntax \"\(palette.background)\"")
-        out.append("    plus-emph-style = normal \"\(palette.ansi[2])\"")
+        out.append("    plus-emph-style = normal \"\(readableChipText(on: palette.ansi[2]))\" \"\(palette.ansi[2])\"")
         out.append("    line-numbers-minus-style = \"\(palette.ansi[1])\"")
         out.append("    line-numbers-plus-style = \"\(palette.ansi[2])\"")
         out.append("    line-numbers-zero-style = \"\(palette.muted)\"")
@@ -912,8 +1761,22 @@ public enum ThemingRenderer {
             ("cached_start", palette.ansi[5]),
             ("cached_mid", palette.ansi[4]),
             ("cached_end", palette.ansi[6]),
-            ("download", palette.ansi[2]),
-            ("upload", palette.ansi[1]),
+            ("available_start", palette.ansi[4]),
+            ("available_mid", palette.ansi[6]),
+            ("available_end", palette.ansi[2]),
+            ("used_start", palette.ansi[1]),
+            ("used_mid", palette.ansi[3]),
+            ("used_end", palette.ansi[1]),
+            // btop 1.4 uses *_start/_mid/_end gradients; a bare
+            // download/upload key is silently ignored.
+            ("download_start", palette.ansi[4]),
+            ("download_mid", palette.ansi[6]),
+            ("download_end", palette.ansi[2]),
+            ("upload_start", palette.ansi[5]),
+            ("upload_mid", palette.ansi[4]),
+            ("upload_end", palette.ansi[1]),
+            ("graph_text", palette.muted),
+            ("meter_bg", palette.border),
         ]
         for (key, value) in entries {
             out.append("theme[\(key)]=\"\(value)\"")
@@ -922,18 +1785,29 @@ public enum ThemingRenderer {
     }
 
     private static func yazi(_ palette: PalettePalette, header: String) -> String {
+        // yazi 26 schema: `[mgr]` (not `[manager]`), hover lives in
+        // `[indicator]`, modes in `[mode]`, and filetype mime globs need `**/`.
+        /// A chip background that cannot clear 4.5:1 with the softer #111
+        /// foreground takes pure black/white instead; the background keeps its
+        /// meaning either way.
+        let normal = (fg: readableChipText(on: palette.ansi[4]), bg: palette.ansi[4])
+        let select = (fg: readableChipText(on: palette.ansi[3]), bg: palette.ansi[3])
+        let unset = (fg: readableChipText(on: palette.muted), bg: palette.muted)
         var out = [header, ""]
-        out.append("[manager]")
+        out.append("[mgr]")
         out.append("cwd = { fg = \"\(palette.ansi[4])\" }")
-        out.append("hovered = { fg = \"\(palette.selectionForeground)\", bg = \"\(palette.selectionBackground)\" }")
-        out.append("preview_title = { fg = \"\(palette.ansi[5])\", bold = true }")
-        out.append("preview = { fg = \"\(palette.foreground)\", bg = \"\(palette.surface)\" }")
+        out.append("find_keyword = { fg = \"\(palette.ansi[3])\", bold = true }")
         out.append("border_style = { fg = \"\(palette.border)\" }")
         out.append("")
+        out.append("[indicator]")
+        out.append("current = { fg = \"\(palette.selectionForeground)\", bg = \"\(palette.selectionBackground)\" }")
+        out.append("")
+        out.append("[mode]")
+        out.append("normal_main = { fg = \"\(normal.fg)\", bg = \"\(normal.bg)\", bold = true }")
+        out.append("select_main = { fg = \"\(select.fg)\", bg = \"\(select.bg)\", bold = true }")
+        out.append("unset_main = { fg = \"\(unset.fg)\", bg = \"\(unset.bg)\", bold = true }")
+        out.append("")
         out.append("[status]")
-        out.append("mode_normal = { fg = \"\(palette.background)\", bg = \"\(palette.ansi[4])\", bold = true }")
-        out.append("mode_select = { fg = \"\(palette.background)\", bg = \"\(palette.ansi[3])\", bold = true }")
-        out.append("mode_unset = { fg = \"\(palette.background)\", bg = \"\(palette.muted)\", bold = true }")
         out.append("progress_label = { fg = \"\(palette.foreground)\" }")
         out.append("")
         out.append("[which]")
@@ -942,9 +1816,9 @@ public enum ThemingRenderer {
         out.append("")
         out.append("[filetype]")
         out.append("rules = [")
-        out.append("  { mime = \"image/*\", fg = \"\(palette.ansi[5])\" },")
-        out.append("  { mime = \"video/*\", fg = \"\(palette.ansi[1])\" },")
-        out.append("  { mime = \"application/zip\", fg = \"\(palette.ansi[3])\" },")
+        out.append("  { mime = \"**/image/*\", fg = \"\(palette.ansi[5])\" },")
+        out.append("  { mime = \"**/{audio,video}/*\", fg = \"\(palette.ansi[1])\" },")
+        out.append("  { mime = \"**/application/{zip,rar,7z*,tar,gzip,xz,zstd}\", fg = \"\(palette.ansi[3])\" },")
         out.append("]")
         return out.joined(separator: "\n") + "\n"
     }
@@ -954,6 +1828,7 @@ public enum ThemingRenderer {
         let payload: [String: Any] = [
             "source": metadata.source,
             "theme": metadata.theme,
+            "theme_id": metadata.themeID,
             "appearance": metadata.appearance,
             "generated_at": formatter.string(from: metadata.generatedAt),
             "targets": metadata.targets,
@@ -965,6 +1840,86 @@ public enum ThemingRenderer {
         let data = (try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]))
             ?? Data("{}".utf8)
         return String(decoding: data, as: UTF8.self) + "\n"
+    }
+
+    /// The standard exports, in write order. One palette, two files: every
+    /// target below still exists for live reload, these are for everything else.
+    public static func standardExports(
+        palette: PalettePalette,
+        metadata: PaletteMetadata
+    ) -> [(name: String, contents: String)] {
+        [
+            (base16Name, base16(palette, header: metadata.header)),
+            (terminalSexyName, terminalSexy(palette)),
+        ]
+    }
+
+    /// base16 slots. The palette has one muted and one foreground role, so
+    /// base03/base04 both take muted and base05/base06/base07 both take
+    /// foreground; base08–base0F are the ANSI hues in base16 order (red,
+    /// orange, yellow, green, cyan, blue, magenta, brown), reusing the same
+    /// terminal palette so the two files cannot disagree.
+    ///
+    /// `base01` is the elevated surface (panels, popups) and `base02` the
+    /// surface behind the window, so a base16 app keeps the same elevation
+    /// order as Palette's own UI.
+    private static func base16(_ palette: PalettePalette, header: String) -> String {
+        let slots: [(String, String)] = [
+            ("base00", palette.background),
+            ("base01", palette.elevated),
+            ("base02", palette.surface),
+            ("base03", palette.muted),
+            ("base04", palette.muted),
+            ("base05", palette.foreground),
+            ("base06", palette.foreground),
+            ("base07", palette.foreground),
+            ("base08", palette.ansi[1]),
+            ("base09", palette.ansi[3]),
+            ("base0A", palette.ansi[3]),
+            ("base0B", palette.ansi[2]),
+            ("base0C", palette.ansi[6]),
+            ("base0D", palette.ansi[4]),
+            ("base0E", palette.ansi[5]),
+            ("base0F", palette.ansi[1]),
+        ]
+        var out = [header, ""]
+        out.append("scheme: \(yamlQuoted(palette.name))")
+        out.append("author: \(yamlQuoted("Palette"))")
+        for (key, value) in slots {
+            out.append("\(key): \(yamlQuoted(value))")
+        }
+        return out.joined(separator: "\n") + "\n"
+    }
+
+    /// terminal.sexy names its slots `color_01`…`color_16` for ANSI 0…15; the
+    /// cursor and selection keys are the ones its importer reads.
+    private static func terminalSexy(_ palette: PalettePalette) -> String {
+        var payload: [String: Any] = [
+            "name": palette.name,
+            "author": "Palette",
+            "foreground": palette.foreground,
+            "background": palette.background,
+            "cursorColor": palette.cursor,
+            "cursorAccentColor": palette.cursorText,
+            "selectionColor": palette.selectionBackground,
+            "selectionForegroundColor": palette.selectionForeground,
+        ]
+        for (index, color) in palette.ansi.enumerated() {
+            payload[String(format: "color_%02d", index + 1)] = color
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]))
+            ?? Data("{}".utf8)
+        return String(decoding: data, as: UTF8.self) + "\n"
+    }
+
+    /// YAML double-quoted scalar. A theme name with a quote or backslash would
+    /// otherwise make the whole scheme unparseable.
+    private static func yamlQuoted(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "\"\(escaped)\""
     }
 
     private static func kitty(_ palette: PalettePalette, header: String) -> String {
@@ -1005,82 +1960,609 @@ public enum ThemingRenderer {
         }
         out.append("        orange \"\(palette.ansi[3])\"")
         out.append("        gray \"\(palette.muted)\"")
+
+        // Zellij derives none of its UI roles from fg/bg; without them the tab
+        // bar, status bar and frames fall back to grey defaults.
+        let emphasis = Array(palette.ansi[1...4])
+        func role(_ name: String, base: String, background: String, minimum: Double) {
+            out.append("        \(name) {")
+            out.append("            base \"\(readableHex(base, on: background, minimum: minimum))\"")
+            out.append("            background \"\(background)\"")
+            for (index, color) in emphasis.enumerated() {
+                out.append("            emphasis_\(index) \"\(readableHex(color, on: background, minimum: 4.5))\"")
+            }
+            out.append("        }")
+        }
+        role("text_unselected", base: palette.foreground, background: palette.background, minimum: 4.5)
+        role("text_selected", base: palette.cursorText, background: palette.cursor, minimum: 4.5)
+        role("ribbon_unselected", base: palette.muted, background: palette.surface, minimum: 4.5)
+        role("ribbon_selected", base: palette.cursorText, background: palette.cursor, minimum: 4.5)
+        role("frame_unselected", base: palette.muted, background: palette.background, minimum: 3)
+        role("frame_selected", base: palette.cursor, background: palette.background, minimum: 3)
+        role("frame_highlight", base: palette.cursorText, background: palette.cursor, minimum: 3)
+        role("exit_code_success", base: palette.background, background: palette.ansi[2], minimum: 4.5)
+        role("exit_code_error", base: palette.background, background: palette.ansi[1], minimum: 4.5)
+
         out.append("    }")
         out.append("}")
         return out.joined(separator: "\n") + "\n"
     }
 
-    private static func nvim(_ palette: PalettePalette, header: String) -> String {
+    /// Fallbacks for common groups Palette does not paint: linking them to a
+    /// painted group is what stops a replaced colorscheme's colours leaking
+    /// into small plugin-defined pieces.
+    static let nvimLinks: [(String, String)] = [
+        ("CursorLineFold", "FoldColumn"),
+        ("CursorLineSign", "SignColumn"),
+        ("StatusLineTerm", "StatusLine"),
+        ("StatusLineTermNC", "StatusLineNC"),
+        ("MsgArea", "Normal"),
+        ("PmenuKind", "Pmenu"),
+        ("PmenuExtra", "Pmenu"),
+        ("PmenuKindSel", "PmenuSel"),
+        ("PmenuExtraSel", "PmenuSel"),
+        ("DiagnosticUnnecessary", "Comment"),
+    ]
+
+    /// A LazyVim session uses far more than Vim's built-in groups: treesitter
+    /// captures, diagnostics, lualine, neo-tree and the pickers each paint
+    /// themselves. One row per group, all in palette roles.
+    static func nvimHighlights(transparent: Bool) -> [NvimHighlight] {
+        var groups: [NvimHighlight] = []
+
+        // Base UI. Bars and floats keep a surface so they read as chrome, not
+        // as the editor; panels give theirs up when the editor is transparent.
+        groups += [
+            NvimHighlight(group: "Normal", fg: "fg", bg: "bg", panel: true),
+            NvimHighlight(group: "NormalNC", fg: "fg", bg: "bg", panel: true),
+            NvimHighlight(group: "NormalFloat", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "FloatBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "FloatTitle", fg: "fg", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "Cursor", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "CursorLine", bg: "surface"),
+            NvimHighlight(group: "CursorColumn", bg: "surface"),
+            NvimHighlight(group: "ColorColumn", bg: "surface"),
+            NvimHighlight(group: "LineNr", fg: "muted", bg: "bg", panel: true),
+            NvimHighlight(group: "CursorLineNr", fg: "yellow", attrs: "bold = true"),
+            NvimHighlight(group: "SignColumn", fg: "muted", bg: "bg", panel: true),
+            NvimHighlight(group: "Folded", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "FoldColumn", fg: "muted", bg: "bg", panel: true),
+            NvimHighlight(group: "WinSeparator", fg: "border"),
+            NvimHighlight(group: "StatusLine", fg: "fg", bg: "elevated"),
+            NvimHighlight(group: "StatusLineNC", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "WinBar", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "WinBarNC", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "TabLine", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "TabLineFill", bg: "surface"),
+            NvimHighlight(group: "TabLineSel", fg: "fg", bg: "elevated", attrs: "bold = true"),
+            NvimHighlight(group: "Pmenu", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "PmenuSel", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "PmenuSbar", bg: "surface"),
+            NvimHighlight(group: "PmenuThumb", bg: "border"),
+            NvimHighlight(group: "Visual", fg: "selectionFg", bg: "selection"),
+            NvimHighlight(group: "VisualNOS", fg: "selectionFg", bg: "selection"),
+            NvimHighlight(group: "Search", fg: "searchFg", bg: "searchBg"),
+            NvimHighlight(group: "IncSearch", fg: "bg", bg: "magenta", attrs: "bold = true"),
+            NvimHighlight(group: "CurSearch", fg: "searchFg", bg: "searchBg", attrs: "bold = true"),
+            NvimHighlight(group: "MatchParen", fg: "cyan", attrs: "bold = true, underline = true"),
+            NvimHighlight(group: "Directory", fg: "blue"),
+            NvimHighlight(group: "Title", fg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "NonText", fg: "border"),
+            NvimHighlight(group: "SpecialKey", fg: "border"),
+            NvimHighlight(group: "Whitespace", fg: "border"),
+            NvimHighlight(group: "EndOfBuffer", fg: "bg"),
+            NvimHighlight(group: "ErrorMsg", fg: "red", attrs: "bold = true"),
+            NvimHighlight(group: "WarningMsg", fg: "yellow"),
+            NvimHighlight(group: "MoreMsg", fg: "green"),
+            NvimHighlight(group: "Question", fg: "green"),
+            NvimHighlight(group: "ModeMsg", fg: "fg", attrs: "bold = true"),
+            NvimHighlight(group: "QuickFixLine", fg: "fg", bg: "elevated", attrs: "bold = true"),
+            NvimHighlight(group: "Substitute", fg: "bg", bg: "red"),
+            NvimHighlight(group: "Conceal", fg: "border"),
+        ]
+
+        // Vim syntax groups.
+        groups += [
+            NvimHighlight(group: "Comment", fg: "muted"),
+            NvimHighlight(group: "Constant", fg: "magenta"),
+            NvimHighlight(group: "String", fg: "green"),
+            NvimHighlight(group: "Character", fg: "green"),
+            NvimHighlight(group: "Number", fg: "yellow"),
+            NvimHighlight(group: "Boolean", fg: "magenta"),
+            NvimHighlight(group: "Float", fg: "magenta"),
+            NvimHighlight(group: "Identifier", fg: "fg"),
+            NvimHighlight(group: "Function", fg: "blue"),
+            NvimHighlight(group: "Statement", fg: "magenta"),
+            NvimHighlight(group: "Conditional", fg: "magenta"),
+            NvimHighlight(group: "Repeat", fg: "magenta"),
+            NvimHighlight(group: "Label", fg: "magenta"),
+            NvimHighlight(group: "Operator", fg: "cyan"),
+            NvimHighlight(group: "Keyword", fg: "magenta"),
+            NvimHighlight(group: "Exception", fg: "magenta"),
+            NvimHighlight(group: "PreProc", fg: "cyan"),
+            NvimHighlight(group: "Include", fg: "cyan"),
+            NvimHighlight(group: "Define", fg: "cyan"),
+            NvimHighlight(group: "Macro", fg: "cyan"),
+            NvimHighlight(group: "PreCondit", fg: "cyan"),
+            NvimHighlight(group: "StorageClass", fg: "cyan"),
+            NvimHighlight(group: "Structure", fg: "cyan"),
+            NvimHighlight(group: "Typedef", fg: "cyan"),
+            NvimHighlight(group: "Special", fg: "cyan"),
+            NvimHighlight(group: "SpecialChar", fg: "cyan"),
+            NvimHighlight(group: "Tag", fg: "blue"),
+            NvimHighlight(group: "Delimiter", fg: "fg"),
+            NvimHighlight(group: "SpecialComment", fg: "muted", attrs: "italic = true"),
+            NvimHighlight(group: "Debug", fg: "yellow"),
+            NvimHighlight(group: "Underlined", fg: "blue", attrs: "underline = true"),
+            NvimHighlight(group: "Ignore", fg: "border"),
+            NvimHighlight(group: "Error", fg: "red"),
+            NvimHighlight(group: "Todo", fg: "yellow", attrs: "bold = true"),
+            NvimHighlight(group: "Type", fg: "cyan"),
+        ]
+
+        // Treesitter captures. Neovim links many defaults, but a scheme that
+        // paints only the legacy groups leaves these to the old scheme.
+        groups += [
+            NvimHighlight(group: "@variable", fg: "fg"),
+            NvimHighlight(group: "@variable.builtin", fg: "magenta"),
+            NvimHighlight(group: "@variable.parameter", fg: "fg"),
+            NvimHighlight(group: "@variable.member", fg: "blue"),
+            NvimHighlight(group: "@constant", fg: "magenta"),
+            NvimHighlight(group: "@constant.builtin", fg: "magenta"),
+            NvimHighlight(group: "@module", fg: "blue"),
+            NvimHighlight(group: "@string", fg: "green"),
+            NvimHighlight(group: "@string.escape", fg: "cyan"),
+            NvimHighlight(group: "@string.special", fg: "cyan"),
+            NvimHighlight(group: "@character", fg: "green"),
+            NvimHighlight(group: "@number", fg: "yellow"),
+            NvimHighlight(group: "@boolean", fg: "magenta"),
+            NvimHighlight(group: "@function", fg: "blue"),
+            NvimHighlight(group: "@function.call", fg: "blue"),
+            NvimHighlight(group: "@function.builtin", fg: "cyan"),
+            NvimHighlight(group: "@function.macro", fg: "cyan"),
+            NvimHighlight(group: "@method", fg: "blue"),
+            NvimHighlight(group: "@method.call", fg: "blue"),
+            NvimHighlight(group: "@constructor", fg: "cyan"),
+            NvimHighlight(group: "@keyword", fg: "magenta"),
+            NvimHighlight(group: "@keyword.function", fg: "magenta"),
+            NvimHighlight(group: "@keyword.return", fg: "magenta"),
+            NvimHighlight(group: "@keyword.operator", fg: "magenta"),
+            NvimHighlight(group: "@conditional", fg: "magenta"),
+            NvimHighlight(group: "@repeat", fg: "magenta"),
+            NvimHighlight(group: "@operator", fg: "cyan"),
+            NvimHighlight(group: "@type", fg: "cyan"),
+            NvimHighlight(group: "@type.builtin", fg: "cyan"),
+            NvimHighlight(group: "@type.qualifier", fg: "cyan"),
+            NvimHighlight(group: "@attribute", fg: "cyan"),
+            NvimHighlight(group: "@property", fg: "blue"),
+            NvimHighlight(group: "@field", fg: "blue"),
+            NvimHighlight(group: "@parameter", fg: "fg"),
+            NvimHighlight(group: "@namespace", fg: "blue"),
+            NvimHighlight(group: "@comment", fg: "muted"),
+            NvimHighlight(group: "@comment.error", fg: "red"),
+            NvimHighlight(group: "@comment.warning", fg: "yellow"),
+            NvimHighlight(group: "@punctuation", fg: "fg"),
+            NvimHighlight(group: "@punctuation.bracket", fg: "fg"),
+            NvimHighlight(group: "@punctuation.delimiter", fg: "fg"),
+            NvimHighlight(group: "@punctuation.special", fg: "cyan"),
+            NvimHighlight(group: "@tag", fg: "blue"),
+            NvimHighlight(group: "@tag.attribute", fg: "cyan"),
+            NvimHighlight(group: "@tag.delimiter", fg: "fg"),
+            NvimHighlight(group: "@label", fg: "magenta"),
+            NvimHighlight(group: "@markup.heading", fg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "@markup.link", fg: "cyan"),
+            NvimHighlight(group: "@markup.raw", fg: "green"),
+            NvimHighlight(group: "@markup.list", fg: "magenta"),
+        ]
+
+        // Diagnostics: plain text, undercurl, inline virtual text, floats,
+        // and signs. The undercurl variants need their own `sp` colour.
+        for (name, color) in [
+            ("Error", "red"), ("Warn", "yellow"), ("Info", "blue"),
+            ("Hint", "cyan"), ("Ok", "green"),
+        ] {
+            groups.append(NvimHighlight(group: "Diagnostic\(name)", fg: color))
+            if name != "Ok" {
+                groups.append(NvimHighlight(
+                    group: "DiagnosticUnderline\(name)",
+                    fg: color,
+                    attrs: "sp = p.\(color), undercurl = true"
+                ))
+            }
+            groups.append(NvimHighlight(group: "DiagnosticVirtualText\(name)", fg: color, bg: "surface"))
+            groups.append(NvimHighlight(group: "DiagnosticFloating\(name)", fg: color, bg: "surface"))
+            groups.append(NvimHighlight(group: "DiagnosticSign\(name)", fg: color))
+        }
+
+        // Diff and git signs.
+        groups += [
+            NvimHighlight(group: "DiffAdd", fg: "green", bg: "surface"),
+            NvimHighlight(group: "DiffChange", fg: "yellow", bg: "surface"),
+            NvimHighlight(group: "DiffDelete", fg: "red", bg: "surface"),
+            NvimHighlight(group: "DiffText", fg: "fg", bg: "elevated", attrs: "bold = true"),
+            NvimHighlight(group: "Added", fg: "green"),
+            NvimHighlight(group: "Removed", fg: "red"),
+            NvimHighlight(group: "Changed", fg: "yellow"),
+            NvimHighlight(group: "GitSignsAdd", fg: "green"),
+            NvimHighlight(group: "GitSignsChange", fg: "yellow"),
+            NvimHighlight(group: "GitSignsDelete", fg: "red"),
+            NvimHighlight(group: "MiniDiffSignAdd", fg: "green"),
+            NvimHighlight(group: "MiniDiffSignChange", fg: "yellow"),
+            NvimHighlight(group: "MiniDiffSignDelete", fg: "red"),
+            NvimHighlight(group: "diffAdded", fg: "green"),
+            NvimHighlight(group: "diffRemoved", fg: "red"),
+            NvimHighlight(group: "diffChanged", fg: "yellow"),
+        ]
+
+        // lualine: each mode has an accent for its solid segments; the middle
+        // sections sit on the palette's surfaces.
+        let modes = [
+            ("normal", "blue"), ("insert", "green"), ("visual", "magenta"),
+            ("replace", "red"), ("command", "yellow"), ("terminal", "cyan"),
+        ]
+        for (mode, accent) in modes {
+            groups += [
+                NvimHighlight(group: "lualine_a_\(mode)", fg: "cursorText", bg: accent, attrs: "bold = true"),
+                NvimHighlight(group: "lualine_b_\(mode)", fg: "cursorText", bg: accent),
+                NvimHighlight(group: "lualine_c_\(mode)", fg: "muted", bg: "surface"),
+                NvimHighlight(group: "lualine_x_\(mode)", fg: "muted", bg: "surface"),
+                NvimHighlight(group: "lualine_y_\(mode)", fg: "muted", bg: "elevated"),
+                NvimHighlight(group: "lualine_z_\(mode)", fg: "muted", bg: "elevated"),
+            ]
+        }
+        groups += [
+            NvimHighlight(group: "lualine_a_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_b_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_c_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_x_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_y_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_z_inactive", fg: "muted", bg: "surface"),
+        ]
+
+        // neo-tree: the tree window is a panel, so its surface follows the
+        // editor's transparency; individual rows carry colour only.
+        groups += [
+            NvimHighlight(group: "NeoTreeNormal", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "NeoTreeNormalNC", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "NeoTreeDirectoryName", fg: "blue"),
+            NvimHighlight(group: "NeoTreeDirectoryIcon", fg: "blue"),
+            NvimHighlight(group: "NeoTreeFileName", fg: "fg"),
+            NvimHighlight(group: "NeoTreeFileNameOpened", fg: "green"),
+            NvimHighlight(group: "NeoTreeFileIcon", fg: "fg"),
+            NvimHighlight(group: "NeoTreeRootName", fg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "NeoTreeIndentMarker", fg: "border"),
+            NvimHighlight(group: "NeoTreeExpander", fg: "muted"),
+            NvimHighlight(group: "NeoTreeCursorLine", bg: "surface", attrs: "bold = true", panel: true),
+            NvimHighlight(group: "NeoTreeGitAdded", fg: "green"),
+            NvimHighlight(group: "NeoTreeGitModified", fg: "yellow"),
+            NvimHighlight(group: "NeoTreeGitDeleted", fg: "red"),
+            NvimHighlight(group: "NeoTreeGitUntracked", fg: "cyan"),
+            NvimHighlight(group: "NeoTreeGitRenamed", fg: "magenta"),
+            NvimHighlight(group: "NeoTreeGitIgnored", fg: "muted"),
+            NvimHighlight(group: "NeoTreeSymbolicLinkTarget", fg: "cyan"),
+        ]
+
+        // Floating pickers keep a surface so they separate from the editor.
+        groups += [
+            NvimHighlight(group: "TelescopeNormal", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "TelescopeBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "TelescopeTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "TelescopePromptNormal", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "TelescopePromptBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "TelescopePromptTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "TelescopeResultsNormal", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "TelescopeResultsBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "TelescopeResultsTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "TelescopePreviewNormal", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "TelescopePreviewBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "TelescopePreviewTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "TelescopeSelection", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "TelescopeSelectionCaret", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "TelescopeMatching", fg: "green", attrs: "bold = true"),
+
+            NvimHighlight(group: "SnacksPicker", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "SnacksPickerBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "SnacksPickerTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "SnacksPickerListCursorLine", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "SnacksPickerMatch", fg: "green", attrs: "bold = true"),
+            NvimHighlight(group: "SnacksPickerDir", fg: "muted"),
+            NvimHighlight(group: "SnacksPickerFile", fg: "fg"),
+            NvimHighlight(group: "SnacksPickerIcon", fg: "blue"),
+
+            // The dashboard is a full-window surface, not a float.
+            NvimHighlight(group: "SnacksDashboardHeader", fg: "blue", bg: "bg", panel: true),
+            NvimHighlight(group: "SnacksDashboardIcon", fg: "cyan"),
+            NvimHighlight(group: "SnacksDashboardKey", fg: "yellow"),
+            NvimHighlight(group: "SnacksDashboardDesc", fg: "fg"),
+            NvimHighlight(group: "SnacksDashboardFooter", fg: "muted"),
+            NvimHighlight(group: "SnacksDashboardTitle", fg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "SnacksDashboardTerminal", fg: "fg"),
+            NvimHighlight(group: "SnacksDashboardSpecial", fg: "magenta"),
+
+            NvimHighlight(group: "SnacksNotifierInfo", fg: "blue", bg: "surface"),
+            NvimHighlight(group: "SnacksNotifierWarn", fg: "yellow", bg: "surface"),
+            NvimHighlight(group: "SnacksNotifierError", fg: "red", bg: "surface"),
+            NvimHighlight(group: "SnacksNotifierDebug", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "SnacksNotifierTrace", fg: "cyan", bg: "surface"),
+        ]
+
+        // noice (command line/popups) and nvim-notify.
+        groups += [
+            NvimHighlight(group: "NoiceCmdline", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "NoiceCmdlineIcon", fg: "blue"),
+            NvimHighlight(group: "NoiceCmdlinePopup", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "NoiceCmdlinePopupBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "NoicePopup", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "NoicePopupBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "NoiceMini", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "NoiceConfirm", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "NoiceConfirmBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "NotifyINFO", fg: "blue", bg: "surface"),
+            NvimHighlight(group: "NotifyWARN", fg: "yellow", bg: "surface"),
+            NvimHighlight(group: "NotifyERROR", fg: "red", bg: "surface"),
+            NvimHighlight(group: "NotifyDEBUG", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "NotifyTRACE", fg: "cyan", bg: "surface"),
+        ]
+
+        groups += [
+            NvimHighlight(group: "LazyNormal", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "LazyButton", fg: "fg", bg: "elevated"),
+            NvimHighlight(group: "LazyButtonActive", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "LazyH1", fg: "cursorText", bg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "LazySpecial", fg: "blue"),
+            NvimHighlight(group: "MasonNormal", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "MasonHeader", fg: "cursorText", bg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "TroubleNormal", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "TroubleText", fg: "fg"),
+            NvimHighlight(group: "DapBreakpoint", fg: "red"),
+            NvimHighlight(group: "DapStopped", fg: "yellow"),
+            // Context headers sit inline in the buffer: tinted, never a solid
+            // block that would hide transparency.
+            NvimHighlight(group: "TreesitterContext", bg: "surface", attrs: "bold = true", panel: true),
+            NvimHighlight(group: "TreesitterContextLineNumber", fg: "muted"),
+            NvimHighlight(group: "CmpItemAbbr", fg: "fg"),
+            NvimHighlight(group: "CmpItemAbbrMatch", fg: "green", attrs: "bold = true"),
+            NvimHighlight(group: "CmpItemKind", fg: "cyan"),
+            NvimHighlight(group: "CmpItemMenu", fg: "muted"),
+        ]
+
+        if transparent {
+            for index in groups.indices where groups[index].panel {
+                groups[index].bg = nil
+            }
+        }
+        return groups
+    }
+
+    private static func nvim(_ palette: PalettePalette, header: String, transparent: Bool) -> String {
+        let search = (fg: readableChipText(on: palette.ansi[3]), bg: palette.ansi[3])
         var out = [header, ""]
         out.append("local p = {")
         out.append("  bg = \"\(palette.background)\", fg = \"\(palette.foreground)\",")
         out.append("  surface = \"\(palette.surface)\", elevated = \"\(palette.elevated)\",")
         out.append("  border = \"\(palette.border)\", muted = \"\(palette.muted)\",")
-        out.append("  cursor = \"\(palette.cursor)\", selection = \"\(palette.selectionBackground)\",")
+        out.append("  cursor = \"\(palette.cursor)\", cursorText = \"\(palette.cursorText)\",")
+        out.append("  selection = \"\(palette.selectionBackground)\", selectionFg = \"\(palette.selectionForeground)\",")
+        out.append("  searchFg = \"\(search.fg)\", searchBg = \"\(search.bg)\",")
         out.append("  red = \"\(palette.ansi[1])\", green = \"\(palette.ansi[2])\",")
         out.append("  yellow = \"\(palette.ansi[3])\", blue = \"\(palette.ansi[4])\",")
         out.append("  magenta = \"\(palette.ansi[5])\", cyan = \"\(palette.ansi[6])\",")
+        let ansiList = (0..<16).map { "\"\(palette.ansi[$0])\"" }.joined(separator: ", ")
+        out.append("  ansi = { \(ansiList) },")
         out.append("}")
         out.append("")
-        out.append("vim.g.colors_name = \"palette\"")
-        out.append("local function hl(group, fg, bg)")
-        out.append("  vim.api.nvim_set_hl(0, group, { fg = fg, bg = bg })")
+        out.append("local groups = {")
+        for highlight in nvimHighlights(transparent: transparent) {
+            // Lua identifiers stay bare; `@` captures and dotted names need
+            // the bracketed form.
+            let key = highlight.group.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+                ? highlight.group
+                : "[\"\(highlight.group)\"]"
+            var parts: [String] = []
+            if let fg = highlight.fg { parts.append("fg = p.\(fg)") }
+            if let bg = highlight.bg { parts.append("bg = p.\(bg)") }
+            if let attrs = highlight.attrs { parts.append(attrs) }
+            out.append("  \(key) = { \(parts.joined(separator: ", ")) },")
+        }
+        out.append("}")
+        out.append("")
+        out.append("-- Groups Palette does not paint would keep the colorscheme it")
+        out.append("-- replaced; point them at painted groups instead.")
+        out.append("local links = {")
+        for (from, to) in nvimLinks {
+            out.append("  { \"\(from)\", \"\(to)\" },")
+        }
+        out.append("}")
+        out.append("")
+        out.append("-- Global so a reload swaps in the newest palette instead of leaving")
+        out.append("-- the previous file's autocmd painting old colours.")
+        out.append("_G.palette_theme_token = _G.palette_theme_token or 0")
+        out.append("")
+        out.append("-- The whole table on every pass: a pass is atomic, never a mixed state.")
+        out.append("_G.palette_theme_apply = function()")
+        out.append("  for group, colors in pairs(groups) do")
+        out.append("    vim.api.nvim_set_hl(0, group, colors)")
+        out.append("  end")
+        out.append("  for _, link in ipairs(links) do")
+        out.append("    vim.api.nvim_set_hl(0, link[1], { link = link[2] })")
+        out.append("  end")
+        out.append("  _G.palette_theme_snap()")
         out.append("end")
-        out.append("hl(\"Normal\", p.fg, p.bg)")
-        out.append("hl(\"NormalFloat\", p.fg, p.surface)")
-        out.append("hl(\"Cursor\", p.bg, p.cursor)")
-        out.append("hl(\"CursorLine\", nil, p.surface)")
-        out.append("hl(\"LineNr\", p.muted, p.bg)")
-        out.append("hl(\"Visual\", p.fg, p.selection)")
-        out.append("hl(\"Search\", p.bg, p.yellow)")
-        out.append("hl(\"StatusLine\", p.fg, p.elevated)")
-        out.append("hl(\"Pmenu\", p.fg, p.surface)")
-        out.append("hl(\"PmenuSel\", p.bg, p.cursor)")
-        out.append("hl(\"Comment\", p.muted)")
-        out.append("hl(\"Constant\", p.magenta)")
-        out.append("hl(\"String\", p.green)")
-        out.append("hl(\"Function\", p.blue)")
-        out.append("hl(\"Keyword\", p.magenta)")
-        out.append("hl(\"Type\", p.cyan)")
-        out.append("hl(\"Error\", p.red)")
-        out.append("hl(\"WarningMsg\", p.yellow)")
+        out.append("")
+        out.append("")
+        out.append("-- Plugins define their own groups with the previous colorscheme's")
+        out.append("-- colours. Snap any group's fg/bg to the nearest palette colour so the")
+        out.append("-- editor stays one palette without naming every plugin here.")
+        out.append("local function palette_rgb(value)")
+        out.append("  return math.floor(value / 65536) % 256, math.floor(value / 256) % 256, value % 256")
+        out.append("end")
+        out.append("local function palette_nearest(value)")
+        out.append("  local r, g, b = palette_rgb(value)")
+        out.append("  local best, bestDistance = value, math.huge")
+        out.append("  for _, hex in ipairs(p.ansi) do")
+        out.append("    local candidate = tonumber(hex:sub(2), 16)")
+        out.append("    local pr, pg, pb = palette_rgb(candidate)")
+        out.append("    local distance = (r - pr) ^ 2 + (g - pg) ^ 2 + (b - pb) ^ 2")
+        out.append("    if distance < bestDistance then")
+        out.append("      bestDistance = distance")
+        out.append("      best = candidate")
+        out.append("    end")
+        out.append("  end")
+        out.append("  return best")
+        out.append("end")
+        out.append("_G.palette_theme_snap = function()")
+        out.append("  local allowed = {}")
+        out.append("  for _, hex in ipairs(p.ansi) do allowed[tonumber(hex:sub(2), 16)] = true end")
+        out.append("  for name, hl in pairs(vim.api.nvim_get_hl(0, {})) do")
+        out.append("    if not hl.link then")
+        out.append("      local update = {}")
+        out.append("      for _, key in ipairs({ \"fg\", \"bg\" }) do")
+        out.append("        local value = hl[key]")
+        out.append("        if type(value) == \"number\" and not allowed[value] then")
+        out.append("          update[key] = palette_nearest(value)")
+        out.append("        end")
+        out.append("      end")
+        out.append("      if next(update) then")
+        out.append("        update.fg = update.fg or hl.fg")
+        out.append("        update.bg = update.bg or hl.bg")
+        out.append("        vim.api.nvim_set_hl(0, name, update)")
+        out.append("      end")
+        out.append("    end")
+        out.append("  end")
+        out.append("end")
+        out.append("")
+        out.append("-- Apply now, then again next tick: plugins that paint from their own")
+        out.append("-- autocmd or vim.schedule() run after us and would otherwise win.")
+        out.append("-- A newer trigger bumps the token and cancels the pending pass, so a")
+        out.append("-- burst of events settles on exactly one extra apply.")
+        out.append("_G.palette_theme_run = function()")
+        out.append("  _G.palette_theme_apply()")
+        out.append("  _G.palette_theme_token = _G.palette_theme_token + 1")
+        out.append("  local token = _G.palette_theme_token")
+        out.append("  vim.defer_fn(function()")
+        out.append("    if token == _G.palette_theme_token then _G.palette_theme_apply() end")
+        out.append("  end, 120)")
+        out.append("end")
+        out.append("")
+        out.append("-- A reload re-runs this file for new colours; it must not register")
+        out.append("-- a second watcher or autocmd. It runs both passes like a trigger.")
+        out.append("local reloading = _G.palette_theme_reloading")
+        out.append("")
+        out.append("_G.palette_theme_run()")
+        out.append("vim.g.colors_name = \"palette\"")
+        out.append("")
+        out.append("if not reloading then")
+        out.append("  -- Lazy and plugin colorschemes load after init.lua, so re-apply.")
+        out.append("  vim.api.nvim_create_augroup(\"PaletteTheme\", { clear = true })")
+        out.append("  vim.api.nvim_create_autocmd({ \"VimEnter\", \"ColorScheme\", \"UIEnter\" }, {")
+        out.append("    group = \"PaletteTheme\",")
+        out.append("    callback = function() _G.palette_theme_run() end,")
+        out.append("  })")
+        out.append("")
+        out.append("  -- Palette rewrites this file on every theme or wallpaper change.")
+        out.append("  -- The writes are atomic (a new inode), so watch the directory.")
+        out.append("  if not _G.palette_theme_watching then")
+        out.append("    _G.palette_theme_watching = true")
+        out.append("    local uv = vim.uv or vim.loop")
+        out.append("    local source = debug.getinfo(1, \"S\").source")
+        out.append("    local file = vim.fn.fnamemodify(")
+        out.append("      source:sub(1, 1) == \"@\" and source:sub(2)")
+        out.append("        or vim.fn.expand(\"~/.config/palette/theme/nvim.lua\"),")
+        out.append("      \":p\")")
+        out.append("    local dir = vim.fn.fnamemodify(file, \":h\")")
+        out.append("    local base = vim.fn.fnamemodify(file, \":t\")")
+        out.append("    local timer, handle = uv.new_timer(), uv.new_fs_event()")
+        out.append("    local busy = false")
+        out.append("    local function reload()")
+        out.append("      if busy then return end")
+        out.append("      busy = true")
+        out.append("      _G.palette_theme_reloading = true")
+        out.append("      local ok, err = pcall(dofile, file)")
+        out.append("      _G.palette_theme_reloading = false")
+        out.append("      busy = false")
+        out.append("      if not ok then")
+        out.append("        vim.notify(\"Palette theme reload failed: \" .. tostring(err), vim.log.levels.WARN)")
+        out.append("      end")
+        out.append("    end")
+        out.append("    handle:start(dir, {}, function(err, name)")
+        out.append("      if err or name ~= base then return end")
+        out.append("      timer:stop()")
+        out.append("      timer:start(200, 0, vim.schedule_wrap(reload))")
+        out.append("    end)")
+        out.append("    vim.api.nvim_create_augroup(\"PaletteThemeWatch\", { clear = true })")
+        out.append("    vim.api.nvim_create_autocmd(\"VimLeavePre\", {")
+        out.append("      group = \"PaletteThemeWatch\",")
+        out.append("      once = true,")
+        out.append("      callback = function()")
+        out.append("        timer:stop()")
+        out.append("        timer:close()")
+        out.append("        handle:stop()")
+        out.append("        handle:close()")
+        out.append("      end,")
+        out.append("    })")
+        out.append("  end")
+        out.append("end")
         return out.joined(separator: "\n") + "\n"
+    }
+
+    /// fish reads `#` at the start of a token as a comment, so a bare
+    /// `set -g fish_color_command #abc` silently sets nothing. Values are
+    /// written without the hash.
+    private static func fishColor(_ hex: String) -> String {
+        hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
     }
 
     private static func fish(_ palette: PalettePalette, header: String) -> String {
         var out = [header, ""]
-        out.append("set -g fish_color_normal \(palette.foreground)")
-        out.append("set -g fish_color_command \(palette.ansi[4])")
-        out.append("set -g fish_color_param \(palette.ansi[6])")
-        out.append("set -g fish_color_string \(palette.ansi[2])")
-        out.append("set -g fish_color_variable \(palette.ansi[5])")
-        out.append("set -g fish_color_error \(palette.ansi[1])")
-        out.append("set -g fish_color_comment \(palette.muted)")
-        out.append("set -g fish_color_keyword \(palette.ansi[5])")
-        out.append("set -g fish_color_operator \(palette.ansi[4])")
-        out.append("set -g fish_color_escape \(palette.ansi[6])")
-        out.append("set -g fish_color_cwd \(palette.ansi[4])")
-        out.append("set -g fish_color_git \(palette.ansi[2])")
-        out.append("set -g fish_color_selection --background=\(palette.selectionBackground)")
-        out.append("set -g fish_color_search_match --background=\(palette.elevated)")
-        out.append("set -g fish_color_autosuggestion \(palette.muted)")
+        out.append("set -g fish_color_normal \(fishColor(palette.foreground))")
+        out.append("set -g fish_color_command \(fishColor(palette.ansi[4]))")
+        out.append("set -g fish_color_param \(fishColor(palette.ansi[6]))")
+        out.append("set -g fish_color_string \(fishColor(palette.ansi[2]))")
+        out.append("set -g fish_color_variable \(fishColor(palette.ansi[5]))")
+        out.append("set -g fish_color_error \(fishColor(palette.ansi[1]))")
+        out.append("set -g fish_color_comment \(fishColor(palette.muted))")
+        out.append("set -g fish_color_keyword \(fishColor(palette.ansi[5]))")
+        out.append("set -g fish_color_operator \(fishColor(palette.ansi[4]))")
+        out.append("set -g fish_color_escape \(fishColor(palette.ansi[6]))")
+        out.append("set -g fish_color_cwd \(fishColor(palette.ansi[4]))")
+        out.append("set -g fish_color_git \(fishColor(palette.ansi[2]))")
+        out.append("set -g fish_color_selection --background=\(fishColor(palette.selectionBackground))")
+        out.append("set -g fish_color_search_match --background=\(fishColor(palette.elevated))")
+        out.append("set -g fish_color_autosuggestion \(fishColor(palette.muted))")
         return out.joined(separator: "\n") + "\n"
     }
+}
 
-    private static func starship(_ palette: PalettePalette, header: String) -> String {
-        let names = ["black", "red", "green", "yellow", "blue", "purple", "cyan", "white"]
-        var out = [header, "", "[palettes.palette]"]
-        for (index, name) in names.enumerated() {
-            out.append("\(name) = \"\(palette.ansi[index])\"")
+// MARK: - Staleness
+
+/// Generated files an older build left wrong. Launch repairs them once, quietly,
+/// so an upgrading user's Neovim stops failing on `#` comments in Lua.
+public enum ThemingStaleness {
+    public static func reasons(
+        themeID: String,
+        themeDir: URL,
+        fileManager: FileManager = .default
+    ) -> [String] {
+        var reasons: [String] = []
+        let paletteJSON = themeDir.appendingPathComponent(ThemingRenderer.paletteJSONName)
+        if !themeID.isEmpty,
+           let data = fileManager.contents(atPath: paletteJSON.path),
+           let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+            // A palette.json without theme_id predates the id fix, so the files
+            // were generated from an unresolvable display name (Default Dark).
+            if let written = object["theme_id"] as? String, written != themeID {
+                reasons.append("palette.json theme id '\(written)' does not match '\(themeID)'")
+            } else if object["theme_id"] == nil {
+                reasons.append("palette.json predates theme ids")
+            }
         }
-        out.append("bg = \"\(palette.background)\"")
-        out.append("fg = \"\(palette.foreground)\"")
-        out.append("accent = \"\(palette.cursor)\"")
-        out.append("muted = \"\(palette.muted)\"")
-        for (index, name) in names.enumerated() {
-            out.append("bright-\(name) = \"\(palette.ansi[index + 8])\"")
+        for target in [ThemingTarget.nvim, .zellij] {
+            let url = themeDir.appendingPathComponent(target.fileName)
+            guard let text = try? String(contentsOf: url, encoding: .utf8),
+                  text.first(where: { !$0.isWhitespace }) == "#" else { continue }
+            reasons.append("\(target.fileName) still starts with #")
         }
-        return out.joined(separator: "\n") + "\n"
+        return reasons
     }
 }
 
@@ -1092,6 +2574,53 @@ extension RGBA {
         let minimum = min(red, green, blue)
         guard maximum > 0 else { return 0 }
         return (maximum - minimum) / maximum
+    }
+
+    /// colorsys.rgb_to_hls.
+    var hls: (hue: Double, lightness: Double, saturation: Double) {
+        let maximum = max(red, green, blue)
+        let minimum = min(red, green, blue)
+        let lightness = (maximum + minimum) / 2
+        guard maximum != minimum else { return (0, lightness, 0) }
+        let delta = maximum - minimum
+        let saturation = lightness <= 0.5 ? delta / (maximum + minimum) : delta / (2 - maximum - minimum)
+        let redPart = (maximum - red) / delta
+        let greenPart = (maximum - green) / delta
+        let bluePart = (maximum - blue) / delta
+        var hue: Double
+        if red == maximum {
+            hue = bluePart - greenPart
+        } else if green == maximum {
+            hue = 2 + redPart - bluePart
+        } else {
+            hue = 4 + greenPart - redPart
+        }
+        hue = (hue / 6).truncatingRemainder(dividingBy: 1)
+        if hue < 0 { hue += 1 }
+        return (hue, lightness, saturation)
+    }
+
+    /// colorsys.rgb_to_hsv.
+    var hsv: (hue: Double, saturation: Double, value: Double) {
+        let maximum = max(red, green, blue)
+        let minimum = min(red, green, blue)
+        let delta = maximum - minimum
+        let saturation = maximum == 0 ? 0 : delta / maximum
+        guard delta != 0 else { return (0, saturation, maximum) }
+        let redPart = (maximum - red) / delta
+        let greenPart = (maximum - green) / delta
+        let bluePart = (maximum - blue) / delta
+        var hue: Double
+        if red == maximum {
+            hue = bluePart - greenPart
+        } else if green == maximum {
+            hue = 2 + redPart - bluePart
+        } else {
+            hue = 4 + greenPart - redPart
+        }
+        hue = (hue / 6).truncatingRemainder(dividingBy: 1)
+        if hue < 0 { hue += 1 }
+        return (hue, saturation, maximum)
     }
 
     func mixed(with other: RGBA, amount: Double) -> RGBA {

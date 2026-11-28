@@ -1,0 +1,137 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "Add Web App…",
+  "focusZone" : "search",
+  "itemCount" : 4,
+  "items" : [
+    {
+      "actions" : [
+        "add:Add Web App"
+      ],
+      "badge" : "new",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "add-new",
+      "providerID" : "web",
+      "subtitle" : "Enter a domain, or type \/web example.com",
+      "title" : "Add Web App…"
+    },
+    {
+      "actions" : [
+        "open:Open Web App",
+        "copy-url:Copy URL",
+        "shortcut:Change Shortcut…",
+        "clear-shortcut:Clear Shortcut",
+        "remove:Remove Web App"
+      ],
+      "badge" : "web",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "wa-2",
+      "providerID" : "web",
+      "subtitle" : "https:\/\/figma.com · fig",
+      "title" : "Figma"
+    },
+    {
+      "actions" : [
+        "open:Open Web App",
+        "copy-url:Copy URL",
+        "shortcut:Change Shortcut…",
+        "clear-shortcut:Clear Shortcut",
+        "remove:Remove Web App"
+      ],
+      "badge" : "web",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "wa-3",
+      "providerID" : "web",
+      "subtitle" : "https:\/\/github.com · gh",
+      "title" : "GitHub"
+    },
+    {
+      "actions" : [
+        "open:Open Web App",
+        "copy-url:Copy URL",
+        "shortcut:Change Shortcut…",
+        "clear-shortcut:Clear Shortcut",
+        "remove:Remove Web App"
+      ],
+      "badge" : "web",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "wa-1",
+      "providerID" : "web",
+      "subtitle" : "https:\/\/linear.app · lin",
+      "title" : "Linear"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : false,
+  "previewVisible" : false,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "\/web",
+  "railFocused" : false,
+  "railID" : "web",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "Web Apps",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+
+    ],
+    "background" : "",
+    "foreground" : "",
+    "live" : false
+  },
+  "terminalActive" : false,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}

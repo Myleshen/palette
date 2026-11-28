@@ -47,7 +47,8 @@ public enum ThemingReload {
         case .nvim:
             return Status(
                 state: .action,
-                message: "Run :source ~/.config/palette/theme/nvim.lua or restart Neovim"
+                message: "Run :source ~/.config/palette/theme/nvim.lua or Restart Neovide/Neovim"
+                    + " (Neovide keeps the old colours until its nvim restarts)"
             )
         case .fish:
             return Status(
@@ -55,19 +56,26 @@ public enum ThemingReload {
                 message: "Open a new shell (or `source ~/.config/palette/theme/fish.fish`)"
             )
         case .starship:
-            return Status(state: .action, message: "Next prompt")
+            return Status(
+                state: .action,
+                message: "New shell — fish sets STARSHIP_CONFIG; other shells: "
+                    + "export STARSHIP_CONFIG=~/.config/palette/theme/starship-theme.toml"
+            )
         case .bat:
-            return Status(state: .action, message: "Next bat invocation")
+            return Status(state: .action, message: "Next bat invocation (Palette runs bat cache --build)")
         case .btop:
-            return Status(state: .action, message: "Restart btop")
+            return Status(
+                state: .action,
+                message: "Set color_theme = \"palette\" in btop.conf once, then restart btop"
+            )
         case .delta:
             return Status(state: .action, message: "Next git/delta command")
         case .yazi:
             return Status(
                 state: .action,
-                message: "Copy the theme to ~/.config/yazi/theme.toml, then restart yazi"
+                message: "Merge the theme into ~/.config/yazi/theme.toml (copy only if absent), then restart yazi"
             )
-        case .vscode, .zed, .arc, .neovide:
+        case .vscode, .zed, .arc:
             return Status(state: .action, message: target.unavailableReason ?? "Not configured yet.")
         default:
             return Status(state: .action, message: target.unavailableReason ?? "Not configured yet.")
@@ -84,5 +92,24 @@ public enum ThemingReload {
             return Status(state: .failed, message: "Restart kitty (reload failed)")
         }
         return Status(state: .reloaded, message: "Reloaded open kitty windows")
+    }
+
+    /// The Apply that writes `allow_remote_control` cannot reach the kitty that
+    /// is already running: it starts its socket on the next launch. Said once
+    /// because the directive is already in the config afterwards.
+    public static func kittyAddedRemoteControl() -> Status {
+        Status(
+            state: .action,
+            message: "Added remote control — restart kitty once, then applies recolour it live"
+        )
+    }
+
+    /// One kitty process can have several OS windows; `set-colors -a` painted
+    /// all of them over one socket.
+    public static func kittyLive(windows: Int) -> Status {
+        Status(
+            state: .reloaded,
+            message: windows == 1 ? "Reloaded 1 kitty window" : "Reloaded \(windows) kitty windows"
+        )
     }
 }

@@ -17,6 +17,26 @@ final class DeveloperWorkflowTests: XCTestCase {
         func search(_ request: SearchRequest) async throws -> [PaletteItem] { items }
     }
 
+    private final class CountingPrewarmProvider: PaletteProvider, @unchecked Sendable {
+        let descriptor = ProviderDescriptor(id: "warm", name: "warm")
+        private let lock = NSLock()
+        private var count = 0
+
+        var prewarmCount: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return count
+        }
+
+        func search(_ request: SearchRequest) async throws -> [PaletteItem] { [] }
+
+        func prewarm() async {
+            lock.lock()
+            count += 1
+            lock.unlock()
+        }
+    }
+
     func testClipboardTransforms() {
         XCTAssertEqual(ClipboardTransform.trim.apply(to: "  hi \n"), "hi")
         XCTAssertEqual(ClipboardTransform.uppercase.apply(to: "abc"), "ABC")
@@ -139,6 +159,14 @@ final class DeveloperWorkflowTests: XCTestCase {
 
         let unknown = ProviderRegistry(providers: [apps], prefix: "/", global: ["nope"])
         XCTAssertTrue(unknown.diagnostics.contains { $0.level == .warning && $0.message.contains("nope") })
+    }
+
+    func testRegistryPrewarmsProvidersOnce() async {
+        let warm = CountingPrewarmProvider()
+        let registry = ProviderRegistry(providers: [warm], prefix: "/")
+        await registry.prewarm()
+        await registry.prewarm()
+        XCTAssertEqual(warm.prewarmCount, 1)
     }
 
     func testRegistryAliasesAndConfiguredOrder() {

@@ -268,6 +268,8 @@ struct SettingsView: View {
     @State private var launcherRecordToken = 0
     @State private var clipboardRecordToken = 0
     @State private var terminalRecordToken = 0
+    @State private var themeGalleryRecordToken = 0
+    @State private var wallpaperGalleryRecordToken = 0
     @State private var scratchpadRecordToken = 0
     @State private var askRecordToken = 0
     @State private var screenshotRecordToken = 0
@@ -304,7 +306,11 @@ struct SettingsView: View {
     @State private var cheatsheetExtensions: String
     @State private var wallpaperPreviewImage: NSImage?
     @State private var copiedInclude: String?
+    @State private var copiedAdvice: String?
     @State private var removePoliciesPending = false
+    /// A silent plist outlives unchecking or Revert; the browser keeps the
+    /// Palette colour until it is removed in the Browsers card.
+    @State private var policyWarning: String?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var keepAwakeStatus = KeepAwakeStatus()
     @State private var keepAwakeMessage: String?
@@ -326,6 +332,7 @@ struct SettingsView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private let keepAwake: KeepAwakeService
     private let themesDirectory: URL
@@ -335,6 +342,8 @@ struct SettingsView: View {
     private let initialWebAppBrowser: String
     private let onApply: (PaletteConfig) -> String?
     private let onOpen: (URL) -> Void
+    private let onThemeCards: () -> Void
+    private let onOpenThemedZellij: () -> Void
     private let onExportBackup: () -> Void
     /// Clears the learned-ranking rows; returns an error message on failure.
     private let onForgetLearned: () async -> String?
@@ -359,6 +368,8 @@ struct SettingsView: View {
         updates: UpdateService,
         onApply: @escaping (PaletteConfig) -> String?,
         onOpen: @escaping (URL) -> Void,
+        onThemeCards: @escaping () -> Void,
+        onOpenThemedZellij: @escaping () -> Void,
         onExportBackup: @escaping () -> Void,
         onForgetLearned: @escaping () async -> String?
     ) {
@@ -421,6 +432,8 @@ struct SettingsView: View {
         self.initialWebAppBrowser = config.webAppBrowser
         self.onApply = onApply
         self.onOpen = onOpen
+        self.onThemeCards = onThemeCards
+        self.onOpenThemedZellij = onOpenThemedZellij
         self.onExportBackup = onExportBackup
         self.onForgetLearned = onForgetLearned
         _theming = ObservedObject(wrappedValue: theming)
@@ -429,6 +442,16 @@ struct SettingsView: View {
     private var theme: Theme { themeManager.theme }
     private var muted: Color { theme.color(theme.palette.fgMuted) }
     private var danger: Color { theme.color(theme.palette.danger) }
+    private var success: Color { theme.color(theme.palette.success) }
+    private var warning: Color { theme.color(theme.palette.warning) }
+
+    /// Error copy is body text, so it needs 4.5:1 on the card surface. The
+    /// danger token only guarantees the 3:1 status bar, so lift it for text.
+    private var dangerText: Color {
+        guard let color = RGBA(hex: theme.palette.danger),
+              let surface = RGBA(hex: theme.palette.surface) else { return danger }
+        return theme.color(PalettePalette.hex(PalettePalette.readable(color, on: surface, minimum: 4.5)))
+    }
 
     /// The light palette's accent is only 3.4:1 on the card fill; darken it
     /// just for light mode so links stay readable.
@@ -473,21 +496,18 @@ struct SettingsView: View {
                 Text("The key is deleted from the encrypted local key file. This cannot be undone.")
             }
             .confirmationDialog(
-                "Remove the managed palette policies?",
+                "Remove silent browser theming?",
                 isPresented: $removePoliciesPending,
                 titleVisibility: .visible
             ) {
-                Button(theming.supportsLegacyPolicyCLI ? "Remove policies" : "Show removal steps",
-                       role: .destructive) {
+                Button("Remove", role: .destructive) {
                     Task { @MainActor in
-                        await theming.removePolicies(config.theming)
+                        await theming.removeSilentTheming()
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(theming.supportsLegacyPolicyCLI
-                    ? "Each selected browser stops using Palette's theme. Running browsers may need a restart."
-                    : "macOS 27 removed profiles install; remove Palette under System Settings → General → Device Management → Profiles.")
+                Text("Palette deletes the managed preference files it owns. Browsers fall back to their own colour; running browsers may need a restart.")
             }
     }
 
@@ -591,11 +611,13 @@ struct SettingsView: View {
 
     private var settingsBackdrop: some View {
         ZStack {
-            if !reduceTransparency {
+            if !reduceTransparency, contrast != .increased {
                 GlassBackdrop(material: .hudWindow)
             }
             theme.color(theme.palette.bg)
-                .opacity(reduceTransparency ? 1 : (theme.window.glass ? theme.window.glassOpacity : 1))
+                .opacity(reduceTransparency || contrast == .increased
+                    ? 1
+                    : (theme.window.glass ? theme.window.glassOpacity : 1))
         }
     }
 
@@ -627,7 +649,7 @@ struct SettingsView: View {
             .tint(theme.color(theme.palette.accent))
         }
         .background(
-            reduceTransparency
+            reduceTransparency || contrast == .increased
                 ? theme.color(theme.palette.surface).opacity(1)
                 : theme.color(theme.palette.bg).opacity(0.35)
         )
@@ -709,15 +731,15 @@ struct SettingsView: View {
             switch saveState {
             case .failed(let message):
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(danger)
                 Text("Could not save: \(message)")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(dangerText)
             case .pending:
                 PaletteSpinner()
                 Text("Saving…")
             case .saved:
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(success)
                 Text("Saved")
             case .idle:
                 Image(systemName: "checkmark.circle")
@@ -727,7 +749,7 @@ struct SettingsView: View {
             Spacer(minLength: 12)
             if issueCount > 0 {
                 Text("\(issueCount) \(issueCount == 1 ? "value needs" : "values need") attention")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(theme.color(theme.palette.fg))
             }
             Button("Reset \(selectedTab.title)…") { resetPending = true }
                 .controlSize(.small)
@@ -735,7 +757,7 @@ struct SettingsView: View {
         .font(.caption)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(theme.color(theme.palette.surface).opacity(reduceTransparency ? 1 : 0.65))
+        .background(theme.color(theme.palette.surface).opacity(reduceTransparency || contrast == .increased ? 1 : 0.65))
     }
 
     // MARK: - Cards and rows
@@ -806,7 +828,7 @@ struct SettingsView: View {
             if let error {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(danger)
+                    .foregroundStyle(dangerText)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let help {
                 Text(help)
@@ -1098,6 +1120,8 @@ struct SettingsView: View {
             .init(title: "Preview layout", tab: .launcher, anchor: "row-Preview", keywords: "preview beside below layout"),
             .init(title: "Palette", tab: .theming, anchor: "appearance-theme", keywords: "palette theme browser ghostty search preview dark light catppuccin gruvbox aetheria"),
             .init(title: "Themes", tab: .theming, anchor: "appearance-theme", keywords: "theme browser ghostty search preview dark light catppuccin gruvbox aetheria glass material"),
+            .init(title: "Theme Cards", tab: .theming, anchor: "appearance-theme", keywords: "cards gallery wallpaper desktop picture swatch flip apply shortcut"),
+            .init(title: "Wallpaper folder", tab: .theming, anchor: "theming-section", keywords: "wallpaper folder directory theme cards pictures wallpapers group extract"),
             .init(title: "UI font family", tab: .appearance, anchor: "row-UI family", keywords: "font family ui typography"),
             .init(title: "UI size", tab: .appearance, anchor: "row-UI size", keywords: "font size ui typography"),
             .init(title: "Mono font family", tab: .appearance, anchor: "row-Mono family", keywords: "font family mono code typography"),
@@ -1146,10 +1170,14 @@ struct SettingsView: View {
             .init(title: "Diagnostics", tab: .diagnostics, anchor: "diagnostics-lines", keywords: "diagnostics startup warnings log"),
             .init(title: "Theming", tab: .theming, anchor: "theming-section", keywords: "theming cross app palette terminal editor export managed files"),
             .init(title: "Other apps", tab: .theming, anchor: "theming-section", keywords: "other apps palette source theme wallpaper extract desktop picture follow"),
+            .init(title: "Palette source", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper toggle disable override follow extract"),
             .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
-            .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium neovide apps"),
-            .init(title: "Browsers", tab: .theming, anchor: "theming-targets", keywords: "browsers helium chrome edge brave vivaldi chromium arc managed policy mobileconfig admin all profiles seed install remove"),
-            .init(title: "Helium policy", tab: .theming, anchor: "theming-targets", keywords: "helium managed policy mobileconfig admin all profiles seed install remove profiles"),
+            .init(title: "Terminal transparency", tab: .theming, anchor: "row-Terminal transparency", keywords: "transparent transparency opacity neovide kitty ghostty nvim background blur"),
+            .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium apps"),
+            .init(title: "Recommendations", tab: .theming, anchor: "theming-recommendations", keywords: "recommendations conflicts config conflict nvim starship zellij kitty ghostty fish helium neovide palette overridden"),
+            .init(title: "Config conflicts", tab: .theming, anchor: "theming-recommendations", keywords: "conflicts recommendations config overridden palette old colours"),
+            .init(title: "Browsers", tab: .theming, anchor: "theming-browsers", keywords: "browsers helium chrome edge brave vivaldi chromium arc silent managed plist mobileconfig admin all profiles seed enable remove download"),
+            .init(title: "Helium policy", tab: .theming, anchor: "theming-browsers", keywords: "helium silent managed plist mobileconfig admin all profiles seed enable remove download"),
             .init(title: "Include lines", tab: .theming, anchor: "theming-targets", keywords: "include line config-file source copy kitty ghostty zellij neovim fish starship bat delta btop yazi"),
             .init(title: "Apply", tab: .theming, anchor: "theming-section", keywords: "apply palette revert previous generated files"),
         ]
@@ -1260,6 +1288,12 @@ struct SettingsView: View {
         }
         if hotkeyIssue(config.terminalHotkey, required: false, among: config.terminalHotkey) != nil {
             next.terminalHotkey = savedConfig.terminalHotkey
+        }
+        if hotkeyIssue(config.themeGalleryHotkey, required: false, among: config.themeGalleryHotkey) != nil {
+            next.themeGalleryHotkey = savedConfig.themeGalleryHotkey
+        }
+        if hotkeyIssue(config.wallpaperGalleryHotkey, required: false, among: config.wallpaperGalleryHotkey) != nil {
+            next.wallpaperGalleryHotkey = savedConfig.wallpaperGalleryHotkey
         }
         if hotkeyIssue(config.scratchpadHotkey, required: false, among: config.scratchpadHotkey) != nil {
             next.scratchpadHotkey = savedConfig.scratchpadHotkey
@@ -1391,6 +1425,8 @@ struct SettingsView: View {
     private var hotkeyValues: [String] {
         [
             config.hotkey, config.clipboardHotkey, config.terminalHotkey,
+            config.themeGalleryHotkey,
+            config.wallpaperGalleryHotkey,
             config.scratchpadHotkey, config.askHotkey, config.screenshotHotkey,
             config.regionScreenshotHotkey, config.windowScreenshotHotkey,
             config.recordingHotkey,
@@ -1460,6 +1496,8 @@ struct SettingsView: View {
         if hotkeyIssue(config.hotkey, required: true, among: "") != nil { count += 1 }
         if hotkeyIssue(config.clipboardHotkey, required: true, among: "") != nil { count += 1 }
         if hotkeyIssue(config.terminalHotkey, required: false, among: "") != nil { count += 1 }
+        if hotkeyIssue(config.themeGalleryHotkey, required: false, among: "") != nil { count += 1 }
+        if hotkeyIssue(config.wallpaperGalleryHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.scratchpadHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.askHotkey, required: false, among: "") != nil { count += 1 }
         if hotkeyIssue(config.screenshotHotkey, required: false, among: "") != nil { count += 1 }
@@ -1484,7 +1522,7 @@ struct SettingsView: View {
             card("Startup", anchor: "general-startup") {
                 toggleRow("Open Palette at login", isOn: $launchAtLogin)
                 if let loginMessage {
-                    Text(loginMessage).font(.caption).foregroundStyle(.red)
+                    Text(loginMessage).font(.caption).foregroundStyle(dangerText)
                 }
             } footer: {
                 Text("Applies immediately. If macOS asks for approval, allow Palette under System Settings › General › Login Items.")
@@ -1493,7 +1531,7 @@ struct SettingsView: View {
             card("Permissions", anchor: "general-permissions") {
                 HStack(spacing: 8) {
                     Image(systemName: accessibilityTrusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(accessibilityTrusted ? .green : .orange)
+                        .foregroundStyle(accessibilityTrusted ? success : warning)
                     Text("Accessibility")
                     Spacer()
                     Text(accessibilityTrusted ? "Enabled" : "Not granted")
@@ -1520,7 +1558,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(muted)
                 if let keepAwakeMessage {
-                    Text(keepAwakeMessage).font(.caption).foregroundStyle(.red)
+                    Text(keepAwakeMessage).font(.caption).foregroundStyle(dangerText)
                 }
             } footer: {
                 Text("Clamshell asks for an administrator password and keeps working with the lid shut on AC power only. Turning it off leaves an active keep-awake timer alone.")
@@ -2098,18 +2136,14 @@ struct SettingsView: View {
 
     // MARK: - Theming
 
-    private enum OtherAppsPalette: String, CaseIterable, Identifiable {
-        case palette
-        case theme
-        case wallpaper
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .palette: return "Palette theme"
-            case .theme: return "Another theme"
-            case .wallpaper: return "Wallpaper"
-            }
-        }
+    private var sourceControls: ThemingSourceControls {
+        ThemingSourceControls(source: config.theming.source)
+    }
+
+    private var themeGalleryShortcutLabel: String {
+        let keys = config.themeGalleryHotkey.trimmingCharacters(in: .whitespaces)
+        guard !keys.isEmpty else { return "Not set" }
+        return HotKeySpec.parse(keys)?.prettyDisplay ?? keys
     }
 
     private var themingPane: some View {
@@ -2128,8 +2162,25 @@ struct SettingsView: View {
                 ThemeBrowserView(
                     themeManager: themeManager,
                     selection: $config.theme,
-                    themesDirectory: themesDirectory
+                    themesDirectory: themesDirectory,
+                    paletteSource: config.theming.source
                 )
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Theme Cards").font(theme.font(size: 13))
+                        Text("Large card gallery with left and right neighbours peeking; the desktop picture palette comes first. Its wallpaper folder is under Other apps.")
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Text(themeGalleryShortcutLabel)
+                        .font(.system(size: 11))
+                        .foregroundStyle(muted)
+                    Button("Open") { onThemeCards() }
+                        .controlSize(.small)
+                        .accessibilityLabel("Open Theme Cards gallery")
+                }
                 Button("Open themes folder") { onOpen(PalettePaths.resolve().themesDir) }
             } footer: {
                 Text("Theme files use TOML. Browsing previews a theme without changing anything; Use Theme applies it and saves the choice for the current mode. This is Palette's own palette.")
@@ -2151,26 +2202,35 @@ struct SettingsView: View {
                     ),
                     help: "Off by default. Palette always themes itself; this also writes managed palette files for terminals and editors."
                 )
+                if let policyWarning {
+                    Text(policyWarning)
+                        .font(.caption)
+                        .foregroundStyle(danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if !config.theming.enabled {
                     Text("Palette themes itself here and in Appearance; enable this to also theme other apps.")
                         .font(.caption)
                         .foregroundStyle(muted)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    pickerRow("Palette for other apps", help: "Palette theme uses the palette chosen in Palette above.") {
-                        Picker("Palette for other apps", selection: otherAppsPaletteBinding) {
-                            ForEach(OtherAppsPalette.allCases) { option in
-                                Text(option.title).tag(option)
-                            }
+                    pickerRow(
+                        "Palette source",
+                        help: "Theme follows the theme picker; Wallpaper samples the desktop picture for the files Palette writes for other apps."
+                    ) {
+                        Picker("Palette source", selection: $config.theming.source) {
+                            Text("Theme").tag(ThemingSource.theme)
+                            Text("Wallpaper").tag(ThemingSource.wallpaper)
                         }
                         .labelsHidden()
                         .pickerStyle(.segmented)
-                        .frame(maxWidth: 380)
+                        .frame(maxWidth: 260)
                     }
-                    if config.theming.source == .theme && !config.theming.theme.isEmpty {
+
+                    VStack(alignment: .leading, spacing: 6) {
                         pickerRow("Theme override", help: "Empty follows the Palette theme above.") {
                             PaletteMenuPicker(
-                                selection: $config.theming.theme,
+                                selection: otherAppsThemeBinding,
                                 choices: [PaletteMenuChoice(value: "", label: "Use the Palette theme")]
                                     + otherAppsThemeChoices.map { info in
                                         PaletteMenuChoice(
@@ -2182,8 +2242,30 @@ struct SettingsView: View {
                             )
                             .frame(maxWidth: 360, alignment: .leading)
                         }
+                        if let reason = sourceControls.themeDisabledReason {
+                            Text(reason)
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    if config.theming.source == .wallpaper {
+                    .disabled(!sourceControls.themeEnabled)
+                    .opacity(sourceControls.themeEnabled ? 1 : 0.45)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        pickerRow(
+                            "Wallpaper folder",
+                            help: "Both this palette and the Theme Cards wallpapers group read it. Empty shows the desktop picture card only."
+                        ) {
+                            TextField("~/wallpapers", text: $config.theming.wallpaperDirectory)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 380)
+                        }
+                        if wallpaperFolderMissing {
+                            Text("Folder not found")
+                                .font(.caption)
+                                .foregroundStyle(danger)
+                        }
                         HStack(alignment: .top, spacing: 12) {
                             Group {
                                 if let wallpaperPreviewImage {
@@ -2213,7 +2295,7 @@ struct SettingsView: View {
                                     .lineLimit(2)
                                 Button("Extract palette") {
                                     Task { @MainActor in
-                                        await theming.previewWallpaper(darkMode: config.theming.darkMode)
+                                        await theming.previewWallpaper(config: config.theming)
                                     }
                                 }
                                 .disabled(theming.busy)
@@ -2249,6 +2331,41 @@ struct SettingsView: View {
                             .pickerStyle(.segmented)
                             .frame(maxWidth: 260)
                         }
+                        if let reason = sourceControls.wallpaperDisabledReason {
+                            Text(reason)
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .disabled(!sourceControls.wallpaperEnabled)
+                    .opacity(sourceControls.wallpaperEnabled ? 1 : 0.45)
+
+                    pickerRow(
+                        "Terminal transparency",
+                        help: "Auto keeps Neovim see-through when kitty, Ghostty or Neovide already has an opacity below 1. On drops Normal's background; off always paints the palette background."
+                    ) {
+                        Picker("Terminal transparency", selection: $config.theming.transparent) {
+                            Text("Auto").tag(ThemingTransparency.auto)
+                            Text("On").tag(ThemingTransparency.on)
+                            Text("Off").tag(ThemingTransparency.off)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 260)
+                    }
+
+                    pickerRow(
+                        "Match macOS appearance",
+                        help: "Auto switches macOS to dark or light whenever a palette is applied. Off leaves the system appearance alone."
+                    ) {
+                        Picker("Match macOS appearance", selection: $config.theming.systemAppearance) {
+                            Text("Auto").tag(ThemingSystemAppearance.auto)
+                            Text("Off").tag(ThemingSystemAppearance.off)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 160)
                     }
 
                     Divider().padding(.vertical, 4)
@@ -2296,6 +2413,92 @@ struct SettingsView: View {
             }
 
             if config.theming.enabled {
+                card("Browsers", anchor: "theming-browsers") {
+                    Text("Silent updates · all profiles of that browser · seed colour, approximate")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                    ForEach(theming.browserRows()) { browser in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if browser.supportsThemePolicy {
+                                toggleRow(
+                                    browser.targetTitle,
+                                    isOn: themingTargetBinding(browser.target),
+                                    help: "Managed preference \(browser.silentPlistPath)"
+                                )
+                            } else {
+                                HStack(spacing: 8) {
+                                    Toggle(browser.targetTitle, isOn: .constant(false))
+                                        .toggleStyle(.checkbox)
+                                        .disabled(true)
+                                        .font(theme.font(size: 13))
+                                    Text("Unsupported — does not implement BrowserThemeColor.")
+                                        .font(.caption)
+                                        .foregroundStyle(muted)
+                                }
+                            }
+                            Text(browserPolicyStatus(browser))
+                                .font(.caption)
+                                .foregroundStyle(muted)
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+                    Text("Enable silent browser theming once. macOS asks for your password, removes any old Palette profile, and creates a preference file Palette owns, so later applies update it with no prompt.")
+                        .font(.caption)
+                        .foregroundStyle(muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !legacyProfileNames.isEmpty {
+                        Text("Removing the old profile: \(legacyProfileNames).")
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                    }
+                    HStack(spacing: 8) {
+                        Button(theming.policyBusy ? "Enabling…" : "Enable silent browser theming…") {
+                            Task { @MainActor in
+                                await theming.enableSilentTheming(
+                                    config.theming,
+                                    background: PalettePalette(theme: theme).background
+                                )
+                            }
+                        }
+                        .disabled(theming.policyBusy || !canEnableSilentTheming)
+                        .help("One administrator prompt for every selected installed browser.")
+                        Button("Download profile") {
+                            Task { @MainActor in
+                                await theming.exportPolicyProfiles(config.theming)
+                            }
+                        }
+                        .disabled(theming.policyBusy || selectedBrowsers.isEmpty)
+                        .help("Save a .mobileconfig for the OS-managed route instead.")
+                        Button("Refresh") {
+                            Task { @MainActor in await theming.refreshPolicyStates() }
+                        }
+                        .disabled(theming.policyBusy)
+                        Button("Remove…") {
+                            removePoliciesPending = true
+                        }
+                        .disabled(theming.policyBusy)
+                        if theming.policyBusy {
+                            PaletteSpinner()
+                        }
+                    }
+                    if let status = theming.policyStatus {
+                        Text(status)
+                            .font(.caption)
+                            .foregroundStyle(muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let error = theming.policyError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } footer: {
+                    Text("Helium is always listed; the other browsers appear when installed. Silent theming seeds the Palette background for every profile of that browser.")
+                }
+                .task { await theming.refreshPolicyStates() }
+
                 card("Targets", anchor: "theming-targets") {
                     ForEach(ThemingTarget.allCases.filter { !$0.isBrowser }) { target in
                         if target.isImplemented {
@@ -2323,6 +2526,13 @@ struct SettingsView: View {
                                             .controlSize(.small)
                                             .help("Ask the running app to re-read the Palette colours. Palette never restarts it.")
                                         }
+                                        if target == .zellij {
+                                            Button("Open themed session") {
+                                                onOpenThemedZellij()
+                                            }
+                                            .controlSize(.small)
+                                            .help("Open a new kitty window on a fresh Palette zellij session. zellij reads the palette only at session start, so a running session keeps its old colours.")
+                                        }
                                     }
                                 }
                             }
@@ -2336,100 +2546,6 @@ struct SettingsView: View {
                                     .font(.caption)
                                     .foregroundStyle(muted)
                                 Spacer(minLength: 0)
-                            }
-                        }
-                    }
-
-                    Divider().padding(.vertical, 4)
-                    Text("Browsers")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(muted)
-                    Text("admin once · all profiles of that browser · seed colour, approximate")
-                        .font(.caption)
-                        .foregroundStyle(muted)
-                    ForEach(theming.browserRows()) { browser in
-                        VStack(alignment: .leading, spacing: 2) {
-                            if browser.supportsThemePolicy {
-                                toggleRow(
-                                    browser.targetTitle,
-                                    isOn: themingTargetBinding(browser.target),
-                                    help: "Managed policy \(browser.policyIdentifier)"
-                                )
-                            } else {
-                                HStack(spacing: 8) {
-                                    Toggle(browser.targetTitle, isOn: .constant(false))
-                                        .toggleStyle(.checkbox)
-                                        .disabled(true)
-                                        .font(theme.font(size: 13))
-                                    Text("Unsupported — does not implement BrowserThemeColor.")
-                                        .font(.caption)
-                                        .foregroundStyle(muted)
-                                }
-                            }
-                            Text(browserPolicyStatus(browser))
-                                .font(.caption)
-                                .foregroundStyle(muted)
-                        }
-                    }
-
-                    if !selectedBrowsers.isEmpty {
-                        Divider().padding(.vertical, 4)
-                        Text("Profiles install: the generated .mobileconfig opens in System Settings, where you approve it under General → Device Management. No password prompt comes from Palette.")
-                            .font(.caption)
-                            .foregroundStyle(muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: 8) {
-                            Button(theming.policyBusy ? "Opening…" : "Open in System Settings…") {
-                                Task { @MainActor in
-                                    await theming.installPolicies(config.theming)
-                                }
-                            }
-                            .disabled(theming.policyBusy || browserPolicyFiles.isEmpty)
-                            .help("Press Apply Palette to generate the profile files first.")
-                            Button("Reveal file") { revealPolicyFiles() }
-                                .disabled(browserPolicyFiles.isEmpty)
-                            Button("Refresh") {
-                                Task { @MainActor in await theming.refreshPolicyStates() }
-                            }
-                            .disabled(theming.policyBusy)
-                            Button("Remove Policies…") {
-                                removePoliciesPending = true
-                            }
-                            .disabled(theming.policyBusy)
-                            if theming.policyBusy {
-                                PaletteSpinner()
-                            }
-                        }
-                        if let status = theming.policyStatus {
-                            Text(status)
-                                .font(.caption)
-                                .foregroundStyle(muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if let error = theming.policyError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(danger)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if theming.supportsLegacyPolicyCLI, !browserInstallCommand.isEmpty {
-                            Text("Legacy CLI (still available on this macOS; macOS 27 removed it)")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(muted)
-                            ForEach([browserInstallCommand, browserRemoveCommand], id: \.self) { command in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Text(command)
-                                        .font(.caption.monospaced())
-                                        .textSelection(.enabled)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                    Spacer(minLength: 8)
-                                    Button(copiedInclude == command ? "Copied" : "Copy") {
-                                        copyInclude(command)
-                                    }
-                                    .controlSize(.small)
-                                }
                             }
                         }
                     }
@@ -2466,11 +2582,74 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(muted)
                 } footer: {
-                    Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path).")
+                    Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Starship is the exception: its config is never edited — Palette writes a remapped copy and fish exports STARSHIP_CONFIG. btop and yazi are manual: the generated theme file is left for you to point the app at. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path). \(themingInstallSummary)")
                 }
-                .task { await theming.refreshPolicyStates() }
+
+                let advice = themingAdvice
+                if !advice.isEmpty {
+                    card("Recommendations", anchor: "theming-recommendations") {
+                        ForEach(advice) { item in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: item.target.adviceIcon)
+                                    .foregroundStyle(item.severity == .blocking ? dangerText : warningText)
+                                    .frame(width: 16)
+                                    .accessibilityLabel(item.target.title)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(item.file + (item.line.map { ":\($0)" } ?? ""))
+                                            .font(.caption.monospaced())
+                                            .foregroundStyle(muted)
+                                        Text(item.severity == .blocking ? "Blocking" : "Warning")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(item.severity == .blocking ? dangerText : warningText)
+                                    }
+                                    Text(item.message)
+                                        .font(.caption)
+                                        .foregroundStyle(theme.color(theme.palette.fg))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(item.suggestion)
+                                        .font(.caption)
+                                        .foregroundStyle(muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 8)
+                                Button(copiedAdvice == item.id ? "Copied" : "Copy") {
+                                    copyAdvice(item)
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                    } footer: {
+                        Text("These lines in your own configs run after Palette's palette and keep the old colours. Palette never edits them; fix them once in the file shown.")
+                    }
+                }
             }
         }
+    }
+
+    /// Scans the user's own config for lines that beat the palette. Cheap
+    /// enough to recompute: a handful of small files, and the card has to
+    /// refresh after Apply or a target toggle.
+    private var themingAdvice: [ThemingAdvice] {
+        ThemingAdvice.scan(
+            home: palettePaths.home,
+            enabledTargets: Set(config.theming.targets.compactMap(ThemingTarget.init(rawValue:)))
+        )
+    }
+
+    /// Warning copy is body text, so it needs 4.5:1 on the card surface; the
+    /// warning token only guarantees the 3:1 status bar.
+    private var warningText: Color {
+        guard let color = RGBA(hex: theme.palette.warning),
+              let surface = RGBA(hex: theme.palette.surface) else { return warning }
+        return theme.color(PalettePalette.hex(PalettePalette.readable(color, on: surface, minimum: 4.5)))
+    }
+
+    private var wallpaperFolderMissing: Bool {
+        let path = config.theming.wallpaperDirectory
+        guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let url = WallpaperLibrary.directory(path: path) else { return false }
+        return !FileManager.default.fileExists(atPath: url.path)
     }
 
     private var selectedBrowsers: [ChromiumBrowser] {
@@ -2481,64 +2660,64 @@ struct SettingsView: View {
         .filter(\.supportsThemePolicy)
     }
 
-    private var browserPolicyFiles: [String] {
-        selectedBrowsers.compactMap { browser in
-            let path = theming.policyURL(for: browser).path
-            return FileManager.default.fileExists(atPath: path) ? path : nil
+    /// What the selected targets actually put on disk: a marker block, a
+    /// managed preference, a generated copy or nothing at all.
+    private var themingInstallSummary: String {
+        let selected = config.theming.targets
+            .compactMap(ThemingTarget.init(rawValue:))
+            .filter(\.isImplemented)
+        guard !selected.isEmpty else { return "Nothing selected: no app is changed." }
+        let order: [ThemingTarget.InstallKind] = [.markerBlock, .policy, .generated, .manual]
+        let parts = order.compactMap { kind -> String? in
+            let names = selected.filter { $0.installKind == kind }.map(\.title)
+            guard !names.isEmpty else { return nil }
+            return "\(kind.rawValue): \(names.joined(separator: ", "))"
+        }
+        return "Installed: " + parts.joined(separator: " · ") + "."
+    }
+
+    private var canEnableSilentTheming: Bool {
+        let installed = theming.installedBrowserIDs()
+        return selectedBrowsers.contains {
+            installed.contains($0.bundleID) && theming.policyStates[$0.bundleID] != true
         }
     }
 
-    private var browserInstallCommand: String {
-        ChromiumPolicy.installCommand(paths: browserPolicyFiles)
-    }
-
-    private var browserRemoveCommand: String {
-        ChromiumPolicy.removeCommand(identifiers: selectedBrowsers.map(\.policyIdentifier))
+    private var legacyProfileNames: String {
+        ChromiumBrowser.catalog
+            .filter { theming.legacyProfiles.contains($0.bundleID) }
+            .map(\.name)
+            .joined(separator: ", ")
     }
 
     private func browserPolicyStatus(_ browser: ChromiumBrowser) -> String {
         guard browser.supportsThemePolicy else {
             return "Unsupported — does not implement BrowserThemeColor."
         }
-        switch theming.policyStates[browser.bundleID] {
-        case true?: return "Installed — all profiles"
-        case false?: return "Not installed"
-        case nil: return "Not checked"
+        if theming.policyStates[browser.bundleID] == true {
+            return "Managed — updates silently"
         }
+        guard theming.installedBrowserIDs().contains(browser.bundleID) else {
+            return "Not installed"
+        }
+        return theming.legacyProfiles.contains(browser.bundleID)
+            ? "Enable silent theming — removes the old profile"
+            : "Enable silent theming"
     }
 
-    private func revealPolicyFiles() {
-        let urls = browserPolicyFiles.map { URL(fileURLWithPath: $0) }
-        guard !urls.isEmpty else { return }
-        NSWorkspace.shared.activateFileViewerSelecting(urls)
-    }
-
-    private var otherAppsPaletteBinding: Binding<OtherAppsPalette> {
+    private var otherAppsThemeBinding: Binding<String> {
         Binding(
             get: {
-                if config.theming.source == .wallpaper { return .wallpaper }
-                return config.theming.theme.isEmpty ? .palette : .theme
+                ThemeLoader.themeID(for: config.theming.theme, themesDirectory: themesDirectory)
+                    ?? config.theming.theme
             },
-            set: { option in
-                switch option {
-                case .palette:
-                    config.theming.source = .theme
-                    config.theming.theme = ""
-                case .theme:
-                    config.theming.source = .theme
-                    if config.theming.theme.isEmpty {
-                        config.theming.theme = themeManager.currentThemeID
-                    }
-                case .wallpaper:
-                    config.theming.source = .wallpaper
-                }
-            }
+            set: { config.theming.theme = $0 }
         )
     }
 
     private var otherAppsThemeChoices: [ThemeInfo] {
         let themes = themeCatalogThemes
-        let selected = config.theming.theme
+        let selected = otherAppsThemeBinding.wrappedValue
         guard !selected.isEmpty, !themes.contains(where: { $0.name == selected }) else {
             return themes
         }
@@ -2564,8 +2743,14 @@ struct SettingsView: View {
                 var targets = config.theming.targets
                 if enabled {
                     if !targets.contains(target.rawValue) { targets.append(target.rawValue) }
+                    policyWarning = nil
                 } else {
                     targets.removeAll { $0 == target.rawValue }
+                    if let browser = target.browser,
+                       theming.policyStates[browser.bundleID] == true {
+                        policyWarning = "\(browser.name) still has silent theming enabled. "
+                            + "Unchecking does not remove it — use Remove… in the Browsers card."
+                    }
                 }
                 config.theming.targets = targets
             }
@@ -2573,6 +2758,7 @@ struct SettingsView: View {
     }
 
     private func applyTheming() {
+        policyWarning = nil
         let themingConfig = config.theming
         let fallback = themeManager.currentThemeID
         Task { @MainActor in
@@ -2583,6 +2769,15 @@ struct SettingsView: View {
     private func revertTheming() {
         Task { @MainActor in
             _ = await theming.revert()
+            await theming.refreshPolicyStates()
+            let installed = ChromiumBrowser.catalog.filter {
+                theming.policyStates[$0.bundleID] == true
+            }
+            if !installed.isEmpty {
+                policyWarning = "Revert restored the files, but \(installed.map(\.name).joined(separator: ", ")) "
+                    + "still \(installed.count == 1 ? "has" : "have") silent theming enabled. "
+                    + "Use Remove… in the Browsers card."
+            }
         }
     }
 
@@ -2593,6 +2788,18 @@ struct SettingsView: View {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
             if copiedInclude == hint { copiedInclude = nil }
+        }
+    }
+
+    private func copyAdvice(_ advice: ThemingAdvice) {
+        let location = advice.file + (advice.line.map { ":\($0)" } ?? "")
+        let text = "\(location)\n\(advice.message)\n\(advice.suggestion)"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copiedAdvice = advice.id
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if copiedAdvice == advice.id { copiedAdvice = nil }
         }
     }
 
@@ -2675,6 +2882,11 @@ struct SettingsView: View {
                             token: $clipboardRecordToken, label: "Clipboard hotkey", required: true)
                 shortcutRow("Terminal shortcut", id: "terminal", value: $config.terminalHotkey,
                             token: $terminalRecordToken, label: "Terminal hotkey")
+                shortcutRow("Theme cards shortcut", id: "theme-gallery", value: $config.themeGalleryHotkey,
+                            token: $themeGalleryRecordToken, label: "Theme cards hotkey")
+                shortcutRow("Wallpaper cards shortcut", id: "wallpaper-gallery",
+                            value: $config.wallpaperGalleryHotkey,
+                            token: $wallpaperGalleryRecordToken, label: "Wallpaper cards hotkey")
                 shortcutRow("Scratchpad list", id: "scratchpad", value: $config.scratchpadHotkey,
                             token: $scratchpadRecordToken, label: "Scratchpad list hotkey")
                 shortcutRow("Ask shortcut", id: "ask", value: $config.askHotkey,
@@ -2738,7 +2950,7 @@ struct SettingsView: View {
 
             Text(shortcutSummary)
                 .font(.caption)
-                .foregroundStyle(hasShortcutConflict ? .red : .secondary)
+                .foregroundStyle(hasShortcutConflict ? dangerText : muted)
         }
     }
 
@@ -2856,6 +3068,8 @@ struct SettingsView: View {
             ("Launcher", config.hotkey),
             ("Clipboard", config.clipboardHotkey),
             ("Terminal", config.terminalHotkey),
+            ("Theme cards", config.themeGalleryHotkey),
+            ("Wallpaper cards", config.wallpaperGalleryHotkey),
             ("Scratchpad list", config.scratchpadHotkey),
             ("Ask", config.askHotkey),
             ("Screen", config.screenshotHotkey),
@@ -2911,8 +3125,10 @@ struct SettingsView: View {
     private var ownShortcutKeys: [(id: String, keys: String)] {
         [
             ("launcher", config.hotkey), ("clipboard", config.clipboardHotkey),
-            ("terminal", config.terminalHotkey), ("scratchpad", config.scratchpadHotkey),
-            ("ask", config.askHotkey), ("screen", config.screenshotHotkey),
+            ("terminal", config.terminalHotkey), ("theme-gallery", config.themeGalleryHotkey),
+            ("wallpaper-gallery", config.wallpaperGalleryHotkey),
+            ("scratchpad", config.scratchpadHotkey), ("ask", config.askHotkey),
+            ("screen", config.screenshotHotkey),
             ("region", config.regionScreenshotHotkey), ("window", config.windowScreenshotHotkey),
             ("recording", config.recordingHotkey),
         ] + config.shortcuts.map { ($0.command, $0.keys) }
@@ -3143,7 +3359,7 @@ struct SettingsView: View {
                 if let bookmarksError {
                     Text("\(bookmarksError) The file is left untouched; fix or restore bookmarks.toml, then reopen Settings.")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(dangerText)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     ForEach($bookmarks) { $bookmark in
@@ -3613,7 +3829,7 @@ struct SettingsView: View {
 
                 if askKeyStored {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(success)
                         Text("Key saved locally (encrypted, user-only)")
                         Spacer()
                         Button("Clear key", role: .destructive) {
@@ -4122,7 +4338,7 @@ struct SettingsView: View {
                             .accessibilityLabel("Use alias \(entry.word)")
                         TextField("Alias", text: $entry.word)
                             .settingsField()
-                            .foregroundStyle(aliasIssues[entry.id] == nil ? Color.primary : Color.red)
+                            .foregroundStyle(aliasIssues[entry.id] == nil ? Color.primary : dangerText)
                         Button {
                             deleteAlias(entry.id, from: id)
                         } label: {
@@ -4133,7 +4349,7 @@ struct SettingsView: View {
                         .accessibilityLabel("Delete alias \(entry.word)")
                     }
                     if let issue = aliasIssues[entry.id] {
-                        Text(issue).font(.caption).foregroundStyle(.red)
+                        Text(issue).font(.caption).foregroundStyle(dangerText)
                     }
                 }
             }
@@ -4294,6 +4510,8 @@ struct SettingsView: View {
             config.hotkey = defaults.hotkey
             config.clipboardHotkey = defaults.clipboardHotkey
             config.terminalHotkey = defaults.terminalHotkey
+            config.themeGalleryHotkey = defaults.themeGalleryHotkey
+            config.wallpaperGalleryHotkey = defaults.wallpaperGalleryHotkey
             config.scratchpadHotkey = defaults.scratchpadHotkey
             config.askHotkey = defaults.askHotkey
             config.screenshotHotkey = defaults.screenshotHotkey
@@ -4350,6 +4568,9 @@ struct SettingsView: View {
         case .theming:
             config.theme = ThemeSelection()
             config.theming = ThemingConfig()
+            // Same as the master switch going off: reset must not leave the
+            // marked blocks behind in the apps' configs.
+            Task { @MainActor in _ = theming.removeAllIncludes() }
         case .about, .providerFiles, .configFiles, .diagnostics:
             break
         case .providers:

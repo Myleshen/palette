@@ -1,8 +1,92 @@
 import XCTest
+import Foundation
+import PaletteCore
 @testable import PalettePlatform
 @testable import PaletteProviders
 
+private actor StatusTestBridge: HostBridge {
+    func prompt(kind: PromptKind, title: String, placeholder: String?) async -> String? { nil }
+    func notify(_ message: String) async {}
+    func copyToClipboard(_ text: String, concealed: Bool, clearAfterMs: Int?) async {}
+}
+
 final class BitwardenTests: XCTestCase {
+    /// A fake `bw` that counts invocations; `body` is what the CLI answers.
+    private func makeStatusTool(body: String) throws -> (tool: String, counter: URL, dir: URL) {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-bw-status-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let counter = dir.appendingPathComponent("calls")
+        let script = dir.appendingPathComponent("bw")
+        try """
+        #!/bin/sh
+        echo x >> "\(counter.path)"
+        \(body)
+        """.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        return (script.path, counter, dir)
+    }
+
+    private func makeProvider(tool: String?, vault: BitwardenVault) async -> BitwardenProvider {
+        let launcher = await MainActor.run { LauncherService() }
+        return BitwardenProvider(
+            kind: .passwords,
+            vault: vault,
+            bridge: StatusTestBridge(),
+            launcher: launcher,
+            resolveTool: { tool }
+        )
+    }
+
+    private func statusCalls(_ counter: URL) throws -> Int {
+        guard FileManager.default.fileExists(atPath: counter.path) else { return 0 }
+        return try String(contentsOf: counter, encoding: .utf8)
+            .split(separator: "\n")
+            .count
+    }
+
+    func testPrewarmThenSearchRunsStatusOnce() async throws {
+        let (tool, counter, dir) = try makeStatusTool(
+            body: #"printf '%s' '{"status":"locked","userEmail":"a@example.com"}'"#
+        )
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let vault = BitwardenVault(persistCache: false)
+        let provider = await makeProvider(tool: tool, vault: vault)
+        await provider.prewarm()
+
+        let items = try await provider.search(SearchRequest(text: "", limit: 20, isBound: true))
+        XCTAssertEqual(items.map(\.id), ["unlock"])
+        XCTAssertTrue(items.first?.title.contains("a@example.com") == true)
+        XCTAssertEqual(try statusCalls(counter), 1)
+    }
+
+    func testPrewarmAndFirstSearchShareOneStatusCall() async throws {
+        let (tool, counter, dir) = try makeStatusTool(
+            body: #"sleep 0.3; printf '%s' '{"status":"locked"}'"#
+        )
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let vault = BitwardenVault(persistCache: false)
+        let provider = await makeProvider(tool: tool, vault: vault)
+        async let search = provider.search(SearchRequest(text: "", limit: 20, isBound: true))
+        await provider.prewarm()
+        let items = try await search
+
+        XCTAssertEqual(items.map(\.id), ["unlock"])
+        XCTAssertEqual(try statusCalls(counter), 1)
+    }
+
+    func testPrewarmIsSkippedWithoutTheTool() async throws {
+        let (_, counter, dir) = try makeStatusTool(body: #"printf '%s' '{"status":"locked"}'"#)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let provider = await makeProvider(tool: nil, vault: BitwardenVault(persistCache: false))
+        await provider.prewarm()
+
+        XCTAssertEqual(try statusCalls(counter), 0)
+    }
+
     func testOnlySessionErrorsClearTheCachedSession() {
         XCTAssertTrue(BitwardenProvider.looksLikeSessionFailure("Invalid session."))
         XCTAssertTrue(BitwardenProvider.looksLikeSessionFailure("You are not logged in."))

@@ -19,6 +19,11 @@ public enum BackupExporter {
         guard process.terminationStatus == 0 else {
             throw NSError(domain: "PaletteBackup", code: Int(process.terminationStatus))
         }
+        // The archive holds config, database and API-key blobs; keep it owner-only.
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: destination.path
+        )
     }
 
     /// Copies the user state into `temp` and returns the top-level names that
@@ -42,7 +47,8 @@ public enum BackupExporter {
         for suffix in ["-wal", "-shm"] {
             copy(URL(fileURLWithPath: paths.databaseFile.path + suffix), as: "palette.sqlite" + suffix)
         }
-        copy(paths.configDir.appendingPathComponent("ask-key.bin"), as: "ask-key.bin")
+        // The key itself stays on this Mac; shipping it beside the sealed blob
+        // would make the pair readable by anyone who has the zip.
         copy(paths.configDir.appendingPathComponent("ask-keys.bin"), as: "ask-keys.bin")
         copy(paths.bookmarksFile, as: "bookmarks.toml")
         copy(paths.configDir.appendingPathComponent("commands.toml"), as: "commands.toml")
@@ -77,9 +83,10 @@ public enum BackupExporter {
         Included in this archive:
         \(included.map { "- \($0)" }.joined(separator: "\n"))
 
-        ask-key.bin and ask-keys.bin hold API keys stored by Palette; they
-        are encrypted. Everything else is plain text or a normal SQLite
-        database. Clipboard history is included without its text entries.
+        ask-keys.bin holds Ask API keys sealed with a key that stays on this
+        Mac, so the file cannot be read on another machine. Everything else is
+        plain text or a normal SQLite database. Clipboard history is included
+        without its text entries.
         clipboard/ holds the image and file-icon files the database points at.
         """
         try readme.write(to: temp.appendingPathComponent("README.txt"), atomically: true, encoding: .utf8)

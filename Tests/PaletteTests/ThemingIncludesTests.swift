@@ -58,6 +58,9 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertTrue(zellij.hasPrefix("// >>> palette theme >>>"))
         XCTAssertTrue(zellij.contains("themes {"))
         XCTAssertTrue(zellij.contains("theme \"palette\""))
+        XCTAssertTrue(zellij.contains("theme_dark \"palette\""))
+        XCTAssertTrue(zellij.contains("theme_light \"palette\""))
+        XCTAssertTrue(zellij.contains("default_shell \"fish\""))
 
         XCTAssertNil(install(includes, .nvim).error)
         let lua = try read(home + "/.config/nvim/init.lua")
@@ -66,11 +69,20 @@ final class ThemingIncludesTests: XCTestCase {
 
         XCTAssertNil(install(includes, .fish).error)
         XCTAssertTrue(try read(home + "/.config/fish/config.fish").contains("# >>> palette theme >>>"))
+    }
 
-        XCTAssertNil(install(includes, .starship).error)
-        let starship = try read(home + "/.config/starship.toml")
-        XCTAssertTrue(starship.contains("# >>> palette theme >>>"))
-        XCTAssertTrue(starship.hasPrefix("palette = \"palette\"\n"))
+    /// The remapped copy is the only starship file Palette writes; the user's
+    /// own starship.toml (including its palette names) is never edited, because
+    /// their styles reference those names.
+    func testStarshipInstallNeverWritesTheUserConfig() throws {
+        let home = makeHome()
+        let path = home + "/.config/starship.toml"
+        let original = "# user starship\nadd_newline = false\n\npalette = \"noctalia\"\n\n[character]\nsuccess_symbol = \">\"\n"
+        try write(original, to: path)
+        let includes = includes(home)
+
+        XCTAssertEqual(install(includes, .starship).action, .unchanged)
+        XCTAssertEqual(try read(path), original)
     }
 
     func testVimFallbackUsesVimCommentsAndSource() throws {
@@ -135,6 +147,41 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertEqual(once, twice)
         XCTAssertEqual(twice.components(separatedBy: "# >>> palette theme >>>").count, 2)
         XCTAssertEqual(twice.components(separatedBy: "# <<< palette theme <<<").count, 2)
+    }
+
+    func testKittyBlockOwnsSocketOnlyRemoteControlAndReportsItOnce() throws {
+        let home = makeHome()
+        try write("listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}\n", to: home + "/.config/kitty/kitty.conf")
+        let includes = includes(home)
+
+        let first = install(includes, .kitty)
+        XCTAssertTrue(first.addedRemoteControl, "the first Apply is the one that needs the restart")
+        let text = try read(home + "/.config/kitty/kitty.conf")
+        XCTAssertTrue(text.contains(
+            "allow_remote_control socket-only\n"
+                + "# Palette overrides listen_on so it can recolour this window live; unchecking restores your own line.\n"
+                + "listen_on unix:${TMPDIR}palette-kitty-{kitty_pid}\n"
+                + "include ~/config/theme/kitty.conf"
+        ))
+        XCTAssertTrue(text.contains("listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}"), "the user's listener stays")
+        XCTAssertLessThan(
+            try XCTUnwrap(text.range(of: "omarchy-kitty-{kitty_pid}")?.lowerBound),
+            try XCTUnwrap(text.range(of: "palette-kitty-{kitty_pid}")?.lowerBound),
+            "the managed listener must come after the user's line; kitty keeps the last one"
+        )
+
+        let second = install(includes, .kitty)
+        XCTAssertEqual(second.action, .unchanged)
+        XCTAssertFalse(second.addedRemoteControl, "the directive is in the config now, so no second restart hint")
+        XCTAssertEqual(try read(home + "/.config/kitty/kitty.conf"), text)
+
+        _ = includes.remove(.kitty)
+        let restored = try read(home + "/.config/kitty/kitty.conf")
+        XCTAssertEqual(
+            restored,
+            "listen_on unix:${XDG_RUNTIME_DIR}/omarchy-kitty-{kitty_pid}\n",
+            "removing the block restores the user's own listener"
+        )
     }
 
     func testRemovalRestoresTheUnrelatedContentByteForByte() throws {
@@ -241,37 +288,137 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertEqual(backups.filter { $0 == "kitty-kitty.conf.orig" }.count, 1)
     }
 
-    // MARK: - Starship TOML
-
-    func testStarshipInstallIsValidTOMLAndRemovalRestoresTheFile() throws {
+    func testRevertKeepsSettingsTheUserAddedAfterTheFirstApply() throws {
         let home = makeHome()
-        let path = home + "/.config/starship.toml"
-        let original = "# user starship\nadd_newline = false\n\n[character]\nsuccess_symbol = \">\"\n"
+        let path = home + "/.config/kitty/kitty.conf"
+        let original = "font_size 13\n"
         try write(original, to: path)
         let includes = includes(home)
 
-        XCTAssertNil(install(includes, .starship).error)
-        let installed = try read(path)
-        let table = try TOMLTable(string: installed)
-        XCTAssertEqual(table.str("palette"), "palette")
-        XCTAssertNotNil(table.table("palettes")?.table("palette"))
-        XCTAssertNotNil(table.table("character"))
-        XCTAssertEqual(table.bool("add_newline"), false)
+        XCTAssertNil(install(includes, .kitty).error)
+        // The user keeps editing the file after Palette's block was installed.
+        try write(try read(path) + "background_opacity 0.9\n", to: path)
 
-        XCTAssertEqual(includes.remove(.starship).action, .removed)
+        let outcomes = includes.revert()
+        XCTAssertEqual(outcomes.first { $0.target == .kitty }?.action, .restored)
+        XCTAssertEqual(try read(path), original + "background_opacity 0.9\n")
+        XCTAssertFalse(includes.hasBackups)
+    }
+
+    func testRevertKeepsUserContentWrittenIntoAPaletteCreatedFile() throws {
+        let home = makeHome()
+        let path = home + "/.config/kitty/kitty.conf"
+        let includes = includes(home)
+
+        XCTAssertNil(install(includes, .kitty).error)
+        try write(try read(path) + "font_size 15\n", to: path)
+
+        XCTAssertEqual(includes.revert().first { $0.target == .kitty }?.action, .restored)
+        XCTAssertEqual(try read(path), "font_size 15\n")
+    }
+
+    func testRevertRestoresTheSnapshotWhenTheBlockWasRemovedByHand() throws {
+        let home = makeHome()
+        let path = home + "/.config/kitty/kitty.conf"
+        let original = "font_size 13\n"
+        try write(original, to: path)
+        let includes = includes(home)
+
+        XCTAssertNil(install(includes, .kitty).error)
+        try write(original, to: path)
+
+        XCTAssertEqual(includes.revert().first { $0.target == .kitty }?.action, .restored)
         XCTAssertEqual(try read(path), original)
     }
 
-    func testStarshipAddsTheScalarBeforeTheFirstTable() throws {
+    // MARK: - Neovim target drift
+
+    func testNvimBlockInInitVimIsStillFoundAfterInitLuaAppears() throws {
         let home = makeHome()
-        let path = home + "/.config/starship.toml"
-        try write("[character]\nsuccess_symbol = \">\"\n", to: path)
+        let vim = home + "/.config/nvim/init.vim"
+        let lua = home + "/.config/nvim/init.lua"
+        try write("set number\n", to: vim)
         let includes = includes(home)
 
-        XCTAssertNil(install(includes, .starship).error)
-        let table = try TOMLTable(string: try read(path))
-        XCTAssertEqual(table.str("palette"), "palette")
-        XCTAssertNotNil(table.table("character"))
+        XCTAssertNil(install(includes, .nvim).error)
+        XCTAssertTrue(try read(vim).contains("\" >>> palette theme >>>"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lua))
+
+        // The user later creates an init.lua; the primary path now points there.
+        try write("vim.opt.number = true\n", to: lua)
+        XCTAssertEqual(includes.plan(for: .nvim)?.path, vim)
+        XCTAssertTrue(includes.status(for: .nvim).installed)
+
+        XCTAssertEqual(includes.revert().first { $0.target == .nvim }?.action, .restored)
+        XCTAssertEqual(try read(vim), "set number\n")
+        XCTAssertEqual(try read(lua), "vim.opt.number = true\n")
+    }
+
+    func testNvimRemoveStripsTheBlockFromTheAlternateFile() throws {
+        let home = makeHome()
+        let vim = home + "/.config/nvim/init.vim"
+        try write("set number\n", to: vim)
+        let includes = includes(home)
+
+        XCTAssertNil(install(includes, .nvim).error)
+        try write("vim.opt.number = true\n", to: home + "/.config/nvim/init.lua")
+
+        XCTAssertEqual(includes.remove(.nvim).action, .removed)
+        XCTAssertEqual(try read(vim), "set number\n")
+    }
+
+    // MARK: - Starship TOML
+
+    func testStarshipStatusSaysHowToWireItWithoutFish() throws {
+        let home = makeHome()
+        let theme = home + "/config/theme"
+        try write("set -gx STARSHIP_CONFIG \(theme)/starship-theme.toml\n", to: theme + "/starship-palette.fish")
+        try write("palette = \"palette\"\n", to: theme + "/starship-theme.toml")
+        let includes = includes(home)
+
+        let status = includes.status(for: .starship)
+        XCTAssertTrue(status.installed)
+        XCTAssertTrue(status.note.contains("export STARSHIP_CONFIG"), status.note)
+    }
+
+    func testFishBlockSourcesTheStarshipSnippetAndFallsBackToFishPalette() throws {
+        let home = makeHome()
+        let includes = includes(home)
+        let fishPath = home + "/.config/fish/config.fish"
+        let theme = home + "/config/theme"
+        try write("set -g fish_greeting \"\"\n", to: fishPath)
+        try write("set -gx STARSHIP_CONFIG \(theme)/starship-theme.toml\n", to: theme + "/starship-palette.fish")
+
+        XCTAssertNil(install(includes, .fish).error)
+        let wired = try read(fishPath)
+        let body = wired.components(separatedBy: "\n")
+        let start = try XCTUnwrap(body.firstIndex(of: "# >>> palette theme >>>"))
+        let end = try XCTUnwrap(body.firstIndex(of: "# <<< palette theme <<<"))
+        XCTAssertEqual(Array(body[(start + 1)..<end]), ["source \(theme)/starship-palette.fish"])
+
+        XCTAssertEqual(includes.remove(.starship).action, .removed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: theme + "/starship-palette.fish"))
+        XCTAssertTrue(try read(fishPath).contains("source \(theme)/fish.fish"))
+        XCTAssertFalse(try read(fishPath).contains("starship-palette.fish"))
+    }
+
+    func testStarshipRemoveCleansALegacyInlineBlock() throws {
+        let home = makeHome()
+        let path = home + "/.config/starship.toml"
+        let original = """
+        add_newline = false
+        palette = "palette"
+        # >>> palette theme >>>
+        [palettes.palette]
+        blue = "#0000ff"
+        # <<< palette theme <<<
+
+        """
+        try write(original, to: path)
+        let includes = includes(home)
+
+        XCTAssertEqual(includes.remove(.starship).action, .removed)
+        XCTAssertEqual(try read(path), "add_newline = false\n")
     }
 
     // MARK: - Mappings and availability
@@ -344,7 +491,9 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertNil(install(includes, .bat).error)
         XCTAssertNil(install(includes, .btop).error)
         XCTAssertTrue(try read(home + "/.config/bat/config").contains("--theme=palette"))
-        XCTAssertTrue(try read(home + "/.config/btop/btop.conf").contains("color_theme = \"palette\""))
+        // btop deletes a marker block when it saves, so Palette never writes
+        // one; the linked theme file is the install.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: home + "/.config/btop/btop.conf"))
         XCTAssertEqual(
             try FileManager.default.destinationOfSymbolicLink(atPath: home + "/.config/bat/themes/palette.tmTheme"),
             home + "/config/theme/bat.tmTheme"
@@ -380,7 +529,7 @@ final class ThemingIncludesTests: XCTestCase {
 
         let status = includes.status(for: .yazi)
         XCTAssertFalse(status.available)
-        XCTAssertTrue(status.note.contains("Unavailable"))
+        XCTAssertTrue(status.note.contains("Manual"))
         XCTAssertEqual(install(includes, .yazi).action, .unchanged)
         XCTAssertEqual(try read(path), original)
     }

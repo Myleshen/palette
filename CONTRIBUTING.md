@@ -34,6 +34,10 @@ Deeper notes: `ARCHITECTURE.md`, `PROVIDERS.md`, `THEMING.md`, `TESTING.md`.
 
 - `main` takes pull requests only: a PR and a green `build` check are required,
   and force-pushes and deletions are blocked. There are no bypass actors.
+- Behaviour lives in `openspec/specs/` and is the source of truth. A code change
+  — feature, fix, refactor or test-only — needs a kebab-case OpenSpec change
+  under `openspec/changes/` before implementation; pure documentation edits are
+  the only exception. `make specs` must pass.
 - No version bump in a PR. The maintainer sets the version and tags the release.
 - User-visible changes get a `CHANGELOG.md` entry: a `## x.y.z — YYYY-MM-DD`
   heading with `Added` / `Changed` / `Fixed` / `Verified` sections.
@@ -53,7 +57,8 @@ merge and a release.
 1. Bump `CFBundleShortVersionString` in `Resources/Info.plist` (and
    `CFBundleVersion`, which Settings shows alongside it).
 2. Add the `CHANGELOG.md` entry. Its text becomes the release body.
-3. Merge the PR.
+3. Run `make specs` (`openspec validate --all --strict`) and fix anything it
+   reports. Merge the PR.
 4. Tag and push:
 
    ```sh

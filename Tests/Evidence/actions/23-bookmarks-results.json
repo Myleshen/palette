@@ -1,0 +1,113 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "Palette Releases",
+  "focusZone" : "search",
+  "itemCount" : 3,
+  "items" : [
+    {
+      "actions" : [
+        "open:Open Bookmark"
+      ],
+      "badge" : "BOOKMARK",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "bookmark:https:\/\/github.com\/myleshen\/palette\/releases",
+      "providerID" : "bookmark",
+      "subtitle" : "https:\/\/github.com\/myleshen\/palette\/releases",
+      "title" : "Palette Releases"
+    },
+    {
+      "actions" : [
+        "open:Open Bookmark"
+      ],
+      "badge" : "BOOKMARK",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "bookmark:https:\/\/github.com\/ghostty-org\/ghostty\/tree\/main\/themes",
+      "providerID" : "bookmark",
+      "subtitle" : "https:\/\/github.com\/ghostty-org\/ghostty\/tree\/main\/themes",
+      "title" : "Ghostty Themes"
+    },
+    {
+      "actions" : [
+        "open:Open Bookmark"
+      ],
+      "badge" : "BOOKMARK",
+      "group" : "",
+      "hasPreview" : false,
+      "id" : "bookmark:https:\/\/opencode.ai\/docs",
+      "providerID" : "bookmark",
+      "subtitle" : "https:\/\/opencode.ai\/docs",
+      "title" : "OpenCode Docs"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : false,
+  "previewVisible" : false,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "\/bookmark",
+  "railFocused" : false,
+  "railID" : "bookmark",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "Bookmarks",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+
+    ],
+    "background" : "",
+    "foreground" : "",
+    "live" : false
+  },
+  "terminalActive" : false,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}

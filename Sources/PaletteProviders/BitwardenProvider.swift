@@ -17,6 +17,8 @@ public actor BitwardenVault {
     private var itemCache: [String: (date: Date, data: Data)] = [:]
     private var listTask: Task<ListResult, Never>?
     private var lastListAttempt: Date?
+    private var statusTask: Task<String, Never>?
+    private var statusGeneration = 0
     private var generation = 0
     private let persistCache: Bool
     private let cacheScope: String
@@ -57,6 +59,8 @@ public actor BitwardenVault {
         listCache = nil
         itemCache.removeAll()
         listTask = nil
+        statusTask = nil
+        statusGeneration += 1
         generation += 1
         if persistCache {
             SecureVaultCache.remove(scope: cacheScope)
@@ -72,6 +76,8 @@ public actor BitwardenVault {
         lastStatusDate = nil
         itemCache.removeAll()
         listTask = nil
+        statusTask = nil
+        statusGeneration += 1
         generation += 1
         if persistCache { SecureVaultCache.removeSession(scope: cacheScope) }
     }
@@ -201,6 +207,24 @@ public actor BitwardenVault {
         if let lastStatus, let lastStatusDate, Date().timeIntervalSince(lastStatusDate) < 30 {
             return lastStatus
         }
+        return await startStatus(bw: bw).value
+    }
+
+    /// Prewarm and the first search share one `bw status` process instead of
+    /// racing two, and the 30 s cache still answers a later query.
+    private func startStatus(bw: String) -> Task<String, Never> {
+        if let statusTask { return statusTask }
+        let activeGeneration = statusGeneration
+        let task = Task<String, Never> { [weak self] in
+            let status = await self?.readStatus(bw: bw, generation: activeGeneration) ?? "unknown"
+            await self?.storeStatus(status, generation: activeGeneration)
+            return status
+        }
+        statusTask = task
+        return task
+    }
+
+    private func readStatus(bw: String, generation activeGeneration: Int) async -> String {
         guard let result = try? await ProcessRunner.run([bw, "status"], timeout: 10),
               result.status == 0,
               let data = result.stdoutString.data(using: .utf8),
@@ -208,12 +232,19 @@ public actor BitwardenVault {
               let status = object["status"] as? String else {
             return "unknown"
         }
-        if let email = object["userEmail"] as? String, !email.isEmpty {
+        if generation == activeGeneration,
+           let email = object["userEmail"] as? String, !email.isEmpty {
             self.email = email
         }
+        return status
+    }
+
+    private func storeStatus(_ status: String, generation activeGeneration: Int) {
+        guard generation == activeGeneration else { return }
+        statusTask = nil
+        guard status != "unknown" else { return }
         lastStatus = status
         lastStatusDate = Date()
-        return status
     }
 
     public func login(bw: String, bridge: HostBridge, environment: [String: String]) async {
@@ -261,6 +292,8 @@ public actor BitwardenVault {
         session = key
         lastStatus = "unlocked"
         lastStatusDate = Date()
+        statusTask = nil
+        statusGeneration += 1
         if persistCache { SecureVaultCache.saveSession(key, scope: cacheScope) }
         // Login may be a different account, so do not reuse another vault's
         // cached payload.
@@ -305,6 +338,8 @@ public actor BitwardenVault {
         session = key
         lastStatus = "unlocked"
         lastStatusDate = Date()
+        statusTask = nil
+        statusGeneration += 1
         if persistCache { SecureVaultCache.saveSession(key, scope: cacheScope) }
         // Reuse a fresh six-hour snapshot so unlocking feels instant; use the
         // menu-bar refresh when the vault has changed on another device.
@@ -388,6 +423,7 @@ public actor BitwardenProvider: PaletteProvider {
     private let launcher: LauncherService
     private let terminalApp: String
     private let environment: [String: String]
+    private let resolveTool: @Sendable () -> String?
 
     public nonisolated let descriptor: ProviderDescriptor
 
@@ -397,7 +433,8 @@ public actor BitwardenProvider: PaletteProvider {
         bridge: HostBridge,
         launcher: LauncherService,
         terminalApp: String = "kitty",
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        resolveTool: @escaping @Sendable () -> String? = { ToolLocator.shared.path(for: "bw") }
     ) {
         self.kind = kind
         self.vault = vault
@@ -405,6 +442,7 @@ public actor BitwardenProvider: PaletteProvider {
         self.launcher = launcher
         self.terminalApp = terminalApp
         self.environment = environment
+        self.resolveTool = resolveTool
         self.descriptor = ProviderDescriptor(
             id: kind.trigger,
             name: kind.name,
@@ -427,8 +465,15 @@ public actor BitwardenProvider: PaletteProvider {
     ]
     static let hostHandledCustomActions: Set<String> = []
 
+    /// The first `/bw` used to pay for `bw status`; do it once at launch. The
+    /// vault coalesces this with the first search, so the CLI runs once.
+    public func prewarm() async {
+        guard let bw = resolveTool(), await vault.currentSession() == nil else { return }
+        _ = await vault.status(bw: bw)
+    }
+
     public func search(_ request: SearchRequest) async throws -> [PaletteItem] {
-        guard let bw = ToolLocator.shared.path(for: "bw") else {
+        guard let bw = resolveTool() else {
             return [installRow()]
         }
 
@@ -504,7 +549,7 @@ public actor BitwardenProvider: PaletteProvider {
             try await runRowCommand(command)
             return
         }
-        guard let bw = ToolLocator.shared.path(for: "bw"),
+        guard let bw = resolveTool(),
               let session = await vault.currentSession() else {
             await bridge.notify("Unlock Bitwarden first")
             return
@@ -591,7 +636,7 @@ public actor BitwardenProvider: PaletteProvider {
     // MARK: - Vault rows
 
     private func runRowCommand(_ command: String) async throws {
-        guard let bw = ToolLocator.shared.path(for: "bw") else { return }
+        guard let bw = resolveTool() else { return }
         switch command {
         case "install":
             try await MainActor.run {

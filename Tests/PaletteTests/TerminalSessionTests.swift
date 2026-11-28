@@ -75,6 +75,39 @@ final class TerminalSessionTests: XCTestCase {
         )
     }
 
+    func testThemedSessionButtonCreatesThePaletteSession() {
+        XCTAssertEqual(ZellijLauncher.themedSessionName, "Palette")
+        XCTAssertEqual(
+            ZellijLauncher.themedSessionScript(zellij: "/opt/homebrew/bin/zellij"),
+            "'/opt/homebrew/bin/zellij' attach --create 'Palette' || "
+                + "{ '/opt/homebrew/bin/zellij' delete-session --force 'Palette'; "
+                + "exec '/opt/homebrew/bin/zellij' --session 'Palette'; }"
+        )
+    }
+
+    @MainActor
+    func testKittyTerminalArgumentsKeepTheThemedScriptIntact() {
+        // `zsh -lic` gets one raw argument: escaping the script's quotes again
+        // made zsh fail with "unmatched '" and the kitty window closed.
+        let script = ZellijLauncher.themedSessionScript(zellij: "/z")
+        XCTAssertEqual(
+            LauncherService.kittyTerminalArguments(command: script),
+            ["--detach", "/bin/zsh", "-lic", "\(script); exec /bin/zsh -l"]
+        )
+    }
+
+    func testRestartRelaunchUsesTheThemedSessionScript() {
+        // AppRestart relaunches through the same command as the button: a
+        // fresh Palette session, because a running one never re-reads the
+        // palette.
+        XCTAssertEqual(
+            ZellijLauncher.themedSessionScript(zellij: "/z"),
+            "'/z' attach --create 'Palette' || "
+                + "{ '/z' delete-session --force 'Palette'; "
+                + "exec '/z' --session 'Palette'; }"
+        )
+    }
+
     // MARK: - Editor launch
 
     func testNeovideStartsANewInstance() {

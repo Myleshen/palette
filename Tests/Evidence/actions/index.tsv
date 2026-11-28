@@ -1,0 +1,41 @@
+01	launcher-empty	Launcher	Launcher, empty	panelVisible=true,itemCount>0	pass	1100x629	
+02	launcher-search	Launcher	Launcher, typed search results	itemCount>0 for a typed query	pass	1100x629	
+03	launcher-no-results	Launcher	Launcher, no-results state	itemCount=0 with a query typed	pass	1100x629	
+04	clipboard-preview	Launcher	Clipboard history with live preview	previewEnabled=true,itemCount>0 from seeded clips	pass	1100x629	
+05	scratchpad	Launcher	Scratchpad	scratchpadActive=true	pass	1100x629	
+06	terminal	Launcher	Embedded terminal pane	terminalActive=true after echo	skip	1100x629	SwiftTerm draws terminal glyphs into a layer; snapshot= captures the pane frame but not the text. The text itself was verified with PALETTE_TERMINAL_DEBUG: echo palette-2200 printed palette-2200.
+09	theme-browser	Launcher	Theme browser (launcher /theme)	firstProvider=theme,itemCount>0	pass	1100x629	
+21	calculator-result	Launcher	Calculator result row	firstTitle=8,firstProvider=calc	pass	1100x629	
+22	snippet-expansion	Launcher	Snippet row with expanded preview	firstProvider=snip,previewEnabled=true	pass	1100x629	
+23	bookmarks-results	Launcher	Bookmark search results	firstProvider=bookmark,itemCount>0	pass	1100x629	
+24	cheatsheets-results	Launcher	Cheatsheet search results	firstProvider=cheat,itemCount>0	pass	1100x629	
+25	webapps-results	Launcher	Web App search results	firstProvider=web,itemCount>2	pass	1100x629	
+07	ask-window	Panels	Ask window, composer	askWindows=1	pass	860x579	
+08	status-panel	Panels	Status panel	statusPanelOpen=true	pass	300x775	
+19	clipboard-list	Panels	Clipboard list: text, image and file entries	itemCount>4 from five seeded rows	pass	1100x629	
+20	clipboard-pinned	Panels	Pinned clipboard row and chronology	itemCount=3, pinned row offers Unpin, newest first	pass	1100x629	
+29	ask-chat	Panels	Ask conversation restored from history	askWindows=1,askTurns>0	pass	860x579	
+30	palette-menu	Panels	Palette menu probe with arrow highlight	paletteMenuOpen=true,paletteMenuRows>0	pass	228x97	
+28b	media-preview	Panels	Screenshot annotator preview (Pin toolbar)	annotator renders the capture window; Pin action visible	pass	1180x792	
+10	theming-source-theme	Theming	Settings → Theming, source = Theme	settings window rendered, theming.enabled=true	pass	1100x820	
+11	theming-source-wallpaper	Theming	Settings → Theming, source = Wallpaper (theme group disabled)	settings window rendered, source=wallpaper	pass	1100x820	
+26	screenshots-pane	Settings	Settings → Screenshots	settings window rendered	pass	1100x820	
+27	recordings-pane	Settings	Settings → Recordings	settings window rendered	pass	1100x820	
+28	captures-pane	Settings	Settings → Captures	settings window rendered	pass	1100x820	
+31	engine-browser	Settings	Settings → Search, engine browser rows	settings window rendered with engine rows	pass	1100x820	
+33	browser-policy	Settings	Settings → Theming → Browsers, policy state	settings window rendered, browsers card	pass	1100x820	
+38	diagnostics	Settings	Settings → Diagnostics	settings window rendered	pass	1100x820	
+39	about-pane	Settings	Settings → About	settings window rendered	pass	1100x820	
+12	deck-colors-fan	Deck	Theme deck, colours fan at 3440×1415	thumbsReady=true, deck rendered	pass	3440x849	
+13	deck-colors-preview	Deck	Theme deck, colour preview	thumbsReady=true, preview open	pass	3440x849	
+14	deck-wallpapers-fan	Deck	Theme deck, wallpapers fan	thumbsReady=true,thumbsTotal>0	pass	3440x849	
+15	deck-wallpaper-preview	Deck	Theme deck, wallpaper preview	thumbsReady=true, preview open	pass	3440x849	
+16	deck-mid-deal	Deck	Theme deck, mid-deal at 0.5	thumbsReady=true, deal frozen	pass	3440x849	
+36	deck-filter	Deck	Theme deck, filter active (gruvbox)	deck open, filter narrowed	pass	3440x849	
+37	deck-favourites	Deck	Theme deck, favourites view (Tab)	favourites view open with seeded favourite	pass	3440x849	
+17	theme-applied	Theming	Launcher after applying catppuccin-mocha	theme.id contains catppuccin, panel visible	pass	1100x629	
+18	wallpaper-applied	Theming	Wallpaper-sourced palette applied in an isolated home	palette.json written, launcher uses wallpaper palette	pass	1100x629	
+40	theme-applied-search	Theming	Themed launcher with search, compared with 02	theme.id contains catppuccin, pixels differ from 02	pass	1100x629	
+35	broken-config	Errors	Broken config.toml: visible parse error	statusMessage contains 'config.toml has an error'	pass	1100x629	
+32	restart-prompt	Errors	Restart prompt (kitty/Ghostty)	skipped: no script verb, requires a running target app	skip	no-image	Needs themingEngine.restartPrompt, which only publishes after a real apply against a running app. No verb exposes it and faking it would not be the real window.
+34	increase-contrast	Accessibility	Increase Contrast forced on	skipped: requires the real system accessibility setting	skip	no-image	Increase Contrast comes from NSWorkspace/SwiftUI colourSchemeContrast; there is no app override or script verb, and changing it would alter the user settings.

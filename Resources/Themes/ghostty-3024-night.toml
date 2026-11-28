@@ -9,10 +9,10 @@ appearance = "dark"
 
 [palette]
 bg = "#090300"
-surface = "#060200"
+surface = "#0c0501"
 elevated = "#221c1a"
 fg = "#a5a2a2"
-fg_muted = "#7a7574"
+fg_muted = "#7b7674"
 accent = "#01a0e4"
 accent_fg = "#000000"
 selection_bg = "#4a4543"
@@ -36,4 +36,4 @@ bg = "#221c1a"
 fg = "#6e6a69"
 
 [footer]
-hint_color = "#6e6a69"
+hint_color = "#7a7674"

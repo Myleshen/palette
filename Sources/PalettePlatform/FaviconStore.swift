@@ -16,10 +16,19 @@ public actor FaviconStore {
     /// Hosts another search is already fetching; a keystroke must not queue a
     /// second request for the same icon.
     private var inFlight: Set<String> = []
+    /// Cancels a redirect off Google's origin, and is retained by the session.
+    private let session: URLSession
 
     public init(directory: URL? = nil) {
         let cache = PalettePaths.resolve().cacheDir.appendingPathComponent("Favicons", isDirectory: true)
         self.directory = directory ?? cache
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 2.5
+        session = URLSession(
+            configuration: configuration,
+            delegate: SafeURL.RedirectGuard(),
+            delegateQueue: nil
+        )
         try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
     }
 
@@ -60,15 +69,16 @@ public actor FaviconStore {
             return base64
         }
 
-        guard let requestURL = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=64") else {
+        guard let requestURL = Self.faviconURL(for: host) else {
             misses.insert(host)
             return nil
         }
         var request = URLRequest(url: requestURL)
         request.timeoutInterval = 2.5
         request.cachePolicy = .returnCacheDataElseLoad
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
+        guard let (bytes, response) = try? await session.bytes(for: request),
               let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let data = try? await Self.read(bytes, limit: Self.maxBytes),
               let png = try? Self.pngData(from: data) else {
             misses.insert(host)
             return nil
@@ -83,6 +93,31 @@ public actor FaviconStore {
     private static func host(of urlString: String) -> String? {
         guard let host = URL(string: urlString)?.host?.lowercased(), !host.isEmpty else { return nil }
         return host
+    }
+
+    /// Built with `URLComponents` so a host containing `&` or `?` stays one
+    /// query value instead of injecting parameters.
+    static func faviconURL(for host: String) -> URL? {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.google.com"
+        components.path = "/s2/favicons"
+        components.queryItems = [
+            URLQueryItem(name: "domain", value: host),
+            URLQueryItem(name: "sz", value: "64"),
+        ]
+        return components.url
+    }
+
+    private static let maxBytes = 2_000_000
+
+    private static func read(_ bytes: URLSession.AsyncBytes, limit: Int) async throws -> Data {
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count >= limit { break }
+        }
+        return data
     }
 
     private func file(for host: String) -> URL {

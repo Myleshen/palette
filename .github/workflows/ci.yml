@@ -44,6 +44,9 @@ jobs:
       - name: Warm the build cache
         run: Scripts/restore-build-timestamps.sh
 
+      - name: Validate specs
+        run: npx --yes @fission-ai/openspec@2.2.0 validate --all --strict
+
       - name: Test
         run: swift test ${{ github.event_name == 'push' && '--enable-code-coverage' || '' }}
 

@@ -215,7 +215,7 @@ struct GlassSurface<S: Shape>: View {
         }
         .overlay {
             if policy.increaseContrast {
-                shape.stroke(.primary.opacity(0.25), lineWidth: 1)
+                shape.stroke(.primary.opacity(0.55), lineWidth: 1)
             }
         }
     }
@@ -256,15 +256,18 @@ enum LauncherMetrics {
 private struct CardSurface: ViewModifier {
     var theme: Theme
     var background: String?
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: LauncherMetrics.cardRadius, style: .continuous)
     }
 
     /// Every card paints its own palette colour; glass only ever sits on top.
+    /// Increase Contrast makes that fill opaque so text never sits on a
+    /// desktop-tinted blend the loader did not validate.
     var fill: Color {
         theme.color(background ?? theme.palette.bg)
-            .opacity(theme.window.glass ? theme.window.glassOpacity : 1)
+            .opacity(contrast == .increased ? 1 : (theme.window.glass ? theme.window.glassOpacity : 1))
     }
 
     func body(content: Content) -> some View {
@@ -410,7 +413,7 @@ private struct ChipButton: View {    var title: String
                 .lineLimit(1)
                 .foregroundColor(selected
                     ? theme.color(theme.palette.accentFg)
-                    : theme.color(hovered ? theme.palette.fg : theme.palette.fgMuted))
+                    : theme.color(theme.palette.fg))
                 .padding(.horizontal, 10)
                 .frame(minHeight: 28)
                 .background(
@@ -496,10 +499,6 @@ private struct ProviderGlyph: View {
             Text(initials)
                 .font(.system(size: 10, weight: .bold))
                 .frame(width: 16, height: 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(theme.color(theme.palette.elevated))
-                )
         }
     }
 }
@@ -547,7 +546,7 @@ struct ResultRow: View {
                     size: theme.typography.size,
                     base: selected ? selectedBase : theme.palette.fg,
                     match: selected ? selectedMatch : nil,
-                    weight: .regular,
+                    weight: selected ? .medium : .regular,
                     lineLimit: titleLineLimit
                 )
                 if theme.list.showSubtitles, let subtitle = item.subtitle ?? item.trouble?.detail, !subtitle.isEmpty {
@@ -621,17 +620,18 @@ struct ResultRow: View {
                 Color.clear
             default:
                 RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
-                    .fill(color.opacity(0.95))
+                    .fill(color)
             }
         } else if hovered {
             // Deliberately weaker than selection, and absent when the user
-            // turned selection backgrounds off.
+            // turned selection backgrounds off. The themed hover fill is used
+            // opaque so its text pair stays the one the loader validates.
             switch style {
             case "none":
                 Color.clear
             default:
                 RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
-                    .fill(color.opacity(0.45))
+                    .fill(theme.color(theme.states.hover.bg ?? theme.palette.elevated))
             }
         } else {
             Color.clear
@@ -651,6 +651,10 @@ struct ActionRow: View {
     var selected: Bool
     var theme: Theme
     var pill: Bool = false
+
+    private var selectedBase: String {
+        theme.states.selected.fg ?? theme.palette.selectionFg
+    }
 
     private var actionIcon: String {
         if action.concealed { return "lock.fill" }
@@ -683,22 +687,16 @@ struct ActionRow: View {
             Image(systemName: actionIcon)
                 .font(.system(size: 12, weight: .medium))
                 .frame(width: CGFloat(theme.effectiveIconSize))
-                .foregroundColor(theme.color(selected
-                    ? (pill ? theme.palette.accent : theme.palette.selectionFg)
-                    : theme.palette.fgMuted))
+                .foregroundColor(theme.color(selected ? selectedBase : theme.palette.fgMuted))
             Text(action.title)
                 .font(.system(size: theme.typography.size))
-                .foregroundColor(theme.color(selected
-                    ? (pill ? theme.palette.fg : (theme.states.selected.fg ?? theme.palette.selectionFg))
-                    : theme.palette.fg))
+                .foregroundColor(theme.color(selected ? selectedBase : theme.palette.fg))
                 .lineLimit(1)
             Spacer()
             if let shortcut = action.shortcut {
                 Text(shortcut)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundColor(selected
-                        ? theme.color(theme.palette.selectionFg).opacity(0.85)
-                        : theme.color(theme.palette.fgMuted))
+                    .foregroundColor(theme.color(selected ? selectedBase : theme.palette.fgMuted))
             }
         }
         .padding(.horizontal, LauncherMetrics.innerPadding)
@@ -729,7 +727,7 @@ struct ActionRow: View {
                 Color.clear
             default:
                 RoundedRectangle(cornerRadius: LauncherMetrics.rowRadius, style: .continuous)
-                    .fill(color.opacity(0.95))
+                    .fill(color)
             }
         } else {
             Color.clear
@@ -741,6 +739,7 @@ struct LauncherRootView: View {
     @ObservedObject var controller: SearchController
     @EnvironmentObject var themeManager: ThemeManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @FocusState private var searchFocused: Bool
     @FocusState private var promptFocused: Bool
     @State private var railScrollTarget: String?
@@ -757,8 +756,8 @@ struct LauncherRootView: View {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
             .strokeBorder(
                 theme.color(theme.palette.accent)
-                    .opacity(controller.focusZone == zone ? 0.55 : 0),
-                lineWidth: 1
+                    .opacity(controller.focusZone == zone ? 1 : 0),
+                lineWidth: 2
             )
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -1226,7 +1225,7 @@ struct LauncherRootView: View {
                 if controller.query.isEmpty {
                     Text(theme.search.placeholder)
                         .font(theme.font(size: theme.typography.size + 3))
-                        .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.55))
+                        .foregroundColor(theme.color(theme.palette.fgMuted))
                         .lineLimit(1)
                         .allowsHitTesting(false)
                 }
@@ -1268,22 +1267,17 @@ struct LauncherRootView: View {
             GlassSurface(shape: Capsule())
                 .overlay(
                     Capsule()
-                        .fill(theme.color(theme.palette.bg).opacity(isPill && theme.window.glass ? theme.window.glassOpacity : 1))
+                        .fill(theme.color(theme.palette.bg).opacity(
+                            contrast == .increased ? 1 : (isPill && theme.window.glass ? theme.window.glassOpacity : 1)
+                        ))
                 )
         )
         .overlay(
             Capsule()
                 .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            theme.color(theme.palette.fg).opacity(isPill && theme.window.glass ? 0.14 : 0),
-                            theme.color(theme.palette.accent)
-                                .opacity(isPill ? (controller.focusZone == .search ? 0.65 : 0.30) : 0),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
+                    theme.color(theme.palette.accent)
+                        .opacity(controller.focusZone == .search ? 1 : 0.30),
+                    lineWidth: controller.focusZone == .search ? 2 : 1
                 )
         )
         .simultaneousGesture(TapGesture().onEnded {
@@ -1504,21 +1498,25 @@ struct LauncherRootView: View {
             Text("Keyboard")
                 .font(.system(size: 9, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.7))
+                .foregroundColor(theme.color(theme.palette.fgMuted))
                 .padding(.bottom, 2)
             ForEach(Self.shortcutHints) { hint in
+                let cap = isPill
+                    ? AnyShape(Capsule())
+                    : AnyShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                 HStack(spacing: 8) {
                     Text(hint.keys)
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(theme.color(theme.palette.elevated).opacity(0.7))
-                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                        .background(theme.color(theme.palette.surface))
+                        .clipShape(cap)
+                        .overlay(cap.stroke(theme.color(theme.palette.border).opacity(0.6), lineWidth: 1))
                         .frame(width: 50, alignment: .leading)
                     Text(hint.label)
                         .font(.system(size: 10))
                 }
-                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.85))
+                .foregroundColor(theme.color(theme.palette.fgMuted))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1533,10 +1531,10 @@ struct LauncherRootView: View {
                 .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.7))
             Text(emptyTitle)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(theme.color(theme.palette.fg).opacity(0.9))
+                .foregroundColor(theme.color(theme.palette.fg))
             Text(emptyDetail)
                 .font(.system(size: 11))
-                .foregroundColor(theme.color(theme.palette.fgMuted).opacity(0.8))
+                .foregroundColor(theme.color(theme.palette.fgMuted))
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .frame(maxWidth: 360)
@@ -1608,8 +1606,7 @@ struct LauncherRootView: View {
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
-                .background(theme.color(theme.palette.elevated).opacity(0.7))
-                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(theme.color(theme.palette.border).opacity(0.6), lineWidth: 1))
             Text(title)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -1617,23 +1614,26 @@ struct LauncherRootView: View {
         .padding(.leading, 3)
         .padding(.trailing, 8)
         .padding(.vertical, 3)
-        .background(theme.color(theme.palette.elevated).opacity(0.35))
+        .background(theme.color(theme.palette.surface))
         .clipShape(Capsule())
+        .overlay(Capsule().strokeBorder(theme.color(theme.palette.border).opacity(0.6), lineWidth: 1))
         .layoutPriority(1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Press return to \(title)")
     }
 
     private func hint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 3) {
+        let cap = isPill
+            ? AnyShape(Capsule())
+            : AnyShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        return HStack(spacing: 3) {
             Text(key)
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
-                .background(theme.color(theme.palette.elevated).opacity(0.7))
-                .clipShape(isPill
-                    ? AnyShape(Capsule())
-                    : AnyShape(RoundedRectangle(cornerRadius: 3, style: .continuous)))
+                .background(theme.color(theme.palette.surface))
+                .clipShape(cap)
+                .overlay(cap.stroke(theme.color(theme.palette.border).opacity(0.6), lineWidth: 1))
             Text(label)
         }
         .foregroundColor(theme.color(theme.footer.hintColor))
@@ -1646,6 +1646,7 @@ struct PromptView: View {
     var theme: Theme
     var focused: FocusState<Bool>.Binding
     var pill: Bool = false
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1688,9 +1689,13 @@ struct PromptView: View {
                 .onSubmit { controller.submitPrompt() }
             }
             if let message = controller.promptValidationMessage {
-                Text(message)
-                    .font(.system(size: 11))
-                    .foregroundColor(theme.color(theme.palette.danger))
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(theme.color(theme.palette.danger))
+                    Text(message)
+                        .foregroundColor(theme.color(theme.palette.fg))
+                }
+                .font(.system(size: 11))
             }
             HStack(spacing: 8) {
                 Spacer()
@@ -1718,7 +1723,7 @@ struct PromptView: View {
         .background(
             GlassSurface(
                 shape: RoundedRectangle(cornerRadius: pill ? 18 : 12, style: .continuous),
-                tint: theme.color(theme.palette.elevated).opacity(0.55)
+                tint: theme.color(theme.palette.elevated).opacity(contrast == .increased ? 1 : 0.55)
             )
         )
         .overlay(
@@ -1803,7 +1808,7 @@ struct ClipboardPreviewPane: View {
         .cardSurface(theme: theme)
         .overlay(
             RoundedRectangle(cornerRadius: LauncherMetrics.cardRadius, style: .continuous)
-                .strokeBorder(theme.color(theme.palette.accent).opacity(focused ? 0.55 : 0), lineWidth: 1)
+                .strokeBorder(theme.color(theme.palette.accent).opacity(focused ? 1 : 0), lineWidth: 2)
         )
         .task(id: item?.stableID) { await load() }
     }
@@ -2073,6 +2078,7 @@ struct ScratchpadView: View {
     @ObservedObject var controller: SearchController
     var theme: Theme
     @FocusState private var focused: Bool
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2125,7 +2131,7 @@ struct ScratchpadView: View {
         .background(
             GlassSurface(
                 shape: RoundedRectangle(cornerRadius: 16, style: .continuous),
-                tint: theme.color(theme.palette.elevated).opacity(0.55)
+                tint: theme.color(theme.palette.elevated).opacity(contrast == .increased ? 1 : 0.55)
             )
         )
         .overlay(
@@ -2147,6 +2153,7 @@ extension Notification.Name {
 struct TerminalPane: View {
     @ObservedObject var controller: SearchController
     var theme: Theme
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         // The card takes its own row instead of covering the last lines of
@@ -2189,7 +2196,7 @@ struct TerminalPane: View {
         .background(
             GlassSurface(
                 shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                tint: theme.color(theme.palette.elevated).opacity(0.9)
+                tint: theme.color(theme.palette.elevated).opacity(contrast == .increased ? 1 : 0.9)
             )
         )
         .overlay(
@@ -2299,6 +2306,7 @@ struct TerminalSurface: NSViewRepresentable {
         }
 
         private func didStart(_ view: LocalProcessTerminalView) {
+            TerminalProcesses.register(view.process?.shellPid ?? 0)
             view.window?.makeFirstResponder(view)
             if let command = initialCommand, !command.isEmpty {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak view] in
@@ -2326,6 +2334,7 @@ struct TerminalSurface: NSViewRepresentable {
 
         func processTerminated(source: TerminalView, exitCode: Int32?) {
             guard let view else { return }
+            TerminalProcesses.unregister(view.process?.shellPid ?? 0)
             // A stale zellij attach (dead session, resurrect prompt) gets one
             // rebuild; anything else is a real end the user has to see.
             if let name = zellijName, rebuilds == 0, exitCode != 0,
@@ -2354,7 +2363,7 @@ struct TerminalSurface: NSViewRepresentable {
         }
 
         private static func environment(shell: String) -> [String] {
-            var environment = ProcessInfo.processInfo.environment
+            var environment = ProcessRunner.sanitizedEnvironment(ProcessInfo.processInfo.environment)
                 .filter { $0.key != "SHELL" && $0.key != "TERM" }
                 .map { "\($0.key)=\($0.value)" }
             environment.append("SHELL=\(shell)")
@@ -2371,10 +2380,8 @@ struct TerminalSurface: NSViewRepresentable {
         let terminal = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 560))
         terminal.configureNativeColors()
         terminal.usesMetalLayerSurface = false
-        terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
-        terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
+        TerminalPalette.apply(theme, to: terminal)
         terminal.wantsLayer = true
-        terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
         terminal.layer?.cornerRadius = 10
         terminal.font = resolvedFont()
         context.coordinator.view = terminal
@@ -2385,7 +2392,10 @@ struct TerminalSurface: NSViewRepresentable {
             object: nil,
             queue: .main
         ) { _ in
-            stoppable.view.terminate()
+            // The observer is registered on the main queue.
+            MainActor.assumeIsolated {
+                TerminalProcesses.stop(pid: stoppable.view.process?.shellPid ?? 0)
+            }
         }
         DispatchQueue.main.async {
             context.coordinator.start(restarting: false)
@@ -2444,10 +2454,10 @@ struct TerminalSurface: NSViewRepresentable {
     }
 
     func updateNSView(_ terminal: LocalProcessTerminalView, context: Context) {
-        terminal.nativeBackgroundColor = theme.nsColor(theme.palette.bg)
-        terminal.nativeForegroundColor = theme.nsColor(theme.palette.fg)
+        // A theme change recolours the live pane in place; the session keeps
+        // running, so a palette apply does not restart anyone's shell.
+        TerminalPalette.apply(theme, to: terminal)
         terminal.font = resolvedFont()
-        terminal.layer?.backgroundColor = theme.nsColor(theme.palette.bg).cgColor
         context.coordinator.session = session
         context.coordinator.initialCommand = initialCommand
         context.coordinator.onExit = onExit

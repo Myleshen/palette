@@ -4,6 +4,7 @@ import PaletteCore
 import PalettePlatform
 @testable import PaletteProviders
 import PaletteRuntime
+@testable import PaletteApp
 
 final class FeedbackTests: XCTestCase {
     private final class StubProvider: PaletteProvider, @unchecked Sendable {
@@ -123,5 +124,51 @@ final class FeedbackTests: XCTestCase {
 
         XCTAssertEqual(result.items.map { $0.id }, ["fast:1"])
         XCTAssertEqual(result.timedOutProviders, ["slow"])
+    }
+
+    /// A provider blocked in non-suspending work cannot be cancelled, so the
+    /// race must not await it: the search returns at the deadline.
+    func testGlobalDeadlineBoundsAProviderThatNeverSuspends() async {
+        final class BlockingProvider: PaletteProvider, @unchecked Sendable {
+            let descriptor = ProviderDescriptor(id: "blocked", name: "blocked", trigger: "blocked", isGlobal: true)
+
+            // Synchronous on purpose: cancellation cannot interrupt it.
+            private func block() {
+                Thread.sleep(forTimeInterval: 1)
+            }
+
+            func search(_ request: SearchRequest) async throws -> [PaletteItem] {
+                block()
+                return [PaletteItem(id: "blocked:1", title: "Blocked", providerID: "blocked")]
+            }
+        }
+
+        let fast = StubProvider(id: "fast", items: [
+            PaletteItem(id: "fast:1", title: "Fast", providerID: "fast"),
+        ])
+        let registry = ProviderRegistry(
+            providers: [fast, BlockingProvider()],
+            prefix: "/",
+            global: ["fast", "blocked"],
+            globalDeadline: .milliseconds(50)
+        )
+
+        let started = Date()
+        let result = await registry.search(raw: "")
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertLessThan(elapsed, 0.5)
+        XCTAssertEqual(result.items.map { $0.id }, ["fast:1"])
+        XCTAssertEqual(result.timedOutProviders, ["blocked"])
+    }
+
+    // MARK: - Scratchpad saves
+
+    func testScratchpadSaveFailureIsReportedWithItsReason() {
+        let error = CocoaError(.fileWriteNoPermission)
+        let status = ScratchpadSave.failureStatus(for: error)
+
+        XCTAssertTrue(status.hasPrefix("Could not save the note:"))
+        XCTAssertTrue(status.contains(error.localizedDescription))
     }
 }

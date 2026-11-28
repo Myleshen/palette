@@ -191,24 +191,15 @@ final class StatusPanelMenuTests: XCTestCase {
         XCTAssertLessThanOrEqual(frame.maxY, screen.maxY - StatusPanelLayout.margin)
     }
 
-    func testPanelHeightUsesTheContentWhenItFits() {
-        let screen = CGRect(x: 0, y: 0, width: 1000, height: 1000)
-        XCTAssertEqual(
-            StatusPanelLayout.panelHeight(content: 420, screen: screen),
-            420
-        )
-    }
+    func testPanelHeightUsesContentCapsTallContentAndNeverCollapses() {
+        let roomy = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+        XCTAssertEqual(StatusPanelLayout.panelHeight(content: 420, screen: roomy), 420)
 
-    func testPanelHeightCapsTallContentToTheScreen() {
-        let screen = CGRect(x: 0, y: 0, width: 1000, height: 600)
+        let short = CGRect(x: 0, y: 0, width: 1000, height: 600)
         XCTAssertEqual(
-            StatusPanelLayout.panelHeight(content: 900, screen: screen),
-            screen.height - StatusPanelLayout.margin * 2 - StatusPanelLayout.gap
+            StatusPanelLayout.panelHeight(content: 900, screen: short),
+            short.height - StatusPanelLayout.margin * 2 - StatusPanelLayout.gap
         )
-    }
-
-    func testPanelHeightNeverCollapsesBelowOnePoint() {
-        let screen = CGRect(x: 0, y: 0, width: 1000, height: 1000)
-        XCTAssertEqual(StatusPanelLayout.panelHeight(content: 0, screen: screen), 1)
+        XCTAssertEqual(StatusPanelLayout.panelHeight(content: 0, screen: roomy), 1)
     }
 }

@@ -128,6 +128,32 @@ final class PersistenceSafetyTests: XCTestCase {
         XCTAssertFalse(result.createdDefault)
     }
 
+    func testWriteRefusesToClobberAFileThatDidNotParse() throws {
+        let (paths, root) = try makePaths()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let broken = "not [ valid toml\n"
+        try broken.write(to: paths.configFile, atomically: true, encoding: .utf8)
+        let backupURL = ConfigWriter.backupURL(for: paths.configFile)
+        let backup = "# the user's last good config\n"
+        try backup.write(to: backupURL, atomically: true, encoding: .utf8)
+
+        let result = ConfigLoader.load(paths: paths)
+        let parseError = try XCTUnwrap(result.parseError)
+
+        XCTAssertThrowsError(
+            try ConfigWriter.write(PaletteConfig(), to: paths.configFile, parseError: parseError)
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("Nothing was saved"))
+            XCTAssertTrue(error.localizedDescription.contains("config.toml.bak"))
+        }
+        XCTAssertEqual(try String(contentsOf: paths.configFile, encoding: .utf8), broken)
+        XCTAssertEqual(try String(contentsOf: backupURL, encoding: .utf8), backup)
+
+        // A readable file still saves normally.
+        try ConfigWriter.write(PaletteConfig(), to: paths.configFile)
+        XCTAssertTrue(try String(contentsOf: paths.configFile, encoding: .utf8).contains("[theme]"))
+    }
+
     // MARK: - Clipboard clear
 
     func testClipboardClearOnlyFiresWhenDueAndMatching() {

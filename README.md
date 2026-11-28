@@ -12,9 +12,32 @@ Dock icon, no script layer holding the core together.
 
 ## Status
 
-v2.19.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
+v2.20.0. Built for macOS 14+ (developed on macOS 27), Apple silicon. Not sandboxed
 and not distributed through the App Store, by design: a launcher needs to see
 your files and drive other apps.
+
+## Specs
+
+Behaviour is specified in [`openspec/specs/`](openspec/specs/) — one capability
+per directory, each requirement a SHALL with WHEN/THEN scenarios. These specs,
+not this README, are the behavioural source of truth; the guides below are
+explanations that link back to them.
+
+Every code change starts as an OpenSpec change in
+[`openspec/changes/`](openspec/changes/), named for its behaviour
+(`add-theme-deck`, `fix-revert-clobber`); a `release-<version>` change is only
+for packaging and version work. Pure documentation edits are the only
+exception.
+
+```sh
+make specs    # openspec validate --all --strict
+```
+
+Significant technical choices are recorded as ADRs in
+[`openspec/decisions/`](openspec/decisions/), with
+[`matrix.md`](openspec/decisions/matrix.md) mapping capabilities to code and
+tests. A change is archived only after its behaviour is verified on the merged
+tree; a release change stays open until its tag exists.
 
 ## Feature timeline
 
@@ -24,8 +47,9 @@ Where each headline feature landed. Every fix, and everything before 1.8, is in
 
 | Feature | Version |
 |---|---|
-| Pinned screenshots, on-device OCR, learned ranking, provider groups, update nudge | 2.18.0 |
+| Fanned theme cards (`⌘⌥G`), wallpaper cards and wallpaper palettes, generated configs in each app's real syntax, Starship prompt theming, theme-id fix | 2.20.0 |
 | Cross-app theming (tokens + browser policy), 942 themes, non-tracking menus, annotator selection, trigger hiding | 2.19.0 |
+| Pinned screenshots, on-device OCR, learned ranking, provider groups, update nudge | 2.18.0 |
 | Custom hotkey binder — `[[binding]]` launches an app, runs a shell command, opens a provider trigger, or opens a URL | 2.16.0 |
 | Ask web search on by default; installed-font dropdowns; onboarding shows the real capture keys and Skip applies Essentials | 2.16.0 |
 | Ask chat window — multi-turn, streaming, saved chats, markdown (code, tables, images), optional web search | 2.15.0 |
@@ -87,7 +111,11 @@ make test       # run the test suite
 ```
 
 The app is ad-hoc signed. macOS may ask for Accessibility permission again
-after a rebuild; that is expected without a Developer ID certificate.
+after a rebuild; that is expected without a Developer ID certificate. Because
+there is no signing identity to anchor to, TCC grants are keyed only to the
+bundle identifier: any app built with the same identifier can inherit a grant
+you gave Palette, and the app runs without the hardened runtime or library
+validation. Only run builds you made or downloaded from the release page.
 
 ### Homebrew
 
@@ -195,6 +223,8 @@ Caches live in `~/Library/Caches/Palette`.
 | `⌥Space` | show / hide |
 | `⌥V` | clipboard browser with live preview |
 | `⌘⌥T` | embedded terminal |
+| `⌘⌥G` | theme cards gallery (Colors) |
+| `⌘⌥W` | theme cards gallery (Wallpapers) |
 | `⌘⌥S` | scratchpad list |
 | `⌘⌥A` | Ask |
 | `↑` `↓` | move selection (or the focused rail/strip row) |
@@ -385,18 +415,19 @@ fallbacks.
 
 ### Settings
 
-`⌘,` (or the menu-bar icon) opens a native Settings window with nineteen panes in
-four sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
+`⌘,` (or the menu-bar icon) opens a native Settings window with twenty panes in
+five sidebar groups. Basics holds **General**, **Launcher**, **Appearance**,
 and **Shortcuts**; Features holds **Search**, **Ask**, **Embedded Terminal**,
 **Bookmarks**, **Cheatsheets**, **Web Apps**, **Screenshots**, **After a
-capture**, **Recordings**, and **Captures**; System holds **About** and
-**Providers**; Advanced holds **Provider Files**, **Config Files**, and
-**Diagnostics**. General holds startup, permissions, power, notifications, the
+capture**, **Recordings**, and **Captures**; Theming holds **Theming** (Palette
+theme, cross-app targets and browsers); Advanced holds **Provider Files**,
+**Config Files**, and **Diagnostics**; System holds **About** and
+**Providers**. General holds startup, permissions, power, notifications, the
 editor/terminal apps used by providers, clipboard history, and the command
 prefix; Launcher holds where the panel opens, the search placeholder, app order,
-and the panel size; Appearance holds themes, typography, and glass; Shortcuts
-holds every global shortcut, including capture, recording, and your own **Custom
-hotkeys**. **Search** holds the web-results toggle and one card per engine
+and the panel size; Appearance holds typography and glass; Theming holds the
+Palette theme, cross-app targets and the browser policy; Shortcuts holds every
+global shortcut, including capture, recording, and your own **Custom hotkeys**. **Search** holds the web-results toggle and one card per engine
 (Name · Search URL · `!keyword` · Browser · Open in web app). **Ask** selects the
 endpoint and model, saves a local API key, toggles fallback, answer
 notifications (sound, Notification Center banner, Dock badge) and the per-turn
@@ -583,7 +614,9 @@ in Settings → Providers to let it answer unprefixed queries too.
 
 `/bw`, `/bwu`, `/bwt`, `/bwn`, and `/bwo` share one in-memory session. The first
 read of a vault is cached for **thirty days** in an AES-GCM encrypted file under
-`~/Library/Caches/Palette/Bitwarden`; the key is a per-user `0600` file. Prefix
+`~/Library/Caches/Palette/Bitwarden`; the key is a per-user `0600` file. The
+cache is `0600` on disk, which stops other users but not another process running
+as you; anything that can read your home directory can read the cache. Prefix
 switches, typing, and copy actions reuse the snapshot instead of spawning
 `bw list` again. Choose **Refresh Bitwarden Cache** in the menu-bar menu when the
 vault changed elsewhere; the next search reads it fresh. The cache is scoped to
@@ -817,6 +850,23 @@ Mocha/Latte, Gruvbox Dark/Light, and **Aetheria Pink** (the pink/violet Noctalia
 palette). Settings can choose the dark/light pair and auto/dark/light mode; theme
 TOML files live in `~/.config/palette/themes`.
 
+**Theme cards** (`⌘⌥G` for Colors, `⌘⌥W` for Wallpapers, or `/theme cards`) open a
+fanned deck of the active mode: ←/→ or scroll flips, typing filters within that
+mode, Tab shows mode favourites, ⌃F marks a card, Return applies, Esc closes.
+`P` or Space opens a full-screen preview of the card in front (palette blocks,
+all 16 ANSI colours, a live launcher mock; wallpapers fill the panel with their
+palette dots), and Esc collapses it back to the fan. Choosing a wallpaper card
+sets it as the desktop picture and, when cross-app theming is on *and* the
+palette source is Wallpaper, re-samples the new picture and applies that palette;
+otherwise only the picture changes.
+
+**Cross-app theming** (Settings → Theming, off by default) writes the palette into
+kitty, Ghostty, zellij, Neovim, fish, Starship, bat, delta and btop through a
+marked block in each app's own config, with one-step Revert; yazi and the
+Chromium browser policy are the manual/approval cases. The generated files, the
+exact reload each app needs, marker blocks, backup/Revert, wallpaper rules and
+Starship's remapped copy are documented in [THEMING.md](THEMING.md#6-cross-app-theming).
+
 ## Configuration
 
 Minimal `config.toml`:
@@ -829,6 +879,8 @@ terminal_app = "kitty"
 editor_open_with = "neovide"
 clipboard_hotkey = "opt+v"
 terminal_hotkey = "cmd+option+t"     # empty disables
+theme_gallery_hotkey = "cmd+opt+g"   # empty disables
+wallpaper_gallery_hotkey = "cmd+opt+w" # empty disables
 scratchpad_hotkey = "cmd+option+s"   # empty disables
 ask_hotkey = "cmd+option+a"          # empty disables
 screenshot_hotkey = "cmd+shift+3"

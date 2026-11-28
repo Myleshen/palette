@@ -62,6 +62,21 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertLessThan(elapsed, 3.5)
     }
 
+    /// The shipped bug was a helper's child surviving after the command
+    /// finished. The shell exits on its own either way, so only a real check
+    /// of the grandchild's pid proves the process group was killed.
+    func testCommandThatExitsLeavesNoGrandchildBehind() async throws {
+        let result = try await ProcessRunner.run(
+            ["/bin/sh", "-c", "sleep 30 & echo $!; exit 0"],
+            timeout: 10
+        )
+        XCTAssertEqual(result.status, 0)
+        let output = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let grandchild = try XCTUnwrap(pid_t(output), "the child did not report its pid: \(output)")
+        XCTAssertEqual(kill(grandchild, 0), -1, "grandchild \(grandchild) survived the command")
+        XCTAssertEqual(errno, ESRCH)
+    }
+
     /// fzf or a provider can close stdin while Palette is still writing. The
     /// helper must stop at the short write instead of spinning; SIGPIPE is
     /// ignored at startup, and the injected writer proves the loop without
@@ -81,6 +96,16 @@ final class ProcessRunnerTests: XCTestCase {
         let data = Data(repeating: 7, count: 1000)
         let written = ProcessRunner.writeAll(data, to: -1) { _, count in count }
         XCTAssertEqual(written, data.count)
+    }
+
+    func testLogFileIsOwnerOnly() throws {
+        let logURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-log-perm-\(UUID().uuidString).log")
+        defer { try? FileManager.default.removeItem(at: logURL) }
+
+        Log.shared.configure(url: logURL)
+        let attributes = try FileManager.default.attributesOfItem(atPath: logURL.path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
     }
 
     /// End to end through the real pipe: a child that exits without reading
@@ -111,13 +136,17 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertTrue(logged.contains("of 1000000 bytes"))
     }
 
+    final class Sink: @unchecked Sendable {
+        var data = Data()
+    }
+
     func testStreamDeliversStdoutChunks() async throws {
-        var received = Data()
+        let sink = Sink()
         let result = try await ProcessRunner.stream(["/bin/sh", "-c", "printf 'a\\0b\\0c'"]) { chunk in
-            received.append(contentsOf: chunk)
+            sink.data.append(contentsOf: chunk)
             return true
         }
         XCTAssertEqual(result.status, 0)
-        XCTAssertEqual(FDEnumerator.splitNUL(received), ["a", "b", "c"])
+        XCTAssertEqual(FDEnumerator.splitNUL(sink.data), ["a", "b", "c"])
     }
 }

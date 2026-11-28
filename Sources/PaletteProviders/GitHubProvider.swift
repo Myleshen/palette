@@ -156,6 +156,8 @@ public enum GitHubNotification {
 /// looking for: the current repository, their repos, their PRs, or their
 /// assigned issues.
 public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
+    public typealias CommandRunner = @Sendable ([String], String?, TimeInterval?) async throws -> ProcessResult
+
     private let kind: GitHubKind
     public let descriptor: ProviderDescriptor
 
@@ -167,6 +169,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     private let bridge: HostBridge
     private let terminalApp: String
     private let terminal: String
+    private let run: CommandRunner
     private let cache = ResultCache()
 
     /// Custom action ids `activate` routes; the host owns the embedded panel.
@@ -198,13 +201,15 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         launcher: LauncherService,
         bridge: HostBridge,
         terminalApp: String = "kitty",
-        terminal: String = "kitty"
+        terminal: String = "kitty",
+        run: @escaping CommandRunner = { try await ProcessRunner.run($0, cwd: $1, timeout: $2) }
     ) {
         self.kind = kind
         self.launcher = launcher
         self.bridge = bridge
         self.terminalApp = terminalApp
         self.terminal = terminal
+        self.run = run
         self.descriptor = ProviderDescriptor(
             id: kind.id,
             name: kind.name,
@@ -359,17 +364,19 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         repo: String?,
         cwd: String?
     ) async -> (items: [PaletteItem], error: String?) {
-        var prArgs = ["pr", "list"]
-        var issueArgs = ["issue", "list"]
-        if let repo {
-            prArgs += ["--repo", repo]
-            issueArgs += ["--repo", repo]
-        }
-        prArgs += ["--state", "all", "--limit", "20", "--json", "number,title,state,isDraft,url"]
-        issueArgs += ["--state", "all", "--limit", "20", "--json", "number,title,state,url"]
+        let repoArgs = repo.map { ["--repo", $0] } ?? []
+        let prArgs = ["pr", "list"] + repoArgs
+            + ["--state", "all", "--limit", "20", "--json", "number,title,state,isDraft,url"]
+        let issueArgs = ["issue", "list"] + repoArgs
+            + ["--state", "all", "--limit", "20", "--json", "number,title,state,url"]
+
+        // Two `gh` processes on separate connections; run them together so the
+        // listing costs one call's latency instead of two.
+        async let prs = json(gh, prArgs, cwd: cwd)
+        async let issues = json(gh, issueArgs, cwd: cwd)
 
         let pullRequests: [[String: Any]]
-        switch await json(gh, prArgs, cwd: cwd) {
+        switch await prs {
         case .success(let entries): pullRequests = entries
         case .failure(let error): return ([], error.message)
         }
@@ -404,8 +411,8 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
             )
         }
 
-        if case .success(let issues) = await json(gh, issueArgs, cwd: cwd) {
-            items += issues.compactMap { entry in
+        if case .success(let issueEntries) = await issues {
+            items += issueEntries.compactMap { entry in
                 guard let number = entry["number"] as? Int,
                       let title = entry["title"] as? String,
                       let url = entry["url"] as? String else { return nil }
@@ -463,16 +470,15 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     /// A Finder launch starts with cwd `/`, so ask git where this checkout is.
     private func repositoryRoot() async -> String? {
         let cwd = FileManager.default.currentDirectoryPath
-        guard let result = try? await ProcessRunner.run(
-            ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
-            timeout: 3
+        guard let result = try? await run(
+            ["git", "-C", cwd, "rev-parse", "--show-toplevel"], nil, 3
         ), result.status == 0 else { return nil }
         let path = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : path
     }
 
     private func unavailableSubtitle(_ gh: String, fallback: String) async -> String {
-        if let status = try? await ProcessRunner.run([gh, "auth", "status"], timeout: 8),
+        if let status = try? await run([gh, "auth", "status"], nil, 8),
            status.status != 0 {
             return "Run gh auth login"
         }
@@ -721,24 +727,22 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     /// tree that is not a full clone.
     private func repositorySlug(_ gh: String) async -> String? {
         let cwd = FileManager.default.currentDirectoryPath
-        if let result = try? await ProcessRunner.run(
+        if let result = try? await run(
             [gh, "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
-            cwd: cwd,
-            timeout: 5
+            cwd, 5
         ), result.status == 0 {
             let slug = result.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
             if GitHubRepoRef.slug(from: slug) != nil { return slug }
         }
         guard let root = await repositoryRoot(),
-              let remote = try? await ProcessRunner.run(
-                ["git", "-C", root, "remote", "get-url", "origin"],
-                timeout: 3
+              let remote = try? await run(
+                ["git", "-C", root, "remote", "get-url", "origin"], nil, 3
               ), remote.status == 0 else { return nil }
         return GitHubRepoRef.slug(fromRemote: remote.stdoutString)
     }
 
     private func runGh(_ gh: String, _ args: [String], done: String) async {
-        guard let result = try? await ProcessRunner.run([gh] + args, timeout: 30) else {
+        guard let result = try? await run([gh] + args, nil, 30) else {
             await bridge.notify("gh could not run")
             return
         }
@@ -888,7 +892,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
         _ args: [String],
         cwd: String? = nil
     ) async -> Result<[[String: Any]], ErrorLine> {
-        guard let result = try? await ProcessRunner.run([gh] + args, cwd: cwd, timeout: 12) else {
+        guard let result = try? await run([gh] + args, cwd, 12) else {
             return .failure(ErrorLine(message: "gh could not run"))
         }
         guard result.status == 0 else {
@@ -914,7 +918,7 @@ public final class GitHubProvider: PaletteProvider, @unchecked Sendable {
     }
 
     private func jsonPages(_ gh: String, _ args: [String]) async -> Result<[[String: Any]], ErrorLine> {
-        guard let result = try? await ProcessRunner.run([gh] + args, timeout: 20) else {
+        guard let result = try? await run([gh] + args, nil, 20) else {
             return .failure(ErrorLine(message: "gh could not run"))
         }
         guard result.status == 0 else {

@@ -1,4 +1,5 @@
 import XCTest
+@testable import PaletteApp
 @testable import PaletteCore
 
 /// The menu panel reuses this pure selection model; the item rules and the
@@ -97,6 +98,32 @@ final class PaletteMenuTests: XCTestCase {
         model.highlight("choice:1")
         XCTAssertEqual(model.activation?.id, "choice:2", "a disabled row cannot take the highlight")
         XCTAssertFalse(PaletteMenuItem.heading("h", "Heading").isSelectable)
+    }
+
+    /// The rows the real `PaletteMenuPicker` builds: the heading is drawn once
+    /// for a repeated group, the current value is the checked row, and the id
+    /// maps back to the value a picker would write.
+    func testPickerBuilderCountsRowsAndRoundTripsTheChoice() {
+        let values = ["png", "jpg", "gif"]
+        let rows = paletteMenuPickerItems(
+            choices: [
+                PaletteMenuChoice(value: values[0], label: "PNG", heading: "Images"),
+                PaletteMenuChoice(value: values[1], label: "JPG"),
+                PaletteMenuChoice(value: values[2], label: "GIF", heading: "Images"),
+            ],
+            selected: values[0]
+        )
+
+        XCTAssertEqual(rows.count, 4, "three choices plus one heading")
+        XCTAssertEqual(rows.filter(\.isSelectable).count, 3)
+
+        var model = PaletteMenuSelection(items: rows)
+        XCTAssertEqual(model.activation?.id, "choice:0")
+
+        model.move(1)
+        guard let id = model.activation?.id else { return XCTFail("no row highlighted") }
+        let index = Int(id.dropFirst("choice:".count))
+        XCTAssertEqual(index.map { values[$0] }, "jpg")
     }
 
     // MARK: - Search

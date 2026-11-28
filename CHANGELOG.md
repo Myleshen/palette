@@ -1,5 +1,182 @@
 # Changelog
 
+## 2.20.0 — 2026-11-28
+
+### Added
+
+- **Standard palette export.** Each apply also writes `palette.yaml` (base16)
+  and `palette.terminal-sexy.json`, so another tool can read Palette's colours
+  without an adapter; per-app files remain for live reload.
+- **Transparency is preserved for nvim/Neovide.** `[theming] transparent`
+  (auto) detects kitty/Ghostty opacity or Neovide's opacity and leaves `Normal`
+  without a background, so the editor shows the terminal through instead of a
+  solid slab. Auto/On/Off in Settings.
+- **Wallpaper colours own the palette.** While the source is wallpaper, a theme
+  pick is refused with a visible reason instead of silently flipping the
+  source; the deck's new `Wallpaper colours | Theme colours` control is the
+  explicit switch.
+- **Quick-access kitty panel and stale Starship shells now follow the palette**
+  too: the drop-down gets the same managed block and socket, and the user's
+  starship palette block is refreshed on every apply.
+- **macOS appearance follows the palette.** `[theming] system_appearance`
+  (auto) switches macOS to light when a light palette is applied and back to
+  dark for a dark one; with `dark_mode = "auto"` a wallpaper's own brightness
+  decides (light picture → light palette and light macOS), so either a light
+  theme or a light wallpaper takes the whole system with it. Auto/Off in
+  Settings; a denied Automation permission is reported, never silent.
+- **Every plugin group snaps to the palette.** After painting its own groups,
+  the nvim file maps any remaining group colour a plugin defined to the nearest
+  palette colour (no link, no stale colour), which covers pickers, notifiers,
+  trouble, cmp and future plugins without naming them.
+- **One picture on every Space, reliably.** The first retargetable Space entry
+  becomes canonical and is copied to every other Space/display, with a second
+  settle pass after WallpaperAgent writes its cache back.
+- **nvim is themed end to end.** 298 highlight groups (base, treesitter,
+  diagnostics, diff, lualine, neo-tree, telescope/snacks, noice/notify) plus
+  `colors_name = "palette"`, with sidebars/dashboards transparent when the
+  terminal or Neovide is translucent.
+- **fish colours actually apply.** The generated lines no longer start a value
+  with `#` (fish read it as a comment and silently unset the colour).
+- **Starship keeps your palette names.** Palette no longer adds a
+  `[palettes.palette]` table to your `starship.toml`; it remaps the values of
+  the palette you actually select, so `fg:pink`-style references keep working.
+- **zellij switches live.** `theme_dark`/`theme_light` are written and every
+  running session is told to switch, with fish as the pane shell for
+  GUI-launched sessions.
+- **One wallpaper on every Space.** Applying a wallpaper now rewrites every
+  Space's picture in the wallpaper store and refreshes WallpaperAgent, so
+  switching Space no longer changes the wallpaper or the palette.
+- **Theming recommendations.** Settings → Theming lists config lines that
+  override the palette (LazyVim colorscheme, a foreign starship palette, a
+  duplicate zellij theme, kitty colours after the include, a stale Helium
+  profile) with file, line and the fix.
+- **The deck says why.** With the wallpaper owning the palette, Apply is
+  disabled for theme cards and the reason stays visible.
+- **Follow-mode starts at launch.** With `source = "wallpaper"` and
+  `follow_wallpaper = true`, the five-second desktop poll is installed at
+  launch, not only after a settings change, so changing the desktop recolours
+  Palette and the generated files without a relaunch.
+- **Zellij's own UI follows the palette.** The generated theme now defines the
+  tab bar, status bar, selected/unselected tabs, pane frames and exit-code
+  indicators from the palette (contrast-checked, accepted by
+  `zellij setup --check`), not just the terminal ANSI colours.
+- **A running kitty picks up the palette on launch**, so a terminal that was
+  already open when Palette restarted no longer keeps yesterday's colours.
+- **First-response latency:** wallpaper thumbnails decode concurrently
+  (~550 ms for a cold 19-card deck), GitHub's PR and issue queries run in
+  parallel (~0.5 s), and Bitwarden's status is prewarmed at launch.
+- **Wallpaper palettes follow pywal.** Extraction now uses pywal's pipeline —
+  the same 16-slot ordering, dark/light background and foreground rules, and its
+  saturation/contrast adjustments (`[theming] saturation`, `contrast`) — so a
+  light wallpaper no longer gets a saturated mid-tone background and ANSI 1–6
+  are the image's own colours. Validated slot-for-slot against pywal 3.8.15 on
+  real wallpapers. Wallpaper-derived ANSI slots are also separated when two land
+  on the same hue, so a machine-extracted palette can't give you two identical
+  blues.
+- **Theme cards** — a non-tracking **hand of cards** (`⌘⌥G`, configurable, and
+  `/theme cards`) that fills the usable width of the display under the pointer
+  and rests on its bottom edge, at any resolution or orientation. The cards ride
+  a circular arc: the selection is the apex, neighbours descend and tilt by the
+  tangent, the reach grows with the width, and the whole card scales down on a
+  short screen. It deals in from below with a staggered spring, glides along the
+  arc on ←/→ or scroll, tilts on hover, and honours Reduce Motion; type to
+  filter, Tab shows favourites, Ctrl+F favourites a card, Return/Space applies,
+  Esc closes. Wallpaper cards are **full-bleed pictures** from
+  `[theming] wallpaper_directory` (default `~/wallpapers`), the
+  current desktop marked. **Picking a wallpaper picks its colours**: the
+  picture, its palette in Palette itself, the generated app files (when Other
+  apps is on) and `source = "wallpaper"` move together, so a theme card is
+  refused until the source is set back to Theme. The curated 138-theme
+  catalogue opens in 17 ms, flips in under a millisecond.
+- **Starship prompt theming** — the generated copy rewrites the values of your
+  active palette table to the nearest Palette colours (OKLab distance), keeping
+  your keys and prompt format, wired through `STARSHIP_CONFIG` in the fish block.
+  Your own `starship.toml` is never edited.
+
+### Removed
+
+- **The catalogue is curated: 69 families, 138 themes.** Every kept family has a
+  dark and a light variant, and every theme was audited for contrast (body 7:1,
+  secondary 4.5:1, semantics 3:1), role separation (main vs secondary text,
+  border, accent), ANSI distinctness and usable red/green for diffs. 795 themes
+  were removed; a saved theme from the old set migrates to its kept sibling on
+  launch, and an unknown id now reports an error instead of silently applying
+  Default Dark.
+- **The `/unit` converter is gone.** It disappeared in 2.18.2 without a
+  user-facing note; this entry records it. `/calc` still answers arithmetic,
+  and no unit or currency conversion is provided.
+- **Clipboard kind filter chips are gone.** Since 2.19.0 `/clip` is one flat
+  chronological list across text, images and files; pins keep their badge but
+  do not jump the queue.
+
+### Fixed
+
+- **Accessibility pass over every theme and surface (WCAG 2.2).** 8,195
+  approved colour pairings across the catalogue and the generated app files now
+  clear their bars: body text 7:1, secondary text, accent, selection and footer
+  hints 4.5:1, semantic ANSI 3:1. 84 theme files had authored failures (worst
+  2.68) and were repaired by the OKLab repair pass, not hand-edited. Selected
+  rows use the selection pair instead of muted text, focus rings are full
+  opacity, status colours come from the theme rather than system red/green, and
+  Increase Contrast now makes launcher cards, search, preview and Settings
+  opaque instead of letting text sit on a desktop-tinted blend. Selected rows
+  and menus also carry a weight/leading-bar cue so state is never colour-only.
+- **Revert no longer destroys your edits.** It strips only Palette's marked
+  block instead of restoring a first-install snapshot, so settings you added
+  after the first Apply survive; a Palette-created file is deleted only when
+  nothing else is left. Revert is also atomic, and a failed one is retryable.
+- **A broken `config.toml` can no longer be overwritten.** Any non-Settings
+  save (theme pick, launcher position, onboarding) now refuses while the file
+  doesn't parse, keeping both it and the `.bak` the error message points at.
+- **Applying the same palette twice no longer destroys the Revert target**, and
+  Auto appearance keeps following light/dark after a theme pick.
+- **The 300 ms provider deadline is real**: a provider stuck in synchronous work
+  no longer holds the keystroke past the budget.
+- **Failures are visible**: a paste whose target never comes forward says so
+  instead of vanishing, and a scratchpad note that fails to save stays in the
+  editor with a message.
+- **Theme ids vs display names** — `[theming] theme` stored `Ghostty · AlxPro
+  Dark`, which the loader could not resolve, so Apply silently used Default Dark.
+  It now stores `ghostty-alxpro-dark`, resolves display names everywhere, and
+  migrates an existing value on launch.
+- **Browsers card** — the Chromium browsers (Helium always) moved to their own
+  card above Targets, so the policy rows are visible without deep scrolling.
+- Theme override in Settings shows the resolved id instead of a “Custom/missing”
+  entry.
+- Upgrading from an older theming build repairs itself: a stale `palette.json`
+  id or a `#`-prefixed Lua/KDL header triggers one silent re-apply at launch, so
+  Neovim no longer errors `E5113` on old generated files.
+- Wallpaper cards no longer silently enable cross-app theming; with it off they
+  only change the desktop picture. The wallpaper folder defaults to
+  `~/wallpapers`, an empty value stays empty, a missing folder is shown, and an
+  unreadable desktop picture names its path.
+- Chromium policy detection covers the user-scoped profile macOS installs
+  (previously read as "Not installed" while enforcing) and reports a stale
+  colour; removal targets every catalogue browser and warns when one remains
+  installed.
+- Apply now recolours running kitty windows over their unix sockets: the
+  managed block adds `allow_remote_control socket-only`, the first apply after
+  that asks for the one restart it needs, and later applies are live. A stale
+  browser profile opens in System Settings once per apply, so re-approval is one
+  click, and Neovim's hint names Neovide explicitly.
+- bat runs `bat cache --build` after linking its theme, so it actually applies;
+  btop is manual now (btop deletes marker comments, which left the row lying
+  and a dangling `color_theme`).
+- The home file index survives stalls: `~`-rooted scopes exclude the
+  iCloud/TCC folders (Desktop, Documents, Downloads, Library subfolders) whose
+  FileProvider can block `open(2)`, and a timed-out walk returns what it
+  collected instead of discarding 40k entries.
+- Resetting Theming removes the installed include blocks; unknown target ids
+  and invalid `dark_mode` are reported at load.
+- Generated files now follow each format's real syntax: bat's XML declaration
+  leads the file (comments after), yazi uses the 26 schema (`[mgr]`,
+  `[indicator]`, `[mode]`), btop uses real `download_*`/`upload_*` and meter
+  keys, Lua/KDL headers use `--`/`//`, Starship TOML ends with a newline, and
+  Chromium policy UUIDs are unique per browser. Validated with kitty's config
+  loader, `zellij setup --check`, `nvim --headless luafile`, `fish -n`,
+  `starship prompt`, `xmllint`, `git config -f`, `plutil -lint` and yazi/btop
+  schema checks.
+
 ## 2.19.0 — 2026-11-27
 
 ### Added
@@ -8,19 +185,28 @@
   Advanced) owns the Palette theme, optional theming of other apps (off by
   default), and the target list. A palette is generated from the chosen theme or
   extracted from the wallpaper, written as managed includes under
-  `~/.config/palette/theme/` (kitty, Ghostty, zellij, Neovim, fish, starship,
-  bat, delta, btop, yazi). Includes are installed and removed automatically per
-  target with marker blocks, one original backup and a one-step Revert; Palette
-  never rewrites an app's config beyond its marked block. Wallpaper palettes
-  re-apply automatically when the wallpaper changes; theme palettes apply on
-  demand. Apply reports the truth per app: kitty reloads through remote control
-  when available, and Ghostty/zellij/Neovim/fish/Starship say exactly what they
-  need (restart, new session, source, next prompt).
-- **Chromium browser theming via managed policy.** Installed Chromium browsers
-  (Helium, Chrome, Edge, Brave, Vivaldi, Chromium) can inherit the palette
-  background as `BrowserThemeColor` through a per-browser `.mobileconfig`,
-  installed with one native Touch ID/password prompt, removable the same way.
-  App-wide per browser and approximate by design; Arc is listed as unsupported.
+  `~/.config/palette/theme/` (kitty, Ghostty, zellij, Neovim, fish, Starship,
+  bat, delta, btop, yazi). Eight of those targets get their include installed
+  and removed automatically as a marked block in the app's own config; Starship
+  is never edited (Palette writes a remapped copy that fish points
+  `STARSHIP_CONFIG` at), and yazi is a manual merge because appending a second
+  TOML section would be invalid. Each edited config keeps one original backup
+  and a one-step Revert; Palette never rewrites an app's config beyond its marked
+  block. Wallpaper palettes re-apply automatically when the wallpaper changes;
+  theme palettes apply on demand. Apply reports the truth per app: kitty reloads
+  every window over its unix socket once Palette's managed block has been
+  restarted into, and the rest say exactly what they need (restart, new session,
+  source, next prompt). A non-blocking prompt offers to restart only the apps
+  that cannot reload (Neovide, Ghostty); zellij sessions are never killed.
+- **Chromium browser theming via a user-owned managed plist.** Installed
+  Chromium browsers (Helium, Chrome, Edge, Brave, Vivaldi, Chromium) inherit the
+  palette background as `BrowserThemeColor`. One **Enable silent browser
+  theming** step asks for the administrator password, removes any old Palette
+  profile, and hands the user-scoped plist to your account; every later Apply
+  rewrites it with no password and no System Settings trip. Running browsers
+  refresh themselves; **Download profile** still exports a `.mobileconfig` for
+  the OS-managed route. App-wide per browser and approximate by design; Arc is
+  listed as unsupported.
 - **19 Omarchy themes** (`omarchy-*`), MIT, contrast-checked, alongside the 914
   Ghostty themes in the theme browser.
 - Action-routing contract and store-level wiring tests with mutation checks.
@@ -29,7 +215,7 @@
   recording options, Ask model, theme override, all font pickers, every Settings
   dropdown) is a custom panel now. Native menu tracking no longer swallows global
   hotkeys, so screenshots, clipboard and launcher work while a Palette menu is
-  open. Long lists are lazy and searchable: the 942-row theme menu opens in
+  open. Long lists are lazy and searchable: a 942-row stress menu opens in
   ~42 ms instead of ~1.4 s and renders ~50 rows.
 - **Annotator selection.** Marks can be selected, text resized from a corner
   handle (Escape cancels, one undo step), and deleted with Delete or the
@@ -57,6 +243,27 @@
   (reverting the OCR fix or the setup-file creation now fails the suite).
 
 ### Changed
+
+- **One palette everywhere, live.** Apply now updates Palette's own theme (launcher,
+  panels, embedded terminal) alongside the generated files; a wallpaper-sourced
+  palette recolours Palette too and is re-derived at launch. The embedded
+  terminal applies all 16 ANSI colours and recolours in place.
+- **Theming pane source toggle**: a global `Palette source: Theme | Wallpaper`
+  sits above the per-app controls; the inactive group is visibly disabled.
+- **Running apps update where the app allows it**: Neovim/Neovide through the
+  file watcher plus last-writer `ColorScheme` pass, kitty through its socket
+  (one restart enables it), browsers through a user-owned managed plist
+  (one native-auth enable removes old profiles and then updates silently).
+- **Restart now is reliable**: kitty escalates quit → SIGTERM → SIGKILL and
+  relaunches through the normal terminal path into zellij; editors stay
+  graceful. Zellij gets an “Open themed session” action because it has no
+  runtime theme switch.
+- Longest-match triggers and safe prefix hiding: `/bwn` is no longer captured by
+  `/bw`, and an unspaced ambiguous trigger stays visible until resolved.
+- Clipboard per-kind limits, preview text size, flat `/clip`, non-tracking menus,
+  status panel, annotator selection, and the fanned theme deck are unchanged
+  from earlier 2.20 entry below.
+
 
 - `/clip` is a flat chronological list across text, images and files — no
   kind grouping or kind filter chips, pins keep their badge without jumping the

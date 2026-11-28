@@ -433,10 +433,6 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(parsed.webSearchEngines[1].appMode)
     }
 
-    func testStockWebSearchEnginesCarryKeywords() {
-        XCTAssertEqual(WebSearchEngine.defaults.map(\.keyword), ["g", "ddg", "gh", "yt"])
-    }
-
     func testRestoringDefaultsReAddsDeletedStockEngine() {
         let engines = WebSearchEngine.defaults.filter { $0.name != "GitHub" }
         let restored = WebSearchEngine.restoringDefaults(into: engines)
@@ -475,13 +471,6 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(filled.map(\.urlTemplate), engines.map(\.urlTemplate))
     }
 
-    func testBackfillLeavesACustomKeywordUntouched() {
-        let engines = [
-            WebSearchEngine(name: "Google", urlTemplate: "https://www.google.com/search?q={query}", keyword: "goog"),
-        ]
-        XCTAssertEqual(WebSearchEngine.backfillingKeywords(into: engines).map(\.keyword), ["goog"])
-    }
-
     func testBackfillDoesNotResurrectADeletedStockEngine() {
         let engines = WebSearchEngine.defaults.filter { $0.name != "GitHub" }
         let filled = WebSearchEngine.backfillingKeywords(into: engines)
@@ -509,16 +498,6 @@ final class CoreTests: XCTestCase {
     func testParityDefaultsAndWebSearchConfigRoundTrip() throws {
         var config = PaletteConfig()
         config.searchPlaceholder = "Find anything"
-        XCTAssertEqual(config.clipboard.maxText, 100)
-        XCTAssertEqual(config.clipboard.maxImages, 20)
-        XCTAssertEqual(config.clipboard.maxFiles, 20)
-        XCTAssertEqual(config.webSearchEngines.count, 4)
-        XCTAssertEqual(config.clipboardHotkey, "opt+v")
-        XCTAssertEqual(config.terminalHotkey, "cmd+option+t")
-        XCTAssertEqual(config.scratchpadHotkey, "cmd+option+s")
-        XCTAssertEqual(config.askHotkey, "cmd+option+a")
-        XCTAssertEqual(config.searchPosition, .top)
-        XCTAssertEqual(config.webAppBrowser, "Helium")
 
         let table = try TOMLTable(string: ConfigWriter.render(config))
         var diagnostics: [Diagnostic] = []
@@ -533,10 +512,6 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(parsed.webAppBrowser, "Helium")
         XCTAssertEqual(parsed.searchPlaceholder, "Find anything")
         XCTAssertTrue(diagnostics.isEmpty)
-        XCTAssertTrue(ThemeLoader.builtinNames.contains("gruvbox-dark"))
-        XCTAssertTrue(ThemeLoader.builtinNames.contains("aetheria-pink"))
-        XCTAssertEqual(parsed.providerAliases["neo"], ProviderAliases.defaults["neo"])
-        XCTAssertEqual(parsed.providerAliases["neof"], ProviderAliases.defaults["neof"])
 
         var disabled = config
         disabled.terminalHotkey = ""

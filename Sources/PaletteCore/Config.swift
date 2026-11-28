@@ -20,6 +20,20 @@ public struct ThemeSelection: Sendable, Equatable {
         self.dark = dark
         self.light = light
     }
+
+    /// Records an applied theme in the slot that matches its appearance, so a
+    /// relaunch and every other reader of `[theme]` agree with what is on screen.
+    public func applying(themeID: String, appearance: String) -> ThemeSelection {
+        var updated = self
+        if appearance.lowercased() == "light" {
+            updated.mode = .light
+            updated.light = themeID
+        } else {
+            updated.mode = .dark
+            updated.dark = themeID
+        }
+        return updated
+    }
 }
 
 public enum SearchPosition: String, Sendable, Equatable, CaseIterable {
@@ -443,6 +457,8 @@ public struct PaletteConfig: Sendable, Equatable {
     public var hotkey: String
     public var clipboardHotkey: String
     public var terminalHotkey: String
+    public var themeGalleryHotkey: String
+    public var wallpaperGalleryHotkey: String
     public var scratchpadHotkey: String
     public var askHotkey: String
     public var screenshotHotkey: String
@@ -504,6 +520,8 @@ public struct PaletteConfig: Sendable, Equatable {
         hotkey: String = "opt+space",
         clipboardHotkey: String = "opt+v",
         terminalHotkey: String = "cmd+option+t",
+        themeGalleryHotkey: String = "cmd+opt+g",
+        wallpaperGalleryHotkey: String = "cmd+opt+w",
         scratchpadHotkey: String = "cmd+option+s",
         askHotkey: String = "cmd+option+a",
         // Same family as the system screenshot keys, which the app takes over.
@@ -547,6 +565,8 @@ public struct PaletteConfig: Sendable, Equatable {
         self.hotkey = hotkey
         self.clipboardHotkey = clipboardHotkey
         self.terminalHotkey = terminalHotkey
+        self.themeGalleryHotkey = themeGalleryHotkey
+        self.wallpaperGalleryHotkey = wallpaperGalleryHotkey
         self.scratchpadHotkey = scratchpadHotkey
         self.askHotkey = askHotkey
         self.screenshotHotkey = screenshotHotkey
@@ -662,7 +682,30 @@ public struct PalettePaths: Sendable {
         for url in [configDir, providersDir, themesDir, themeDir, stateDir, logsDir, cacheDir] {
             try manager.createDirectory(at: url, withIntermediateDirectories: true)
         }
+        // Clipboard text, logs and cached vault data are user-private.
+        for url in [stateDir, logsDir, cacheDir] {
+            Self.restrict(url, to: 0o700)
+        }
     }
+
+    /// Permission tightening must never stop the app from launching.
+    private static func restrict(_ url: URL, to mode: Int) {
+        do {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: mode],
+                ofItemAtPath: url.path
+            )
+        } catch {
+            permissionLogLock.lock()
+            defer { permissionLogLock.unlock() }
+            guard !didLogPermissionFailure else { return }
+            didLogPermissionFailure = true
+            NSLog("Palette: could not restrict permissions on \(url.path): \(error.localizedDescription)")
+        }
+    }
+
+    private static let permissionLogLock = NSLock()
+    nonisolated(unsafe) private static var didLogPermissionFailure = false
 
     /// Resources live in the app bundle in release builds, and next to the
     /// package during `swift run` and tests.
@@ -701,6 +744,22 @@ public enum ConfigLoader {
             } catch {
                 diagnostics.append(Diagnostic(.error, "Could not write default config: \(error.localizedDescription)", source: "config"))
             }
+        }
+
+        // A config this large is not hand-written; refuse it whole rather than
+        // allocate it and let the parser choke. parseError also stops
+        // auto-apply from overwriting the user's file.
+        let maxConfigBytes = 4_000_000
+        if let size = (try? FileManager.default.attributesOfItem(atPath: paths.configFile.path))?[.size] as? NSNumber,
+           size.intValue > maxConfigBytes {
+            let message = "config.toml is larger than 4 MB; using built-in defaults. Trim \(paths.configFile.path) and restart Palette."
+            diagnostics.append(Diagnostic(.error, message, source: "config"))
+            return ConfigLoadResult(
+                config: PaletteConfig(),
+                diagnostics: diagnostics,
+                createdDefault: created,
+                parseError: message
+            )
         }
 
         guard let text = try? String(contentsOf: paths.configFile, encoding: .utf8) else {
@@ -747,6 +806,12 @@ public enum ConfigLoader {
         }
         if let hotkey = table.str("terminal_hotkey") {
             config.terminalHotkey = hotkey
+        }
+        if let hotkey = table.str("theme_gallery_hotkey") {
+            config.themeGalleryHotkey = hotkey
+        }
+        if let hotkey = table.str("wallpaper_gallery_hotkey") {
+            config.wallpaperGalleryHotkey = hotkey
         }
         if let hotkey = table.str("scratchpad_hotkey") {
             config.scratchpadHotkey = hotkey
@@ -1085,6 +1150,7 @@ public enum ConfigLoader {
         }
 
         if let themingTable = table.table("theming") {
+            diagnostics.append(contentsOf: ThemingConfig.diagnostics(for: themingTable))
             config.theming = ThemingConfig.parse(themingTable)
         }
 
@@ -1163,6 +1229,8 @@ public enum ConfigLoader {
 
         # Optional global shortcuts. Set either to "" to disable it.
         terminal_hotkey = "cmd+option+t"
+        theme_gallery_hotkey = "cmd+opt+g"
+        wallpaper_gallery_hotkey = "cmd+opt+w"
         scratchpad_hotkey = "cmd+option+s"
         ask_hotkey = "cmd+option+a"
 
@@ -1337,6 +1405,8 @@ public enum ConfigLoader {
         theme = ""                    # empty uses the theme Palette is showing
         follow_wallpaper = false
         dark_mode = "auto"            # auto | dark | light
+        transparent = "auto"          # auto | on | off — keep terminal/Neovide transparency
+        wallpaper_directory = "~/wallpapers"  # theme cards' Wallpapers group; empty shows the desktop card only
         targets = ["kitty", "ghostty", "zellij", "nvim", "fish", "starship"]
 
         [scopes.projects]
@@ -1353,11 +1423,14 @@ public enum ConfigLoader {
 
         [scopes.home]
         roots = ["~"]
+        # Desktop/Documents/Downloads are iCloud-managed: a stalled provider
+        # makes walking them hang for minutes. Root one directly to search it.
         exclude = [
           "node_modules", ".git", ".build", "target", ".next", "dist",
           "Library", ".cache", ".venv", "venv", "__pycache__", "DerivedData",
           "*.app", "*.framework", "*.dSYM", ".Trash", "Movies", "Music",
-          "Pictures",
+          "Pictures", "Desktop", "Documents", "Downloads", "Applications",
+          "CloudStorage", "Mobile Documents", "Containers",
         ]
         include = []
         include_hidden = false
@@ -1384,6 +1457,20 @@ public enum ConfigLoader {
     }
 }
 
+/// A save that was refused because config.toml could not be parsed. The message
+/// already names the .bak the user can restore.
+public struct ConfigWriteRefusal: LocalizedError, Equatable, Sendable {
+    public let parseError: String
+
+    public init(parseError: String) {
+        self.parseError = parseError
+    }
+
+    public var errorDescription: String? {
+        "\(parseError) Nothing was saved; the broken file and its backup are untouched."
+    }
+}
+
 public enum ConfigWriter {
     /// Bumped when a key's on-disk meaning changes. Written as
     /// `[meta] config_version`.
@@ -1395,8 +1482,12 @@ public enum ConfigWriter {
 
     /// Saves the canonical render, keeping the exact previous file as a single
     /// rolling backup. The backup is written first: if it fails, the original
-    /// file stays untouched.
-    public static func write(_ config: PaletteConfig, to url: URL) throws {
+    /// file stays untouched. A file Palette could not parse is the user's, so
+    /// `parseError` refuses the write instead of erasing it.
+    public static func write(_ config: PaletteConfig, to url: URL, parseError: String? = nil) throws {
+        if let parseError {
+            throw ConfigWriteRefusal(parseError: parseError)
+        }
         let manager = FileManager.default
         if manager.fileExists(atPath: url.path) {
             let previous = try Data(contentsOf: url)
@@ -1414,6 +1505,8 @@ public enum ConfigWriter {
         out.append("hotkey = \(quote(config.hotkey))")
         out.append("clipboard_hotkey = \(quote(config.clipboardHotkey))")
         out.append("terminal_hotkey = \(quote(config.terminalHotkey))")
+        out.append("theme_gallery_hotkey = \(quote(config.themeGalleryHotkey))")
+        out.append("wallpaper_gallery_hotkey = \(quote(config.wallpaperGalleryHotkey))")
         out.append("scratchpad_hotkey = \(quote(config.scratchpadHotkey))")
         out.append("ask_hotkey = \(quote(config.askHotkey))")
         out.append("screenshot_hotkey = \(quote(config.screenshotHotkey))")

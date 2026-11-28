@@ -38,6 +38,10 @@ public struct ThemingIncludes: Sendable {
         public var path: String?
         public var action: Action
         public var error: String?
+        /// True when this install first put kitty's `allow_remote_control` in
+        /// the config, so the running kitty needs one restart to start its
+        /// socket.
+        public var addedRemoteControl: Bool = false
     }
 
     public struct Status: Sendable, Equatable {
@@ -61,6 +65,26 @@ public struct ThemingIncludes: Sendable {
         themeDir.appendingPathComponent("previous", isDirectory: true)
     }
 
+    /// The colour-remapped copy Starship is pointed at, and the fish snippet
+    /// that exports STARSHIP_CONFIG. Both are generated files owned by Palette.
+    public var starshipThemeURL: URL {
+        themeDir.appendingPathComponent(StarshipTheme.fileName)
+    }
+
+    public var starshipSnippetURL: URL {
+        themeDir.appendingPathComponent(StarshipTheme.snippetFileName)
+    }
+
+    /// btop reads a named theme from its own themes directory. Palette links it
+    /// but never edits btop.conf: btop deletes a marker block on save.
+    public var btopThemeLink: String {
+        home + "/.config/btop/themes/palette.theme"
+    }
+
+    /// bat only sees a new theme after its cache is rebuilt. Public so the
+    /// engine and its tests name the same command.
+    public static let batCacheArguments = ["bat", "cache", "--build"]
+
     // MARK: - Per-target mappings
 
     public func plan(for target: ThemingTarget) -> Plan? {
@@ -73,12 +97,16 @@ public struct ThemingIncludes: Sendable {
         case .zellij:
             return Plan(target: target, path: homeDir + "/.config/zellij/config.kdl", format: .kdl)
         case .nvim:
-            let lua = homeDir + "/.config/nvim/init.lua"
-            let vim = homeDir + "/.config/nvim/init.vim"
-            if !fileManager.fileExists(atPath: lua), fileManager.fileExists(atPath: vim) {
-                return Plan(target: target, path: vim, format: .vim)
+            let lua = Plan(target: target, path: homeDir + "/.config/nvim/init.lua", format: .lua)
+            let vim = Plan(target: target, path: homeDir + "/.config/nvim/init.vim", format: .vim)
+            // A block Palette installed in init.vim must still be found after
+            // the user creates an init.lua, or Remove/Revert would miss it.
+            if hasMarker(lua) { return lua }
+            if hasMarker(vim) { return vim }
+            if !fileManager.fileExists(atPath: lua.path), fileManager.fileExists(atPath: vim.path) {
+                return vim
             }
-            return Plan(target: target, path: lua, format: .lua)
+            return lua
         case .fish:
             return Plan(target: target, path: homeDir + "/.config/fish/config.fish", format: .hash)
         case .starship:
@@ -96,15 +124,53 @@ public struct ThemingIncludes: Sendable {
             return Plan(target: target, path: path, format: .hash)
         case .yazi:
             // Not auto-merged: yazi's theme.toml is a table-per-section file,
-            // so appending a second [manager]/[status] block is invalid TOML.
-            // The generated file stays available as a manual full replacement.
+            // so appending a second [mgr]/[status] block is invalid TOML.
+            // The generated file stays available as a manual merge.
             return nil
-        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed, .neovide:
+        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed:
             return nil
         }
     }
 
     public func status(for target: ThemingTarget) -> Status {
+        if target.isManual {
+            if target == .btop {
+                let link = btopThemeLink
+                let linked = fileManager.fileExists(atPath: link)
+                return Status(
+                    available: true,
+                    installed: linked,
+                    path: link,
+                    note: linked
+                        ? "Manual — theme file linked; set color_theme = \"palette\" in btop.conf"
+                        : "Manual — apply to link the theme file, then set color_theme = \"palette\" in btop.conf"
+                )
+            }
+            return Status(
+                available: false,
+                installed: false,
+                path: nil,
+                note: "Manual — \(target.includeHint)"
+            )
+        }
+        // Starship has no include directive and Palette never edits its config,
+        // so installed means "the themed copy exists". Whether fish exports
+        // STARSHIP_CONFIG changes the note, not the file itself.
+        if target == .starship, plan(for: target) != nil {
+            let themed = fileManager.fileExists(atPath: starshipThemeURL.path)
+            guard themed else {
+                return Status(available: true, installed: false, path: starshipThemeURL.path, note: "Not installed")
+            }
+            let wired = fishExportsStarship
+            return Status(
+                available: true,
+                installed: true,
+                path: starshipThemeURL.path,
+                note: wired
+                    ? "Installed — fish sets STARSHIP_CONFIG"
+                    : "Generated — export STARSHIP_CONFIG=\(shortPath(starshipThemeURL.path))"
+            )
+        }
         guard let plan = plan(for: target) else {
             let reason = target.unavailableReason ?? target.includeHint
             return Status(available: false, installed: false, path: nil, note: "Unavailable — \(reason)")
@@ -136,8 +202,26 @@ public struct ThemingIncludes: Sendable {
         palette: PalettePalette,
         metadata: PaletteMetadata
     ) -> Outcome {
+        if target.isManual {
+            do {
+                try installAuxiliary(target)
+                // An older build injected a block into btop.conf; btop deletes
+                // markers when it saves, so strip any leftover on every apply.
+                if let plan = plan(for: target) {
+                    try removeLegacyBlock(plan)
+                }
+                return Outcome(target: target, path: nil, action: .unchanged, error: nil)
+            } catch {
+                return Outcome(target: target, path: nil, action: .failed, error: error.localizedDescription)
+            }
+        }
         guard let plan = plan(for: target) else {
             return Outcome(target: target, path: nil, action: .unchanged, error: nil)
+        }
+        if target == .starship {
+            // The engine writes the colour-remapped copy; Palette never edits
+            // the user's starship.toml, so there is no include to install.
+            return Outcome(target: target, path: plan.path, action: .unchanged, error: nil)
         }
         guard let body = blockBody(for: plan, palette: palette, metadata: metadata) else {
             return Outcome(target: target, path: plan.path, action: .failed, error: "No block body for \(target.title).")
@@ -145,19 +229,26 @@ public struct ThemingIncludes: Sendable {
         let resolved = resolve(plan.path)
         let existing = (try? String(contentsOfFile: resolved, encoding: .utf8)) ?? ""
         let existed = fileManager.fileExists(atPath: resolved)
+        let addedRemoteControl = target == .kitty && (
+            !hasRemoteControlDirective(existing) || !hasManagedListenOn(existing)
+        )
         do {
             try backupIfNeeded(plan, resolved: resolved, existed: existed)
-            let updated: String
-            if target == .starship {
-                updated = starshipInstalling(existing, format: plan.format, body: body)
-            } else {
-                updated = appendingBlock(to: removingBlock(from: existing, format: plan.format), format: plan.format, body: body)
-            }
+            let updated = appendingBlock(to: removingBlock(from: existing, format: plan.format), format: plan.format, body: body)
             if updated != existing {
                 try write(updated, to: resolved)
             }
+            if target == .kitty {
+                writeQuickAccessKitty(body)
+            }
             try installAuxiliary(target)
-            return Outcome(target: target, path: plan.path, action: updated == existing ? .unchanged : .installed, error: nil)
+            return Outcome(
+                target: target,
+                path: plan.path,
+                action: updated == existing ? .unchanged : .installed,
+                error: nil,
+                addedRemoteControl: addedRemoteControl
+            )
         } catch {
             return Outcome(target: target, path: plan.path, action: .failed, error: error.localizedDescription)
         }
@@ -169,7 +260,11 @@ public struct ThemingIncludes: Sendable {
         guard let plan = plan(for: target) else {
             return Outcome(target: target, path: nil, action: .unchanged, error: nil)
         }
+        if target == .starship {
+            return removeStarship(plan)
+        }
         removeAuxiliary(target)
+        if target == .kitty { removeQuickAccessKitty() }
         let resolved = resolve(plan.path)
         guard let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
               existing.contains(startMarker(plan.format)) else {
@@ -215,8 +310,25 @@ public struct ThemingIncludes: Sendable {
             let backup = backupURL(for: plan)
             let created = createdURL(for: plan)
             let resolved = resolve(plan.path)
-            if fileManager.fileExists(atPath: backup.path) {
-                do {
+            let hasBackup = fileManager.fileExists(atPath: backup.path)
+            let hasCreated = fileManager.fileExists(atPath: created.path)
+            guard hasBackup || hasCreated else { continue }
+            do {
+                let current = try? String(contentsOfFile: resolved, encoding: .utf8)
+                if let current, current.contains(startMarker(plan.format)) {
+                    // Strip only Palette's block: settings the user added after
+                    // the first Apply stay. Same rule as `remove()`.
+                    let updated = removingBlock(from: current, format: plan.format)
+                    if hasCreated, updated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        // Palette created the whole file and nothing else is in it.
+                        try fileManager.removeItem(atPath: resolved)
+                        outcomes.append(Outcome(target: target, path: plan.path, action: .removed, error: nil))
+                    } else {
+                        try write(updated, to: resolved)
+                        outcomes.append(Outcome(target: target, path: plan.path, action: .restored, error: nil))
+                    }
+                } else if hasBackup {
+                    // No block left to strip, so the snapshot is the only copy.
                     try fileManager.createDirectory(
                         at: URL(fileURLWithPath: resolved).deletingLastPathComponent(),
                         withIntermediateDirectories: true
@@ -225,22 +337,18 @@ public struct ThemingIncludes: Sendable {
                         try fileManager.removeItem(atPath: resolved)
                     }
                     try fileManager.copyItem(at: backup, to: URL(fileURLWithPath: resolved))
-                    try? fileManager.removeItem(at: backup)
-                    try? fileManager.removeItem(at: created)
                     outcomes.append(Outcome(target: target, path: plan.path, action: .restored, error: nil))
-                } catch {
-                    outcomes.append(Outcome(target: target, path: plan.path, action: .failed, error: error.localizedDescription))
-                }
-            } else if fileManager.fileExists(atPath: created.path) {
-                do {
-                    if fileManager.fileExists(atPath: resolved) {
+                } else {
+                    // Palette created the file; keep whatever the user wrote.
+                    if let current, current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         try fileManager.removeItem(atPath: resolved)
                     }
-                    try? fileManager.removeItem(at: created)
                     outcomes.append(Outcome(target: target, path: plan.path, action: .removed, error: nil))
-                } catch {
-                    outcomes.append(Outcome(target: target, path: plan.path, action: .failed, error: error.localizedDescription))
                 }
+                try? fileManager.removeItem(at: backup)
+                try? fileManager.removeItem(at: created)
+            } catch {
+                outcomes.append(Outcome(target: target, path: plan.path, action: .failed, error: error.localizedDescription))
             }
         }
         return outcomes
@@ -256,6 +364,35 @@ public struct ThemingIncludes: Sendable {
         "\(format.comment) <<< palette theme <<<"
     }
 
+    /// The quick-access panel is a separate kitty process with its own config,
+    /// so it never sees kitty.conf's include or listener. Give it the same
+    /// managed block, or the drop-down keeps the previous palette forever.
+    private var quickAccessKittyPath: String? {
+        let path = home + "/.config/kitty/quick-access-terminal.conf"
+        return fileManager.fileExists(atPath: path) ? path : nil
+    }
+
+    private func writeQuickAccessKitty(_ body: String) {
+        guard let path = quickAccessKittyPath else { return }
+        let resolved = resolve(path)
+        let existing = (try? String(contentsOfFile: resolved, encoding: .utf8)) ?? ""
+        let updated = appendingBlock(
+            to: removingBlock(from: existing, format: .hash),
+            format: .hash,
+            body: body
+        )
+        if updated != existing { try? write(updated, to: resolved) }
+    }
+
+    private func removeQuickAccessKitty() {
+        guard let path = quickAccessKittyPath else { return }
+        let resolved = resolve(path)
+        guard let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
+              existing.contains(startMarker(.hash)) else { return }
+        let updated = removingBlock(from: existing, format: .hash)
+        if updated != existing { try? write(updated, to: resolved) }
+    }
+
     private func blockBody(
         for plan: Plan,
         palette: PalettePalette,
@@ -267,38 +404,54 @@ public struct ThemingIncludes: Sendable {
         // expand `~` on every version.
         switch plan.target {
         case .kitty:
-            return "include \(shortPath(themeFile(.kitty).path))"
+            // socket-only keeps remote control on the local unix socket and
+            // off TCP. Palette's listen_on is intentionally after the user's
+            // line: kitty keeps the last one, so the managed block overrides it
+            // for live recolour, and removing the block restores the original.
+            return [
+                "allow_remote_control socket-only",
+                "# Palette overrides listen_on so it can recolour this window live; unchecking restores your own line.",
+                "listen_on unix:${TMPDIR}palette-kitty-{kitty_pid}",
+                "include \(shortPath(themeFile(.kitty).path))",
+            ].joined(separator: "\n")
         case .ghostty:
             return "config-file = \(themeFile(.ghostty).path)"
         case .zellij:
             guard let raw = ThemingRenderer.contents(for: .zellij, palette: palette, metadata: metadata) else {
                 return nil
             }
-            return stripHeader(raw) + "\ntheme \"palette\""
+            return stripHeader(raw)
+                + "\ntheme \"palette\"\ntheme_dark \"palette\"\ntheme_light \"palette\""
+                // Panes inherit the server's shell; a GUI-launched panel can
+                // start zellij with zsh, which never loads the fish palette or
+                // STARSHIP_CONFIG. Fish is the shell this setup themes.
+                + "\ndefault_shell \"fish\""
         case .nvim:
             let path = themeFile(.nvim).path
             return plan.format == .vim
                 ? "source \(path)"
                 : "dofile(\"\(path)\")"
         case .fish:
-            return "source \(themeFile(.fish).path)"
+            // One block line: either the palette snippet, or the wrapper that
+            // also exports STARSHIP_CONFIG for the themed copy.
+            return fishBody()
         case .starship:
-            guard let raw = ThemingRenderer.contents(for: .starship, palette: palette, metadata: metadata) else {
-                return nil
-            }
-            // The `[palettes.palette]` table is the block; the scalar lives
-            // outside it because TOML needs root keys before tables.
-            return stripHeader(raw)
+            // Never inlined: the engine writes the colour-remapped copy and fish
+            // exports STARSHIP_CONFIG. A second `[palettes.palette]` table would
+            // fight a user's own palette names (their styles reference them).
+            return nil
         case .bat:
             return "--theme=palette"
         case .delta:
             return "[include]\n    path = \(themeFile(.delta).path)"
         case .btop:
-            return "color_theme = \"palette\""
+            // Manual only: see `plan(for:)`. btop deletes a marker block the
+            // next time it saves btop.conf.
+            return nil
         case .yazi:
             // Manual only: see `plan(for:)`.
             return nil
-        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed, .neovide:
+        case .helium, .chrome, .edge, .brave, .vivaldi, .chromium, .arc, .vscode, .zed:
             return nil
         }
     }
@@ -324,6 +477,30 @@ public struct ThemingIncludes: Sendable {
         return text + "\n" + block + "\n"
     }
 
+    /// A comment mentioning the directive is not a setting; only a real line
+    /// counts, so the one-restart hint is not silently skipped.
+    private func hasRemoteControlDirective(_ text: String) -> Bool {
+        text.components(separatedBy: .newlines).contains { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("#") else { return false }
+            return trimmed.split(whereSeparator: { $0 == " " || $0 == "\t" }).first == "allow_remote_control"
+        }
+    }
+
+    /// An install from the version that only wrote `allow_remote_control` has
+    /// no managed listener yet, so its running kitty needs one restart too.
+    private func hasManagedListenOn(_ text: String) -> Bool {
+        text.components(separatedBy: .newlines).contains { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed == "listen_on unix:${TMPDIR}\(KittyRemoteControl.managedListenTemplate)"
+        }
+    }
+
+    private func hasMarker(_ plan: Plan) -> Bool {
+        guard let text = try? String(contentsOfFile: resolve(plan.path), encoding: .utf8) else { return false }
+        return text.contains(startMarker(plan.format))
+    }
+
     private func removingBlock(from text: String, format: Format) -> String {
         let start = startMarker(format)
         let end = endMarker(format)
@@ -335,28 +512,97 @@ public struct ThemingIncludes: Sendable {
         return lines.joined(separator: "\n")
     }
 
-    private func stripHeader(_ raw: String) -> String {
+    /// Applies the same block removal an older Palette wrote, without touching
+    /// anything else. Used when a target became manual.
+    private func removeLegacyBlock(_ plan: Plan) throws {
+        let resolved = resolve(plan.path)
+        guard let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
+              existing.contains(startMarker(plan.format)) else { return }
+        try write(removingBlock(from: existing, format: plan.format), to: resolved)
+    }
+
+    public func stripHeader(_ raw: String) -> String {
         var lines = raw.components(separatedBy: "\n")
-        while let first = lines.first, first.isEmpty || first.hasPrefix("# ") {
-            lines.removeFirst()
+        // Every comment marker the renderers use: `#` shell/conf, `//` KDL,
+        // `--` Lua. A leftover header would otherwise land inside the inlined
+        // block as app syntax.
+        while let first = lines.first {
+            let trimmed = first.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty
+                || trimmed.hasPrefix("# ")
+                || trimmed.hasPrefix("// ")
+                || trimmed.hasPrefix("-- ") {
+                lines.removeFirst()
+            } else {
+                break
+            }
         }
         return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Starship
 
-    private func starshipInstalling(_ text: String, format: Format, body: String) -> String {
-        var lines = removingBlock(from: text, format: format).components(separatedBy: "\n")
-        if let index = topLevelPaletteIndex(in: lines) {
-            lines[index] = "palette = \"palette\""
-        } else if let table = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[") }) {
-            lines.insert("palette = \"palette\"", at: table)
-        } else if lines.last == "" {
-            lines.insert("palette = \"palette\"", at: lines.count - 1)
-        } else {
-            lines.append("palette = \"palette\"")
+    private func fishBody() -> String {
+        if fileManager.fileExists(atPath: starshipSnippetURL.path) {
+            return "source \(starshipSnippetURL.path)"
         }
-        return appendingBlock(to: lines.joined(separator: "\n"), format: format, body: body)
+        return "source \(themeFile(.fish).path)"
+    }
+
+    /// True when the fish config's managed block points at Palette's starship
+    /// snippet, i.e. STARSHIP_CONFIG will be set in a new shell.
+    private var fishExportsStarship: Bool {
+        guard let plan = plan(for: .fish),
+              let text = try? String(contentsOfFile: resolve(plan.path), encoding: .utf8),
+              text.contains(startMarker(plan.format)) else { return false }
+        return text.contains(starshipSnippetURL.path)
+    }
+
+    private func removeStarship(_ plan: Plan) -> Outcome {
+        var changed = false
+        try? fileManager.removeItem(at: themeDir.appendingPathComponent("starship.toml"))
+        for url in [starshipThemeURL, starshipSnippetURL] where fileManager.fileExists(atPath: url.path) {
+            try? fileManager.removeItem(at: url)
+            changed = true
+        }
+        let resolved = resolve(plan.path)
+        if let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
+           existing.contains(startMarker(plan.format)) {
+            // Legacy block from the version that inlined the palette table.
+            var updated = removingBlock(from: existing, format: plan.format)
+            updated = starshipRemoving(updated)
+            let created = fileManager.fileExists(atPath: createdURL(for: plan).path)
+            if created, updated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                try? fileManager.removeItem(atPath: resolved)
+            } else {
+                try? write(updated, to: resolved)
+            }
+            changed = true
+        }
+        try? fileManager.removeItem(at: backupURL(for: plan))
+        try? fileManager.removeItem(at: createdURL(for: plan))
+        refreshFishBlock()
+        return Outcome(
+            target: .starship,
+            path: plan.path,
+            action: changed ? .removed : .unchanged,
+            error: nil
+        )
+    }
+
+    /// Keeps a one-line fish block pointing at the right file when the snippet
+    /// disappears outside an Apply (direct remove, Disable).
+    private func refreshFishBlock() {
+        guard let plan = plan(for: .fish) else { return }
+        let resolved = resolve(plan.path)
+        guard let existing = try? String(contentsOfFile: resolved, encoding: .utf8),
+              existing.contains(startMarker(plan.format)) else { return }
+        let updated = appendingBlock(
+            to: removingBlock(from: existing, format: plan.format),
+            format: plan.format,
+            body: fishBody()
+        )
+        if updated != existing { try? write(updated, to: resolved) }
     }
 
     private func starshipRemoving(_ text: String) -> String {
@@ -398,7 +644,7 @@ public struct ThemingIncludes: Sendable {
         case .bat:
             pair = (home + "/.config/bat/themes/palette.tmTheme", themeFile(.bat))
         case .btop:
-            pair = (home + "/.config/btop/themes/palette.theme", themeFile(.btop))
+            pair = (btopThemeLink, themeFile(.btop))
         default:
             pair = nil
         }
@@ -419,12 +665,17 @@ public struct ThemingIncludes: Sendable {
     }
 
     private func removeAuxiliary(_ target: ThemingTarget) {
+        if target == .starship {
+            try? fileManager.removeItem(at: starshipThemeURL)
+            try? fileManager.removeItem(at: starshipSnippetURL)
+            return
+        }
         let pair: (link: String, source: URL)?
         switch target {
         case .bat:
             pair = (home + "/.config/bat/themes/palette.tmTheme", themeFile(.bat))
         case .btop:
-            pair = (home + "/.config/btop/themes/palette.theme", themeFile(.btop))
+            pair = (btopThemeLink, themeFile(.btop))
         default:
             pair = nil
         }

@@ -4,10 +4,15 @@
 
 ```sh
 make test          # swift test
+make specs         # openspec validate --all --strict
 ```
 
 The suite is pure Swift and does not require a running app. Path and external
 provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
+
+Behaviour lives in `openspec/specs/`; `make specs` fails on a requirement
+without a WHEN/THEN scenario or an over-long description, and CI runs the same
+command.
 
 | File | What is covered |
 |---|---|
@@ -21,7 +26,14 @@ provider tests skip themselves when `fd`, `fzf`, or `python3` is missing.
 | `KeepAwakeTests` | keep-awake start/stop, timed expiry, provider rows/actions, clamshell toggle independence, clamshell flag cleanup, AC/battery guard transitions |
 | `ExternalProviderTests` | NDJSON round-trip against the hello example |
 | `PerformanceTests` | hard budgets for theme menu open, warm catalog, 5k clipboard snapshot, cached `/neo`, and theme apply file generation |
-| `ThemeApplyIntegrationTests` | Apply/uncheck/Revert against a sandbox HOME with real kitty, Ghostty, zellij, Neovim, fish and Starship configs |
+| `ThemeApplyIntegrationTests` | Apply/uncheck/Revert against a sandbox HOME with real kitty, Ghostty, zellij, Neovim, fish and Starship configs, the `palette.json` handoff (`source`, `theme_id`) and one managed block per file after a second apply |
+| `WallpaperApplyIntegrationTests` | a sandbox desktop picture runs the real pywal extraction, rewrites `palette.json` to `source = "wallpaper"`, and a repeat apply rewrites the same palette and one include |
+| `ControllerIntegrationTests` | the real `SearchController`/`AskWindowController`: hide resets the query and selection, terminal/scratchpad/preview replace each other, and opening Ask leaves the panel's draft alone |
+| `CheatsheetTests` | extension filter and previews, setup/empty rows, and a `[cheatsheets] folders` entry written to `config.toml` reaching the provider through `ConfigLoader` |
+| `PaletteMenuTests` | menu row rules, separator/disabled skipping, search/filter, and the rows the real `paletteMenuPickerItems` builder makes |
+| `ThemeCardsTests`, `ThemeFanTests` | deck order (wallpaper first), filtering, favourites, wallpaper listing, fan geometry, thumbnail cache, open/flip timings |
+| `ThemeFormatTests`, `ThemeIDTests` | per-format generated syntax (Lua/KDL/TOML/XML headers), display-name → id resolution and migration |
+| `ThemingIncludesTests`, `ThemingReloadTests`, `ThemingTests` | marker blocks per format, created-file removal, backup/Revert, per-target reload truth, palette extraction |
 | `AnnotationInteractionTests` | pointer hit-test, delete selected, one-step move undo, crop clamping |
 
 ## Provider conformance harness
@@ -67,6 +79,19 @@ Supported steps: `show`, `hide`, `toggle`, `actions`, `settings`, `exit`,
 `shift+` (for example `key=cmd+k`). `snapshot` writes the panel content without
 screen-recording permission, so it works on a locked display.
 
+Theme cards have their own steps: `themecards` opens the Colors deck,
+`themecards_mode=colors|wallpapers` switches mode, `themecards_next` / `_prev` /
+`_first` / `_last` move, `themecards_filter=<text>` types into the filter,
+`themecards_tab` toggles favourites, `themecards_favourite` marks the front
+card, `themecards_apply` applies it without Return, `themecards_preview` and
+`themecards_previewclose` open and collapse the full-screen preview, and
+`themecards_snapshot=<path>` / `themecardsclose` capture and close it.
+`Scripts/theme-cards-snapshot.sh` uses those steps to render
+`Tests/Snapshots/theme-cards-fan.png`, `theme-cards-preview.png`,
+`theme-cards-wallpapers.png` and `theme-cards-wallpaper-preview.png` headlessly,
+which is how the hand, the dimming, the lifted card, the focused preview and the
+Wallpapers mode are checked without opening the app.
+
 A scripted run never takes focus. Windows are ordered to the back of the normal
 level, panels never become key, the app stays an accessory (no Dock icon), and a
 resign-key auto-hide is ignored so clicking elsewhere cannot break a flow.
@@ -76,8 +101,11 @@ presentation, and `assert=appActive=false` proves it from inside the app.
 
 Other hooks: `PALETTE_QUERY`, `PALETTE_SHOW_ON_LAUNCH`,
 `PALETTE_SNAPSHOT`, `PALETTE_SNAPSHOT_DELAY`, `PALETTE_EXIT_AFTER_SNAPSHOT`,
-and `PALETTE_ACTIONS`. `dump` also exposes the Ask window as `askWindows`,
-`askStreaming`, `askTurns`, `askChats`, and `askBadge`.
+`PALETTE_ACTIONS` and `PALETTE_FORCE_HOTKEYS=1` (register the real Carbon
+shortcuts in script mode; used by the `hotkeys` e2e flow). `dump` also exposes
+the Ask window as `askWindows`, `askStreaming`, `askTurns`, `askChats`, and
+`askBadge`, the AppKit window as `panelFrame`/`panelScreenFrame`/`panelGeometryOK`,
+and the live shortcut count as `registeredHotkeys`.
 
 Cross-app theming needs a home of its own, or a scripted apply would edit the
 real kitty/Ghostty/fish configs. `PALETTE_HOME` moves every managed path into a
@@ -101,22 +129,30 @@ it does not test Carbon hotkey delivery or real typing. Check those manually.
 
 Script mode cannot enter a native menu-tracking loop, because it never opens a
 native `NSMenu` and never activates the app. The custom, non-activating panels
-replaced those menus for exactly that reason, and the flows drive them instead:
-`statuspanel` opens the status-item panel, and
+replaced those menus for exactly that reason. The script steps still open them
+for manual snapshots: `statuspanel` opens the status-item panel, and
 `palette_menu=<probe|picker|engine_browser>` opens a representative menu, a
 `PaletteMenuPicker` menu, or the engine browser picker. While one is open the
 dump exposes `paletteMenuOpen`, `paletteMenuRows`, `paletteMenuHighlight` and
 `statusPanelOpen`, `statusPanelRows`, `statusPanelHighlight`. `palettemenu_probe`
 stands in for a global hotkey callback and increments `paletteMenuProbe`; a
 native tracking loop would block that callback until the menu closed.
-`key=` routes Up/Down/Return/Esc to the open panel, so the flows assert the
-highlight moves and Esc closes.
+`key=` routes Up/Down/Return/Esc to the open panel. The row model behind both
+panels is pinned in `PaletteMenuTests` and `StatusPanelMenuTests`; the e2e suite
+does not re-check it.
 
 What remains human-only: the system app menu bar, Services, file panels,
 first-run and TCC alerts, and confirming that a real Carbon hotkey still fires
-while a panel is open. Script mode can also prove the app stayed out of focus
-(`appActive=false`), but not that a real activation (click, Dock, `open`) leaves
-the panel placed correctly. Those stay on the manual checklist.
+while a panel is open. The theme cards gallery renders in script mode without
+activation, but its steps drive the deck model directly: real arrow-key handling,
+typing into the filter, click-to-deal and drag on a card, the lift animation and
+the preview's grow-from-the-card spring are checked by eye (see
+`theme-cards-fan.png`, `theme-cards-preview.png`,
+`theme-cards-wallpapers.png` and `theme-cards-wallpaper-preview.png`). Script
+mode can also prove the
+app stayed out of focus (`appActive=false`), but not that a real activation
+(click, Dock, `open`) leaves the panel placed correctly. Those stay on the manual
+checklist.
 
 ## E2E flows
 
@@ -125,30 +161,32 @@ make e2e           # Scripts/e2e.sh; builds build/Palette.app if it is missing
 ```
 
 `Scripts/e2e.sh` runs one flow per launch. Each flow gets its own temp
-`PALETTE_CONFIG_DIR`, `PALETTE_STATE_DIR` (SQLite database and logs),
-`PALETTE_CACHE_DIR`, and `PALETTE_SUPPORT_DIR` (Ask key file and web-app
-profiles), so the real `~/.config/palette` and `~/Library/Application Support`
-stay untouched. It fails on a non-zero exit, a missing `SCRIPT OK` in the log,
-a missing quiet-presentation log line, or a missing artifact, and it kills a
-leftover Palette process before exiting:
+`PALETTE_HOME`, `PALETTE_CONFIG_DIR`, `PALETTE_STATE_DIR` (SQLite database and
+logs), `PALETTE_CACHE_DIR`, and `PALETTE_SUPPORT_DIR` (Ask key file and web-app
+profiles), so the real `~/.config/palette`, `~/Library/Application Support` and
+dotfiles stay untouched. It fails on a non-zero exit, a missing `SCRIPT OK` in
+the log, a missing quiet-presentation log line, or a missing artifact, and it
+kills a leftover Palette process before exiting.
 
-| Flow | What it asserts |
+E2E is the bundle-only layer: four flows, each proving something a test process
+cannot. Functional behaviour lives in `swift test`, where it can assert
+controller and file state instead of a screenshot.
+
+| Flow | What only the bundle proves |
 |---|---|
-| `empty-query-reset` | hiding and reshowing resets the query and selection to the first row |
-| `screenshot-keeps-panel` | a capture leaves the panel visible |
-| `universal-search` | an unprefixed query returns rows from the default global providers (`system`, `timer`, `awake`) |
-| `launcher-tab` | the Launcher Settings tab renders, via `settings_snapshot=` |
-| `ask-window-not-modal` | the Ask window opens while the scratchpad stays active |
-| `ask-window-coexists` | the Ask window and the launcher are both visible |
-| `cheatsheets` | a temp `[cheatsheets] folders` entry reaches `/cheat`, which returns rows from the `cheat` provider |
-| `status-panel-interaction` | the status-item panel opens without activation, reports rows, and Esc closes it |
-| `palette-menu-probe` | the menu holds its five fixed rows, a hotkey probe runs while it is open, Up cycles the highlight while skipping a separator and a disabled row, and Esc closes |
-| `palette-menu-picker` | a `PaletteMenuPicker` menu builds four rows and Up/Down move between choices |
-| `engine-browser-picker` | the web-search engine browser picker builds its rows, stays inactive, and moves the highlight |
-| `theme-menu-lazy` | the 942-row theme browser reports the whole catalog but renders under 45 rows (`themeMenuRows`, `themeMenuRendered`) |
+| `hotkeys` | the defaults register all 11 Carbon hotkeys against the live keyboard layout with no conflict (`PALETTE_FORCE_HOTKEYS=1`); skipped with a loud line when a Palette process is already running, since it owns those keys |
+| `panel-geometry-capture` | the real `NSPanel` is at the configured size inside the active screen's visible frame (`panelGeometryOK`), and a capture request that CI cannot grant TCC for leaves it visible |
+| `quit-intercepted` | with the panel open, a terminate request (⌘Q) hides it instead of quitting; reaching `dump`/`exit` proves the process survived |
+| `cold-launch-script` | a cold launch with nothing but an isolated home accepts the script grammar and writes a parseable dump |
+| `no-surviving-children` | quitting reaps the PTY child the embedded terminal started (a `sleep 4242` launched into the panel) instead of orphaning it |
 
 The capture flow asserts panel visibility only: a real capture needs Screen
-Recording TCC, which CI does not grant.
+Recording TCC, which CI does not grant. `hotkeys` is the one flow that needs
+the real keyboard layout, so quit an installed Palette before running `make
+e2e` locally (it registers the same keys); CI runners have none.
+
+Flow checks that need JSON parsing use `plutil` (`check_dump`), so no extra
+tool is required.
 
 `make test`, `make e2e`, and `make layout-check` run under `taskpolicy -b` and
 `nice -n 10`, and the scripts do the same for their internal builds and app
@@ -174,26 +212,31 @@ they guard. The numbers below are from a 2026-11-26 run on the development Mac
 
 | What | Threshold | Measured |
 |---|---|---|
-| Opening the 942-row theme menu (warm catalog, building the rows) | < 250 ms | 4.9 ms |
+| Opening the 138-row theme menu (warm catalog, building the rows) | < 250 ms | < 5 ms |
 | `ThemeLoader.catalog` warm | < 400 ms | 21.8 ms |
 | 5k-entry clipboard search snapshot rebuild | < 100 ms | 20.8 ms |
 | Cached `/neo` open (empty query over a 20k-path snapshot) | < 200 ms | 50.9 ms; 101 ms at background QoS |
 | Theme apply file generation (sandbox HOME, 7 files, no reloads) | < 300 ms | 10.1 ms |
-| Theme browser first frame (942 rows in catalog) | renders < 45 rows | checked by `theme-menu-lazy` in e2e |
 
-The last row is a UI-laziness assertion and lives in the e2e flow because
-`PaletteTests` does not link the `PaletteApp` target that owns the view.
+Row construction for the catalogue menu is checked in-process: `PaletteMenuLazinessTests`
+hosts the real view and asserts SwiftUI builds only a page of rows, not the whole
+catalogue. The Settings theme browser is not measured; it uses the same
+catalogue budget above.
+
+The fanned deck logs its catalogue build time (`Theme cards catalogue: … in …
+ms`, the catalogue plus the wallpaper folder) but has no hard budget: its cost is
+dominated by `ThemeLoader.catalog`, which the row above budgets. Card flips and
+thumbnail loads are bounded by drawing only the cards near the selection.
 
 `AnnotationInteractionTests` drives the editor model, not the window: hit-test
-picking, delete-selected, one undo step per move, and crop clamping. This branch
-has no per-mark resize handles — the only resize path is the crop rectangle,
-which is what the clamp test covers. If the annotate branch lands a resize API,
-extend that suite against it instead of the crop path.
+picking, delete-selected, one undo step per move, and crop clamping. The
+corner-handle text resize added in 2.19.0 is not covered here yet; extend this
+suite against the annotation model rather than the crop path.
 
 ## Layout check
 
 Unit tests cannot see a clipped label or a squashed stepper. `make layout-check`
-renders every Settings pane headlessly — all 19 of them — and compares each with
+renders every Settings pane headlessly — all 20 of them — and compares each with
 the reference in `Tests/Snapshots/`:
 
 ```sh
@@ -319,24 +362,19 @@ Run `make run`, then work through this list. Items marked ⚠ require permission
 **Packaging**
 - [ ] `make install` replaces `~/Applications/Palette.app`.
 - [ ] The app launches after a fresh rebuild and reinstall.
-- [ ] v1 has no login item; launch Palette after login (or add it to Login Items).
+- [ ] Palette installs itself as a login item on first launch from
+      `/Applications` (or `~/Applications`); **Open Palette at login** in
+      Settings → General turns it off and that choice sticks across reinstalls.
 - [ ] Rebuild + reinstall preserves config, state, and clipboard history.
 
-## Verified in this build
+## Earlier verification
 
-Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
+Per-release evidence lives in `CHANGELOG.md`; the dated checks below are kept as
+history and carry the version they were run on. They are not a claim about the
+current build.
 
-- `swift test` — 168 tests, 0 failures (including ordered NDJSON delivery,
-  web-app URL normalization, shortcut parsing, store dedupe, text/image/file
-  clipboard, pins, Lua export, config round-trip with `clipboard_hotkey`,
-  `search_position`, and `web_app_browser`, emoji catalog and Apple names,
-  breadth-first paths, browser validation, the shortcut recorder, Bitwarden
-  session classification, encrypted cache expiry and refresh, path filtering,
-  use counts, fuzzy abbreviations, fuzzy clipboard/file search, Ask config
-  without secrets, free-first models, quota fallback, invalid-key endpoint
-  skipping, response parsing, Ask history trimming, scratch notes, recent-use
-  queries, and snippet placeholder expansion).
-- `make app` and `make install` — release bundle assembled, ad-hoc signed,
+- v2.2.2 install check (2026-11-03, macOS 27.2 arm64): `make app` and
+  `make install` — release bundle assembled, ad-hoc signed,
   installed at `/Applications/Palette.app` (`dev.myleshen.palette`, LSUIElement,
   version 2.2.2). Launcher, clipboard, terminal, scratchpad, and Ask hotkeys
   registered without a conflict.
@@ -498,7 +536,8 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   inverted the layout, and old `bottom` configs now open in the center.
 - v1.5.1 physical round on the installed app (screen unlocked):
   `⌥Space` opened the launcher and `⌥V` opened the clipboard browser with the
-  wide preview and filter chips; `Esc` dismissed them. In Settings, clicking the
+  wide preview (the kind filter chips of that release were removed in 2.19.0;
+  the preview remains); `Esc` dismissed them. In Settings, clicking the
   launcher recorder and pressing `⌃⌥K` changed the field to `opt+ctrl+k`; Save
   rewrote `config.toml`, the app logged `Hotkey registered: opt+ctrl+k`, and the
   recorded shortcut opened the panel. Recording `⌥Space` again restored it.
@@ -514,8 +553,9 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   first with web-search rows below; the 1.5 build's `search_position =
   "bottom"` put the tab strip and search field under the results (removed in
   1.7.1); `/clip` showed pinned-first
-  Text/Images/Files groups, the All/Text/Images/Files chips highlighted the
-  matching filter, and `/clip image` showed only the 1024×1024 image with its
+  Text/Images/Files groups with All/Text/Images/Files chips (both since removed:
+  `/clip` is one chronological list) highlighting the matching filter, and
+  `/clip image` showed only the 1024×1024 image with its
   preview; Settings showed recorded `opt+space` / `opt+v` and the position
   picker.
 - v1.3 parity checks: empty query is a list by default; `/neo ~/dev/` showed
@@ -541,8 +581,10 @@ Checked on 2026-11-03, macOS 27.2 (arm64), with the display unlocked:
   badges; `/emoji star` ranked Star first, followed by Starry Eyes, Star of
   David, and other literal matches.
 - Clipboard browser (`⌥V` via the harness clipboard step): text, a 1360×928
-  screenshot, and a two-file Finder selection were captured and grouped under
-  Text/Images/Files. Images rendered in the preview pane; a single
+  screenshot, and a two-file Finder selection were captured; the build of that
+  era grouped them under Text/Images/Files (kind grouping was removed in
+  2.19.0). Images
+  rendered in the preview pane; a single
   `emoji-test.txt` entry rendered header, icon, 672 KB size, and a `bat` text
   preview; `/clip text` filtered to the text entry. Copy Files restored file
   URLs to the pasteboard (`«class furl»`).

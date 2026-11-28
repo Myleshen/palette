@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palette 2.20.0 — per-action evidence</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0c0e; --surface:#141619; --surface2:#1b1e22;
+          --border:#2a2e34; --fg:#e7e9ec; --muted:#9aa1aa; --accent:#8ab4f8;
+          --pass:#3fb950; --fail:#f85149; --skip:#d29922; }
+  * { box-sizing: border-box; }
+  body { margin:0 auto; max-width:62rem; padding:2.5rem 1.25rem 6rem; background:var(--bg);
+         color:var(--fg); font:15px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  h1,h2,h3 { line-height:1.25; letter-spacing:-0.01em; }
+  h1 { font-size:1.7rem; margin:0 0 .35rem; }
+  h2 { font-size:1.15rem; margin:2.8rem 0 1rem; padding-bottom:.45rem;
+       border-bottom:1px solid var(--border); scroll-margin-top:1rem; }
+  h3 { font-size:.95rem; margin:0 0 .5rem; }
+  p { color:var(--muted); }
+  a { color:var(--accent); }
+  .lede { max-width:46rem; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+          padding:1rem 1.1rem 1.15rem; margin:0 0 1.4rem; }
+  .card img { display:block; width:100%; height:auto; border-radius:6px;
+              border:1px solid var(--border); background:#000; }
+  .meta { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin:.55rem 0 .35rem;
+          color:var(--muted); font-size:.8rem; }
+  .badge { display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.75rem;
+           font-weight:700; letter-spacing:.02em; }
+  .badge.pass { background:rgba(63,185,80,.14); color:var(--pass); border:1px solid rgba(63,185,80,.4); }
+  .badge.fail { background:rgba(248,81,73,.14); color:var(--fail); border:1px solid rgba(248,81,73,.4); }
+  .badge.skip { background:rgba(210,153,34,.14); color:var(--skip); border:1px solid rgba(210,153,34,.4); }
+  .assert { color:var(--fg); font-size:.85rem; margin:.15rem 0 0; }
+  .assert span { color:var(--muted); }
+  .reason { color:var(--fail); font-size:.82rem; margin:.4rem 0 0; }
+  .skipped { border-left:3px solid var(--skip); padding:.75rem 1rem; background:var(--surface2);
+             border-radius:0 8px 8px 0; color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(17rem,1fr)); gap:1rem; }
+  .grid figure { margin:0; background:var(--surface2); border:1px solid var(--border);
+                 border-radius:8px; padding:.6rem; }
+  .grid img { width:100%; height:auto; border-radius:4px; border:1px solid var(--border); }
+  .grid figcaption { font-size:.75rem; color:var(--muted); margin-top:.45rem; }
+</style>
+<style data-atlas-theme>
+
+:root{color-scheme:dark;--bg:#0f1113;--panel:#171a1d;--line:#2a2f33;--text:#d8dde2;--dim:#8b959d;
+--accent:#6ea8fe;--ok:#4ec9a5;--warn:#e0b341;--bad:#e06c75;
+--fg:var(--text);--muted:var(--dim);--card:var(--panel);--link:var(--accent);
+--badge:var(--warn);--soft:#1a1e21}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0 auto;max-width:62rem;padding:2rem 1.5rem 5rem;background:var(--bg);color:var(--text);
+font:15px/1.6 ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace}
+main{max-width:62rem;margin:0 auto}
+h1,h2,h3,h4{line-height:1.25}
+h1{font-size:1.35rem;margin:0 0 .35rem;letter-spacing:-.01em}
+h2{font-size:1.05rem;margin:2.25rem 0 .6rem;padding-bottom:.3rem;border-bottom:1px solid var(--line)}
+h3{font-size:.95rem;margin:1.5rem 0 .4rem;color:var(--dim);font-weight:600}
+p,li{color:var(--text)}
+a{color:var(--accent)}
+a:hover{text-decoration:underline}
+code{background:#101315;border:1px solid var(--line);border-radius:4px;padding:.05em .35em;font-size:.9em}
+pre{background:#101315;border:1px solid var(--line);border-radius:6px;padding:.7rem .85rem;
+overflow-x:auto;font-size:.88em;margin:.6rem 0}
+pre code{background:none;border:none;padding:0}
+table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.92em}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:.85em;text-transform:uppercase;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+blockquote{margin:1rem 0;padding:.5rem .9rem;border-left:3px solid var(--line);color:var(--dim)}
+hr{border:0;border-top:1px solid var(--line);margin:2rem 0}
+img{max-width:100%}
+input,textarea,select,button{font:inherit;color:var(--text);background:#101315;
+border:1px solid var(--line);border-radius:5px}
+button,select{cursor:pointer;background:var(--panel)}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
+button.primary,.opt.on{color:var(--bg)}
+::selection{background:var(--accent);color:var(--bg)}
+
+</style>
+</head>
+<body>
+<h1>Palette 2.20.0 — per-action evidence</h1>
+<p class="lede">One real render per user-facing action, produced by the app's own
+<code>snapshot=</code>, <code>window_snapshot=</code>, <code>statuspanel_snapshot=</code>,
+<code>settings_snapshot=</code> and <code>themecards_snapshot=</code> hooks. Every run used a
+throwaway HOME/config/state/cache tree, asserted its state through <code>assert=</code>/<code>dump=</code>,
+and each image passed a non-blank pixel-variance check. Screen Recording was never used.</p>
+<h2 id="launcher">Launcher</h2>
+<article class="card">
+<h3>1 · Launcher, empty</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/01-launcher-empty.json</span></div>
+<p class="assert"><span>Proves:</span> panelVisible=true,itemCount>0</p>
+<img loading="lazy" src="actions/01-launcher-empty.png" alt="Launcher, empty">
+</article>
+<article class="card">
+<h3>2 · Launcher, typed search results</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/02-launcher-search.json</span></div>
+<p class="assert"><span>Proves:</span> itemCount>0 for a typed query</p>
+<img loading="lazy" src="actions/02-launcher-search.png" alt="Launcher, typed search results">
+</article>
+<article class="card">
+<h3>3 · Launcher, no-results state</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/03-launcher-no-results.json</span></div>
+<p class="assert"><span>Proves:</span> itemCount=0 with a query typed</p>
+<img loading="lazy" src="actions/03-launcher-no-results.png" alt="Launcher, no-results state">
+</article>
+<article class="card">
+<h3>4 · Clipboard history with live preview</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/04-clipboard-preview.json</span></div>
+<p class="assert"><span>Proves:</span> previewEnabled=true,itemCount>0 from seeded clips</p>
+<img loading="lazy" src="actions/04-clipboard-preview.png" alt="Clipboard history with live preview">
+</article>
+<article class="card">
+<h3>5 · Scratchpad</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/05-scratchpad.json</span></div>
+<p class="assert"><span>Proves:</span> scratchpadActive=true</p>
+<img loading="lazy" src="actions/05-scratchpad.png" alt="Scratchpad">
+</article>
+<article class="card">
+<h3>6 · Embedded terminal pane</h3>
+<div class="meta"><span class="badge skip">SKIP</span><span>1100x629</span><span>actions/06-terminal.json</span></div>
+<p class="assert"><span>Proves:</span> terminalActive=true after echo</p>
+<img loading="lazy" src="actions/06-terminal.png" alt="Embedded terminal pane">
+<div class="skipped">Not fully captured. SwiftTerm draws terminal glyphs into a layer; snapshot= captures the pane frame but not the text. The text itself was verified with PALETTE_TERMINAL_DEBUG: echo palette-2200 printed palette-2200.</div>
+</article>
+<article class="card">
+<h3>9 · Theme browser (launcher /theme)</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/09-theme-browser.json</span></div>
+<p class="assert"><span>Proves:</span> firstProvider=theme,itemCount>0</p>
+<img loading="lazy" src="actions/09-theme-browser.png" alt="Theme browser (launcher /theme)">
+</article>
+<article class="card">
+<h3>21 · Calculator result row</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/21-calculator-result.json</span></div>
+<p class="assert"><span>Proves:</span> firstTitle=8,firstProvider=calc</p>
+<img loading="lazy" src="actions/21-calculator-result.png" alt="Calculator result row">
+</article>
+<article class="card">
+<h3>22 · Snippet row with expanded preview</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/22-snippet-expansion.json</span></div>
+<p class="assert"><span>Proves:</span> firstProvider=snip,previewEnabled=true</p>
+<img loading="lazy" src="actions/22-snippet-expansion.png" alt="Snippet row with expanded preview">
+</article>
+<article class="card">
+<h3>23 · Bookmark search results</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/23-bookmarks-results.json</span></div>
+<p class="assert"><span>Proves:</span> firstProvider=bookmark,itemCount>0</p>
+<img loading="lazy" src="actions/23-bookmarks-results.png" alt="Bookmark search results">
+</article>
+<article class="card">
+<h3>24 · Cheatsheet search results</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/24-cheatsheets-results.json</span></div>
+<p class="assert"><span>Proves:</span> firstProvider=cheat,itemCount>0</p>
+<img loading="lazy" src="actions/24-cheatsheets-results.png" alt="Cheatsheet search results">
+</article>
+<article class="card">
+<h3>25 · Web App search results</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/25-webapps-results.json</span></div>
+<p class="assert"><span>Proves:</span> firstProvider=web,itemCount>2</p>
+<img loading="lazy" src="actions/25-webapps-results.png" alt="Web App search results">
+</article>
+<h2 id="panels">Panels</h2>
+<article class="card">
+<h3>7 · Ask window, composer</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>860x579</span><span>actions/07-ask-window.json</span></div>
+<p class="assert"><span>Proves:</span> askWindows=1</p>
+<img loading="lazy" src="actions/07-ask-window.png" alt="Ask window, composer">
+</article>
+<article class="card">
+<h3>8 · Status panel</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>300x775</span><span>actions/08-status-panel.json</span></div>
+<p class="assert"><span>Proves:</span> statusPanelOpen=true</p>
+<img loading="lazy" src="actions/08-status-panel.png" alt="Status panel">
+</article>
+<article class="card">
+<h3>19 · Clipboard list: text, image and file entries</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/19-clipboard-list.json</span></div>
+<p class="assert"><span>Proves:</span> itemCount>4 from five seeded rows</p>
+<img loading="lazy" src="actions/19-clipboard-list.png" alt="Clipboard list: text, image and file entries">
+</article>
+<article class="card">
+<h3>20 · Pinned clipboard row and chronology</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/20-clipboard-pinned.json</span></div>
+<p class="assert"><span>Proves:</span> itemCount=3, pinned row offers Unpin, newest first</p>
+<img loading="lazy" src="actions/20-clipboard-pinned.png" alt="Pinned clipboard row and chronology">
+</article>
+<article class="card">
+<h3>28b · Screenshot annotator preview (Pin toolbar)</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1180x792</span><span>actions/28b-media-preview.json</span></div>
+<p class="assert"><span>Proves:</span> annotator renders the capture window; Pin action visible</p>
+<img loading="lazy" src="actions/28b-media-preview.png" alt="Screenshot annotator preview (Pin toolbar)">
+</article>
+<article class="card">
+<h3>29 · Ask conversation restored from history</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>860x579</span><span>actions/29-ask-chat.json</span></div>
+<p class="assert"><span>Proves:</span> askWindows=1,askTurns>0</p>
+<img loading="lazy" src="actions/29-ask-chat.png" alt="Ask conversation restored from history">
+</article>
+<article class="card">
+<h3>30 · Palette menu probe with arrow highlight</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>228x97</span><span>actions/30-palette-menu.json</span></div>
+<p class="assert"><span>Proves:</span> paletteMenuOpen=true,paletteMenuRows>0</p>
+<img loading="lazy" src="actions/30-palette-menu.png" alt="Palette menu probe with arrow highlight">
+</article>
+<h2 id="settings">Settings</h2>
+<article class="card">
+<h3>26 · Settings → Screenshots</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/26-screenshots-pane.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered</p>
+<img loading="lazy" src="actions/26-screenshots-pane.png" alt="Settings → Screenshots">
+</article>
+<article class="card">
+<h3>27 · Settings → Recordings</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/27-recordings-pane.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered</p>
+<img loading="lazy" src="actions/27-recordings-pane.png" alt="Settings → Recordings">
+</article>
+<article class="card">
+<h3>28 · Settings → Captures</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/28-captures-pane.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered</p>
+<img loading="lazy" src="actions/28-captures-pane.png" alt="Settings → Captures">
+</article>
+<article class="card">
+<h3>31 · Settings → Search, engine browser rows</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/31-engine-browser.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered with engine rows</p>
+<img loading="lazy" src="actions/31-engine-browser.png" alt="Settings → Search, engine browser rows">
+</article>
+<article class="card">
+<h3>33 · Settings → Theming → Browsers, policy state</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/33-browser-policy.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered, browsers card</p>
+<img loading="lazy" src="actions/33-browser-policy.png" alt="Settings → Theming → Browsers, policy state">
+</article>
+<article class="card">
+<h3>38 · Settings → Diagnostics</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/38-diagnostics.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered</p>
+<img loading="lazy" src="actions/38-diagnostics.png" alt="Settings → Diagnostics">
+</article>
+<article class="card">
+<h3>39 · Settings → About</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/39-about-pane.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered</p>
+<img loading="lazy" src="actions/39-about-pane.png" alt="Settings → About">
+</article>
+<h2 id="deck">Deck</h2>
+<article class="card">
+<h3>12 · Theme deck, colours fan at 3440×1415</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>3440x849</span><span>actions/12-deck-colors-fan.json</span></div>
+<p class="assert"><span>Proves:</span> thumbsReady=true, deck rendered</p>
+<img loading="lazy" src="actions/12-deck-colors-fan.png" alt="Theme deck, colours fan at 3440×1415">
+</article>
+<article class="card">
+<h3>13 · Theme deck, colour preview</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>3440x849</span><span>actions/13-deck-colors-preview.json</span></div>
+<p class="assert"><span>Proves:</span> thumbsReady=true, preview open</p>
+<img loading="lazy" src="actions/13-deck-colors-preview.png" alt="Theme deck, colour preview">
+</article>
+<article class="card">
+<h3>14 · Theme deck, wallpapers fan</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>3440x849</span><span>actions/14-deck-wallpapers-fan.json</span></div>
+<p class="assert"><span>Proves:</span> thumbsReady=true,thumbsTotal>0</p>
+<img loading="lazy" src="actions/14-deck-wallpapers-fan.png" alt="Theme deck, wallpapers fan">
+</article>
+<article class="card">
+<h3>15 · Theme deck, wallpaper preview</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>3440x849</span><span>actions/15-deck-wallpaper-preview.json</span></div>
+<p class="assert"><span>Proves:</span> thumbsReady=true, preview open</p>
+<img loading="lazy" src="actions/15-deck-wallpaper-preview.png" alt="Theme deck, wallpaper preview">
+</article>
+<article class="card">
+<h3>16 · Theme deck, mid-deal at 0.5</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>3440x849</span><span>actions/16-deck-mid-deal.json</span></div>
+<p class="assert"><span>Proves:</span> thumbsReady=true, deal frozen</p>
+<img loading="lazy" src="actions/16-deck-mid-deal.png" alt="Theme deck, mid-deal at 0.5">
+</article>
+<article class="card">
+<h3>36 · Theme deck, filter active (gruvbox)</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>3440x849</span><span>actions/36-deck-filter.json</span></div>
+<p class="assert"><span>Proves:</span> deck open, filter narrowed</p>
+<img loading="lazy" src="actions/36-deck-filter.png" alt="Theme deck, filter active (gruvbox)">
+</article>
+<article class="card">
+<h3>37 · Theme deck, favourites view (Tab)</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>3440x849</span><span>actions/37-deck-favourites.json</span></div>
+<p class="assert"><span>Proves:</span> favourites view open with seeded favourite</p>
+<img loading="lazy" src="actions/37-deck-favourites.png" alt="Theme deck, favourites view (Tab)">
+</article>
+<h2 id="theming">Theming</h2>
+<article class="card">
+<h3>10 · Settings → Theming, source = Theme</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/10-theming-source-theme.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered, theming.enabled=true</p>
+<img loading="lazy" src="actions/10-theming-source-theme.png" alt="Settings → Theming, source = Theme">
+</article>
+<article class="card">
+<h3>11 · Settings → Theming, source = Wallpaper (theme group disabled)</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x820</span><span>actions/11-theming-source-wallpaper.json</span></div>
+<p class="assert"><span>Proves:</span> settings window rendered, source=wallpaper</p>
+<img loading="lazy" src="actions/11-theming-source-wallpaper.png" alt="Settings → Theming, source = Wallpaper (theme group disabled)">
+</article>
+<article class="card">
+<h3>17 · Launcher after applying catppuccin-mocha</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/17-theme-applied.json</span></div>
+<p class="assert"><span>Proves:</span> theme.id contains catppuccin, panel visible</p>
+<img loading="lazy" src="actions/17-theme-applied.png" alt="Launcher after applying catppuccin-mocha">
+</article>
+<article class="card">
+<h3>18 · Wallpaper-sourced palette applied in an isolated home</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/18-wallpaper-applied.json</span></div>
+<p class="assert"><span>Proves:</span> palette.json written, launcher uses wallpaper palette</p>
+<img loading="lazy" src="actions/18-wallpaper-applied.png" alt="Wallpaper-sourced palette applied in an isolated home">
+</article>
+<article class="card">
+<h3>40 · Themed launcher with search, compared with 02</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/40-theme-applied-search.json</span></div>
+<p class="assert"><span>Proves:</span> theme.id contains catppuccin, pixels differ from 02</p>
+<img loading="lazy" src="actions/40-theme-applied-search.png" alt="Themed launcher with search, compared with 02">
+</article>
+<h2 id="accessibility">Accessibility</h2>
+<article class="card">
+<h3>34 · Increase Contrast forced on</h3>
+<div class="meta"><span class="badge skip">SKIP</span><span>no-image</span></div>
+<p class="assert"><span>Proves:</span> skipped: requires the real system accessibility setting</p>
+<div class="skipped">Not fully captured. Increase Contrast comes from NSWorkspace/SwiftUI colourSchemeContrast; there is no app override or script verb, and changing it would alter the user settings.</div>
+</article>
+<h2 id="errors">Errors</h2>
+<article class="card">
+<h3>32 · Restart prompt (kitty/Ghostty)</h3>
+<div class="meta"><span class="badge skip">SKIP</span><span>no-image</span></div>
+<p class="assert"><span>Proves:</span> skipped: no script verb, requires a running target app</p>
+<div class="skipped">Not fully captured. Needs themingEngine.restartPrompt, which only publishes after a real apply against a running app. No verb exposes it and faking it would not be the real window.</div>
+</article>
+<article class="card">
+<h3>35 · Broken config.toml: visible parse error</h3>
+<div class="meta"><span class="badge pass">PASS</span><span>1100x629</span><span>actions/35-broken-config.json</span></div>
+<p class="assert"><span>Proves:</span> statusMessage contains 'config.toml has an error'</p>
+<img loading="lazy" src="actions/35-broken-config.png" alt="Broken config.toml: visible parse error">
+</article>
+<h2 id="settings-panes">Settings panes</h2>
+<p>All 20 Settings sections, rendered by <code>Scripts/layout-check.sh</code> and copied here unchanged so every pane is represented even where no scripted state applies.</p>
+<div class="grid">
+<figure><img loading="lazy" src="panes/01-general.png" alt="Settings general"><figcaption>01 · general</figcaption></figure>
+<figure><img loading="lazy" src="panes/02-launcher.png" alt="Settings launcher"><figcaption>02 · launcher</figcaption></figure>
+<figure><img loading="lazy" src="panes/03-appearance.png" alt="Settings appearance"><figcaption>03 · appearance</figcaption></figure>
+<figure><img loading="lazy" src="panes/04-shortcuts.png" alt="Settings shortcuts"><figcaption>04 · shortcuts</figcaption></figure>
+<figure><img loading="lazy" src="panes/05-search.png" alt="Settings search"><figcaption>05 · search</figcaption></figure>
+<figure><img loading="lazy" src="panes/06-ask.png" alt="Settings ask"><figcaption>06 · ask</figcaption></figure>
+<figure><img loading="lazy" src="panes/07-terminal.png" alt="Settings terminal"><figcaption>07 · terminal</figcaption></figure>
+<figure><img loading="lazy" src="panes/08-bookmarks.png" alt="Settings bookmarks"><figcaption>08 · bookmarks</figcaption></figure>
+<figure><img loading="lazy" src="panes/09-cheatsheets.png" alt="Settings cheatsheets"><figcaption>09 · cheatsheets</figcaption></figure>
+<figure><img loading="lazy" src="panes/10-web-apps.png" alt="Settings web-apps"><figcaption>10 · web-apps</figcaption></figure>
+<figure><img loading="lazy" src="panes/11-screenshots.png" alt="Settings screenshots"><figcaption>11 · screenshots</figcaption></figure>
+<figure><img loading="lazy" src="panes/12-after-capture.png" alt="Settings after-capture"><figcaption>12 · after-capture</figcaption></figure>
+<figure><img loading="lazy" src="panes/13-recordings.png" alt="Settings recordings"><figcaption>13 · recordings</figcaption></figure>
+<figure><img loading="lazy" src="panes/14-captures.png" alt="Settings captures"><figcaption>14 · captures</figcaption></figure>
+<figure><img loading="lazy" src="panes/15-about.png" alt="Settings about"><figcaption>15 · about</figcaption></figure>
+<figure><img loading="lazy" src="panes/16-providers.png" alt="Settings providers"><figcaption>16 · providers</figcaption></figure>
+<figure><img loading="lazy" src="panes/17-provider-files.png" alt="Settings provider-files"><figcaption>17 · provider-files</figcaption></figure>
+<figure><img loading="lazy" src="panes/18-config-files.png" alt="Settings config-files"><figcaption>18 · config-files</figcaption></figure>
+<figure><img loading="lazy" src="panes/19-diagnostics.png" alt="Settings diagnostics"><figcaption>19 · diagnostics</figcaption></figure>
+<figure><img loading="lazy" src="panes/20-theming.png" alt="Settings theming"><figcaption>20 · theming</figcaption></figure>
+</div>
+</body>
+</html>
