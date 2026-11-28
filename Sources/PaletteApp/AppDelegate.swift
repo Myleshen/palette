@@ -3585,6 +3585,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             }
         }
+        if applied {
+            do {
+                if let spaces = try AllSpacesWallpaper.spread(picture: url) {
+                    Log.shared.info("Wallpaper applied to \(spaces) spaces", source: "theming")
+                }
+            } catch {
+                Log.shared.warn(
+                    "Could not apply the wallpaper to every space: \(error.localizedDescription)",
+                    source: "theming"
+                )
+            }
+        }
         return applied
     }
 
