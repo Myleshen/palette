@@ -813,6 +813,31 @@ public enum WallpaperPalette {
         return extract(pixels: pixels, appearance: appearance, saturation: saturation, contrast: contrast)
     }
 
+    /// `auto` appearance for a picture: a light image gets pywal's light
+    /// ordering, a dark image the dark one. Average relative luminance over a
+    /// sparse sample, so a 6K file costs a few thousand reads.
+    public static func suggestedAppearance(pixels: WallpaperPixels) -> String {
+        let stride = max(1, pixels.pixels.count / 512)
+        var total = 0.0
+        var count = 0
+        var index = 0
+        while index < pixels.pixels.count {
+            let pixel = pixels.pixels[index]
+            if pixel.alpha > 0.5 {
+                func linear(_ value: Double) -> Double {
+                    value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+                }
+                total += 0.2126 * linear(pixel.red)
+                    + 0.7152 * linear(pixel.green)
+                    + 0.0722 * linear(pixel.blue)
+                count += 1
+            }
+            index += stride
+        }
+        guard count > 0 else { return "dark" }
+        return total / Double(count) > 0.35 ? "light" : "dark"
+    }
+
     /// Pure: pywal's pipeline. Quantize to 16 colours (ascending luminance, the
     /// order its ImageMagick backend returns), pour them into pywal's
     /// `color0...color15` slots, then run its dark/light adjustment, `--saturate`

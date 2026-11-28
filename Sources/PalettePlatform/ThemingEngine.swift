@@ -397,9 +397,8 @@ public final class ThemingEngine: ObservableObject {
         defer { busy = false }
         var value = config.normalized()
         value.source = .wallpaper
-        let appearance = PalettePalette.appearance(darkMode: value.darkMode)
         guard let palette = await extractWallpaperPalette(
-            appearance: appearance,
+            appearance: value.darkMode,
             saturation: value.saturation,
             contrast: value.contrast
         ) else {
@@ -408,7 +407,8 @@ public final class ThemingEngine: ObservableObject {
             )
             status = message
             let result = ApplyResult(
-                status: message, source: "wallpaper", appearance: appearance,
+                status: message, source: "wallpaper",
+                appearance: PalettePalette.appearance(darkMode: value.darkMode),
                 written: [], skipped: [], includeLines: [], notices: [], changes: [], targets: [], error: message
             )
             lastResult = result
@@ -418,7 +418,7 @@ public final class ThemingEngine: ObservableObject {
         let metadata = PaletteMetadata(
             source: "wallpaper",
             theme: "Wallpaper",
-            appearance: appearance,
+            appearance: palette.appearance,
             targets: value.targets,
             transparentBackgrounds: transparency.isTransparent
         )
@@ -429,7 +429,7 @@ public final class ThemingEngine: ObservableObject {
             let message = "Palette follows the desktop picture. Cross-app theming is off."
             status = message
             let result = ApplyResult(
-                status: message, source: "wallpaper", appearance: appearance,
+                status: message, source: "wallpaper", appearance: palette.appearance,
                 written: [], skipped: [], includeLines: [], notices: [], changes: [], targets: [], error: nil
             )
             lastResult = result
@@ -443,9 +443,8 @@ public final class ThemingEngine: ObservableObject {
     /// before the user commits.
     public func previewWallpaper(config: ThemingConfig) async -> PalettePalette? {
         let value = config.normalized()
-        let appearance = PalettePalette.appearance(darkMode: value.darkMode)
         let palette = await extractWallpaperPalette(
-            appearance: appearance,
+            appearance: value.darkMode,
             saturation: value.saturation,
             contrast: value.contrast
         )
@@ -1409,9 +1408,12 @@ public final class ThemingEngine: ObservableObject {
     ) async -> PalettePalette? {
         await Task.detached(priority: .userInitiated) {
             guard let pixels = readPixels(url) else { return nil }
+            let resolved = appearance == "auto"
+                ? WallpaperPalette.suggestedAppearance(pixels: pixels)
+                : appearance
             return WallpaperPalette.extract(
                 pixels: pixels,
-                appearance: appearance,
+                appearance: resolved,
                 saturation: saturation,
                 contrast: contrast
             )

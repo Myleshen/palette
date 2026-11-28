@@ -20,8 +20,10 @@
   starship palette block is refreshed on every apply.
 - **macOS appearance follows the palette.** `[theming] system_appearance`
   (auto) switches macOS to light when a light palette is applied and back to
-  dark for a dark one; Auto/Off in Settings, and a denied Automation permission
-  is reported instead of failing silently.
+  dark for a dark one; with `dark_mode = "auto"` a wallpaper's own brightness
+  decides (light picture → light palette and light macOS), so either a light
+  theme or a light wallpaper takes the whole system with it. Auto/Off in
+  Settings; a denied Automation permission is reported, never silent.
 - **Every plugin group snaps to the palette.** After painting its own groups,
   the nvim file maps any remaining group colour a plugin defined to the nearest
   palette colour (no link, no stale colour), which covers pickers, notifiers,
