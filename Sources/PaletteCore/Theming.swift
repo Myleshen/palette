@@ -1523,6 +1523,19 @@ public struct PaletteMetadata: Sendable, Equatable {
     }
 }
 
+/// One row of the generated nvim highlight table. Colours are role names that
+/// the Lua table resolves to `p.<role>`, so no group can carry a hex value
+/// outside the palette.
+struct NvimHighlight {
+    let group: String
+    var fg: String?
+    var bg: String?
+    var attrs: String?
+    /// Panels and full-window surfaces drop their background when the editor
+    /// is transparent. Floating windows keep theirs for separation.
+    var panel = false
+}
+
 public enum ThemingRenderer {
     public static let paletteJSONName = "palette.json"
     /// The same palette in two shapes other tools already read, so a new app
@@ -1927,6 +1940,352 @@ public enum ThemingRenderer {
         return out.joined(separator: "\n") + "\n"
     }
 
+    /// Fallbacks for common groups Palette does not paint: linking them to a
+    /// painted group is what stops a replaced colorscheme's colours leaking
+    /// into small plugin-defined pieces.
+    static let nvimLinks: [(String, String)] = [
+        ("CursorLineFold", "FoldColumn"),
+        ("CursorLineSign", "SignColumn"),
+        ("StatusLineTerm", "StatusLine"),
+        ("StatusLineTermNC", "StatusLineNC"),
+        ("MsgArea", "Normal"),
+        ("PmenuKind", "Pmenu"),
+        ("PmenuExtra", "Pmenu"),
+        ("PmenuKindSel", "PmenuSel"),
+        ("PmenuExtraSel", "PmenuSel"),
+        ("DiagnosticUnnecessary", "Comment"),
+    ]
+
+    /// A LazyVim session uses far more than Vim's built-in groups: treesitter
+    /// captures, diagnostics, lualine, neo-tree and the pickers each paint
+    /// themselves. One row per group, all in palette roles.
+    static func nvimHighlights(transparent: Bool) -> [NvimHighlight] {
+        var groups: [NvimHighlight] = []
+
+        // Base UI. Bars and floats keep a surface so they read as chrome, not
+        // as the editor; panels give theirs up when the editor is transparent.
+        groups += [
+            NvimHighlight(group: "Normal", fg: "fg", bg: "bg", panel: true),
+            NvimHighlight(group: "NormalNC", fg: "fg", bg: "bg", panel: true),
+            NvimHighlight(group: "NormalFloat", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "FloatBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "FloatTitle", fg: "fg", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "Cursor", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "CursorLine", bg: "surface"),
+            NvimHighlight(group: "CursorColumn", bg: "surface"),
+            NvimHighlight(group: "ColorColumn", bg: "surface"),
+            NvimHighlight(group: "LineNr", fg: "muted", bg: "bg", panel: true),
+            NvimHighlight(group: "CursorLineNr", fg: "yellow", attrs: "bold = true"),
+            NvimHighlight(group: "SignColumn", fg: "muted", bg: "bg", panel: true),
+            NvimHighlight(group: "Folded", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "FoldColumn", fg: "muted", bg: "bg", panel: true),
+            NvimHighlight(group: "WinSeparator", fg: "border"),
+            NvimHighlight(group: "StatusLine", fg: "fg", bg: "elevated"),
+            NvimHighlight(group: "StatusLineNC", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "WinBar", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "WinBarNC", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "TabLine", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "TabLineFill", bg: "surface"),
+            NvimHighlight(group: "TabLineSel", fg: "fg", bg: "elevated", attrs: "bold = true"),
+            NvimHighlight(group: "Pmenu", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "PmenuSel", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "PmenuSbar", bg: "surface"),
+            NvimHighlight(group: "PmenuThumb", bg: "border"),
+            NvimHighlight(group: "Visual", fg: "selectionFg", bg: "selection"),
+            NvimHighlight(group: "VisualNOS", fg: "selectionFg", bg: "selection"),
+            NvimHighlight(group: "Search", fg: "searchFg", bg: "searchBg"),
+            NvimHighlight(group: "IncSearch", fg: "bg", bg: "magenta", attrs: "bold = true"),
+            NvimHighlight(group: "CurSearch", fg: "searchFg", bg: "searchBg", attrs: "bold = true"),
+            NvimHighlight(group: "MatchParen", fg: "cyan", attrs: "bold = true, underline = true"),
+            NvimHighlight(group: "Directory", fg: "blue"),
+            NvimHighlight(group: "Title", fg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "NonText", fg: "border"),
+            NvimHighlight(group: "SpecialKey", fg: "border"),
+            NvimHighlight(group: "Whitespace", fg: "border"),
+            NvimHighlight(group: "EndOfBuffer", fg: "bg"),
+            NvimHighlight(group: "ErrorMsg", fg: "red", attrs: "bold = true"),
+            NvimHighlight(group: "WarningMsg", fg: "yellow"),
+            NvimHighlight(group: "MoreMsg", fg: "green"),
+            NvimHighlight(group: "Question", fg: "green"),
+            NvimHighlight(group: "ModeMsg", fg: "fg", attrs: "bold = true"),
+            NvimHighlight(group: "QuickFixLine", fg: "fg", bg: "elevated", attrs: "bold = true"),
+            NvimHighlight(group: "Substitute", fg: "bg", bg: "red"),
+            NvimHighlight(group: "Conceal", fg: "border"),
+        ]
+
+        // Vim syntax groups.
+        groups += [
+            NvimHighlight(group: "Comment", fg: "muted"),
+            NvimHighlight(group: "Constant", fg: "magenta"),
+            NvimHighlight(group: "String", fg: "green"),
+            NvimHighlight(group: "Character", fg: "green"),
+            NvimHighlight(group: "Number", fg: "yellow"),
+            NvimHighlight(group: "Boolean", fg: "magenta"),
+            NvimHighlight(group: "Float", fg: "magenta"),
+            NvimHighlight(group: "Identifier", fg: "fg"),
+            NvimHighlight(group: "Function", fg: "blue"),
+            NvimHighlight(group: "Statement", fg: "magenta"),
+            NvimHighlight(group: "Conditional", fg: "magenta"),
+            NvimHighlight(group: "Repeat", fg: "magenta"),
+            NvimHighlight(group: "Label", fg: "magenta"),
+            NvimHighlight(group: "Operator", fg: "cyan"),
+            NvimHighlight(group: "Keyword", fg: "magenta"),
+            NvimHighlight(group: "Exception", fg: "magenta"),
+            NvimHighlight(group: "PreProc", fg: "cyan"),
+            NvimHighlight(group: "Include", fg: "cyan"),
+            NvimHighlight(group: "Define", fg: "cyan"),
+            NvimHighlight(group: "Macro", fg: "cyan"),
+            NvimHighlight(group: "PreCondit", fg: "cyan"),
+            NvimHighlight(group: "StorageClass", fg: "cyan"),
+            NvimHighlight(group: "Structure", fg: "cyan"),
+            NvimHighlight(group: "Typedef", fg: "cyan"),
+            NvimHighlight(group: "Special", fg: "cyan"),
+            NvimHighlight(group: "SpecialChar", fg: "cyan"),
+            NvimHighlight(group: "Tag", fg: "blue"),
+            NvimHighlight(group: "Delimiter", fg: "fg"),
+            NvimHighlight(group: "SpecialComment", fg: "muted", attrs: "italic = true"),
+            NvimHighlight(group: "Debug", fg: "yellow"),
+            NvimHighlight(group: "Underlined", fg: "blue", attrs: "underline = true"),
+            NvimHighlight(group: "Ignore", fg: "border"),
+            NvimHighlight(group: "Error", fg: "red"),
+            NvimHighlight(group: "Todo", fg: "yellow", attrs: "bold = true"),
+            NvimHighlight(group: "Type", fg: "cyan"),
+        ]
+
+        // Treesitter captures. Neovim links many defaults, but a scheme that
+        // paints only the legacy groups leaves these to the old scheme.
+        groups += [
+            NvimHighlight(group: "@variable", fg: "fg"),
+            NvimHighlight(group: "@variable.builtin", fg: "magenta"),
+            NvimHighlight(group: "@variable.parameter", fg: "fg"),
+            NvimHighlight(group: "@variable.member", fg: "blue"),
+            NvimHighlight(group: "@constant", fg: "magenta"),
+            NvimHighlight(group: "@constant.builtin", fg: "magenta"),
+            NvimHighlight(group: "@module", fg: "blue"),
+            NvimHighlight(group: "@string", fg: "green"),
+            NvimHighlight(group: "@string.escape", fg: "cyan"),
+            NvimHighlight(group: "@string.special", fg: "cyan"),
+            NvimHighlight(group: "@character", fg: "green"),
+            NvimHighlight(group: "@number", fg: "yellow"),
+            NvimHighlight(group: "@boolean", fg: "magenta"),
+            NvimHighlight(group: "@function", fg: "blue"),
+            NvimHighlight(group: "@function.call", fg: "blue"),
+            NvimHighlight(group: "@function.builtin", fg: "cyan"),
+            NvimHighlight(group: "@function.macro", fg: "cyan"),
+            NvimHighlight(group: "@method", fg: "blue"),
+            NvimHighlight(group: "@method.call", fg: "blue"),
+            NvimHighlight(group: "@constructor", fg: "cyan"),
+            NvimHighlight(group: "@keyword", fg: "magenta"),
+            NvimHighlight(group: "@keyword.function", fg: "magenta"),
+            NvimHighlight(group: "@keyword.return", fg: "magenta"),
+            NvimHighlight(group: "@keyword.operator", fg: "magenta"),
+            NvimHighlight(group: "@conditional", fg: "magenta"),
+            NvimHighlight(group: "@repeat", fg: "magenta"),
+            NvimHighlight(group: "@operator", fg: "cyan"),
+            NvimHighlight(group: "@type", fg: "cyan"),
+            NvimHighlight(group: "@type.builtin", fg: "cyan"),
+            NvimHighlight(group: "@type.qualifier", fg: "cyan"),
+            NvimHighlight(group: "@attribute", fg: "cyan"),
+            NvimHighlight(group: "@property", fg: "blue"),
+            NvimHighlight(group: "@field", fg: "blue"),
+            NvimHighlight(group: "@parameter", fg: "fg"),
+            NvimHighlight(group: "@namespace", fg: "blue"),
+            NvimHighlight(group: "@comment", fg: "muted"),
+            NvimHighlight(group: "@comment.error", fg: "red"),
+            NvimHighlight(group: "@comment.warning", fg: "yellow"),
+            NvimHighlight(group: "@punctuation", fg: "fg"),
+            NvimHighlight(group: "@punctuation.bracket", fg: "fg"),
+            NvimHighlight(group: "@punctuation.delimiter", fg: "fg"),
+            NvimHighlight(group: "@punctuation.special", fg: "cyan"),
+            NvimHighlight(group: "@tag", fg: "blue"),
+            NvimHighlight(group: "@tag.attribute", fg: "cyan"),
+            NvimHighlight(group: "@tag.delimiter", fg: "fg"),
+            NvimHighlight(group: "@label", fg: "magenta"),
+            NvimHighlight(group: "@markup.heading", fg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "@markup.link", fg: "cyan"),
+            NvimHighlight(group: "@markup.raw", fg: "green"),
+            NvimHighlight(group: "@markup.list", fg: "magenta"),
+        ]
+
+        // Diagnostics: plain text, undercurl, inline virtual text, floats,
+        // and signs. The undercurl variants need their own `sp` colour.
+        for (name, color) in [
+            ("Error", "red"), ("Warn", "yellow"), ("Info", "blue"),
+            ("Hint", "cyan"), ("Ok", "green"),
+        ] {
+            groups.append(NvimHighlight(group: "Diagnostic\(name)", fg: color))
+            if name != "Ok" {
+                groups.append(NvimHighlight(
+                    group: "DiagnosticUnderline\(name)",
+                    fg: color,
+                    attrs: "sp = p.\(color), undercurl = true"
+                ))
+            }
+            groups.append(NvimHighlight(group: "DiagnosticVirtualText\(name)", fg: color, bg: "surface"))
+            groups.append(NvimHighlight(group: "DiagnosticFloating\(name)", fg: color, bg: "surface"))
+            groups.append(NvimHighlight(group: "DiagnosticSign\(name)", fg: color))
+        }
+
+        // Diff and git signs.
+        groups += [
+            NvimHighlight(group: "DiffAdd", fg: "green", bg: "surface"),
+            NvimHighlight(group: "DiffChange", fg: "yellow", bg: "surface"),
+            NvimHighlight(group: "DiffDelete", fg: "red", bg: "surface"),
+            NvimHighlight(group: "DiffText", fg: "fg", bg: "elevated", attrs: "bold = true"),
+            NvimHighlight(group: "Added", fg: "green"),
+            NvimHighlight(group: "Removed", fg: "red"),
+            NvimHighlight(group: "Changed", fg: "yellow"),
+            NvimHighlight(group: "GitSignsAdd", fg: "green"),
+            NvimHighlight(group: "GitSignsChange", fg: "yellow"),
+            NvimHighlight(group: "GitSignsDelete", fg: "red"),
+            NvimHighlight(group: "MiniDiffSignAdd", fg: "green"),
+            NvimHighlight(group: "MiniDiffSignChange", fg: "yellow"),
+            NvimHighlight(group: "MiniDiffSignDelete", fg: "red"),
+            NvimHighlight(group: "diffAdded", fg: "green"),
+            NvimHighlight(group: "diffRemoved", fg: "red"),
+            NvimHighlight(group: "diffChanged", fg: "yellow"),
+        ]
+
+        // lualine: each mode has an accent for its solid segments; the middle
+        // sections sit on the palette's surfaces.
+        let modes = [
+            ("normal", "blue"), ("insert", "green"), ("visual", "magenta"),
+            ("replace", "red"), ("command", "yellow"), ("terminal", "cyan"),
+        ]
+        for (mode, accent) in modes {
+            groups += [
+                NvimHighlight(group: "lualine_a_\(mode)", fg: "cursorText", bg: accent, attrs: "bold = true"),
+                NvimHighlight(group: "lualine_b_\(mode)", fg: "cursorText", bg: accent),
+                NvimHighlight(group: "lualine_c_\(mode)", fg: "muted", bg: "surface"),
+                NvimHighlight(group: "lualine_x_\(mode)", fg: "muted", bg: "surface"),
+                NvimHighlight(group: "lualine_y_\(mode)", fg: "muted", bg: "elevated"),
+                NvimHighlight(group: "lualine_z_\(mode)", fg: "muted", bg: "elevated"),
+            ]
+        }
+        groups += [
+            NvimHighlight(group: "lualine_a_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_b_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_c_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_x_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_y_inactive", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "lualine_z_inactive", fg: "muted", bg: "surface"),
+        ]
+
+        // neo-tree: the tree window is a panel, so its surface follows the
+        // editor's transparency; individual rows carry colour only.
+        groups += [
+            NvimHighlight(group: "NeoTreeNormal", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "NeoTreeNormalNC", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "NeoTreeDirectoryName", fg: "blue"),
+            NvimHighlight(group: "NeoTreeDirectoryIcon", fg: "blue"),
+            NvimHighlight(group: "NeoTreeFileName", fg: "fg"),
+            NvimHighlight(group: "NeoTreeFileNameOpened", fg: "green"),
+            NvimHighlight(group: "NeoTreeFileIcon", fg: "fg"),
+            NvimHighlight(group: "NeoTreeRootName", fg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "NeoTreeIndentMarker", fg: "border"),
+            NvimHighlight(group: "NeoTreeExpander", fg: "muted"),
+            NvimHighlight(group: "NeoTreeCursorLine", bg: "surface", attrs: "bold = true", panel: true),
+            NvimHighlight(group: "NeoTreeGitAdded", fg: "green"),
+            NvimHighlight(group: "NeoTreeGitModified", fg: "yellow"),
+            NvimHighlight(group: "NeoTreeGitDeleted", fg: "red"),
+            NvimHighlight(group: "NeoTreeGitUntracked", fg: "cyan"),
+            NvimHighlight(group: "NeoTreeGitRenamed", fg: "magenta"),
+            NvimHighlight(group: "NeoTreeGitIgnored", fg: "muted"),
+            NvimHighlight(group: "NeoTreeSymbolicLinkTarget", fg: "cyan"),
+        ]
+
+        // Floating pickers keep a surface so they separate from the editor.
+        groups += [
+            NvimHighlight(group: "TelescopeNormal", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "TelescopeBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "TelescopeTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "TelescopePromptNormal", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "TelescopePromptBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "TelescopePromptTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "TelescopeResultsNormal", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "TelescopeResultsBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "TelescopeResultsTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "TelescopePreviewNormal", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "TelescopePreviewBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "TelescopePreviewTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "TelescopeSelection", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "TelescopeSelectionCaret", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "TelescopeMatching", fg: "green", attrs: "bold = true"),
+
+            NvimHighlight(group: "SnacksPicker", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "SnacksPickerBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "SnacksPickerTitle", fg: "blue", bg: "surface", attrs: "bold = true"),
+            NvimHighlight(group: "SnacksPickerListCursorLine", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "SnacksPickerMatch", fg: "green", attrs: "bold = true"),
+            NvimHighlight(group: "SnacksPickerDir", fg: "muted"),
+            NvimHighlight(group: "SnacksPickerFile", fg: "fg"),
+            NvimHighlight(group: "SnacksPickerIcon", fg: "blue"),
+
+            // The dashboard is a full-window surface, not a float.
+            NvimHighlight(group: "SnacksDashboardHeader", fg: "blue", bg: "bg", panel: true),
+            NvimHighlight(group: "SnacksDashboardIcon", fg: "cyan"),
+            NvimHighlight(group: "SnacksDashboardKey", fg: "yellow"),
+            NvimHighlight(group: "SnacksDashboardDesc", fg: "fg"),
+            NvimHighlight(group: "SnacksDashboardFooter", fg: "muted"),
+            NvimHighlight(group: "SnacksDashboardTitle", fg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "SnacksDashboardTerminal", fg: "fg"),
+            NvimHighlight(group: "SnacksDashboardSpecial", fg: "magenta"),
+
+            NvimHighlight(group: "SnacksNotifierInfo", fg: "blue", bg: "surface"),
+            NvimHighlight(group: "SnacksNotifierWarn", fg: "yellow", bg: "surface"),
+            NvimHighlight(group: "SnacksNotifierError", fg: "red", bg: "surface"),
+            NvimHighlight(group: "SnacksNotifierDebug", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "SnacksNotifierTrace", fg: "cyan", bg: "surface"),
+        ]
+
+        // noice (command line/popups) and nvim-notify.
+        groups += [
+            NvimHighlight(group: "NoiceCmdline", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "NoiceCmdlineIcon", fg: "blue"),
+            NvimHighlight(group: "NoiceCmdlinePopup", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "NoiceCmdlinePopupBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "NoicePopup", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "NoicePopupBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "NoiceMini", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "NoiceConfirm", fg: "fg", bg: "surface"),
+            NvimHighlight(group: "NoiceConfirmBorder", fg: "border", bg: "surface"),
+            NvimHighlight(group: "NotifyINFO", fg: "blue", bg: "surface"),
+            NvimHighlight(group: "NotifyWARN", fg: "yellow", bg: "surface"),
+            NvimHighlight(group: "NotifyERROR", fg: "red", bg: "surface"),
+            NvimHighlight(group: "NotifyDEBUG", fg: "muted", bg: "surface"),
+            NvimHighlight(group: "NotifyTRACE", fg: "cyan", bg: "surface"),
+        ]
+
+        groups += [
+            NvimHighlight(group: "LazyNormal", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "LazyButton", fg: "fg", bg: "elevated"),
+            NvimHighlight(group: "LazyButtonActive", fg: "cursorText", bg: "cursor"),
+            NvimHighlight(group: "LazyH1", fg: "cursorText", bg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "LazySpecial", fg: "blue"),
+            NvimHighlight(group: "MasonNormal", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "MasonHeader", fg: "cursorText", bg: "blue", attrs: "bold = true"),
+            NvimHighlight(group: "TroubleNormal", fg: "fg", bg: "surface", panel: true),
+            NvimHighlight(group: "TroubleText", fg: "fg"),
+            NvimHighlight(group: "DapBreakpoint", fg: "red"),
+            NvimHighlight(group: "DapStopped", fg: "yellow"),
+            // Context headers sit inline in the buffer: tinted, never a solid
+            // block that would hide transparency.
+            NvimHighlight(group: "TreesitterContext", bg: "surface", attrs: "bold = true", panel: true),
+            NvimHighlight(group: "TreesitterContextLineNumber", fg: "muted"),
+            NvimHighlight(group: "CmpItemAbbr", fg: "fg"),
+            NvimHighlight(group: "CmpItemAbbrMatch", fg: "green", attrs: "bold = true"),
+            NvimHighlight(group: "CmpItemKind", fg: "cyan"),
+            NvimHighlight(group: "CmpItemMenu", fg: "muted"),
+        ]
+
+        if transparent {
+            for index in groups.indices where groups[index].panel {
+                groups[index].bg = nil
+            }
+        }
+        return groups
+    }
+
     private static func nvim(_ palette: PalettePalette, header: String, transparent: Bool) -> String {
         let search = (fg: readableChipText(on: palette.ansi[3]), bg: palette.ansi[3])
         var out = [header, ""]
@@ -1943,31 +2302,26 @@ public enum ThemingRenderer {
         out.append("}")
         out.append("")
         out.append("local groups = {")
-        if transparent {
-            // No bg: the terminal's palette background and Neovide's opacity
-            // show through. Every other surface stays bounded.
-            out.append("  Normal = { fg = p.fg },")
-            out.append("  NormalNC = { fg = p.fg },")
-        } else {
-            out.append("  Normal = { fg = p.fg, bg = p.bg },")
+        for highlight in nvimHighlights(transparent: transparent) {
+            // Lua identifiers stay bare; `@` captures and dotted names need
+            // the bracketed form.
+            let key = highlight.group.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+                ? highlight.group
+                : "[\"\(highlight.group)\"]"
+            var parts: [String] = []
+            if let fg = highlight.fg { parts.append("fg = p.\(fg)") }
+            if let bg = highlight.bg { parts.append("bg = p.\(bg)") }
+            if let attrs = highlight.attrs { parts.append(attrs) }
+            out.append("  \(key) = { \(parts.joined(separator: ", ")) },")
         }
-        out.append("  NormalFloat = { fg = p.fg, bg = p.surface },")
-        out.append("  Cursor = { fg = p.cursorText, bg = p.cursor },")
-        out.append("  CursorLine = { bg = p.surface },")
-        out.append("  LineNr = { fg = p.muted, bg = p.bg },")
-        out.append("  Visual = { fg = p.selectionFg, bg = p.selection },")
-        out.append("  Search = { fg = p.searchFg, bg = p.searchBg },")
-        out.append("  StatusLine = { fg = p.fg, bg = p.elevated },")
-        out.append("  Pmenu = { fg = p.fg, bg = p.surface },")
-        out.append("  PmenuSel = { fg = p.cursorText, bg = p.cursor },")
-        out.append("  Comment = { fg = p.muted },")
-        out.append("  Constant = { fg = p.magenta },")
-        out.append("  String = { fg = p.green },")
-        out.append("  Function = { fg = p.blue },")
-        out.append("  Keyword = { fg = p.magenta },")
-        out.append("  Type = { fg = p.cyan },")
-        out.append("  Error = { fg = p.red },")
-        out.append("  WarningMsg = { fg = p.yellow },")
+        out.append("}")
+        out.append("")
+        out.append("-- Groups Palette does not paint would keep the colorscheme it")
+        out.append("-- replaced; point them at painted groups instead.")
+        out.append("local links = {")
+        for (from, to) in nvimLinks {
+            out.append("  { \"\(from)\", \"\(to)\" },")
+        }
         out.append("}")
         out.append("")
         out.append("-- Global so a reload swaps in the newest palette instead of leaving")
@@ -1977,7 +2331,10 @@ public enum ThemingRenderer {
         out.append("-- The whole table on every pass: a pass is atomic, never a mixed state.")
         out.append("_G.palette_theme_apply = function()")
         out.append("  for group, colors in pairs(groups) do")
-        out.append("    vim.api.nvim_set_hl(0, group, { fg = colors.fg, bg = colors.bg })")
+        out.append("    vim.api.nvim_set_hl(0, group, colors)")
+        out.append("  end")
+        out.append("  for _, link in ipairs(links) do")
+        out.append("    vim.api.nvim_set_hl(0, link[1], { link = link[2] })")
         out.append("  end")
         out.append("end")
         out.append("")

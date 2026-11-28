@@ -128,7 +128,7 @@ final class TransparencyRenderTests: XCTestCase {
     func testOpaqueNvimKeepsThePaletteBackground() throws {
         let text = try nvim(transparent: false)
         XCTAssertTrue(text.contains("  Normal = { fg = p.fg, bg = p.bg },"))
-        XCTAssertFalse(text.contains("NormalNC"))
+        XCTAssertTrue(text.contains("  NormalNC = { fg = p.fg, bg = p.bg },"))
         XCTAssertTrue(text.contains("  NormalFloat = { fg = p.fg, bg = p.surface },"))
     }
 

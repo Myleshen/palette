@@ -1,7 +1,7 @@
 import Foundation
 import TOMLKit
 import XCTest
-import PaletteCore
+@testable import PaletteCore
 
 /// Per-format syntax invariants for the generated theme files. The native
 /// validators (kitty's parser, `zellij setup --check`, `nvim -c luafile`,
@@ -178,8 +178,8 @@ final class ThemeFormatTests: XCTestCase {
         XCTAssertFalse(body.contains { $0.hasPrefix("#") }, "Lua cannot use # comments")
         XCTAssertEqual(body.filter { $0.hasPrefix("hl(\"") }.count, 0)
         // One table, one loop: every group carries fg and/or bg.
-        let entries = body.filter { $0.range(of: #"^  [A-Za-z]+ = \{ (fg|bg) = "#, options: .regularExpression) != nil }
-        XCTAssertEqual(entries.count, 18)
+        let entries = body.filter { $0.range(of: #"^  .+ = \{ .+ \},$"#, options: .regularExpression) != nil }
+        XCTAssertEqual(entries.count, ThemingRenderer.nvimHighlights(transparent: false).count)
         XCTAssertTrue(text.filter { $0 == "{" }.count == text.filter { $0 == "}" }.count)
         // Every colour is a quoted hex string, so no Lua escaping is needed.
         for line in body where line.contains("#") {
@@ -232,15 +232,22 @@ final class ThemeFormatTests: XCTestCase {
             try XCTUnwrap(body.range(of: "vim.defer_fn")?.lowerBound)
         )
 
-        // One loop over all 18 groups per pass: no partial clear, no group left
-        // carrying the previous colorscheme.
-        XCTAssertEqual(text.components(separatedBy: "nvim_set_hl").count - 1, 1)
+        // One loop over the whole table per pass, plus the fallback links: no
+        // partial clear, no group left carrying the previous colorscheme.
+        XCTAssertEqual(text.components(separatedBy: "nvim_set_hl").count - 1, 2)
         XCTAssertTrue(text.contains("for group, colors in pairs(groups) do"))
+        XCTAssertTrue(text.contains("vim.api.nvim_set_hl(0, group, colors)"))
         XCTAssertFalse(text.contains("nvim_set_hl(0, group, {})"), "no partial clearing")
-        let entries = text.components(separatedBy: "\n").filter {
-            $0.range(of: #"^  [A-Za-z]+ = \{ (fg|bg) = "#, options: .regularExpression) != nil
+        // Every fallback link points at a painted group.
+        let painted = Set(ThemingRenderer.nvimHighlights(transparent: false).map(\.group))
+        for (from, to) in ThemingRenderer.nvimLinks {
+            XCTAssertTrue(text.contains("{ \"\(from)\", \"\(to)\" },"), from)
+            XCTAssertTrue(painted.contains(to), "\(from) links to unpainted \(to)")
         }
-        XCTAssertEqual(entries.count, 18)
+        let entries = text.components(separatedBy: "\n").filter {
+            $0.range(of: #"^  .+ = \{ .+ \},$"#, options: .regularExpression) != nil
+        }
+        XCTAssertEqual(entries.count, ThemingRenderer.nvimHighlights(transparent: false).count)
 
         // The reloaded file runs _G.palette_theme_run() itself, which is the
         // immediate pass plus the deferred one.
