@@ -451,7 +451,7 @@ final class ThemeApplyIntegrationTests: XCTestCase {
 
         func recoloured() throws -> [String: String] {
             let table = try TOMLTable(string: text(".config/palette/theme/\(StarshipTheme.fileName)"))
-            let values = try XCTUnwrap(table.table("palettes")?.table("noctalia"))
+            let values = try XCTUnwrap(table.table("palettes")?.table("palette"))
             return Dictionary(uniqueKeysWithValues: values.keys.map { ($0, values.str($0) ?? "") })
         }
 

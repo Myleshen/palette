@@ -295,13 +295,13 @@ final class ThemeFormatTests: XCTestCase {
 
         let table = try TOMLTable(string: themed)
         XCTAssertTrue(themed.hasSuffix("\n"), "TOML file should end with a newline")
-        XCTAssertEqual(table.str("palette"), "custom")
+        XCTAssertEqual(table.str("palette"), "palette")
         // ANSI names in styles are replaced with the palette hex.
         XCTAssertEqual(table.table("directory")?.str("style"), "bold \(palette.ansi[4])")
         // Custom palette names keep their style string but their values snap
         // to the nearest Palette colour.
         XCTAssertEqual(table.table("character")?.str("success_symbol"), "[>](bold pink)")
-        let custom = try XCTUnwrap(table.table("palettes")?.table("custom"))
+        let custom = try XCTUnwrap(table.table("palettes")?.table("palette"))
         for key in ["pink", "text"] {
             XCTAssertNotNil(
                 custom.str(key)?.range(of: #"^#[0-9a-f]{6}$"#, options: .regularExpression),
