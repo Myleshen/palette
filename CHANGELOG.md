@@ -4,6 +4,19 @@
 
 ### Added
 
+- **Follow-mode starts at launch.** With `source = "wallpaper"` and
+  `follow_wallpaper = true`, the five-second desktop poll is installed at
+  launch, not only after a settings change, so changing the desktop recolours
+  Palette and the generated files without a relaunch.
+- **Zellij's own UI follows the palette.** The generated theme now defines the
+  tab bar, status bar, selected/unselected tabs, pane frames and exit-code
+  indicators from the palette (contrast-checked, accepted by
+  `zellij setup --check`), not just the terminal ANSI colours.
+- **A running kitty picks up the palette on launch**, so a terminal that was
+  already open when Palette restarted no longer keeps yesterday's colours.
+- **First-response latency:** wallpaper thumbnails decode concurrently
+  (~550 ms for a cold 19-card deck), GitHub's PR and issue queries run in
+  parallel (~0.5 s), and Bitwarden's status is prewarmed at launch.
 - **Wallpaper palettes follow pywal.** Extraction now uses pywal's pipeline —
   the same 16-slot ordering, dark/light background and foreground rules, and its
   saturation/contrast adjustments (`[theming] saturation`, `contrast`) — so a
