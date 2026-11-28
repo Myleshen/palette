@@ -98,6 +98,16 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertEqual(written, data.count)
     }
 
+    func testLogFileIsOwnerOnly() throws {
+        let logURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-log-perm-\(UUID().uuidString).log")
+        defer { try? FileManager.default.removeItem(at: logURL) }
+
+        Log.shared.configure(url: logURL)
+        let attributes = try FileManager.default.attributesOfItem(atPath: logURL.path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+    }
+
     /// End to end through the real pipe: a child that exits without reading
     /// leaves a short write, which is logged instead of raising SIGPIPE.
     func testClosedStdinIsLoggedAndDoesNotRaiseSIGPIPE() async throws {

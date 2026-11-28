@@ -19,6 +19,11 @@ public enum BackupExporter {
         guard process.terminationStatus == 0 else {
             throw NSError(domain: "PaletteBackup", code: Int(process.terminationStatus))
         }
+        // The archive holds config, database and API-key blobs; keep it owner-only.
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: destination.path
+        )
     }
 
     /// Copies the user state into `temp` and returns the top-level names that

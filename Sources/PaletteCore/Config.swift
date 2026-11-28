@@ -746,6 +746,22 @@ public enum ConfigLoader {
             }
         }
 
+        // A config this large is not hand-written; refuse it whole rather than
+        // allocate it and let the parser choke. parseError also stops
+        // auto-apply from overwriting the user's file.
+        let maxConfigBytes = 4_000_000
+        if let size = (try? FileManager.default.attributesOfItem(atPath: paths.configFile.path))?[.size] as? NSNumber,
+           size.intValue > maxConfigBytes {
+            let message = "config.toml is larger than 4 MB; using built-in defaults. Trim \(paths.configFile.path) and restart Palette."
+            diagnostics.append(Diagnostic(.error, message, source: "config"))
+            return ConfigLoadResult(
+                config: PaletteConfig(),
+                diagnostics: diagnostics,
+                createdDefault: created,
+                parseError: message
+            )
+        }
+
         guard let text = try? String(contentsOf: paths.configFile, encoding: .utf8) else {
             diagnostics.append(Diagnostic(.warning, "Using built-in defaults; config.toml could not be read.", source: "config"))
             return ConfigLoadResult(config: PaletteConfig(), diagnostics: diagnostics, createdDefault: created)

@@ -16,7 +16,12 @@ final class AskImageCache {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.timeoutIntervalForResource = 20
-        session = URLSession(configuration: configuration)
+        // The session retains the guard, which cancels redirects to private hosts.
+        session = URLSession(
+            configuration: configuration,
+            delegate: SafeURL.RedirectGuard(),
+            delegateQueue: nil
+        )
     }
 
     func image(for url: URL) async -> NSImage? {
