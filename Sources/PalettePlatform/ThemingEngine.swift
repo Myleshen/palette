@@ -783,6 +783,22 @@ public final class ThemingEngine: ObservableObject {
                 notes.append("Browser theming: enable silent updates once in Settings → Theming → Browsers.")
             }
             notes += outcome.notices
+            // One line, not a second card: the Recommendations card has the
+            // file and the fix, the status only has to point at it. The
+            // managed-preference folder follows the probe, so tests never read
+            // the machine's real Helium policy.
+            let managedDirectory = ChromiumBrowser.browser(for: .helium)
+                .map { (chromiumProbe.silentPath($0.bundleID) as NSString).deletingLastPathComponent }
+                ?? "/Library/Managed Preferences/\(NSUserName())"
+            let conflicts = ThemingAdvice.scan(
+                home: includes.home,
+                enabledTargets: Set(config.targets.compactMap(ThemingTarget.init(rawValue:))),
+                managedPreferencesDirectory: managedDirectory
+            ).filter { $0.severity == .blocking }.count
+            if conflicts > 0 {
+                summary += " · \(conflicts) config conflict\(conflicts == 1 ? "" : "s")"
+                    + " — see Theming → Recommendations"
+            }
             let reports = outcome.reports.map { report -> TargetReport in
                 var report = report
                 if let reload = reloads[report.id] { report.note = reload.message }

@@ -485,4 +485,31 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         XCTAssertNotEqual(mocha, light)
         XCTAssertEqual(data(".config/starship.toml"), userBytes)
     }
+
+    func testApplyStatusPointsAtBlockingConfigConflicts() async throws {
+        try """
+        include ~/.config/palette/theme/kitty.conf
+        background #ffffff
+        """.write(
+            to: home.appendingPathComponent(".config/kitty/kitty.conf"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let engine = makeEngine()
+        let result = await engine.apply(theming([.kitty]))
+
+        XCTAssertTrue(
+            result.status.contains("1 config conflict — see Theming → Recommendations"),
+            result.status
+        )
+        XCTAssertEqual(engine.status, result.status)
+    }
+
+    func testApplyStatusIsQuietWithoutConfigConflicts() async throws {
+        let engine = makeEngine()
+        let result = await engine.apply(theming([.kitty]))
+
+        XCTAssertFalse(result.status.contains("config conflict"), result.status)
+    }
 }

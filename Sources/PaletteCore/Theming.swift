@@ -1241,6 +1241,13 @@ public enum ChromiumPolicy {
     private static func themeColor(in object: Any) -> String? {
         if let dictionary = object as? [String: Any] {
             if let colour = dictionary["BrowserThemeColor"] as? String { return colour }
+            // A real managed preference wraps the value: the payload is
+            // `{ mcxdomain, source, value }`, not a bare colour like the
+            // silent plist and exported profile use.
+            if let payload = dictionary["BrowserThemeColor"] as? [String: Any],
+               let colour = payload["value"] as? String {
+                return colour
+            }
             for value in dictionary.values {
                 if let colour = themeColor(in: value) { return colour }
             }
