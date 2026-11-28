@@ -31,6 +31,12 @@ public struct ThemingSourceControls: Sendable, Equatable {
     }
 }
 
+public enum ThemingTransparency: String, Sendable, Equatable, CaseIterable {
+    case auto
+    case on
+    case off
+}
+
 /// `[theming]` drives the cross-app palette files under
 /// `~/.config/palette/theme/`. `follow_wallpaper` only means anything when the
 /// source is the wallpaper.
@@ -52,6 +58,9 @@ public struct ThemingConfig: Sendable, Equatable {
     public var saturation: Double
     /// pywal `--contrast`: 1...21, 0 disables. 1.5–4.5 is the useful range.
     public var contrast: Double
+    /// Keep terminal/Neovide translucency: `auto` detects it, `on` and `off`
+    /// force it.
+    public var transparent: ThemingTransparency
 
     public init(
         enabled: Bool = false,
@@ -63,7 +72,8 @@ public struct ThemingConfig: Sendable, Equatable {
         wallpaperDirectory: String = WallpaperLibrary.defaultDirectory,
         extraction: String = ThemingConfig.pywal,
         saturation: Double = 0,
-        contrast: Double = 0
+        contrast: Double = 0,
+        transparent: ThemingTransparency = .auto
     ) {
         self.enabled = enabled
         self.source = source
@@ -75,6 +85,7 @@ public struct ThemingConfig: Sendable, Equatable {
         self.extraction = extraction
         self.saturation = saturation
         self.contrast = contrast
+        self.transparent = transparent
     }
 
     public static let pywal = "pywal"
@@ -118,6 +129,10 @@ public struct ThemingConfig: Sendable, Equatable {
         config.extraction = table.str("extraction") ?? config.extraction
         config.saturation = table.number("saturation") ?? config.saturation
         config.contrast = table.number("contrast") ?? config.contrast
+        if let raw = table.str("transparent")?.lowercased(),
+           let transparent = ThemingTransparency(rawValue: raw) {
+            config.transparent = transparent
+        }
         return config.normalized()
     }
 
@@ -147,6 +162,8 @@ public struct ThemingConfig: Sendable, Equatable {
         out.append("saturation = \(value.saturation)")
         out.append("# pywal --contrast: 0 disables; 1.5...4.5 guarantees readable ANSI colours.")
         out.append("contrast = \(value.contrast)")
+        out.append("# auto keeps terminal/Neovide transparency; on | off force the nvim background.")
+        out.append("transparent = \"\(value.transparent.rawValue)\"")
         out.append("targets = [\(value.targets.map(ThemingConfig.quote).joined(separator: ", "))]")
         return out.joined(separator: "\n")
     }
@@ -186,6 +203,14 @@ public struct ThemingConfig: Sendable, Equatable {
             diagnostics.append(Diagnostic(
                 .warning,
                 "Unknown theming extraction '\(raw)'; using pywal.",
+                source: "config"
+            ))
+        }
+        if let raw = table.str("transparent"),
+           ThemingTransparency(rawValue: raw.lowercased()) == nil {
+            diagnostics.append(Diagnostic(
+                .warning,
+                "Unknown theming transparent '\(raw)'; using auto.",
                 source: "config"
             ))
         }
@@ -1442,6 +1467,9 @@ public struct PaletteMetadata: Sendable, Equatable {
     public var appearance: String
     public var generatedAt: Date
     public var targets: [String]
+    /// The nvim file drops Normal's background so a translucent terminal or
+    /// Neovide shows through.
+    public var transparentBackgrounds: Bool
 
     public init(
         source: String,
@@ -1449,7 +1477,8 @@ public struct PaletteMetadata: Sendable, Equatable {
         appearance: String,
         themeID: String = "",
         generatedAt: Date = Date(),
-        targets: [String] = []
+        targets: [String] = [],
+        transparentBackgrounds: Bool = false
     ) {
         self.source = source
         self.theme = theme
@@ -1457,6 +1486,7 @@ public struct PaletteMetadata: Sendable, Equatable {
         self.appearance = appearance
         self.generatedAt = generatedAt
         self.targets = targets
+        self.transparentBackgrounds = transparentBackgrounds
     }
 
     public var header: String { header(comment: "#") }
@@ -1522,7 +1552,12 @@ public enum ThemingRenderer {
         case .kitty: return kitty(palette, header: header)
         case .ghostty: return ghostty(palette, header: header)
         case .zellij: return zellij(palette, header: metadata.header(comment: "//"))
-        case .nvim: return nvim(palette, header: metadata.header(comment: "--"))
+        case .nvim:
+            return nvim(
+                palette,
+                header: metadata.header(comment: "--"),
+                transparent: metadata.transparentBackgrounds
+            )
         case .fish: return fish(palette, header: header)
         case .bat: return bat(palette, header: header)
         case .delta: return delta(palette, header: header)
@@ -1872,7 +1907,7 @@ public enum ThemingRenderer {
         return out.joined(separator: "\n") + "\n"
     }
 
-    private static func nvim(_ palette: PalettePalette, header: String) -> String {
+    private static func nvim(_ palette: PalettePalette, header: String, transparent: Bool) -> String {
         let search = (fg: readableChipText(on: palette.ansi[3]), bg: palette.ansi[3])
         var out = [header, ""]
         out.append("local p = {")
@@ -1888,7 +1923,14 @@ public enum ThemingRenderer {
         out.append("}")
         out.append("")
         out.append("local groups = {")
-        out.append("  Normal = { fg = p.fg, bg = p.bg },")
+        if transparent {
+            // No bg: the terminal's palette background and Neovide's opacity
+            // show through. Every other surface stays bounded.
+            out.append("  Normal = { fg = p.fg },")
+            out.append("  NormalNC = { fg = p.fg },")
+        } else {
+            out.append("  Normal = { fg = p.fg, bg = p.bg },")
+        }
         out.append("  NormalFloat = { fg = p.fg, bg = p.surface },")
         out.append("  Cursor = { fg = p.cursorText, bg = p.cursor },")
         out.append("  CursorLine = { bg = p.surface },")

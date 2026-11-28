@@ -272,6 +272,15 @@ public final class ThemingEngine: ObservableObject {
         config.enabled && config.source == .wallpaper && config.followWallpaper && wallpaperChanged
     }
 
+    /// `auto` reads the user's real config; `on` and `off` override it.
+    static func transparency(for config: ThemingConfig, home: String) -> TransparencyDetection.Result {
+        switch config.transparent {
+        case .on: return TransparencyDetection.Result(isTransparent: true, reason: "transparent = on")
+        case .off: return TransparencyDetection.Result(isTransparent: false)
+        case .auto: return TransparencyDetection.detect(home: home)
+        }
+    }
+
     public static func managedFileNames(targets: [String] = ThemingTarget.allCases.map(\.rawValue)) -> [String] {
         let selected = Set(targets)
         var names = ThemingTarget.allCases
@@ -363,18 +372,20 @@ public final class ThemingEngine: ObservableObject {
         let fallback = Theme.defaultDark
         let loaded = ThemeLoader.load(name: id, themesDirectory: themesDirectory, fallback: fallback)
         let palette = PalettePalette(theme: loaded.theme)
+        let transparency = Self.transparency(for: value, home: includes.home)
         let metadata = PaletteMetadata(
             source: "theme",
             theme: loaded.theme.name,
             appearance: palette.appearance,
             themeID: id,
-            targets: value.targets
+            targets: value.targets,
+            transparentBackgrounds: transparency.isTransparent
         )
         Log.shared.info(
             "Applying '\(loaded.theme.name)' (\(id)) · bg \(palette.background) fg \(palette.foreground)",
             source: "theming"
         )
-        return await finish(palette: palette, metadata: metadata, config: value)
+        return await finish(palette: palette, metadata: metadata, config: value, transparency: transparency)
     }
 
     public func applyWallpaper(_ config: ThemingConfig) async -> ApplyResult {
@@ -399,11 +410,13 @@ public final class ThemingEngine: ObservableObject {
             lastResult = result
             return result
         }
+        let transparency = Self.transparency(for: value, home: includes.home)
         let metadata = PaletteMetadata(
             source: "wallpaper",
             theme: "Wallpaper",
             appearance: appearance,
-            targets: value.targets
+            targets: value.targets,
+            transparentBackgrounds: transparency.isTransparent
         )
         // Pywal parity: the picture owns Palette's colours even when nothing is
         // generated for other apps. Only the files are gated on the switch.
@@ -419,7 +432,7 @@ public final class ThemingEngine: ObservableObject {
             onAppliedPalette?(palette, metadata)
             return result
         }
-        return await finish(palette: palette, metadata: metadata, config: value)
+        return await finish(palette: palette, metadata: metadata, config: value, transparency: transparency)
     }
 
     /// Extracts without writing, so the Settings pane can show the swatches
@@ -752,7 +765,8 @@ public final class ThemingEngine: ObservableObject {
     private func finish(
         palette: PalettePalette,
         metadata: PaletteMetadata,
-        config: ThemingConfig
+        config: ThemingConfig,
+        transparency: TransparencyDetection.Result
     ) async -> ApplyResult {
         lastPalette = palette
         do {
@@ -778,6 +792,9 @@ public final class ThemingEngine: ObservableObject {
             if !metadata.themeID.isEmpty {
                 summary += " · \(metadata.theme) (\(metadata.themeID))"
                 notes.append("Palette source: \(metadata.theme) [\(metadata.themeID)]")
+            }
+            if metadata.transparentBackgrounds, config.targets.contains(ThemingTarget.nvim.rawValue) {
+                notes.append("nvim: transparent background (\(transparency.reason))")
             }
             if outcome.policySelected && outcome.needsEnable {
                 notes.append("Browser theming: enable silent updates once in Settings → Theming → Browsers.")
