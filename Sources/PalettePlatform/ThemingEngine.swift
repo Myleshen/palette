@@ -210,9 +210,7 @@ public final class ThemingEngine: ObservableObject {
         appRestart: AppRestart = .live,
         reloadsEnabled: Bool = true,
         wallpaperOverride: [URL]? = nil,
-        setSystemAppearance: @escaping @Sendable (Bool) async -> Bool = { dark in
-            await SystemAppearance.set(dark: dark)
-        },
+        setSystemAppearance: @escaping @Sendable (Bool) async -> Bool = { _ in false },
         runAdministrator: @escaping @Sendable (String) async throws -> ProcessResult = { shell in
             try await ThemingEngine.administratorRun(shell)
         }

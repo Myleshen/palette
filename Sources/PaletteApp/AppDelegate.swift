@@ -289,7 +289,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themingEngine = ThemingEngine(
             paths: paths,
             themesDirectory: paths.themesDir,
-            kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty")
+            kitty: KittyRemoteControl(binary: ProcessInfo.processInfo.environment["PALETTE_KITTY"] ?? "kitty"),
+            setSystemAppearance: { dark in await SystemAppearance.set(dark: dark) }
         )
         themingEngine.onAppliedPalette = { [weak self] palette, metadata in
             self?.paletteAppliedToOwnTheme(palette, metadata: metadata)
