@@ -306,6 +306,7 @@ struct SettingsView: View {
     @State private var cheatsheetExtensions: String
     @State private var wallpaperPreviewImage: NSImage?
     @State private var copiedInclude: String?
+    @State private var copiedAdvice: String?
     @State private var removePoliciesPending = false
     /// A silent plist outlives unchecking or Revert; the browser keeps the
     /// Palette colour until it is removed in the Browsers card.
@@ -1172,6 +1173,8 @@ struct SettingsView: View {
             .init(title: "Palette source", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper toggle disable override follow extract"),
             .init(title: "Other apps palette", tab: .theming, anchor: "theming-section", keywords: "palette source theme wallpaper extract desktop picture override"),
             .init(title: "Targets", tab: .theming, anchor: "theming-targets", keywords: "targets kitty ghostty zellij neovim fish starship bat delta btop yazi vscode zed helium apps"),
+            .init(title: "Recommendations", tab: .theming, anchor: "theming-recommendations", keywords: "recommendations conflicts config conflict nvim starship zellij kitty ghostty fish helium neovide palette overridden"),
+            .init(title: "Config conflicts", tab: .theming, anchor: "theming-recommendations", keywords: "conflicts recommendations config overridden palette old colours"),
             .init(title: "Browsers", tab: .theming, anchor: "theming-browsers", keywords: "browsers helium chrome edge brave vivaldi chromium arc silent managed plist mobileconfig admin all profiles seed enable remove download"),
             .init(title: "Helium policy", tab: .theming, anchor: "theming-browsers", keywords: "helium silent managed plist mobileconfig admin all profiles seed enable remove download"),
             .init(title: "Include lines", tab: .theming, anchor: "theming-targets", keywords: "include line config-file source copy kitty ghostty zellij neovim fish starship bat delta btop yazi"),
@@ -2555,8 +2558,65 @@ struct SettingsView: View {
                 } footer: {
                     Text("Palette installs a marked block in each checked app's config and removes it when you uncheck one or turn this switch off. Starship is the exception: its config is never edited — Palette writes a remapped copy and fish exports STARSHIP_CONFIG. btop and yazi are manual: the generated theme file is left for you to point the app at. Revert restores the original files. Generated palette files stay in \(PalettePaths.resolve().themeDir.path). \(themingInstallSummary)")
                 }
+
+                let advice = themingAdvice
+                if !advice.isEmpty {
+                    card("Recommendations", anchor: "theming-recommendations") {
+                        ForEach(advice) { item in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: item.target.adviceIcon)
+                                    .foregroundStyle(item.severity == .blocking ? dangerText : warningText)
+                                    .frame(width: 16)
+                                    .accessibilityLabel(item.target.title)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(item.file + (item.line.map { ":\($0)" } ?? ""))
+                                            .font(.caption.monospaced())
+                                            .foregroundStyle(muted)
+                                        Text(item.severity == .blocking ? "Blocking" : "Warning")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(item.severity == .blocking ? dangerText : warningText)
+                                    }
+                                    Text(item.message)
+                                        .font(.caption)
+                                        .foregroundStyle(theme.color(theme.palette.fg))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(item.suggestion)
+                                        .font(.caption)
+                                        .foregroundStyle(muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 8)
+                                Button(copiedAdvice == item.id ? "Copied" : "Copy") {
+                                    copyAdvice(item)
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                    } footer: {
+                        Text("These lines in your own configs run after Palette's palette and keep the old colours. Palette never edits them; fix them once in the file shown.")
+                    }
+                }
             }
         }
+    }
+
+    /// Scans the user's own config for lines that beat the palette. Cheap
+    /// enough to recompute: a handful of small files, and the card has to
+    /// refresh after Apply or a target toggle.
+    private var themingAdvice: [ThemingAdvice] {
+        ThemingAdvice.scan(
+            home: palettePaths.home,
+            enabledTargets: Set(config.theming.targets.compactMap(ThemingTarget.init(rawValue:)))
+        )
+    }
+
+    /// Warning copy is body text, so it needs 4.5:1 on the card surface; the
+    /// warning token only guarantees the 3:1 status bar.
+    private var warningText: Color {
+        guard let color = RGBA(hex: theme.palette.warning),
+              let surface = RGBA(hex: theme.palette.surface) else { return warning }
+        return theme.color(PalettePalette.hex(PalettePalette.readable(color, on: surface, minimum: 4.5)))
     }
 
     private var wallpaperFolderMissing: Bool {
@@ -2702,6 +2762,18 @@ struct SettingsView: View {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
             if copiedInclude == hint { copiedInclude = nil }
+        }
+    }
+
+    private func copyAdvice(_ advice: ThemingAdvice) {
+        let location = advice.file + (advice.line.map { ":\($0)" } ?? "")
+        let text = "\(location)\n\(advice.message)\n\(advice.suggestion)"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copiedAdvice = advice.id
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if copiedAdvice == advice.id { copiedAdvice = nil }
         }
     }
 
