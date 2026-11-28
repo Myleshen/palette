@@ -132,6 +132,34 @@ final class StarshipThemeTests: XCTestCase {
         XCTAssertEqual(table.str("format"), "$directory$git_branch")
     }
 
+    /// Keys named after terminal colours keep that meaning; only custom names
+    /// snap to the nearest colour. A near-monochrome wallpaper palette used to
+    /// collapse `blue` and `bright-blue` into the same grey.
+    func testNamedPaletteKeysFollowTheirAnsiSlot() throws {
+        let user = """
+        palette = "palette"
+
+        [palettes.palette]
+        fg = "#ffffff"
+        bg = "#000000"
+        accent = "#ff0000"
+        blue = "#89b4fa"
+        bright-blue = "#89b4fa"
+        bright-cyan = "#89b4fa"
+        pink = "#ffacea"
+        """
+        let table = try TOMLTable(string: render(user))
+        let values = try XCTUnwrap(table.table("palettes")?.table("palette"))
+        XCTAssertEqual(values.str("fg"), palette.foreground)
+        XCTAssertEqual(values.str("bg"), palette.background)
+        XCTAssertEqual(values.str("accent"), palette.cursor)
+        XCTAssertEqual(values.str("blue"), palette.ansi[4])
+        XCTAssertEqual(values.str("bright-blue"), palette.ansi[12])
+        XCTAssertEqual(values.str("bright-cyan"), palette.ansi[14])
+        XCTAssertNotEqual(values.str("blue"), values.str("bright-blue"))
+        XCTAssertNotEqual(values.str("pink"), palette.ansi[4], "custom names still snap")
+    }
+
     func testActivePaletteValuesFollowTheTheme() throws {
         let user = """
         palette = "noctalia"
