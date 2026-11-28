@@ -1,0 +1,41 @@
+01-launcher-empty	pass	1100x629	panelVisible=true,itemCount>0
+02-launcher-search	pass	1100x629	itemCount>0 for a typed query
+03-launcher-no-results	pass	1100x629	itemCount=0 with a query typed
+04-clipboard-preview	pass	1100x629	previewEnabled=true,itemCount>0 from seeded clips
+05-scratchpad	pass	1100x629	scratchpadActive=true
+06-terminal	skip	1100x629	terminalActive=true after echo
+09-theme-browser	pass	1100x629	firstProvider=theme,itemCount>0
+21-calculator-result	pass	1100x629	firstTitle=8,firstProvider=calc
+22-snippet-expansion	pass	1100x629	firstProvider=snip,previewEnabled=true
+23-bookmarks-results	pass	1100x629	firstProvider=bookmark,itemCount>0
+24-cheatsheets-results	pass	1100x629	firstProvider=cheat,itemCount>0
+25-webapps-results	pass	1100x629	firstProvider=web,itemCount>2
+07-ask-window	pass	860x579	askWindows=1
+08-status-panel	pass	300x775	statusPanelOpen=true
+19-clipboard-list	pass	1100x629	itemCount>4 from five seeded rows
+20-clipboard-pinned	pass	1100x629	itemCount=3, pinned row offers Unpin, newest first
+29-ask-chat	pass	860x579	askWindows=1,askTurns>0
+30-palette-menu	pass	228x97	paletteMenuOpen=true,paletteMenuRows>0
+28b-media-preview	pass	1180x792	annotator renders the capture window; Pin action visible
+10-theming-source-theme	pass	1100x820	settings window rendered, theming.enabled=true
+11-theming-source-wallpaper	pass	1100x820	settings window rendered, source=wallpaper
+26-screenshots-pane	pass	1100x820	settings window rendered
+27-recordings-pane	pass	1100x820	settings window rendered
+28-captures-pane	pass	1100x820	settings window rendered
+31-engine-browser	pass	1100x820	settings window rendered with engine rows
+33-browser-policy	pass	1100x820	settings window rendered, browsers card
+38-diagnostics	pass	1100x820	settings window rendered
+39-about-pane	pass	1100x820	settings window rendered
+12-deck-colors-fan	pass	3440x849	thumbsReady=true, deck rendered
+13-deck-colors-preview	pass	3440x849	thumbsReady=true, preview open
+14-deck-wallpapers-fan	pass	3440x849	thumbsReady=true,thumbsTotal>0
+15-deck-wallpaper-preview	pass	3440x849	thumbsReady=true, preview open
+16-deck-mid-deal	pass	3440x849	thumbsReady=true, deal frozen
+36-deck-filter	pass	3440x849	deck open, filter narrowed
+37-deck-favourites	pass	3440x849	favourites view open with seeded favourite
+17-theme-applied	pass	1100x629	theme.id contains catppuccin, panel visible
+18-wallpaper-applied	pass	1100x629	palette.json written, launcher uses wallpaper palette
+40-theme-applied-search	pass	1100x629	theme.id contains catppuccin, pixels differ from 02
+35-broken-config	pass	1100x629	statusMessage contains 'config.toml has an error'
+32-restart-prompt	skip	no-image	no script verb; needs a running target app and a real restart prompt
+34-increase-contrast	skip	no-image	no script verb; requires toggling the real macOS Increase Contrast setting

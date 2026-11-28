@@ -1,0 +1,116 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "git.md",
+  "focusZone" : "search",
+  "itemCount" : 3,
+  "items" : [
+    {
+      "actions" : [
+        "open:Open git.md",
+        "reveal:Reveal in Finder"
+      ],
+      "badge" : "",
+      "group" : "cheats",
+      "hasPreview" : true,
+      "id" : "\/private\/var\/folders\/sr\/sp37mm7j3b1dsl3pp6s9zp8m0000gn\/T\/palette-evidence.35471\/24\/cheats\/git.md",
+      "providerID" : "cheat",
+      "subtitle" : "cheats · 14 bytes",
+      "title" : "git.md"
+    },
+    {
+      "actions" : [
+        "open:Open shortcuts.md",
+        "reveal:Reveal in Finder"
+      ],
+      "badge" : "",
+      "group" : "cheats",
+      "hasPreview" : true,
+      "id" : "\/private\/var\/folders\/sr\/sp37mm7j3b1dsl3pp6s9zp8m0000gn\/T\/palette-evidence.35471\/24\/cheats\/shortcuts.md",
+      "providerID" : "cheat",
+      "subtitle" : "cheats · 39 bytes",
+      "title" : "shortcuts.md"
+    },
+    {
+      "actions" : [
+        "open:Open zellij.txt",
+        "reveal:Reveal in Finder"
+      ],
+      "badge" : "",
+      "group" : "cheats",
+      "hasPreview" : true,
+      "id" : "\/private\/var\/folders\/sr\/sp37mm7j3b1dsl3pp6s9zp8m0000gn\/T\/palette-evidence.35471\/24\/cheats\/zellij.txt",
+      "providerID" : "cheat",
+      "subtitle" : "cheats · 16 bytes",
+      "title" : "zellij.txt"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : true,
+  "previewVisible" : true,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "\/cheat",
+  "railFocused" : false,
+  "railID" : "cheat",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "Cheatsheets",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+
+    ],
+    "background" : "",
+    "foreground" : "",
+    "live" : false
+  },
+  "terminalActive" : false,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}

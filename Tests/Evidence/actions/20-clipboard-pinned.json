@@ -1,0 +1,128 @@
+{
+  "actionsMode" : false,
+  "appActive" : false,
+  "askBadge" : "",
+  "askChats" : 0,
+  "askStreaming" : false,
+  "askTurns" : 0,
+  "askWindows" : 0,
+  "derivedPanelHeight" : 629,
+  "firstTitle" : "Newest unpinned copy",
+  "focusZone" : "search",
+  "itemCount" : 3,
+  "items" : [
+    {
+      "actions" : [
+        "paste:Paste",
+        "copy:Copy",
+        "pin:Pin",
+        "delete:Delete Entry",
+        "clip-transform:Transform Text…",
+        "scratch-entry:Open in Scratchpad"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "clip-2b73d0d50755897eb0ffbee02d28f620e932907a3b741e048bf9305f6458abc7",
+      "providerID" : "clip",
+      "subtitle" : "33s ago · 20 chars",
+      "title" : "Newest unpinned copy"
+    },
+    {
+      "actions" : [
+        "paste:Paste",
+        "copy:Copy",
+        "pin:Pin",
+        "delete:Delete Entry",
+        "clip-transform:Transform Text…",
+        "scratch-entry:Open in Scratchpad"
+      ],
+      "badge" : "",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "clip-1a033338cc4d7018bb36bda0904f0b225065802873cdeab30860e5bc2a94be00",
+      "providerID" : "clip",
+      "subtitle" : "2m ago · 19 chars",
+      "title" : "Older unpinned copy"
+    },
+    {
+      "actions" : [
+        "paste:Paste",
+        "copy:Copy",
+        "unpin:Unpin",
+        "delete:Delete Entry",
+        "clip-transform:Transform Text…",
+        "scratch-entry:Open in Scratchpad"
+      ],
+      "badge" : "pinned",
+      "group" : "",
+      "hasPreview" : true,
+      "id" : "clip-cc77d49f9270e606590ed794a32ad4d6cb4403fbdd20ffbce4e4c78b7888ab0b",
+      "providerID" : "clip",
+      "subtitle" : "10m ago · 42 chars",
+      "title" : "Release checklist: deck, panes, typography"
+    }
+  ],
+  "paletteMenuHighlight" : "",
+  "paletteMenuOpen" : false,
+  "paletteMenuProbe" : 0,
+  "paletteMenuRows" : 0,
+  "panelFrame" : {
+    "height" : 629,
+    "width" : 1100,
+    "x" : 410,
+    "y" : 300
+  },
+  "panelGeometryOK" : true,
+  "panelHeight" : 629,
+  "panelScreenFrame" : {
+    "height" : 1049,
+    "width" : 1920,
+    "x" : 0,
+    "y" : 0
+  },
+  "panelVisible" : true,
+  "panelWidth" : 1100,
+  "previewEnabled" : true,
+  "previewVisible" : true,
+  "probeResult" : "",
+  "promptError" : "",
+  "promptTitle" : "",
+  "providerBarMode" : "top",
+  "providerCount" : 35,
+  "query" : "\/clip",
+  "railFocused" : false,
+  "railID" : "clip",
+  "registeredHotkeys" : 0,
+  "scopeLabel" : "Clipboard History",
+  "scratchpadActive" : false,
+  "selectionIndex" : 0,
+  "statusMessage" : "",
+  "statusPanelHighlight" : "",
+  "statusPanelOpen" : false,
+  "statusPanelRows" : 0,
+  "stripFocused" : false,
+  "terminal" : {
+    "ansi" : [
+
+    ],
+    "background" : "",
+    "foreground" : "",
+    "live" : false
+  },
+  "terminalActive" : false,
+  "theme" : {
+    "appearance" : "dark",
+    "background" : "#24262d",
+    "foreground" : "#e7e9ee",
+    "id" : "siri-graphite"
+  },
+  "themeMenuRendered" : 0,
+  "themeMenuRows" : 0,
+  "theming" : {
+
+  },
+  "thumbsLoaded" : 0,
+  "thumbsReady" : true,
+  "thumbsTotal" : 0
+}
