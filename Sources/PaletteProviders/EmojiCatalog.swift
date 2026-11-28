@@ -36,7 +36,7 @@ public struct EmojiSearchEntry: Sendable {
 }
 
 public enum EmojiCatalog {
-    public static let all: [EmojiCatalogEntry] = [
+    private static let chunk0: [EmojiCatalogEntry] = [
         .init(glyph: "😀", name: "grinning face", appleName: "grinning face", group: "Smileys & Emotion"),
         .init(glyph: "😃", name: "grinning face with big eyes", appleName: "grinning face with big eyes", group: "Smileys & Emotion"),
         .init(glyph: "😄", name: "grinning face with smiling eyes", appleName: "grinning face with smiling eyes", group: "Smileys & Emotion"),
@@ -237,6 +237,8 @@ public enum EmojiCatalog {
         .init(glyph: "🖖🏻", name: "vulcan salute: light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🖖🏼", name: "vulcan salute: medium-light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🖖🏽", name: "vulcan salute: medium skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk1: [EmojiCatalogEntry] = [
         .init(glyph: "🖖🏾", name: "vulcan salute: medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🖖🏿", name: "vulcan salute: dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🫱", name: "rightwards hand", appleName: "rightward hand", group: "People & Body"),
@@ -437,6 +439,8 @@ public enum EmojiCatalog {
         .init(glyph: "🫶🏽", name: "heart hands: medium skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🫶🏾", name: "heart hands: medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🫶🏿", name: "heart hands: dark skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk2: [EmojiCatalogEntry] = [
         .init(glyph: "👐", name: "open hands", appleName: "open hands", group: "People & Body"),
         .init(glyph: "👐🏻", name: "open hands: light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👐🏼", name: "open hands: medium-light skin tone", appleName: "", group: "People & Body"),
@@ -637,6 +641,8 @@ public enum EmojiCatalog {
         .init(glyph: "👩🏽", name: "woman: medium skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏾", name: "woman: medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏿", name: "woman: dark skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk3: [EmojiCatalogEntry] = [
         .init(glyph: "👩‍🦰", name: "woman: red hair", appleName: "woman with red hair", group: "People & Body"),
         .init(glyph: "👩🏻‍🦰", name: "woman: light skin tone, red hair", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏼‍🦰", name: "woman: medium-light skin tone, red hair", appleName: "", group: "People & Body"),
@@ -837,6 +843,8 @@ public enum EmojiCatalog {
         .init(glyph: "🧏🏿‍♂️", name: "deaf man: dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🧏‍♀️", name: "deaf woman", appleName: "Deaf woman", group: "People & Body"),
         .init(glyph: "🧏🏻‍♀️", name: "deaf woman: light skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk4: [EmojiCatalogEntry] = [
         .init(glyph: "🧏🏼‍♀️", name: "deaf woman: medium-light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🧏🏽‍♀️", name: "deaf woman: medium skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🧏🏾‍♀️", name: "deaf woman: medium-dark skin tone", appleName: "", group: "People & Body"),
@@ -1037,6 +1045,8 @@ public enum EmojiCatalog {
         .init(glyph: "👩🏻‍🏭", name: "woman factory worker: light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏼‍🏭", name: "woman factory worker: medium-light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏽‍🏭", name: "woman factory worker: medium skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk5: [EmojiCatalogEntry] = [
         .init(glyph: "👩🏾‍🏭", name: "woman factory worker: medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏿‍🏭", name: "woman factory worker: dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🧑‍💼", name: "office worker", appleName: "office worker", group: "People & Body"),
@@ -1237,6 +1247,8 @@ public enum EmojiCatalog {
         .init(glyph: "💂🏽‍♀️", name: "woman guard: medium skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "💂🏾‍♀️", name: "woman guard: medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "💂🏿‍♀️", name: "woman guard: dark skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk6: [EmojiCatalogEntry] = [
         .init(glyph: "🥷", name: "ninja", appleName: "ninja", group: "People & Body"),
         .init(glyph: "🥷🏻", name: "ninja: light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🥷🏼", name: "ninja: medium-light skin tone", appleName: "", group: "People & Body"),
@@ -1437,6 +1449,8 @@ public enum EmojiCatalog {
         .init(glyph: "🦹🏿", name: "supervillain: dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🦹‍♂️", name: "man supervillain", appleName: "man supervillain", group: "People & Body"),
         .init(glyph: "🦹🏻‍♂️", name: "man supervillain: light skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk7: [EmojiCatalogEntry] = [
         .init(glyph: "🦹🏼‍♂️", name: "man supervillain: medium-light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🦹🏽‍♂️", name: "man supervillain: medium skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🦹🏾‍♂️", name: "man supervillain: medium-dark skin tone", appleName: "", group: "People & Body"),
@@ -1637,6 +1651,8 @@ public enum EmojiCatalog {
         .init(glyph: "🧍🏿‍♀️", name: "woman standing: dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🧎", name: "person kneeling", appleName: "person kneeling", group: "People & Body"),
         .init(glyph: "🧎🏻", name: "person kneeling: light skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk8: [EmojiCatalogEntry] = [
         .init(glyph: "🧎🏼", name: "person kneeling: medium-light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🧎🏽", name: "person kneeling: medium skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🧎🏾", name: "person kneeling: medium-dark skin tone", appleName: "", group: "People & Body"),
@@ -1837,6 +1853,8 @@ public enum EmojiCatalog {
         .init(glyph: "🕴🏻", name: "person in suit levitating: light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🕴🏼", name: "person in suit levitating: medium-light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🕴🏽", name: "person in suit levitating: medium skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk9: [EmojiCatalogEntry] = [
         .init(glyph: "🕴🏾", name: "person in suit levitating: medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🕴🏿", name: "person in suit levitating: dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👯", name: "people with bunny ears", appleName: "dancing people wearing bunny ears", group: "People & Body"),
@@ -2037,6 +2055,8 @@ public enum EmojiCatalog {
         .init(glyph: "🏊🏻‍♀️", name: "woman swimming: light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🏊🏼‍♀️", name: "woman swimming: medium-light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🏊🏽‍♀️", name: "woman swimming: medium skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk10: [EmojiCatalogEntry] = [
         .init(glyph: "🏊🏾‍♀️", name: "woman swimming: medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🏊🏿‍♀️", name: "woman swimming: dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "⛹️", name: "person bouncing ball", appleName: "basketball player", group: "People & Body"),
@@ -2237,6 +2257,8 @@ public enum EmojiCatalog {
         .init(glyph: "🤾🏽‍♂️", name: "man playing handball: medium skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🤾🏾‍♂️", name: "man playing handball: medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🤾🏿‍♂️", name: "man playing handball: dark skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk11: [EmojiCatalogEntry] = [
         .init(glyph: "🤾‍♀️", name: "woman playing handball", appleName: "woman playing handball", group: "People & Body"),
         .init(glyph: "🤾🏻‍♀️", name: "woman playing handball: light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "🤾🏼‍♀️", name: "woman playing handball: medium-light skin tone", appleName: "", group: "People & Body"),
@@ -2437,6 +2459,8 @@ public enum EmojiCatalog {
         .init(glyph: "👩🏽‍❤️‍💋‍👨🏽", name: "kiss: woman, man, medium skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏽‍❤️‍💋‍👨🏾", name: "kiss: woman, man, medium skin tone, medium-dark skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏽‍❤️‍💋‍👨🏿", name: "kiss: woman, man, medium skin tone, dark skin tone", appleName: "", group: "People & Body"),
+    ]
+    private static let chunk12: [EmojiCatalogEntry] = [
         .init(glyph: "👩🏾‍❤️‍💋‍👨🏻", name: "kiss: woman, man, medium-dark skin tone, light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏾‍❤️‍💋‍👨🏼", name: "kiss: woman, man, medium-dark skin tone, medium-light skin tone", appleName: "", group: "People & Body"),
         .init(glyph: "👩🏾‍❤️‍💋‍👨🏽", name: "kiss: woman, man, medium-dark skin tone, medium skin tone", appleName: "", group: "People & Body"),
@@ -2637,6 +2661,8 @@ public enum EmojiCatalog {
         .init(glyph: "🧑‍🧑‍🧒‍🧒", name: "family: adult, adult, child, child", appleName: "family: adult, adult, child, child", group: "People & Body"),
         .init(glyph: "🧑‍🧒", name: "family: adult, child", appleName: "family: adult, child", group: "People & Body"),
         .init(glyph: "🧑‍🧒‍🧒", name: "family: adult, child, child", appleName: "family: adult, child, child", group: "People & Body"),
+    ]
+    private static let chunk13: [EmojiCatalogEntry] = [
         .init(glyph: "👣", name: "footprints", appleName: "footprints", group: "People & Body"),
         .init(glyph: "🫆", name: "fingerprint", appleName: "fingerprint", group: "People & Body"),
         .init(glyph: "🐵", name: "monkey face", appleName: "monkey face", group: "Animals & Nature"),
@@ -2837,6 +2863,8 @@ public enum EmojiCatalog {
         .init(glyph: "🫘", name: "beans", appleName: "beans", group: "Food & Drink"),
         .init(glyph: "🌰", name: "chestnut", appleName: "chestnut", group: "Food & Drink"),
         .init(glyph: "🫚", name: "ginger root", appleName: "ginger root", group: "Food & Drink"),
+    ]
+    private static let chunk14: [EmojiCatalogEntry] = [
         .init(glyph: "🫛", name: "pea pod", appleName: "pea pod", group: "Food & Drink"),
         .init(glyph: "🍄‍🟫", name: "brown mushroom", appleName: "brown mushroom", group: "Food & Drink"),
         .init(glyph: "🫜", name: "root vegetable", appleName: "root vegetable", group: "Food & Drink"),
@@ -3037,6 +3065,8 @@ public enum EmojiCatalog {
         .init(glyph: "🚲", name: "bicycle", appleName: "bicycle", group: "Travel & Places"),
         .init(glyph: "🛴", name: "kick scooter", appleName: "scooter", group: "Travel & Places"),
         .init(glyph: "🛹", name: "skateboard", appleName: "skateboard", group: "Travel & Places"),
+    ]
+    private static let chunk15: [EmojiCatalogEntry] = [
         .init(glyph: "🛼", name: "roller skate", appleName: "roller skate", group: "Travel & Places"),
         .init(glyph: "🚏", name: "bus stop", appleName: "bus stop", group: "Travel & Places"),
         .init(glyph: "🛣️", name: "motorway", appleName: "motorway", group: "Travel & Places"),
@@ -3237,6 +3267,8 @@ public enum EmojiCatalog {
         .init(glyph: "🧵", name: "thread", appleName: "thread", group: "Activities"),
         .init(glyph: "🪡", name: "sewing needle", appleName: "sewing needle", group: "Activities"),
         .init(glyph: "🧶", name: "yarn", appleName: "yarn", group: "Activities"),
+    ]
+    private static let chunk16: [EmojiCatalogEntry] = [
         .init(glyph: "🪢", name: "knot", appleName: "knot", group: "Activities"),
         .init(glyph: "👓", name: "glasses", appleName: "glasses", group: "Objects"),
         .init(glyph: "🕶️", name: "sunglasses", appleName: "sunglasses", group: "Objects"),
@@ -3437,6 +3469,8 @@ public enum EmojiCatalog {
         .init(glyph: "⚒️", name: "hammer and pick", appleName: "hammer and pick", group: "Objects"),
         .init(glyph: "🛠️", name: "hammer and wrench", appleName: "hammer and wrench", group: "Objects"),
         .init(glyph: "🗡️", name: "dagger", appleName: "dagger", group: "Objects"),
+    ]
+    private static let chunk17: [EmojiCatalogEntry] = [
         .init(glyph: "⚔️", name: "crossed swords", appleName: "crossed swords", group: "Objects"),
         .init(glyph: "💣", name: "bomb", appleName: "bomb", group: "Objects"),
         .init(glyph: "🪃", name: "boomerang", appleName: "boomerang", group: "Objects"),
@@ -3637,6 +3671,8 @@ public enum EmojiCatalog {
         .init(glyph: "➰", name: "curly loop", appleName: "curly loop", group: "Symbols"),
         .init(glyph: "➿", name: "double curly loop", appleName: "double curly loop", group: "Symbols"),
         .init(glyph: "〽️", name: "part alternation mark", appleName: "part alternation mark", group: "Symbols"),
+    ]
+    private static let chunk18: [EmojiCatalogEntry] = [
         .init(glyph: "✳️", name: "eight-spoked asterisk", appleName: "eight spoked asterisk", group: "Symbols"),
         .init(glyph: "✴️", name: "eight-pointed star", appleName: "eight pointed star", group: "Symbols"),
         .init(glyph: "❇️", name: "sparkle", appleName: "sparkle", group: "Symbols"),
@@ -3837,6 +3873,8 @@ public enum EmojiCatalog {
         .init(glyph: "🇬🇹", name: "flag: Guatemala", appleName: "flag of Guatemala", group: "Flags"),
         .init(glyph: "🇬🇺", name: "flag: Guam", appleName: "flag of Guam", group: "Flags"),
         .init(glyph: "🇬🇼", name: "flag: Guinea-Bissau", appleName: "flag of Guinea-Bissau", group: "Flags"),
+    ]
+    private static let chunk19: [EmojiCatalogEntry] = [
         .init(glyph: "🇬🇾", name: "flag: Guyana", appleName: "flag of Guyana", group: "Flags"),
         .init(glyph: "🇭🇰", name: "flag: Hong Kong SAR China", appleName: "flag of Hong Kong", group: "Flags"),
         .init(glyph: "🇭🇲", name: "flag: Heard Island & McDonald Islands", appleName: "flag of Heard and McDonald Islands", group: "Flags"),
@@ -4005,6 +4043,12 @@ public enum EmojiCatalog {
         .init(glyph: "👩‍🤝‍👩", name: "women holding hands", appleName: "women holding hands", group: "Apple"),
         .init(glyph: "🫱‍🫲", name: "handshake", appleName: "handshake", group: "Apple"),
     ]
+
+    /// Split into chunks: one 3,967-element literal overflows the
+    /// initializer frame under AddressSanitizer.
+    public static let all: [EmojiCatalogEntry] = [
+chunk0, chunk1, chunk2, chunk3, chunk4, chunk5, chunk6, chunk7, chunk8, chunk9, chunk10, chunk11, chunk12, chunk13, chunk14, chunk15, chunk16, chunk17, chunk18, chunk19
+    ].flatMap { $0 }
 
     /// Built once, lazily, outside the giant literal above.
     public static let searchIndex: [EmojiSearchEntry] = all.map { emoji in
