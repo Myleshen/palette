@@ -981,8 +981,14 @@ public final class ThemingEngine: ObservableObject {
                 continue
             }
             if target == .starship {
-                // Both files were written above; there is no include line and
-                // the user's own starship.toml is never edited.
+                // Both files were written above. The user's starship.toml also
+                // gets a marker block so a shell that inherited no
+                // STARSHIP_CONFIG (a zellij server started earlier) is current
+                // too; its own lines are untouched.
+                let include = includes.install(target, palette: palette, metadata: metadata)
+                if let error = include.error {
+                    Log.shared.warn("Could not update the starship palette block: \(error)", source: "theming")
+                }
                 written += [StarshipTheme.fileName, StarshipTheme.snippetFileName]
                 changes.append("Starship theme: \(includes.shortPath(includes.starshipThemeURL.path))")
                 if let starshipNotice { notices.append("Starship: \(starshipNotice)") }
