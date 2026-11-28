@@ -182,6 +182,29 @@ final class ThemeFanTests: XCTestCase {
 
     /// The panel takes the computed frame on every display: never the old
     /// 1280×720 box, never a shared-edge margin, and nothing AppKit may shrink.
+    /// A short hand fans over a smaller angular span than a full one; without
+    /// settling, its cards float above the deck's bottom edge.
+    func testAShortHandRestsOnTheBottomEdge() {
+        let metrics = ThemeGalleryLayout.metrics(
+            in: CGRect(x: 0, y: 0, width: 3440, height: 1415)
+        )
+        for relatives in [[0], [-1, 0, 1], [-3, 0, 3], Array(-10 ... 10)] {
+            let settle = metrics.restingOffset(relatives: relatives)
+            let lowest = relatives.map { relative -> CGFloat in
+                let placement = metrics.arc.placement(relative: relative)
+                let dip = metrics.cardWidth * metrics.scale * placement.scale / 2
+                    * sin(abs(placement.rotation) * .pi / 180)
+                return placement.y - dip
+            }.min() ?? 0
+            XCTAssertEqual(
+                lowest - settle,
+                metrics.bottomInset,
+                accuracy: 0.75,
+                "hand \(relatives.first!)...\(relatives.last!) floats"
+            )
+        }
+    }
+
     func testThePanelIsExactlyTheUsableWidth() {
         for (name, visible) in displays {
             let metrics = ThemeGalleryLayout.metrics(in: visible)

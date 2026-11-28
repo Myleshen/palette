@@ -47,6 +47,20 @@ struct ThemeDeckMetrics: Equatable, Sendable {
         )
     }
 
+    /// How far the whole hand must drop so its lowest visible card rests on
+    /// the deck's bottom inset. A short hand (few results) fans over a smaller
+    /// angular span than a full one, so without this it floats mid-deck.
+    func restingOffset(relatives: [Int]) -> CGFloat {
+        let lowest = relatives.map { relative -> CGFloat in
+            let placement = arc.placement(relative: relative)
+            let dip = cardWidth * scale * placement.scale / 2
+                * sin(abs(placement.rotation) * .pi / 180)
+            return placement.y - dip
+        }.min()
+        guard let lowest else { return 0 }
+        return max(0, lowest - bottomInset)
+    }
+
     /// The box every card must stay inside: the deck's width less the side
     /// inset, the fan canvas' height.
     var canvas: CGRect {

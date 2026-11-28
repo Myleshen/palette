@@ -1158,6 +1158,9 @@ private struct ThemeGalleryView: View {
 
     private var fan: some View {
         let slots = model.deck.fanWindow(reach: reach)
+        // Rest the lowest card of *this* hand on the bottom edge; a full hand
+        // already reaches it, a three-card hand would otherwise float.
+        let settle = metrics.restingOffset(relatives: slots.map(\.relative)) * deal
         return ZStack(alignment: .bottom) {
             if slots.isEmpty {
                 Text(model.deck.favouritesOnly && model.deck.query.isEmpty
@@ -1168,7 +1171,7 @@ private struct ThemeGalleryView: View {
                     .accessibilityLabel("No matching cards")
             }
             ForEach(slots, id: \.card.id) { slot in
-                cardView(slot)
+                cardView(slot, settle: settle)
             }
         }
         .frame(maxWidth: .infinity)
@@ -1180,7 +1183,7 @@ private struct ThemeGalleryView: View {
         .accessibilityLabel("Fanned hand of cards")
     }
 
-    private func cardView(_ slot: FanSlot) -> some View {
+    private func cardView(_ slot: FanSlot, settle: CGFloat) -> some View {
         let card = slot.card
         let selected = slot.relative == 0
         let placement = arc.placement(
@@ -1190,7 +1193,7 @@ private struct ThemeGalleryView: View {
         let hovered = hoveredKey == card.cacheKey && !model.previewing
         let cardScale = metrics.scale * placement.scale * (selected && pulse ? 1.06 : 1)
             * (hovered ? motion.hoverScale : 1)
-        let pivotLift = -placement.y - (hovered ? motion.hoverLift : 0)
+        let pivotLift = -(placement.y - settle) - (hovered ? motion.hoverLift : 0)
         // Reduce Motion never slides the hand: the cards keep their positions
         // and the change of front card reads as a short crossfade instead.
         let selectionAnimation: Animation? = reduceMotion
