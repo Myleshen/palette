@@ -648,6 +648,88 @@ final class ThemeFanTests: XCTestCase {
         XCTAssertEqual(files.count, 2, "an edited picture is a new cache key")
     }
 
+    /// A visible window is several large files. They decode a few at a time
+    /// instead of one after another, each exactly once, and a warm open reads
+    /// the 512 px disk cache without touching the originals.
+    func testLargeWindowDecodesConcurrentlyThenLoadsWarmFromCache() async throws {
+        let cache = root.appendingPathComponent("thumbs-window", isDirectory: true)
+        let original = try writeLargePNG("window-0.png", width: 3840, height: 2160)
+        let count = 10
+        let pictures = [original] + (1..<count).map { index in
+            let url = root.appendingPathComponent("window-\(index).png")
+            try? FileManager.default.copyItem(at: original, to: url)
+            return url
+        }
+
+        let loader = CardImageLoader(cacheDirectory: cache)
+        let clock = ContinuousClock()
+        var loaded = 0
+        let cold = await clock.measure {
+            loaded = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
+                for picture in pictures {
+                    group.addTask { await loader.thumbnail(for: picture) != nil }
+                }
+                var done = 0
+                for await ok in group where ok { done += 1 }
+                return done
+            }
+        }
+        XCTAssertEqual(loaded, count, "every card in the window loads")
+        let peak = await loader.peakConcurrentDecodes()
+        XCTAssertGreaterThan(peak, 1, "the window decodes concurrently")
+        XCTAssertLessThanOrEqual(peak, 6, "concurrency stays bounded")
+        for picture in pictures {
+            let pictureCount = await loader.loadCount(for: picture)
+            XCTAssertEqual(pictureCount, 1, "each picture decodes once")
+            let thumbnail = await loader.thumbnail(for: picture)
+            XCTAssertLessThanOrEqual(
+                max(thumbnail?.image.size.width ?? 0, thumbnail?.image.size.height ?? 0),
+                512
+            )
+        }
+
+        let encoded = try FileManager.default.contentsOfDirectory(atPath: cache.path)
+        XCTAssertEqual(encoded.count, count, "one encoded downsample per picture")
+
+        // Only the disk cache can answer a warm loader, not the originals.
+        for picture in pictures {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o000],
+                ofItemAtPath: picture.path
+            )
+        }
+        defer {
+            for picture in pictures {
+                try? FileManager.default.setAttributes(
+                    [.posixPermissions: 0o644],
+                    ofItemAtPath: picture.path
+                )
+            }
+        }
+        let warmLoader = CardImageLoader(cacheDirectory: cache)
+        var warmLoaded = 0
+        let warm = await clock.measure {
+            warmLoaded = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
+                for picture in pictures {
+                    group.addTask { await warmLoader.thumbnail(for: picture) != nil }
+                }
+                var done = 0
+                for await ok in group where ok { done += 1 }
+                return done
+            }
+        }
+        XCTAssertEqual(warmLoaded, count, "a warm window reads every cached downsample")
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: cache.path).count,
+            count,
+            "a warm load writes nothing new"
+        )
+        print(
+            "Thumbnail window \(count) × 4K: cold \(milliseconds(cold)) ms · "
+                + "warm \(milliseconds(warm)) ms"
+        )
+    }
+
     // MARK: - Timings
 
     func testOpenAndFlipTimingsWith942Cards() throws {
