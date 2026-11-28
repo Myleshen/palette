@@ -420,7 +420,8 @@ public struct ThemingIncludes: Sendable {
             guard let raw = ThemingRenderer.contents(for: .zellij, palette: palette, metadata: metadata) else {
                 return nil
             }
-            return stripHeader(raw) + "\ntheme \"palette\""
+            return stripHeader(raw)
+                + "\ntheme \"palette\"\ntheme_dark \"palette\"\ntheme_light \"palette\""
         case .nvim:
             let path = themeFile(.nvim).path
             return plan.format == .vim

@@ -126,6 +126,31 @@ public struct KittyRemoteControl: Sendable {
         return scan.templates.last
     }
 
+    /// Remove Palette's own sockets whose kitty is gone. They are never reused
+    /// (the name carries the pid) and a dead file makes debugging confusing.
+    static func pruneStaleSockets(pids: Set<Int>, directories: [String]? = nil) {
+        let fm = FileManager.default
+        var dirs = directories ?? []
+        if directories == nil {
+            if let temp = ProcessInfo.processInfo.environment["TMPDIR"], !temp.isEmpty {
+                dirs.append(temp)
+            }
+            dirs.append("/tmp")
+            if let runtime = ProcessInfo.processInfo.environment["XDG_RUNTIME_DIR"], !runtime.isEmpty {
+                dirs.append(runtime)
+            }
+        }
+        for directory in dirs {
+            guard let entries = try? fm.contentsOfDirectory(atPath: directory) else { continue }
+            for name in entries where name.hasPrefix("palette-kitty-") {
+                guard let pid = Int(name.dropFirst("palette-kitty-".count)) else { continue }
+                if !pids.contains(pid) {
+                    try? fm.removeItem(atPath: directory + "/" + name)
+                }
+            }
+        }
+    }
+
     /// Every resolvable `listen_on` name in the file, in order. Discovery uses
     /// all of them so a kitty still running with the user's old line is found
     /// too.
@@ -204,6 +229,7 @@ public struct KittyRemoteControl: Sendable {
     private func liveSockets(configPath: String?) async -> [String] {
         let pids = await runningKittyPIDs()
         var paths = Set<String>()
+        Self.pruneStaleSockets(pids: pids)
         let userConfig: String? = configPath.flatMap {
             try? String(contentsOfFile: $0, encoding: .utf8)
         }
