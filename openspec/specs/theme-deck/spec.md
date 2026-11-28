@@ -165,3 +165,66 @@ any config.
 
 - **WHEN** the user presses Return on a colour card while `source = "wallpaper"`
 - **THEN** the deck refuses and no theme or generated file changes
+
+### Requirement: Wallpaper thumbnail warm-up
+
+The deck SHALL decode wallpaper thumbnails concurrently, bounded so the app
+stays responsive, and SHALL have every visible card's picture ready within one
+second on a cold cache for a local wallpaper folder of 4K–8K images.
+
+#### Scenario: Cold open
+
+- **WHEN** the wallpaper deck opens with an empty thumbnail cache and fifteen
+  visible cards
+- **THEN** all fifteen pictures are ready in under 1 s
+
+#### Scenario: Cards before their picture
+
+- **WHEN** a card's picture has not decoded yet
+- **THEN** the card shows its extracted palette background, never an empty
+  placeholder icon
+
+#### Scenario: Warm open
+
+- **WHEN** the cache already holds a card's downsample
+- **THEN** the card reads the cache and does not decode the original file
+
+### Requirement: Visible refusal for theme cards in wallpaper mode
+
+When `[theming] source = "wallpaper"`, the deck SHALL disable Apply for theme
+cards and SHALL keep the reason visible, rather than accepting the key and
+showing a transient status.
+
+#### Scenario: Theme card in wallpaper mode
+
+- **WHEN** the Colours deck is open with source wallpaper
+- **THEN** Apply is disabled for theme cards and the footer states that the
+  wallpaper owns the palette and how to switch
+
+#### Scenario: Wallpaper card
+
+- **WHEN** a wallpaper card is selected in the same mode
+- **THEN** Apply stays enabled
+
+#### Scenario: Source changes back
+
+- **WHEN** the source is switched to Theme while the deck is open
+- **THEN** Apply becomes enabled for theme cards without reopening the deck
+
+### Requirement: Source toggle in the deck
+
+The deck SHALL offer a `Wallpaper colours | Theme colours` control that flips
+`[theming] source`, persists it, and applies the palette that matches, without
+closing the deck.
+
+#### Scenario: Switch to wallpaper colours
+
+- **WHEN** the user selects Wallpaper colours in the deck
+- **THEN** the source is wallpaper, the desktop palette is extracted and applied,
+  and the control shows wallpaper as active
+
+#### Scenario: Switch to theme colours
+
+- **WHEN** the user selects Theme colours
+- **THEN** the source is theme, the current theme is applied, and theme cards
+  become applicable again

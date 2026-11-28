@@ -11,9 +11,10 @@ and [ADR 0003](../../decisions/0003-wallpaper-picking-owns-palette.md).
 
 ### Requirement: Palette source
 
-`[theming] source` SHALL accept `theme` or `wallpaper`. `theme` SHALL name a
-catalogue id, not a display name. `wallpaper` SHALL extract colours from the
-desktop picture, honouring `dark_mode`. Theming SHALL be off by default.
+`[theming] source` SHALL accept `theme` or `wallpaper`. While it is `wallpaper`,
+applying a theme SHALL be refused with a visible explanation; the source SHALL
+only change through an explicit control (Settings source picker or the deck
+toggle).
 
 #### Scenario: Theme source
 
@@ -24,6 +25,18 @@ desktop picture, honouring `dark_mode`. Theming SHALL be off by default.
 
 - **WHEN** `[theming]` is absent
 - **THEN** no app config is touched and no generated files are written
+
+#### Scenario: Theme pick while wallpaper owns the palette
+
+- **WHEN** the user applies a theme from the browser, `/theme` or the deck and
+  `source = "wallpaper"`
+- **THEN** nothing is written, the source stays `wallpaper`, and a status names
+  the reason and how to switch
+
+#### Scenario: Explicit switch to theme colours
+
+- **WHEN** the user picks Theme in the Settings source control or the deck toggle
+- **THEN** the source becomes `theme` and the current theme is applied
 
 ### Requirement: Wallpaper palette extraction
 
@@ -270,3 +283,180 @@ diagnostic. A stale browser profile SHALL be surfaced once per apply.
 
 - **WHEN** `dark_mode = "dim"`
 - **THEN** control reports the invalid value and uses `auto`
+
+### Requirement: Launch palette push
+
+When theming is enabled and a supported terminal is already running, Palette
+SHALL push the current generated palette to that terminal once at launch,
+without rewriting generated files, restarting the terminal or changing the
+configured source.
+
+#### Scenario: Terminal was running before Palette
+
+- **WHEN** Palette launches with `[theming] enabled = true` and a kitty process
+  that Palette manages is already running
+- **THEN** the running kitty adopts the current palette without a file rewrite
+
+#### Scenario: Theming disabled
+
+- **WHEN** Palette launches with `[theming] enabled = false`
+- **THEN** no palette is pushed to any running terminal
+
+#### Scenario: Push fails
+
+- **WHEN** the terminal's socket is gone or refuses the command
+- **THEN** the failure is logged and the launch continues; no restart prompt is
+  raised for a terminal the user did not open through Palette
+
+### Requirement: Wallpaper follow starts at launch
+
+When `[theming] enabled = true`, `source = "wallpaper"` and
+`follow_wallpaper = true`, Palette SHALL poll the desktop picture from launch,
+so a desktop change is picked up without touching Settings or relaunching.
+
+#### Scenario: Launch then change the desktop
+
+- **WHEN** Palette launches in wallpaper-follow mode and the desktop picture
+  later changes
+- **THEN** the palette files and Palette's own theme update on the next poll
+
+#### Scenario: Follow disabled
+
+- **WHEN** `follow_wallpaper = false`
+- **THEN** no poll is installed and a desktop change does nothing
+
+### Requirement: Zellij UI roles follow the palette
+
+The generated zellij theme SHALL define the tab bar, status bar, pane frames and
+exit-code roles from the palette, with readable foregrounds, not only the base
+ANSI palette.
+
+#### Scenario: Tab bar and frames
+
+- **WHEN** the generated zellij theme is active
+- **THEN** the tab bar, status bar, selected/unselected tabs and pane frames use
+  the palette's accent, surface and muted roles
+
+#### Scenario: Exit codes
+
+- **WHEN** a command succeeds or fails in a pane
+- **THEN** the exit-code indicator uses the palette's green or red with a
+  readable foreground
+
+### Requirement: Standard palette export
+
+Every successful apply SHALL write the active palette as a base16 scheme and as
+terminal.sexy JSON in the generated theme directory, so another tool can read
+Palette's colours without an adapter.
+
+#### Scenario: Apply writes both files
+
+- **WHEN** a theme or wallpaper palette is applied
+- **THEN** `palette.yaml` and `palette.terminal-sexy.json` exist and carry that
+  palette's colours
+
+#### Scenario: Slot mapping
+
+- **WHEN** the files are read
+- **THEN** `base00` is the background, `base05` the foreground, `base08`–`base0F`
+  the ANSI hues in base16 order, and terminal.sexy's `color_01`…`color_16` are
+  ANSI 0…15
+
+#### Scenario: Backup and revert
+
+- **WHEN** the palette is reverted
+- **THEN** both files return to the previous palette with the rest of the set
+
+### Requirement: Transparency is preserved
+
+When the user's terminal or Neovide is configured to be translucent, the
+generated nvim file SHALL NOT paint an opaque normal background over it.
+
+#### Scenario: Auto detection
+
+- **WHEN** `[theming] transparent = "auto"` and kitty, ghostty or the nvim lua
+  files configure an opacity below 1
+- **THEN** `Normal` and `NormalNC` carry the foreground without a background
+
+#### Scenario: Explicit off
+
+- **WHEN** `transparent = "off"`
+- **THEN** `Normal` keeps the palette background even if a terminal is
+  translucent
+
+#### Scenario: No transparency configured
+
+- **WHEN** `transparent = "auto"` and no opacity setting is found
+- **THEN** the opaque palette background is emitted as before
+
+### Requirement: One wallpaper on every Space
+
+Applying a wallpaper SHALL set the same picture on every Space of every display,
+not only the Space that is active when the apply runs.
+
+#### Scenario: Several Spaces
+
+- **WHEN** the user applies a wallpaper while the Mac has more than one Space
+- **THEN** every Space's desktop picture is that wallpaper after the apply
+
+#### Scenario: Space switched later
+
+- **WHEN** the user switches to another Space
+- **THEN** the wallpaper and the palette Palette sampled match
+
+#### Scenario: Store unavailable
+
+- **WHEN** the wallpaper store cannot be read or written
+- **THEN** the per-display picture is still set, the failure is logged, and the
+  apply reports success for the picture itself
+
+### Requirement: Complete nvim highlight coverage
+
+The generated nvim file SHALL paint the base, treesitter, diagnostic, diff/git,
+statusline, file-tree and picker highlight groups, so a LazyVim session shows
+the palette everywhere rather than keeping the previous colorscheme in plugin
+groups.
+
+#### Scenario: Plugin groups follow the palette
+
+- **WHEN** the generated file is applied in a LazyVim session
+- **THEN** lualine, neo-tree, telescope/snacks and diagnostic groups carry
+  Palette colours
+
+#### Scenario: Unknown group
+
+- **WHEN** a plugin defines a group Palette does not name
+- **THEN** it links to a painted base group instead of keeping a stale colour
+
+### Requirement: Transparent panels stay see-through
+
+When the palette is applied with a transparent background, the generated nvim
+file SHALL paint panel and full-window groups without a background, while
+floating windows and statusline bars keep their surface so they stay legible.
+
+#### Scenario: neo-tree and the dashboard
+
+- **WHEN** the generated file is applied with transparency on
+- **THEN** NeoTreeNormal, NeoTreeCursorLine and SnacksDashboardHeader carry no
+  background, and NormalFloat, SnacksPicker and StatusLine still do
+
+### Requirement: System appearance follows the palette
+
+With `system_appearance = "auto"`, applying a light or dark palette SHALL switch
+the macOS appearance to match it, and SHALL report when the automation
+permission is denied rather than failing silently.
+
+#### Scenario: Light palette while macOS is dark
+
+- **WHEN** a light theme is applied and macOS is in dark mode
+- **THEN** macOS switches to light and the apply reports it
+
+#### Scenario: Off
+
+- **WHEN** `system_appearance = "off"`
+- **THEN** the macOS appearance is never changed
+
+#### Scenario: Permission denied
+
+- **WHEN** the System Events automation is denied
+- **THEN** the palette still applies and a notice names the permission
