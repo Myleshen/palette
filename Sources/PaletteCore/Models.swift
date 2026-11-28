@@ -363,10 +363,15 @@ public protocol PaletteProvider: AnyObject, Sendable {
     var descriptor: ProviderDescriptor { get }
     func search(_ request: SearchRequest) async throws -> [PaletteItem]
     func activate(_ item: PaletteItem, action: PaletteAction) async throws
+    /// Launch-time work that makes the first search cheaper. Providers with
+    /// nothing to warm up keep the default no-op.
+    func prewarm() async
 }
 
 public extension PaletteProvider {
     func activate(_ item: PaletteItem, action: PaletteAction) async throws {}
+
+    func prewarm() async {}
 }
 
 public enum ProviderError: LocalizedError, Equatable {
