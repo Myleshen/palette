@@ -16,10 +16,19 @@ public actor FaviconStore {
     /// Hosts another search is already fetching; a keystroke must not queue a
     /// second request for the same icon.
     private var inFlight: Set<String> = []
+    /// Cancels a redirect off Google's origin, and is retained by the session.
+    private let session: URLSession
 
     public init(directory: URL? = nil) {
         let cache = PalettePaths.resolve().cacheDir.appendingPathComponent("Favicons", isDirectory: true)
         self.directory = directory ?? cache
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 2.5
+        session = URLSession(
+            configuration: configuration,
+            delegate: SafeURL.RedirectGuard(),
+            delegateQueue: nil
+        )
         try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
     }
 
@@ -67,7 +76,7 @@ public actor FaviconStore {
         var request = URLRequest(url: requestURL)
         request.timeoutInterval = 2.5
         request.cachePolicy = .returnCacheDataElseLoad
-        guard let (bytes, response) = try? await URLSession.shared.bytes(for: request),
+        guard let (bytes, response) = try? await session.bytes(for: request),
               let http = response as? HTTPURLResponse, http.statusCode == 200,
               let data = try? await Self.read(bytes, limit: Self.maxBytes),
               let png = try? Self.pngData(from: data) else {

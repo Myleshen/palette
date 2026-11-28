@@ -10,7 +10,14 @@ public final class Log: @unchecked Sendable {
     public func configure(url: URL) {
         queue.sync {
             self.url = url
-            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let manager = FileManager.default
+            try? manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            // Logs quote prompt and page text, so the file is owner-only.
+            if !manager.fileExists(atPath: url.path) {
+                manager.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600])
+            } else {
+                try? manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            }
         }
     }
 
@@ -25,7 +32,12 @@ public final class Log: @unchecked Sendable {
                 try? FileManager.default.removeItem(at: url)
             }
             if !FileManager.default.fileExists(atPath: url.path) {
-                try? line.data(using: .utf8)?.write(to: url)
+                // Rotation deletes the file, so recreate it owner-only too.
+                FileManager.default.createFile(
+                    atPath: url.path,
+                    contents: Data(line.utf8),
+                    attributes: [.posixPermissions: 0o600]
+                )
             } else if let handle = try? FileHandle(forWritingTo: url) {
                 defer { try? handle.close() }
                 _ = try? handle.seekToEnd()

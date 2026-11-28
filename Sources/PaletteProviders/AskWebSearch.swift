@@ -284,21 +284,7 @@ public enum AskWebSearch {
 
     /// Cancels a redirect whose target is not safe instead of following it and
     /// checking the final URL afterwards.
-    final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-        func urlSession(
-            _ session: URLSession,
-            task: URLSessionTask,
-            willPerformHTTPRedirection response: HTTPURLResponse,
-            newRequest request: URLRequest,
-            completionHandler: @escaping (URLRequest?) -> Void
-        ) {
-            guard let url = request.url, AskWebSearch.allowsRedirect(to: url) else {
-                completionHandler(nil)
-                return
-            }
-            completionHandler(request)
-        }
-    }
+    typealias RedirectGuard = SafeURL.RedirectGuard
 
     /// Only https links in the message are fetched directly.
     private static func httpsLink(in text: String) -> URL? {

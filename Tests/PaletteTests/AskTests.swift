@@ -2,7 +2,7 @@ import XCTest
 import AppKit
 import Foundation
 import TOMLKit
-import PaletteCore
+@testable import PaletteCore
 @testable import PalettePlatform
 @testable import PaletteProviders
 
@@ -706,6 +706,58 @@ final class AskTests: XCTestCase {
         )
     }
 
+    func testAskImageURLsRejectEncodedHostForms() {
+        for raw in [
+            "https://127.1/x",
+            "https://2130706433/x",
+            "https://0x7f000001/x",
+            "https://0177.0.0.1/x",
+            "https://[::ffff:127.0.0.1]/x",
+            "https://[::ffff:7f00:1]/x",
+            "https://localhost./x",
+            "https://localhost/x",
+            "https://10.0.0.1/x",
+            "https://192.168.0.1/x",
+            "https://169.254.169.254/x",
+            "https://[fe80::1]/x",
+            "https://[fc00::1]/x",
+            "https://0.0.0.0/x",
+            "https://[::]/x",
+        ] {
+            XCTAssertFalse(
+                AskMarkdown.isSafeImageURL(URL(string: raw)!),
+                "\(raw) must never be fetched as a markdown image"
+            )
+        }
+        XCTAssertTrue(AskMarkdown.isSafeImageURL(URL(string: "https://example.com/x.png")!))
+        XCTAssertFalse(AskMarkdown.isSafeImageURL(URL(string: "http://example.com/x.png")!))
+    }
+
+    /// Deterministic half of the check: literals are classified without DNS.
+    func testSafeURLClassifiesLiteralAddresses() {
+        for host in [
+            "127.0.0.1", "10.0.0.1", "172.16.0.1", "172.31.255.255", "192.168.0.1",
+            "169.254.169.254", "0.0.0.0",
+            "::1", "[::1]", "[::]", "[::ffff:127.0.0.1]", "[::ffff:7f00:1]",
+            "[fe80::1]", "[fc00::1]", "0:0:0:0:0:0:0:1", "[ff02::1]",
+        ] {
+            let verdict = SafeURL.isPublicLiteralHost(host)
+            XCTAssertEqual(verdict, false, "\(host) must classify as non-public")
+        }
+        for host in ["1.1.1.1", "8.8.8.8", "[2606:4700:4700::1111]"] {
+            XCTAssertEqual(SafeURL.isPublicLiteralHost(host), true, "\(host) is public")
+        }
+        XCTAssertNil(SafeURL.isPublicLiteralHost("example.com"))
+        XCTAssertNil(SafeURL.isPublicLiteralHost("example.com."))
+    }
+
+    func testSafeURLRejectsSpacesAndControlCharacters() {
+        XCTAssertNil(SafeURL.canonicalHost("exa mple.com"))
+        XCTAssertNil(SafeURL.canonicalHost("example.com\u{0}"))
+        XCTAssertNil(SafeURL.canonicalHost("example.com\n"))
+        XCTAssertEqual(SafeURL.canonicalHost("Example.COM."), "example.com")
+    }
+
     func testAskWebRedirectsAreCancelledBeforeFollowing() {
         for raw in [
             "https://127.0.0.1/x",
@@ -746,6 +798,55 @@ final class AskTests: XCTestCase {
         ) { decisions.append($0) }
         XCTAssertEqual(decisions.count, 2)
         XCTAssertEqual(decisions[1]?.url, safeRequest.url)
+    }
+
+    func testRedirectGuardCancelsEveryEncodedPrivateForm() {
+        let redirectGuard = SafeURL.RedirectGuard()
+        let session = URLSession.shared
+        let task = session.dataTask(with: URL(string: "https://example.com/")!)
+        let response = HTTPURLResponse(
+            url: URL(string: "https://example.com/")!,
+            statusCode: 302,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        for raw in [
+            "https://127.1/x",
+            "https://2130706433/x",
+            "https://0x7f000001/x",
+            "https://0177.0.0.1/x",
+            "https://[::ffff:127.0.0.1]/x",
+            "https://[::ffff:7f00:1]/x",
+            "https://localhost./x",
+            "https://localhost/x",
+            "https://10.0.0.1/x",
+            "https://192.168.0.1/x",
+            "https://169.254.169.254/x",
+            "https://[fe80::1]/x",
+            "https://[fc00::1]/x",
+            "https://0.0.0.0/x",
+            "https://[::]/x",
+            "http://example.com/x",
+        ] {
+            var decisions: [URLRequest?] = []
+            redirectGuard.urlSession(
+                session,
+                task: task,
+                willPerformHTTPRedirection: response,
+                newRequest: URLRequest(url: URL(string: raw)!)
+            ) { decisions.append($0) }
+            XCTAssertEqual(decisions.count, 1, raw)
+            XCTAssertNil(decisions[0], "a redirect to \(raw) must be cancelled")
+        }
+
+        var allowed: [URLRequest?] = []
+        redirectGuard.urlSession(
+            session,
+            task: task,
+            willPerformHTTPRedirection: response,
+            newRequest: URLRequest(url: URL(string: "https://example.com/next")!)
+        ) { allowed.append($0) }
+        XCTAssertEqual(allowed.first??.url, URL(string: "https://example.com/next"))
     }
 
     func testFaviconURLKeepsCraftedHostInsideTheDomainParameter() throws {

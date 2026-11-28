@@ -426,6 +426,21 @@ final class ClipboardImageStorageTests: XCTestCase {
         XCTAssertTrue(included.contains("config.toml"))
     }
 
+    func testBackupZipIsOwnerOnly() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("palette-backup-zip-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let staged = root.appendingPathComponent("staged")
+        try FileManager.default.createDirectory(at: staged, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: staged.appendingPathComponent("a.txt"))
+
+        let destination = root.appendingPathComponent("backup.zip")
+        try BackupExporter.zip(staged, to: destination)
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+    }
+
     func testBackupLeavesTheAskKeyBesideTheSealedBlob() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("palette-backup-ask-\(UUID().uuidString)")
