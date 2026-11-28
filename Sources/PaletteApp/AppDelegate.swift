@@ -359,6 +359,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 for case let provider as PathsProvider in builtRegistry.providers {
                     await provider.prewarm(homeConsent: homeConsent)
                 }
+                // Bound providers that shell out (Bitwarden's status probe)
+                // warm once here so the first query does not pay for it.
+                await builtRegistry.prewarm()
             }
         }
         searchController = SearchController(
