@@ -154,7 +154,7 @@ final class ThemingTests: XCTestCase {
             case .nvim:
                 XCTAssertTrue(output.contains("vim.g.colors_name = \"palette\""))
             case .fish:
-                XCTAssertTrue(output.contains("fish_color_command \(palette.ansi[4])"))
+                XCTAssertTrue(output.contains("fish_color_command \(String(palette.ansi[4].dropFirst()))"))
             case .bat:
                 XCTAssertTrue(output.contains("<key>background</key>"))
                 XCTAssertTrue(output.contains("<string>\(palette.background)</string>"))
