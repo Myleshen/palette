@@ -802,10 +802,17 @@ public final class ThemingEngine: ObservableObject {
             }
             if succeeded, config.systemAppearance == .auto {
                 let dark = palette.appearance != "light"
-                if await setSystemAppearance(dark) {
+                let switched = await setSystemAppearance(dark)
+                Log.shared.info(
+                    "System appearance: asked for \(dark ? "dark" : "light") — \(switched ? "switched" : "refused")",
+                    source: "theming"
+                )
+                if switched {
                     notes.append("macOS appearance: \(dark ? "dark" : "light")")
                 } else {
-                    notes.append("macOS appearance unchanged: allow Palette to control System Events in Automation, or set system_appearance = \"off\".")
+                    let message = "macOS appearance unchanged: allow Palette to control System Events in Automation, or set system_appearance = \"off\"."
+                    notes.append(message)
+                    summary += " · \(message)"
                 }
             }
             if outcome.policySelected && outcome.needsEnable {
