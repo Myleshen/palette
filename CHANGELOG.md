@@ -7,6 +7,17 @@
 - **Standard palette export.** Each apply also writes `palette.yaml` (base16)
   and `palette.terminal-sexy.json`, so another tool can read Palette's colours
   without an adapter; per-app files remain for live reload.
+- **Transparency is preserved for nvim/Neovide.** `[theming] transparent`
+  (auto) detects kitty/Ghostty opacity or Neovide's opacity and leaves `Normal`
+  without a background, so the editor shows the terminal through instead of a
+  solid slab. Auto/On/Off in Settings.
+- **Wallpaper colours own the palette.** While the source is wallpaper, a theme
+  pick is refused with a visible reason instead of silently flipping the
+  source; the deck's new `Wallpaper colours | Theme colours` control is the
+  explicit switch.
+- **Quick-access kitty panel and stale Starship shells now follow the palette**
+  too: the drop-down gets the same managed block and socket, and the user's
+  starship palette block is refreshed on every apply.
 - **One wallpaper on every Space.** Applying a wallpaper now rewrites every
   Space's picture in the wallpaper store and refreshes WallpaperAgent, so
   switching Space no longer changes the wallpaper or the palette.
