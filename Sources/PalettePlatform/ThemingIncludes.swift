@@ -218,9 +218,9 @@ public struct ThemingIncludes: Sendable {
         guard let plan = plan(for: target) else {
             return Outcome(target: target, path: nil, action: .unchanged, error: nil)
         }
-        if target == .starship, !fileManager.fileExists(atPath: resolve(plan.path)) {
-            // No user config to update; the generated copy still works through
-            // STARSHIP_CONFIG.
+        if target == .starship {
+            // The engine writes the colour-remapped copy; Palette never edits
+            // the user's starship.toml, so there is no include to install.
             return Outcome(target: target, path: plan.path, action: .unchanged, error: nil)
         }
         guard let body = blockBody(for: plan, palette: palette, metadata: metadata) else {
@@ -436,11 +436,10 @@ public struct ThemingIncludes: Sendable {
             // also exports STARSHIP_CONFIG for the themed copy.
             return fishBody()
         case .starship:
-            // The remapped copy is what fish exports through STARSHIP_CONFIG;
-            // this block covers shells that inherited no environment (a zellij
-            // server started before the setting existed) and would otherwise
-            // keep a stale palette forever.
-            return StarshipTheme.paletteBlock(palette)
+            // Never inlined: the engine writes the colour-remapped copy and fish
+            // exports STARSHIP_CONFIG. A second `[palettes.palette]` table would
+            // fight a user's own palette names (their styles reference them).
+            return nil
         case .bat:
             return "--theme=palette"
         case .delta:

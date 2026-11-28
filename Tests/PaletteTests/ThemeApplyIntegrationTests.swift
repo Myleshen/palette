@@ -295,16 +295,9 @@ final class ThemeApplyIntegrationTests: XCTestCase {
             )
         }
 
-        // The remapped copy is what fish exports; the user's file also gains a
-        // marker block so a shell with no STARSHIP_CONFIG reads the same
-        // palette. Its own lines stay.
-        let starship = text(".config/starship.toml")
-        XCTAssertTrue(starship.contains("# >>> palette theme >>>"))
-        XCTAssertEqual(starship.components(separatedBy: "# >>> palette theme >>>").count, 2,
-                       "one managed block, not two")
-        for line in (originals[".config/starship.toml"] ?? "").components(separatedBy: "\n") where !line.isEmpty {
-            XCTAssertTrue(starship.contains(line), "starship.toml: lost original line '\(line)'")
-        }
+        // Starship is never edited. Palette writes a remapped copy and fish
+        // exports STARSHIP_CONFIG, so the user's own file stays byte-identical.
+        XCTAssertEqual(data(".config/starship.toml"), originalBytes[".config/starship.toml"])
         let mocha = PalettePalette(theme: ThemeLoader.load(name: "catppuccin-mocha", themesDirectory: bundledThemes).theme)
         let themed = try TOMLTable(string: String(contentsOf: themeDir.appendingPathComponent(StarshipTheme.fileName), encoding: .utf8))
         XCTAssertEqual(themed.table("character")?.str("success_symbol"), "[>](bold \(mocha.ansi[2]))")
@@ -429,13 +422,7 @@ final class ThemeApplyIntegrationTests: XCTestCase {
         XCTAssertEqual(light.table("character")?.str("success_symbol"), "[>](bold \(lightPalette.ansi[2]))")
         XCTAssertNotEqual(mochaPalette.ansi[2], lightPalette.ansi[2])
 
-        let finalStarship = text(".config/starship.toml")
-        XCTAssertTrue(finalStarship.contains("# >>> palette theme >>>"))
-        XCTAssertEqual(finalStarship.components(separatedBy: "# >>> palette theme >>>").count, 2)
-        let userText = String(decoding: userBytes, as: UTF8.self)
-        for line in userText.components(separatedBy: "\n") where !line.isEmpty {
-            XCTAssertTrue(finalStarship.contains(line), "starship.toml: lost user line '\(line)'")
-        }
+        XCTAssertEqual(data(".config/starship.toml"), userBytes)
     }
 
     func testCustomPaletteValuesAreRecolouredAndFollowTheTheme() async throws {
@@ -496,7 +483,7 @@ final class ThemeApplyIntegrationTests: XCTestCase {
 
         XCTAssertEqual(Set(mocha.keys), Set(light.keys))
         XCTAssertNotEqual(mocha, light)
-        XCTAssertTrue(text(".config/starship.toml").contains("# >>> palette theme >>>"))
+        XCTAssertEqual(data(".config/starship.toml"), userBytes, "the user's file is never edited")
     }
 
     func testApplyStatusPointsAtBlockingConfigConflicts() async throws {
