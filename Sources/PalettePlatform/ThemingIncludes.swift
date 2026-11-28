@@ -422,6 +422,10 @@ public struct ThemingIncludes: Sendable {
             }
             return stripHeader(raw)
                 + "\ntheme \"palette\"\ntheme_dark \"palette\"\ntheme_light \"palette\""
+                // Panes inherit the server's shell; a GUI-launched panel can
+                // start zellij with zsh, which never loads the fish palette or
+                // STARSHIP_CONFIG. Fish is the shell this setup themes.
+                + "\ndefault_shell \"fish\""
         case .nvim:
             let path = themeFile(.nvim).path
             return plan.format == .vim

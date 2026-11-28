@@ -58,6 +58,9 @@ final class ThemingIncludesTests: XCTestCase {
         XCTAssertTrue(zellij.hasPrefix("// >>> palette theme >>>"))
         XCTAssertTrue(zellij.contains("themes {"))
         XCTAssertTrue(zellij.contains("theme \"palette\""))
+        XCTAssertTrue(zellij.contains("theme_dark \"palette\""))
+        XCTAssertTrue(zellij.contains("theme_light \"palette\""))
+        XCTAssertTrue(zellij.contains("default_shell \"fish\""))
 
         XCTAssertNil(install(includes, .nvim).error)
         let lua = try read(home + "/.config/nvim/init.lua")

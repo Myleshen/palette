@@ -2412,23 +2412,30 @@ public enum ThemingRenderer {
         return out.joined(separator: "\n") + "\n"
     }
 
+    /// fish reads `#` at the start of a token as a comment, so a bare
+    /// `set -g fish_color_command #abc` silently sets nothing. Values are
+    /// written without the hash.
+    private static func fishColor(_ hex: String) -> String {
+        hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+    }
+
     private static func fish(_ palette: PalettePalette, header: String) -> String {
         var out = [header, ""]
-        out.append("set -g fish_color_normal \(palette.foreground)")
-        out.append("set -g fish_color_command \(palette.ansi[4])")
-        out.append("set -g fish_color_param \(palette.ansi[6])")
-        out.append("set -g fish_color_string \(palette.ansi[2])")
-        out.append("set -g fish_color_variable \(palette.ansi[5])")
-        out.append("set -g fish_color_error \(palette.ansi[1])")
-        out.append("set -g fish_color_comment \(palette.muted)")
-        out.append("set -g fish_color_keyword \(palette.ansi[5])")
-        out.append("set -g fish_color_operator \(palette.ansi[4])")
-        out.append("set -g fish_color_escape \(palette.ansi[6])")
-        out.append("set -g fish_color_cwd \(palette.ansi[4])")
-        out.append("set -g fish_color_git \(palette.ansi[2])")
-        out.append("set -g fish_color_selection --background=\(palette.selectionBackground)")
-        out.append("set -g fish_color_search_match --background=\(palette.elevated)")
-        out.append("set -g fish_color_autosuggestion \(palette.muted)")
+        out.append("set -g fish_color_normal \(fishColor(palette.foreground))")
+        out.append("set -g fish_color_command \(fishColor(palette.ansi[4]))")
+        out.append("set -g fish_color_param \(fishColor(palette.ansi[6]))")
+        out.append("set -g fish_color_string \(fishColor(palette.ansi[2]))")
+        out.append("set -g fish_color_variable \(fishColor(palette.ansi[5]))")
+        out.append("set -g fish_color_error \(fishColor(palette.ansi[1]))")
+        out.append("set -g fish_color_comment \(fishColor(palette.muted))")
+        out.append("set -g fish_color_keyword \(fishColor(palette.ansi[5]))")
+        out.append("set -g fish_color_operator \(fishColor(palette.ansi[4]))")
+        out.append("set -g fish_color_escape \(fishColor(palette.ansi[6]))")
+        out.append("set -g fish_color_cwd \(fishColor(palette.ansi[4]))")
+        out.append("set -g fish_color_git \(fishColor(palette.ansi[2]))")
+        out.append("set -g fish_color_selection --background=\(fishColor(palette.selectionBackground))")
+        out.append("set -g fish_color_search_match --background=\(fishColor(palette.elevated))")
+        out.append("set -g fish_color_autosuggestion \(fishColor(palette.muted))")
         return out.joined(separator: "\n") + "\n"
     }
 }

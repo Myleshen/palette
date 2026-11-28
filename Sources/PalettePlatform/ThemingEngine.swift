@@ -1100,6 +1100,15 @@ public final class ThemingEngine: ObservableObject {
                 statusSuffix = "No browser theme written"
             }
         }
+        if selectedIDs.contains(ThemingTarget.zellij.rawValue),
+           reloadsEnabled,
+           let zellij = ToolLocator.shared.path(for: "zellij") {
+            let appearance = palette.appearance
+            let switched = await ZellijThemeReload.reload(binary: zellij, appearance: appearance)
+            if switched > 0 {
+                notices.append("Zellij: switched the theme in \(switched) running session(s).")
+            }
+        }
         return WriteOutcome(
             written: written,
             skipped: skipped,

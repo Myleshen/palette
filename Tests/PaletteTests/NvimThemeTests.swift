@@ -222,3 +222,20 @@ final class NvimThemeTests: XCTestCase {
         }
     }
 }
+
+/// fish treats a leading `#` as a comment, so colour values must not carry it.
+final class FishThemeColourTests: XCTestCase {
+    func testColourValuesAreNotComments() throws {
+        let palette = PalettePalette(theme: .defaultDark)
+        let text = try XCTUnwrap(
+            ThemingRenderer.contents(
+                for: .fish,
+                palette: palette,
+                metadata: PaletteMetadata(source: "theme", theme: "Default Dark", appearance: "dark")
+            )
+        )
+        XCTAssertTrue(text.contains("set -g fish_color_command \(String(palette.ansi[4].dropFirst()))"))
+        XCTAssertFalse(text.contains("set -g fish_color_command #"))
+        XCTAssertFalse(text.contains("set -g fish_color_normal #"))
+    }
+}
