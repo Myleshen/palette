@@ -334,8 +334,7 @@ final class ThemingReloadTests: XCTestCase {
     }
 
     @MainActor
-    func testFirstApplyAsksForOneRestartThenTheNextApplyRecoloursLive() async throws {
-        let home = temporaryDirectory()
+    func testFirstApplyAsksForOneRestartThenTheNextApplyRecoloursLive() async throws {        let home = temporaryDirectory()
         let runtime = home + "/run"
         try FileManager.default.createDirectory(atPath: runtime, withIntermediateDirectories: true)
         let configPath = home + "/.config/kitty/kitty.conf"
@@ -380,5 +379,87 @@ final class ThemingReloadTests: XCTestCase {
             ),
             recordedArguments(in: home).joined(separator: " | ")
         )
+    }
+
+    // MARK: - Launch push
+
+    /// A sandbox HOME with a generated kitty palette on disk and a fake kitty
+    /// listening on Palette's managed socket.
+    @MainActor
+    private func launchFixture() throws -> (home: String, engine: ThemingEngine, themeFile: String) {
+        let home = temporaryDirectory()
+        let paths = PalettePaths(
+            home: home,
+            configDir: URL(fileURLWithPath: home + "/config", isDirectory: true),
+            stateDir: URL(fileURLWithPath: home + "/state", isDirectory: true),
+            cacheDir: URL(fileURLWithPath: home + "/cache", isDirectory: true)
+        )
+        try FileManager.default.createDirectory(at: paths.themeDir, withIntermediateDirectories: true)
+        let themeFile = paths.themeDir.appendingPathComponent("kitty.conf")
+        try write("background #101010\n", to: themeFile.path)
+        try write("{}", to: paths.themeDir.appendingPathComponent("palette.json").path)
+        try write("", to: home + "/run/palette-kitty-77")
+        let engine = ThemingEngine(
+            paths: paths,
+            themesDirectory: paths.themesDir,
+            kitty: KittyRemoteControl(
+                binary: try fakeKitty(in: home, lsStatus: 0, setStatus: 0),
+                environment: ["TMPDIR": home + "/run/"],
+                runningKittyPIDs: { Set([77]) }
+            )
+        )
+        return (home, engine, themeFile.path)
+    }
+
+    private func snapshot(_ directory: String) throws -> [String: Data] {
+        var files: [String: Data] = [:]
+        let base = URL(fileURLWithPath: directory)
+        let enumerator = FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil)
+        while let url = enumerator?.nextObject() as? URL {
+            let regular = (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) ?? false
+            guard regular, url.lastPathComponent != "args.log" else { continue }
+            files[url.path] = try Data(contentsOf: url)
+        }
+        return files
+    }
+
+    @MainActor
+    func testLaunchPushPaintsKittyOnceWithoutWritingFiles() async throws {
+        let (home, engine, themeFile) = try launchFixture()
+        let before = try snapshot(home)
+        let command = "@ --to unix:\(home)/run/palette-kitty-77 set-colors -a \(themeFile)"
+
+        await engine.pushKittyPaletteOnLaunch(
+            config: ThemingConfig(enabled: true, theme: "default-dark", targets: ["kitty"])
+        )
+
+        let arguments = recordedArguments(in: home)
+        XCTAssertEqual(arguments.filter { $0.contains("set-colors") }, [command], arguments.joined(separator: " | "))
+        XCTAssertEqual(try snapshot(home), before, "the launch push only reads the generated file")
+        XCTAssertNil(engine.restartPrompt, "a launch push never asks for a restart")
+    }
+
+    @MainActor
+    func testLaunchPushIsSkippedWhenThemingIsOff() async throws {
+        let (home, engine, themeFile) = try launchFixture()
+
+        await engine.pushKittyPaletteOnLaunch(
+            config: ThemingConfig(enabled: false, theme: "default-dark", targets: ["kitty"])
+        )
+
+        XCTAssertEqual(recordedArguments(in: home), [], "theming off means no kitty is touched")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: themeFile))
+    }
+
+    @MainActor
+    func testLaunchPushIsSilentWithoutAReachableKitty() async throws {
+        let (home, engine, _) = try launchFixture()
+        try FileManager.default.removeItem(atPath: home + "/run/palette-kitty-77")
+
+        await engine.pushKittyPaletteOnLaunch(
+            config: ThemingConfig(enabled: true, theme: "default-dark", targets: ["kitty"])
+        )
+
+        XCTAssertEqual(recordedArguments(in: home), [], "no listening kitty means no command")
     }
 }

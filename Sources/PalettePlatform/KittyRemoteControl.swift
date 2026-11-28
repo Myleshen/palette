@@ -80,19 +80,31 @@ public struct KittyRemoteControl: Sendable {
             return ThemingReload.kittyAddedRemoteControl()
         }
         let sockets = await liveSockets(configPath: configPath)
-        if !sockets.isEmpty {
-            var recoloured = 0
-            for socket in sockets {
-                if await setColors(themeFile, socket: socket) {
-                    recoloured += await windowCount(socket: socket)
-                }
-            }
-            if recoloured > 0 {
-                return ThemingReload.kittyLive(windows: recoloured)
-            }
-            return ThemingReload.kitty(remoteControl: true, applied: false)
+        guard !sockets.isEmpty else {
+            return ThemingReload.kitty(remoteControl: false, applied: false)
         }
-        return ThemingReload.kitty(remoteControl: false, applied: false)
+        return await reload(themeFile: themeFile, sockets: sockets)
+    }
+
+    /// The launch path paints a palette that is already on disk. No listening
+    /// kitty means nothing to say, so it returns nil instead of a restart hint.
+    public func pushExisting(themeFile: String, configPath: String? = nil) async -> ThemingReload.Status? {
+        let sockets = await liveSockets(configPath: configPath)
+        guard !sockets.isEmpty else { return nil }
+        return await reload(themeFile: themeFile, sockets: sockets)
+    }
+
+    private func reload(themeFile: String, sockets: [String]) async -> ThemingReload.Status {
+        var recoloured = 0
+        for socket in sockets {
+            if await setColors(themeFile, socket: socket) {
+                recoloured += await windowCount(socket: socket)
+            }
+        }
+        if recoloured > 0 {
+            return ThemingReload.kittyLive(windows: recoloured)
+        }
+        return ThemingReload.kitty(remoteControl: true, applied: false)
     }
 
     // MARK: - Socket discovery

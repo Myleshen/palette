@@ -1410,6 +1410,25 @@ public final class ThemingEngine: ObservableObject {
         )
     }
 
+    /// Launch: paint a running kitty with the palette already on disk. One
+    /// socket command — no files written, no config changed and no restart
+    /// prompt. Silence when there is nothing to push or no kitty listening.
+    public func pushKittyPaletteOnLaunch(config: ThemingConfig) async {
+        guard config.enabled, reloadsEnabled else { return }
+        let themeFile = themeDir.appendingPathComponent(ThemingTarget.kitty.fileName)
+        guard fileManager.fileExists(atPath: themeFile.path) else { return }
+        guard let status = await kitty.pushExisting(
+            themeFile: themeFile.path,
+            configPath: includes.plan(for: .kitty)?.path
+        ) else { return }
+        Log.shared.info(
+            status.state == .reloaded
+                ? "Launch palette push: \(status.message)"
+                : "Launch palette push failed: \(status.message)",
+            source: "theming"
+        )
+    }
+
     private func reloadAll(
         _ targets: [String],
         kittyRemoteControlAdded: Bool

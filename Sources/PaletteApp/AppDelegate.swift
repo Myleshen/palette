@@ -3398,7 +3398,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// An upgrading user can have generated files from a build that wrote `#`
     /// into Lua/KDL. Neovim fails with E5113 on that file, so the launch path
-    /// rebuilds the set once, silently, and logs what it repaired.
+    /// rebuilds the set once, silently, logs what it repaired, and then paints
+    /// a running kitty from the file that is now on disk.
     private var didRepairStaleTheming = false
 
     private func repairStaleThemingOnLaunch() {
@@ -3407,21 +3408,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let config = configuration.theming
         guard config.enabled else { return }
         let reasons = ThemingStaleness.reasons(themeID: config.theme, themeDir: paths.themeDir)
-        guard !reasons.isEmpty else { return }
         let name = config.theme.isEmpty ? themeManager.currentThemeID : config.theme
-        Log.shared.info(
-            "Re-applying theming on launch: \(reasons.joined(separator: "; "))",
-            source: "theming"
-        )
+        if !reasons.isEmpty {
+            Log.shared.info(
+                "Re-applying theming on launch: \(reasons.joined(separator: "; "))",
+                source: "theming"
+            )
+        }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let result = config.source == .wallpaper
-                ? await self.themingEngine.applyWallpaper(config)
-                : await self.themingEngine.applyTheme(named: name, config: config)
-            if let error = result.error {
-                Log.shared.warn("Could not repair the generated palette: \(error)", source: "theming")
-                self.searchController?.setStatus(error, duration: 8)
+            if !reasons.isEmpty {
+                let result = config.source == .wallpaper
+                    ? await self.themingEngine.applyWallpaper(config)
+                    : await self.themingEngine.applyTheme(named: name, config: config)
+                if let error = result.error {
+                    Log.shared.warn("Could not repair the generated palette: \(error)", source: "theming")
+                    self.searchController?.setStatus(error, duration: 8)
+                }
             }
+            await self.themingEngine.pushKittyPaletteOnLaunch(config: config)
         }
     }
 

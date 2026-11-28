@@ -17,9 +17,9 @@ public struct CardThumbnail: @unchecked Sendable {
 /// the card draws (512 px is 2× its width, enough for Retina), so a 4K/8K file
 /// never becomes a full-size bitmap. A 512 px picture is kept in an NSCache and
 /// encoded to a disk cache keyed by path+mtime, so a warm open reads ~40 KB
-/// instead of the original file. One serial utility queue decodes, never the
-/// main thread. Video files get a still frame when AVFoundation can produce
-/// one cheaply, otherwise nil and the card shows its palette colour.
+/// instead of the original file. A small bounded queue decodes, never the main
+/// thread. Video files get a still frame when AVFoundation can produce one
+/// cheaply, otherwise nil and the card shows its palette colour.
 public actor CardImageLoader {
     public static let shared = CardImageLoader()
 
@@ -31,11 +31,52 @@ public actor CardImageLoader {
         }
     }
 
+    /// Test-visible high-water mark, so "several at once, never more than the
+    /// bound" is an assertion rather than a timing guess.
+    private final class DecodeMonitor: @unchecked Sendable {
+        private let lock = NSLock()
+        private var inFlight = 0
+        private var peak = 0
+
+        func begin() {
+            lock.lock()
+            inFlight += 1
+            peak = max(peak, inFlight)
+            lock.unlock()
+        }
+
+        func end() {
+            lock.lock()
+            inFlight -= 1
+            lock.unlock()
+        }
+
+        var peakInFlight: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return peak
+        }
+
+        func reset() {
+            lock.lock()
+            peak = 0
+            lock.unlock()
+        }
+    }
+
     private let cacheDirectory: URL
     private let memory = NSCache<NSString, Entry>()
-    /// Serial, low QoS: a fan's 19 cards decode one at a time, off the main
-    /// thread, instead of racing 19 full decodes.
-    private let queue = DispatchQueue(label: "dev.myleshen.palette.card-thumbnails", qos: .utility)
+    /// A visible window is ~15 4K–8K pictures. Decoding them one at a time made
+    /// the last card wait on every earlier one; six at a time fills the window
+    /// without turning the branch into 15 simultaneous full decodes.
+    private let queue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "dev.myleshen.palette.card-thumbnails"
+        queue.qualityOfService = .utility
+        queue.maxConcurrentOperationCount = 6
+        return queue
+    }()
+    private let monitor = DecodeMonitor()
 
     private var loads: [String: Int] = [:]
 
@@ -48,7 +89,7 @@ public actor CardImageLoader {
         memory.countLimit = 120
         memory.totalCostLimit = 64 * 1024 * 1024
         let directory = cacheDirectory
-        queue.async {
+        queue.addOperation {
             Self.prune(directory, maxFiles: 400)
         }
     }
@@ -63,11 +104,17 @@ public actor CardImageLoader {
             image = await Self.videoFrame(url: url, maxPixel: pixel)
         } else {
             let directory = cacheDirectory
+            let monitor = monitor
             image = await withCheckedContinuation { continuation in
-                queue.async {
-                    continuation.resume(
-                        returning: Self.imageThumbnail(url: url, maxPixel: pixel, cacheDirectory: directory)
+                queue.addOperation {
+                    monitor.begin()
+                    let decoded = Self.imageThumbnail(
+                        url: url,
+                        maxPixel: pixel,
+                        cacheDirectory: directory
                     )
+                    monitor.end()
+                    continuation.resume(returning: decoded)
                 }
             }
         }
@@ -83,9 +130,15 @@ public actor CardImageLoader {
         loads[Self.cacheKey(url, maxPixel: max(32, Int(maxPixel.rounded())))] ?? 0
     }
 
+    /// Test hook: most decodes that ever ran at the same time.
+    public func peakConcurrentDecodes() -> Int {
+        monitor.peakInFlight
+    }
+
     public func resetForTesting() {
         memory.removeAllObjects()
         loads.removeAll()
+        monitor.reset()
     }
 
     /// The key both caches use: a changed file or mtime is a different picture.
